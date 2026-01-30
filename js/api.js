@@ -196,11 +196,11 @@ const API = {
             let pythonResult = null;
             
             try {
-                // 単純なPOSTリクエスト
+                // FastAPIとの通信のため、Content-Typeは application/json が必須
                 const res = await fetch(CALC_API_URL, {
                     method: 'POST',
                     credentials: 'omit', 
-                    headers: { 'Content-Type': 'text/plain' }, 
+                    headers: { 'Content-Type': 'application/json' }, // ★ここを修正しました
                     body: JSON.stringify(payload)
                 });
                 
@@ -215,7 +215,13 @@ const API = {
                     result.shifts = pythonResult.shifts;
                     result.mode = "python_optimized";
                 } else {
-                    throw new Error("Invalid response from Python engine");
+                    // 解なしの場合でもエラーにせず空リストを許容
+                    if(pythonResult.status === 'success' && pythonResult.mode === 'math_failed'){
+                         result.shifts = [];
+                         console.warn("Math solver returned no solution (relaxed constraints recommended).");
+                    } else {
+                        throw new Error("Invalid response from Python engine");
+                    }
                 }
 
             } catch (pythonError) {
@@ -226,6 +232,7 @@ const API = {
             // =========================================================
             // STEP 2: Gemini APIによる監査と修正 (Gemini 2.5 Flash Preview相当)
             // =========================================================
+            // APIキー設定がある場合のみ実行
             const geminiKey = payload.config.gemini_api_key || payload.config.openai_api_key;
             
             if (geminiKey) {
