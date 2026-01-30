@@ -17,10 +17,3 @@ jobs:
           curl -f -X GET "$SUPABASE_URL/rest/v1/staff?limit=1" \
           -H "apikey: $SUPABASE_KEY" \
           -H "Authorization: Bearer $SUPABASE_KEY"
-git config --global user.name "ryousuke"
-git config --global user.email "master@mochikuro.com
-git config --global user.name "ryousuke"
-git config --global user.email "master@mochikuro.com"
-"
-git config --global user.name "ryosuke"
-git config --global user.email "master@mochikuro.com"
