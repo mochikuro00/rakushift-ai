@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ラクシフトAI - AIシフト管理システム</title>
+    
+    <!-- Frontend Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Custom Styles -->
+    <style>
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Modal Transitions */
+        .modal {
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease-in-out;
+        }
+        .modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+        .modal-content {
+            transform: scale(0.95);
+            transition: all 0.2s ease-in-out;
+        }
+        
+        /* Loading Spinner */
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Print Styles - Standard Fallback */
+        @media print {
+            /* 通常の印刷アクション（Cmd+Pなど）で呼ばれた場合のフォールバック */
+            /* アプリケーション全体を隠し、アラートを出すか、簡易表示にする */
+            /* 今回はJS制御の印刷ボタンを推奨するため、標準印刷では「印刷ボタンを使用してください」と表示するのが親切かもしれないが、
+               とりあえずシフト表エリアだけ出すように最低限の対応をしておく */
+            
+            body * {
+                visibility: hidden;
+            }
+            #shiftViewContent, #shiftViewContent * {
+                visibility: visible;
+            }
+            #shiftViewContent {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-30 transition-transform duration-300 transform -translate-x-full md:translate-x-0 absolute md:relative h-full">
+        <div class="h-32 flex items-center justify-center px-4 border-b border-gray-100">
+            <div class="flex items-center justify-center w-full cursor-pointer hover:opacity-80 transition-opacity" onclick="app.changeView('dashboard')" title="ホーム（ダッシュボード）へ戻る">
+                <img src="images/rakushift_logo_transparent.png" alt="ラクシフトAI" class="h-24 w-auto object-contain">
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+            <div class="px-3 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">メイン</div>
+            <a href="#" data-view="dashboard" class="sidebar-link active flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-blue-600 bg-blue-50">
+                <i class="fa-solid fa-table-cells-large w-6 text-center"></i> ダッシュボード
+            </a>
+            <a href="#" data-view="manual-shift" class="sidebar-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                <i class="fa-regular fa-calendar-days w-6 text-center"></i> シフト表
+            </a>
+
+            <div class="px-3 mt-8 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider admin-link hidden">管理・分析</div>
+            <a href="#" data-view="requests" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors group">
+                <i class="fa-solid fa-inbox w-6 text-center group-hover:text-blue-500"></i> 申請リスト
+                <span id="pendingRequestsBadge" class="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full hidden">0</span>
+            </a>
+            <a href="#" data-view="analytics" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                <i class="fa-solid fa-chart-pie w-6 text-center"></i> 分析・レポート
+            </a>
+
+            <div class="px-3 mt-8 mb-2 text-xs font-bold text-gray-400 uppercase tracking-wider admin-link hidden">設定</div>
+            <a href="#" data-view="staff" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                <i class="fa-solid fa-users w-6 text-center"></i> スタッフ管理
+            </a>
+            <a href="#" data-view="settings" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
+                <i class="fa-solid fa-sliders w-6 text-center"></i> 店舗設定
+            </a>
+        </div>
+
+        <div class="p-4 border-t border-gray-100">
+            <button id="authBtn" class="flex items-center w-full px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                <i class="fa-solid fa-right-to-bracket w-6 text-center"></i> 管理者ログイン
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 bg-gray-50/50">
+        <!-- Header -->
+        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 shadow-sm z-20">
+            <div class="flex items-center gap-4">
+                <button id="mobileMenuBtn" class="md:hidden text-gray-500 hover:text-gray-700">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <div class="flex items-center bg-gray-100 rounded-lg p-1">
+                    <button id="prevPeriod" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm rounded-md transition-all">
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                    </button>
+                    <span id="currentPeriodDisplay" class="px-4 text-sm font-bold text-gray-700 min-w-[100px] text-center">Loading...</span>
+                    <button id="nextPeriod" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm rounded-md transition-all">
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+                <button id="todayBtn" class="hidden md:block px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors">今日</button>
+            </div>
+
+            <div class="flex items-center gap-3" id="adminHeaderControls">
+                <!-- 管理者ログインボタン/管理者メニュー -->
+            </div>
+        </header>
+
+        <!-- View Container (Dynamic Content) -->
+        <div id="viewContainer" class="flex-1 overflow-auto p-4 lg:p-8 relative">
+            <!-- Content injected by JS -->
+            <div class="flex h-full items-center justify-center text-gray-400">
+                <div class="text-center">
+                    <div class="loading-spinner mb-4 mx-auto"></div>
+                    <p>Loading application...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ================= MODALS ================= -->
+
+    <!-- Shop Rules Modal (Read Only) -->
+    <div id="shopRulesModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-book-open text-blue-500"></i> お店のルール</h3>
+                <button onclick="app.closeModal('shopRulesModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-6" id="shopRulesContent">
+                <!-- Content injected by JS -->
+            </div>
+            <div class="p-5 bg-gray-50 border-t border-gray-100 text-center">
+                <button onclick="app.closeModal('shopRulesModal')" class="px-6 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-100 transition">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[600px]">
+            
+            <!-- Left: Branding -->
+            <div class="md:w-1/2 bg-blue-600 text-white p-8 flex flex-col justify-center items-center text-center">
+                <img src="images/rakushift_logo_transparent.png" alt="ラクシフトAI" class="w-48 mb-6 brightness-0 invert opacity-90">
+                <h2 class="text-3xl font-bold mb-2">Rakushift AI</h2>
+                <p class="text-blue-100 mb-8">AIが最適なシフトを自動生成。<br>店舗運営を劇的に効率化します。</p>
+                <div class="space-y-4 text-left text-sm text-blue-100 bg-blue-700/30 p-6 rounded-xl">
+                    <div class="flex items-center gap-3"><i class="fa-solid fa-check-circle"></i> <span>1クリックで自動作成</span></div>
+                    <div class="flex items-center gap-3"><i class="fa-solid fa-check-circle"></i> <span>クラウド保存・共有</span></div>
+                </div>
+            </div>
+
+            <!-- Right: Login Forms -->
+            <div class="md:w-1/2 p-8 bg-gray-50 flex flex-col justify-center">
+                <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">契約者ログイン</h3>
+                <p class="text-xs text-gray-500 text-center mb-6">契約IDと店舗パスワードを入力してください</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">契約ID (Contract ID)</label>
+                        <input type="text" id="loginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: cont_12345">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">店舗パスワード</label>
+                        <input type="password" id="loginShopPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••">
+                    </div>
+                    
+                    <button onclick="app.login()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-4">ログイン</button>
+                    
+                    <div class="text-center mt-4">
+                        <p class="text-xs text-gray-400">※管理者機能はログイン後の画面からアクセスできます</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="adminLoginModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800"><i class="fa-solid fa-user-shield text-blue-600"></i> 管理者認証</h3>
+                <button onclick="app.closeModal('adminLoginModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-500 mb-4">管理者権限のあるアカウントでログインしてください。</p>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">ログインID</label>
+                    <input type="text" id="adminLoginId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                    <input type="password" id="adminLoginPass" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••">
+                </div>
+            </div>
+            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                <button onclick="app.closeModal('adminLoginModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                <button onclick="app.adminLogin()" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">認証する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Shift Modal -->
+    <div id="editShiftModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <div>
+                    <h3 id="editShiftTitle" class="font-bold text-gray-800">シフト編集</h3>
+                    <p id="editShiftDateDisplay" class="text-xs text-gray-500">YYYY-MM-DD</p>
+                </div>
+                <button onclick="app.closeModal('editShiftModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <form id="shiftForm" onsubmit="return false;">
+                <input type="hidden" id="editShiftId">
+                <input type="hidden" id="editShiftDate">
+                <input type="hidden" id="editShiftStaffId">
+                
+                <div id="editShiftStaffName" class="font-bold text-lg text-gray-800 pb-2 border-b border-gray-100"></div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">開始時間</label>
+                        <div class="relative">
+                            <select id="editShiftStart" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-mono text-center appearance-none cursor-pointer hover:bg-gray-50"></select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">終了時間</label>
+                        <div class="relative">
+                            <select id="editShiftEnd" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-mono text-center appearance-none cursor-pointer hover:bg-gray-50"></select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">休憩時間 (分)</label>
+                    <input type="number" id="editShiftBreak" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-right" value="60">
+                </div>
+
+                <div class="pt-2">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="editShiftHoliday" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                        <span class="text-sm font-bold text-red-500">この日を休みにする（シフト削除）</span>
+                    </label>
+                </div>
+                </form>
+            </div>
+            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-between">
+                <button id="deleteShiftBtn" class="text-red-500 font-bold text-sm hover:underline">削除</button>
+                <div class="flex gap-3">
+                    <button onclick="app.closeModal('editShiftModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                    <button id="saveShiftBtn" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff Modal -->
+    <div id="staffModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-gray-800">スタッフ情報</h3>
+                <button onclick="app.closeModal('staffModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <form id="staffForm" onsubmit="return false;">
+                <input type="hidden" id="staffId">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">名前</label>
+                    <input type="text" id="staffName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="山田 太郎">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">役割</label>
+                        <select id="staffRole" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="staff">スタッフ</option>
+                            <option value="leader">リーダー</option>
+                            <option value="manager">店長</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">評価ランク (優先度)</label>
+                        <select id="staffEvaluation" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="A">A (優先・高)</option>
+                            <option value="B" selected>B (標準)</option>
+                            <option value="C">C (育成・低)</option>
+                            <option value="D">D (研修・不可)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">給与形態</label>
+                        <select id="staffSalaryType" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white" onchange="app.toggleSalaryInputs()">
+                            <option value="hourly">時給</option>
+                            <option value="monthly">月給</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="hourlyInputGroup">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">時給 (円)</label>
+                    <input type="number" id="staffHourlyWage" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-right" placeholder="1100">
+                </div>
+                
+                <div id="monthlyInputGroup" class="hidden">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">月給 (円)</label>
+                    <input type="number" id="staffMonthlySalary" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-right" placeholder="250000">
+                </div>
+
+                <div class="border-t border-gray-100 pt-4 mt-2">
+                    <h4 class="text-xs font-bold text-blue-600 mb-3">勤務制約 (AI自動作成用)</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">週の最大勤務日数</label>
+                            <input type="number" id="staffMaxDaysPerWeek" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="5">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">1日の最大勤務時間</label>
+                            <input type="number" id="staffMaxHoursPerDay" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="8">
+                        </div>
+                    </div>
+                </div>
+                </form>
+            </div>
+            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+                <button onclick="app.closeModal('staffModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                <button onclick="app.saveStaff()" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Modal (Proxy) -->
+    <div id="requestModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-indigo-50 flex justify-between items-center">
+                <h3 class="font-bold text-indigo-900">シフト希望提出 (代行)</h3>
+                <button onclick="app.closeModal('requestModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">スタッフ</label>
+                    <select id="requestStaffId" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">希望の種類</label>
+                    <div class="flex gap-4 pt-1">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="requestType" value="off" checked class="text-indigo-600 focus:ring-indigo-500">
+                            <span class="text-sm font-bold">休み希望</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="requestType" value="work" class="text-indigo-600 focus:ring-indigo-500">
+                            <span class="text-sm font-bold">勤務希望</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">日付 (YYYY-MM-DD)</label>
+                    <input type="date" id="requestDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div id="requestTimeGroup" class="hidden grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">開始</label>
+                        <div class="relative">
+                            <select id="requestStartTime" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-center appearance-none cursor-pointer hover:bg-gray-50"></select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">終了</label>
+                        <div class="relative">
+                            <select id="requestEndTime" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-center appearance-none cursor-pointer hover:bg-gray-50"></select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">理由・メモ</label>
+                    <input type="text" id="requestReason" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="私用のため">
+                </div>
+            </div>
+            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                <button onclick="app.closeModal('requestModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                <button onclick="app.submitRequest()" class="px-6 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow hover:bg-indigo-700 transition">提出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto Fill Modal -->
+    <div id="autoFillModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden text-center">
+            <div class="p-6">
+                <div class="w-14 h-14 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                    <i class="fa-solid fa-wand-magic-sparkles text-yellow-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">AI自動シフト作成</h3>
+                <p class="text-sm text-gray-500 mb-6">シフトの空き状況を分析し、<br>最適なスタッフを自動で割り当てます。</p>
+                
+                <div class="text-left bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">作成範囲</label>
+                    <select id="autoFillTarget" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                        <option value="empty_only">今月の空きシフトのみ埋める</option>
+                        <option value="next_week">来週分を作成</option>
+                        <option value="reset_all">現在のシフトをリセットして再構築</option>
+                    </select>
+                </div>
+
+                <button onclick="app.runAutoFill()" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl shadow-lg transition">作成を実行</button>
+            </div>
+            <div class="p-4 bg-gray-50 border-t border-gray-100">
+                <button onclick="app.closeModal('autoFillModal')" class="text-sm font-bold text-gray-400 hover:text-gray-600">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Advice Modal -->
+    <div id="aiAdviceModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 flex justify-between items-center">
+                <div class="flex items-center gap-2 text-blue-800 font-bold">
+                    <i class="fa-solid fa-robot"></i> AIシフト診断
+                </div>
+                <button onclick="app.closeModal('aiAdviceModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div id="aiAnalysisContent" class="p-6 space-y-4 overflow-y-auto flex-1 bg-gray-50">
+                <!-- Content injected -->
+            </div>
+            <div class="p-5 bg-white border-t border-gray-100 flex justify-end">
+                <button onclick="app.applyAiFixes()" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">修正案を適用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Note Modal -->
+    <div id="calendarNoteModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-yellow-50 flex justify-between items-center">
+                <div>
+                    <h3 class="font-bold text-yellow-800 flex items-center gap-2"><i class="fa-regular fa-note-sticky"></i> 日別メモ・備考</h3>
+                    <p id="noteDateDisplay" class="text-xs text-yellow-600 mt-1">YYYY-MM-DD</p>
+                </div>
+                <button onclick="app.closeModal('calendarNoteModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="noteDate">
+                <label class="block text-xs font-bold text-gray-500 mb-2">メモ内容 (団体予約、イベント等)</label>
+                <textarea id="noteText" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none h-32 resize-none" placeholder="例: 19:00〜 団体20名様"></textarea>
+            </div>
+            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-between">
+                <button onclick="app.deleteCalendarNote()" class="text-red-500 font-bold text-sm hover:underline">削除</button>
+                <div class="flex gap-3">
+                    <button onclick="app.closeModal('calendarNoteModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                    <button onclick="app.saveCalendarNote()" class="px-6 py-2 bg-yellow-500 text-white text-sm font-bold rounded-lg shadow hover:bg-yellow-600 transition">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Loading Overlay -->
+    <div id="globalLoading" class="fixed inset-0 z-[100] hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center">
+        <div class="bg-white p-5 rounded-2xl shadow-xl flex items-center gap-4">
+            <div class="loading-spinner w-8 h-8 border-2"></div>
+            <span class="font-bold text-gray-700">処理中...</span>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[90] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Scripts -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            const loading = document.getElementById('globalLoading');
+            if(loading) loading.classList.add('hidden');
+            const container = document.getElementById('viewContainer');
+            if(container) {
+                container.innerHTML = `
+                    <div class="p-8 text-center text-red-600">
+                        <h2 class="text-xl font-bold mb-2">システムエラー</h2>
+                        <p class="font-mono text-xs bg-red-50 p-4 rounded text-left overflow-auto">
+                            ${msg}<br>
+                            at ${url}:${line}:${col}
+                        </p>
+                        <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-200 rounded">再読み込み</button>
+                    </div>
+                `;
+            }
+            return false;
+        };
+    </script>
+    <script src="js/holidays.js?v=id_repair"></script>
+    <script src="js/api.js?v=id_repair"></script>
+    <script src="js/app_v2.js?v=id_repair"></script>
+</body>
+</html>

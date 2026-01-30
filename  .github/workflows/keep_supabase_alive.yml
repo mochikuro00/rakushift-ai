@@ -1,0 +1,26 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Project
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          curl -f -X GET "$SUPABASE_URL/rest/v1/staff?limit=1" \
+          -H "apikey: $SUPABASE_KEY" \
+          -H "Authorization: Bearer $SUPABASE_KEY"
+git config --global user.name "ryousuke"
+git config --global user.email "master@mochikuro.com
+git config --global user.name "ryousuke"
+git config --global user.email "master@mochikuro.com"
+"
+git config --global user.name "ryosuke"
+git config --global user.email "master@mochikuro.com"
