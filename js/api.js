@@ -1,4 +1,3 @@
-
 // =================================================================
 // API Client for Rakushift (Supabase Version)
 // Backend: Supabase (Data) + Cloud Run (Calculation)
@@ -8,7 +7,8 @@ const SUPABASE_URL = "https://guuocjilvtmppbqvsxtl.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1dW9jamlsdnRtcHBicXZzeHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4NTI5MzUsImV4cCI6MjA4MjQyODkzNX0.Myxf-cuIeQ9nzRRJ_Ti1rRlaZ53tmHb0eosEUMFwsHY";
 
 // 外部計算サーバー (Python)
-const CALC_API_URL = "https://rakushift-api-154386097816.asia-northeast1.run.app/generate";
+// ★重要: あなたの最新のCloud Run URLに更新済み
+const CALC_API_URL = "https://rakushift-calc-874112922898.asia-northeast1.run.app/generate";
 
 // Gemini API Endpoint
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -196,10 +196,11 @@ const API = {
             let pythonResult = null;
             
             try {
+                // 単純なPOSTリクエスト
                 const res = await fetch(CALC_API_URL, {
                     method: 'POST',
                     credentials: 'omit', 
-                    headers: { 'Content-Type': 'text/plain' }, // Simple Request to avoid preflight
+                    headers: { 'Content-Type': 'text/plain' }, 
                     body: JSON.stringify(payload)
                 });
                 
@@ -219,23 +220,17 @@ const API = {
 
             } catch (pythonError) {
                 console.error("Step 1 Failed:", pythonError);
-                // Pythonサーバーが落ちている場合などは、エラーを投げるか、空で返す
-                // ここでは空で返し、Geminiに「ゼロから作れ」と言うこともできるが、
-                // 要件に従い「Pythonで計算」が前提なので、エラーとして扱うべきかもしれない。
-                // ただし、ユーザー体験を損なわないよう、エラーメッセージを含めて返す。
                 return { status: "error", message: "Python計算サーバーへの接続に失敗しました。" };
             }
 
             // =========================================================
             // STEP 2: Gemini APIによる監査と修正 (Gemini 2.5 Flash Preview相当)
             // =========================================================
-            // APIキー設定がある場合のみ実行
-            const geminiKey = payload.config.gemini_api_key || payload.config.openai_api_key; // 便宜上OpenAIキー欄もチェック
+            const geminiKey = payload.config.gemini_api_key || payload.config.openai_api_key;
             
             if (geminiKey) {
                 console.log("Step 2: Requesting Gemini AI Audit & Fix...");
                 
-                // Gemini用の修正プロンプトを作成
                 const auditResult = await this.checkShiftsWithGemini(geminiKey, payload, result.shifts);
                 
                 if (auditResult && Array.isArray(auditResult)) {
@@ -259,10 +254,7 @@ const API = {
 
     // Gemini API 呼び出し (監査・修正用)
     async checkShiftsWithGemini(apiKey, payload, originalShifts) {
-        // モデルは設定があればそれを使うが、デフォルトは flash
         const modelName = payload.config.gemini_model || "gemini-1.5-flash"; 
-        // ※ gemini-2.5 は未公開なので、現状は 1.5-flash または 2.0-flash-exp を指定する形になる
-        
         const url = `${GEMINI_API_URL}/${modelName}:generateContent?key=${apiKey}`;
         
         const prompt = `
@@ -314,7 +306,7 @@ ${JSON.stringify(originalShifts.map(s => ({
                         parts: [{ text: prompt }]
                     }],
                     generationConfig: {
-                        temperature: 0.2, // 厳密性を重視
+                        temperature: 0.2,
                         responseMimeType: "application/json"
                     }
                 })
@@ -327,23 +319,20 @@ ${JSON.stringify(originalShifts.map(s => ({
             
             if (!text) return null;
             
-            // JSONパース
             const fixedShifts = JSON.parse(text);
             
-            // フォーマット補正 (break_minutesなど)
             return fixedShifts.map(s => ({
                 ...s,
                 break_minutes: s.break_minutes || 60,
-                organization_id: payload.config.organization_id // 組織IDを復元
+                organization_id: payload.config.organization_id 
             }));
 
         } catch (e) {
             console.error("Gemini Check Error:", e);
-            return null; // エラー時は一次案を採用するためnullを返す
+            return null; 
         }
     }
 };
 
-// グローバル公開
 window.API = API;
 console.log("API Loaded (Supabase Mode)");
