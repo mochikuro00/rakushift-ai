@@ -1,5 +1,4 @@
 fastapi
 uvicorn
-ortools
-google-generativeai
-pydantic
+pulp
+pandas
