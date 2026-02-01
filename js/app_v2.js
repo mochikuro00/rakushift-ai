@@ -3517,6 +3517,26 @@ const app = {
             this.showLoading(false);
         }
     },
+    // 一括保存 (大量データの保存)
+    async saveAllShifts(shifts) {
+        if (!shifts || shifts.length === 0) return;
+        
+        // 50件ずつ分割して保存
+        const batchSize = 50;
+        for (let i = 0; i < shifts.length; i += batchSize) {
+            const batch = shifts.slice(i, i + batchSize);
+            // 組織IDを付与
+            batch.forEach(s => s.organization_id = this.state.organization_id);
+            
+            try {
+                // 並列実行で高速化
+                await Promise.all(batch.map(s => API.create('shifts', s)));
+            } catch(e) {
+                console.error("Background save error:", e);
+            }
+        }
+        console.log("All shifts saved.");
+    },
 
 
     async generateShiftsWithGemini(dateList, outputArray) {
