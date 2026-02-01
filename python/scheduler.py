@@ -10,10 +10,15 @@ class ShiftScheduler:
 
         # 店舗のシフトパターンを取得 (なければデフォルト作成)
         self.patterns = config.get('custom_shifts', [])
+        
+        # 営業時間 (デフォルト)
+        self.op_limit = config.get('opening_time', '09:00')
+        self.cl_limit = config.get('closing_time', '22:00')
+
         if not self.patterns:
             # デフォルトパターン: 早番・遅番・通し
-            op = config.get('opening_time', '09:00')
-            cl = config.get('closing_time', '22:00')
+            op = self.op_limit
+            cl = self.cl_limit
             # 簡易的に真ん中で割る
             mid_h = (int(op.split(':')[0]) + int(cl.split(':')[0])) // 2
             mid_time = f"{mid_h:02d}:00"
@@ -59,6 +64,7 @@ class ShiftScheduler:
             for d in self.dates:
                 try: req_num = int(staff_req.get(d, 2))
                 except: req_num = 2
+                if req_num < 1: req_num = 1
                 
                 # その日の総出勤数
                 daily_sum = pulp.lpSum([
@@ -86,7 +92,11 @@ class ShiftScheduler:
                 except: max_hours = 8
                 
                 for p_idx, pat in enumerate(self.patterns):
-                    duration = self._calc_duration(pat['start'], pat['end'])
+                    # 営業時間ではみ出しをカットした時間で計算
+                    real_start = max(pat['start'], self.op_limit)
+                    real_end = min(pat['end'], self.cl_limit)
+                    duration = self._calc_duration(real_start, real_end)
+                    
                     if duration > max_hours:
                         # 上限を超えるパターンは禁止 (コスト無限大)
                         for d in self.dates:
@@ -99,14 +109,22 @@ class ShiftScheduler:
                 shifts = []
                 for s in self.staff_list:
                     for d in self.dates:
-                        for p_idx, pat in enumerate(self.patterns):
-                            if pulp.value(x[(s['id'], d, p_idx)]) == 1:
+                        for i, p in enumerate(self.patterns):
+                            if pulp.value(x[(s['id'], d, i)]) == 1:
+                                # 時間がはみ出さないようにクリップ
+                                start_t = max(p['start'], self.op_limit)
+                                end_t = min(p['end'], self.cl_limit)
+                                
+                                # 休憩時間の計算
+                                dur = self._calc_duration(start_t, end_t)
+                                brk = 60 if dur > 480 else (45 if dur > 360 else 0)
+
                                 shifts.append({
                                     "staff_id": s['id'],
                                     "date": d,
-                                    "start_time": pat['start'],
-                                    "end_time": pat['end'],
-                                    "break_minutes": 60 if self._calc_duration(pat['start'], pat['end']) > 6 else 45
+                                    "start_time": start_t,
+                                    "end_time": end_t,
+                                    "break_minutes": brk
                                 })
                 return shifts
             return []
@@ -115,30 +133,27 @@ class ShiftScheduler:
             return []
 
     def _solve_fallback(self):
-        # 安全装置: ランダムにパターンを割り当て
+        # 安全装置: 営業時間内のランダムシフト
         shifts = []
         for d in self.dates:
+            # NG日以外の人から選ぶ
             available = [s for s in self.staff_list if d not in self._get_ng_dates(s)]
-            # 必要人数分だけ選ぶ
             count = min(len(available), 3)
             selected = random.sample(available, count) if available else []
             
             for s in selected:
-                # ランダムなパターンを選ぶ (ただしMax時間以内のもの)
-                valid_patterns = []
-                max_h = int(s.get('max_hours_day', 8))
-                for pat in self.patterns:
-                    if self._calc_duration(pat['start'], pat['end']) <= max_h:
-                        valid_patterns.append(pat)
+                # パターンがあればそれを使う、なければ営業時間フル
+                pat = self.patterns[0] if self.patterns else {"start": self.op_limit, "end": self.cl_limit}
                 
-                if not valid_patterns: valid_patterns = [self.patterns[0]]
+                # クリップ処理
+                start_t = max(pat['start'], self.op_limit)
+                end_t = min(pat['end'], self.cl_limit)
                 
-                pat = random.choice(valid_patterns)
                 shifts.append({
                     "staff_id": s['id'],
                     "date": d,
-                    "start_time": pat['start'],
-                    "end_time": pat['end'],
+                    "start_time": start_t,
+                    "end_time": end_t,
                     "break_minutes": 60
                 })
         return shifts
@@ -152,4 +167,7 @@ class ShiftScheduler:
     def _calc_duration(self, start, end):
         sh, sm = map(int, start.split(':'))
         eh, em = map(int, end.split(':'))
-        return (eh * 60 + em - (sh * 60 + sm)) / 60
+        # 日またぎ考慮 (終了 < 開始 なら +24h)
+        if (eh * 60 + em) < (sh * 60 + sm):
+            eh += 24
+        return ((eh * 60 + em) - (sh * 60 + sm)) / 60
