@@ -42,11 +42,20 @@ class ShiftScheduler:
 
             penalty = 0
 
-            # 1. NG日 (ハード制約)
+            # 1. NG日 (ハード制約) - 安全対策済み
             for s in self.staff_list:
-                ng_dates = s.get('unavailable_dates', [])
-                if isinstance(ng_dates, str):
-                    ng_dates = ng_dates.split(',') if ng_dates else []
+                raw_ng = s.get('unavailable_dates')
+                ng_dates = []
+                
+                if raw_ng:
+                    if isinstance(raw_ng, list):
+                        ng_dates = raw_ng
+                    elif isinstance(raw_ng, str):
+                        ng_dates = raw_ng.split(',')
+                
+                # 空白除去などのクリーニング
+                ng_dates = [str(d).strip() for d in ng_dates if d]
+
                 for d in self.dates:
                     if d in ng_dates:
                         problem += x[(s['id'], d)] == 0
@@ -100,7 +109,8 @@ class ShiftScheduler:
                             })
                 return shifts
             return []
-        except:
+        except Exception as e:
+            print(f"Solver Error: {e}")
             return []
 
     def _solve_fallback(self):
@@ -114,8 +124,13 @@ class ShiftScheduler:
             # 働けるスタッフを探す
             available = []
             for s in self.staff_list:
-                ng_dates = s.get('unavailable_dates', [])
-                if isinstance(ng_dates, str): ng_dates = ng_dates.split(',')
+                raw_ng = s.get('unavailable_dates')
+                ng_dates = []
+                if raw_ng:
+                    if isinstance(raw_ng, list): ng_dates = raw_ng
+                    elif isinstance(raw_ng, str): ng_dates = raw_ng.split(',')
+                ng_dates = [str(date).strip() for date in ng_dates]
+
                 if d not in ng_dates:
                     available.append(s['id'])
             
