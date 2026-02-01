@@ -3385,8 +3385,8 @@ const app = {
         }
     },
 
-    // --- AI自動作成 ---
-    async runAutoFill() {
+       // --- AI自動作成 (Python + Gemini) ---
+       async runAutoFill() {
         // 店舗ログイン状態の確認
         if (!this.state.isShopLoggedIn || !this.state.organization_id) {
             this.showToast('セッションエラー: 再ログインしてください', 'error');
@@ -3398,6 +3398,10 @@ const app = {
         this.showLoading(true);
 
         try {
+            // ★重要: 計算前に最新の設定とスタッフ情報をDBから再取得する
+            console.log("Refreshing data before generation...");
+            await this.loadData(); 
+
             // 期間計算
             const today = new Date();
             let startDate, endDate;
@@ -3440,15 +3444,95 @@ const app = {
                 );
             }
 
-            // APIに送信して生成実行 (Python + Gemini Audit)
+            // APIに送信
             this.showToast('AI計算サーバーにリクエスト送信中...', 'info');
             console.log("Sending request to Calculation Engine..."); 
             
-            // 重要: config に organization_id が含まれていることを確認
-            // もし空なら手動で補完
             if (!this.state.config.organization_id) {
                 this.state.config.organization_id = this.state.organization_id;
             }
+
+            const payload = {
+                staff_list: this.state.staff,
+                config: this.state.config,
+                dates: dates,
+                requests: this.state.requests,
+                mode: 'auto'
+            };
+
+            const result = await API.generateShifts(payload);
+            
+            if (result.status === 'error') {
+                this.showToast(`生成エラー: ${result.message}`, 'error');
+                return;
+            }
+
+            console.log("Server Response:", result);
+
+            if (result.status === 'success' && result.shifts) {
+                // 保存処理
+                const newShifts = result.shifts;
+                this.showToast(`${newShifts.length}件のシフト生成完了。保存中...`, 'info');
+                
+                const existing = this.state.shifts.filter(s => dates.includes(s.date));
+                const finalShifts = [];
+                
+                for (const s of newShifts) {
+                    if (targetType === 'empty_only') {
+                        const exists = existing.find(ex => ex.date === s.date && ex.staff_id === s.staff_id);
+                        if (exists) continue;
+                    }
+                    finalShifts.push(s);
+                }
+
+                // 一括保存
+                await this.saveAllShifts(finalShifts);
+
+                if (targetType === 'reset_all') {
+                    this.state.shifts = this.state.shifts.filter(s => !dates.includes(s.date));
+                }
+                
+                // 表示用データの追加
+                const displayShifts = finalShifts.map((s, idx) => ({
+                    ...s,
+                    id: s.id || `temp_${Date.now()}_${idx}`, 
+                    organization_id: this.state.organization_id
+                }));
+                
+                this.state.shifts = [...this.state.shifts, ...displayShifts];
+                
+                console.log(`Generated ${displayShifts.length} shifts. Updating view...`);
+
+                this.renderCurrentView();
+                this.calculateMonthlyStats();
+                this.showToast(`完了しました (Mode: ${result.mode})`, 'success');
+            } else {
+                this.showToast('シフト案が生成されませんでした (条件が厳しすぎる可能性があります)', 'warning');
+            }
+
+        } catch (e) {
+            console.error('AutoFill Error:', e);
+            this.showToast(`エラー: ${e.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    // 一括保存ヘルパー (saveAllShifts が無い場合に追加)
+    async saveAllShifts(shifts) {
+        if (!shifts || shifts.length === 0) return;
+        const batchSize = 50;
+        for (let i = 0; i < shifts.length; i += batchSize) {
+            const batch = shifts.slice(i, i + batchSize);
+            batch.forEach(s => s.organization_id = this.state.organization_id);
+            try {
+                await Promise.all(batch.map(s => API.create('shifts', s)));
+            } catch(e) {
+                console.error("Background save error:", e);
+            }
+        }
+    },
+
 
             const payload = {
                 staff_list: this.state.staff,
