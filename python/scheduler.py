@@ -1,33 +1,16 @@
-"""
-Rakushift AI - Shift Scheduler v2.0
-====================================
-3-Tier Priority System:
-  Tier 1: Legal / Contract / Physics (NEVER violate)
-  Tier 2: Store Settings / 15-min Coverage (STRICT)
-  Tier 3: OJT / Power Balance / Team Optimization (SOFT)
-
-Auto-relaxation: Tier3 -> Tier2 -> Tier1-only -> Greedy
-All settings come from user config - nothing is hardcoded.
-"""
-
 import pulp
 from datetime import datetime, timedelta
 
 
 class ShiftScheduler:
 
-    # Break rules per Japanese Labor Standards Act (default)
     DEFAULT_BREAK_RULES = [
         {"min_hours": 6, "break_minutes": 45},
         {"min_hours": 8, "break_minutes": 60},
     ]
 
-    # Role IDs that count as mentors (can supervise rookies)
     MENTOR_ROLES = {"manager", "leader"}
-    # Role IDs that count as rookies (must not work alone)
     ROOKIE_ROLES = {"rookie"}
-
-    # Power score by evaluation rank
     POWER_SCORE = {"A": 3.0, "B": 2.0, "C": 1.0, "D": 0.5}
 
     def __init__(self, staff_list, config, dates, requests=None):
@@ -36,7 +19,6 @@ class ShiftScheduler:
         self.dates = sorted(dates or [])
         self.requests = requests or []
 
-        # --- Shift patterns from config ---
         raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
         for p in raw_patterns:
@@ -50,7 +32,6 @@ class ShiftScheduler:
             cl = self.config.get("closing_time", "22:00")
             self.shift_patterns = [{"start": op, "end": cl, "name": "full"}]
 
-        # --- Operating hours ---
         self.op_limit = self.config.get("opening_time", "09:00")
         self.cl_limit = self.config.get("closing_time", "22:00")
         raw_ot = self.config.get("opening_times", {})
@@ -63,7 +44,6 @@ class ShiftScheduler:
         else:
             self.opening_times = raw_ot
 
-        # --- Staff requirements from config ---
         sr = self.config.get("staff_req", {})
         self.min_weekday = int(sr.get("min_weekday", 2))
         self.min_weekend = int(sr.get("min_weekend", 3))
@@ -71,17 +51,14 @@ class ShiftScheduler:
         self.min_manager = int(sr.get("min_manager", 1))
         self.time_staff_req = self.config.get("time_staff_req", [])
 
-        # --- Break rules ---
         self.break_rules = self.config.get("break_rules", [])
         if not self.break_rules:
             self.break_rules = self.DEFAULT_BREAK_RULES
 
-        # --- Closed / special days ---
         self.closed_days = self.config.get("closed_days", [])
         self.special_holidays = self.config.get("special_holidays", [])
         self.special_days = self.config.get("special_days", {})
 
-        # --- Pre-compute staff metadata ---
         self._mentor_ids = set()
         self._rookie_ids = set()
         self._monthly_ids = set()
@@ -102,7 +79,6 @@ class ShiftScheduler:
                 self._manager_ids.add(sid)
             if salary == "monthly":
                 self._monthly_ids.add(sid)
-
             self._eval_rank[sid] = evaluation if evaluation in self.POWER_SCORE else "B"
 
         print("[Init] Staff:{} Dates:{} Patterns:{}".format(
@@ -113,8 +89,6 @@ class ShiftScheduler:
         print("[Init] Mentors:{} Rookies:{} Monthly:{}".format(
             len(self._mentor_ids), len(self._rookie_ids),
             len(self._monthly_ids)))
-
-    # ==================== HELPERS ====================
 
     def _to_minutes(self, time_str):
         try:
@@ -226,8 +200,6 @@ class ShiftScheduler:
             hrs = (pe - ps) / 60.0
             if hrs < 1:
                 continue
-            if not force and hrs > max_hours + 0.01:
-                continue
             key = (ps, pe)
             if key in seen:
                 continue
@@ -248,7 +220,9 @@ class ShiftScheduler:
         cl = self._to_minutes(day_close)
         if op >= cl:
             return {}
-        slots = {t: req_num for t in range(op, cl, 15)}
+        slots = {}
+        for t in range(op, cl, 15):
+            slots[t] = req_num
 
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
@@ -269,8 +243,6 @@ class ShiftScheduler:
 
     def _is_rookie(self, staff):
         return staff["id"] in self._rookie_ids
-
-    # ==================== PRE-CHECK ====================
 
     def pre_check(self):
         warnings = []
@@ -369,12 +341,10 @@ class ShiftScheduler:
                            "shortage": short})
         return ranges
 
-    # ==================== MAIN SOLVE ====================
-
     def solve(self, force=False):
         result = self._solve_milp(force=force, tier=3)
         if result:
-            print("[Solve] Tier 3 (full optimization) succeeded")
+            print("[Solve] Tier 3 (full) succeeded")
             return result
 
         print("[Fallback] Relaxing Tier 3...")
@@ -386,13 +356,11 @@ class ShiftScheduler:
         print("[Fallback] Relaxing to Tier 1 + force...")
         result = self._solve_milp(force=True, tier=1)
         if result:
-            print("[Solve] Tier 1 (legal only + force) succeeded")
+            print("[Solve] Tier 1 (legal only) succeeded")
             return result
 
-        print("[Fallback] Greedy algorithm...")
+        print("[Fallback] Greedy...")
         return self._solve_greedy()
-
-    # ==================== MILP SOLVER ====================
 
     def _solve_milp(self, force=False, tier=3):
         try:
@@ -416,11 +384,8 @@ class ShiftScheduler:
                             "x_{}_{}_{}" .format(sid, d, oi),
                             0, 1, pulp.LpBinary)
 
-            # ====================================================
-            # TIER 1: Legal / Contract / Physics (HARD constraints)
-            # ====================================================
+            # ========== TIER 1: Legal / Contract ==========
 
-            # 1-a: Max 1 shift per person per day
             for s in self.staff_list:
                 sid = s["id"]
                 for d in self.dates:
@@ -430,7 +395,6 @@ class ShiftScheduler:
                             x[(sid, d, oi)] for oi in range(len(opts))
                         ) <= 1
 
-            # 1-b: Weekly day limit (from contract)
             week_groups = self._group_dates_by_week()
             for s in self.staff_list:
                 sid = s["id"]
@@ -449,7 +413,6 @@ class ShiftScheduler:
                     if wv:
                         prob += pulp.lpSum(wv) <= effective
 
-            # 1-c: Max 6 consecutive working days
             if not force:
                 sorted_d = sorted(self.dates)
                 for s in self.staff_list:
@@ -463,12 +426,9 @@ class ShiftScheduler:
                         if sv:
                             prob += pulp.lpSum(sv) <= 6
 
-            # ====================================================
-            # TIER 2: Store settings / Coverage (SOFT with huge penalty)
-            # ====================================================
+            # ========== TIER 2: Coverage ==========
 
             if tier >= 2:
-                # 2-a: 15-min slot coverage
                 for d in self.dates:
                     slot_reqs = self._build_slot_requirements(d)
                     for slot_min, req in slot_reqs.items():
@@ -484,11 +444,7 @@ class ShiftScheduler:
                                 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(workers) + slack >= req
                             penalty += slack * 1000000
-                        else:
-                            print("  WARN: No staff can cover {} {}".format(
-                                d, self._from_minutes(slot_min)))
 
-                # 2-b: Manager/mentor minimum per slot
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
@@ -508,13 +464,9 @@ class ShiftScheduler:
                             prob += pulp.lpSum(mgr_vars) + slack >= self.min_manager
                             penalty += slack * 500000
 
-            # ====================================================
-            # TIER 3: OJT / Power Balance / Team optimization
-            # ====================================================
+            # ========== TIER 3: OJT / Power Balance ==========
 
             if tier >= 3:
-                # 3-a: Rookie must have mentor overlap
-                #   For every slot where a rookie works, at least 1 mentor
                 if self._rookie_ids and self._mentor_ids:
                     for d in self.dates:
                         if self._get_day_type(d) == "closed":
@@ -543,8 +495,6 @@ class ShiftScheduler:
                                 for rv in rookie_vars:
                                     penalty += rv * 200000
 
-                # 3-b: Power balance per day
-                #   Target: avg power per day should be >= 1.5
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
@@ -552,23 +502,18 @@ class ShiftScheduler:
                     if not slot_reqs:
                         continue
                     power_expr = pulp.LpAffineExpression()
-                    count_expr = pulp.LpAffineExpression()
                     for s in self.staff_list:
                         sid = s["id"]
                         rank = self._eval_rank.get(sid, "B")
                         pw = self.POWER_SCORE.get(rank, 2.0)
                         for oi in range(len(staff_opts.get((sid, d), []))):
                             power_expr += x[(sid, d, oi)] * pw
-                            count_expr += x[(sid, d, oi)]
-                    # Instead of ratio, ensure total power >= 1.5 * required
                     min_req = self._get_required_staff(d)
                     if min_req > 0:
-                        slack = pulp.LpVariable(
-                            "pw_{}".format(d), 0, None)
+                        slack = pulp.LpVariable("pw_{}".format(d), 0, None)
                         prob += power_expr + slack >= 1.5 * min_req
                         penalty += slack * 10000
 
-                # 3-c: Rank C/D minimization (use A/B first)
                 for s in self.staff_list:
                     sid = s["id"]
                     rank = self._eval_rank.get(sid, "B")
@@ -577,11 +522,8 @@ class ShiftScheduler:
                         for oi in range(len(staff_opts.get((sid, d), []))):
                             penalty += x[(sid, d, oi)] * cost
 
-            # ====================================================
-            # OBJECTIVES (always active)
-            # ====================================================
+            # ========== OBJECTIVES ==========
 
-            # Monthly salary staff should work as much as possible
             for sid in self._monthly_ids:
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
@@ -592,7 +534,6 @@ class ShiftScheduler:
                             x[(sid, d, oi)] for oi in range(len(opts)))
                         penalty += not_working * 30000
 
-            # Minimize hourly labor cost
             for s in self.staff_list:
                 if str(s.get("salary_type", "hourly")).lower() != "hourly":
                     continue
@@ -602,7 +543,6 @@ class ShiftScheduler:
                     for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                         penalty += x[(sid, d, oi)] * wage * opt["hours"] * 0.01
 
-            # Force mode: penalize overtime heavily
             if force:
                 for s in self.staff_list:
                     mh = float(s.get("max_hours_day") or 8)
@@ -612,9 +552,6 @@ class ShiftScheduler:
                             if opt["hours"] > mh:
                                 penalty += x[(sid, d, oi)] * (opt["hours"] - mh) * 50000
 
-            # ====================================================
-            # SOLVE
-            # ====================================================
             prob += penalty
             solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=120)
             prob.solve(solver)
@@ -655,7 +592,7 @@ class ShiftScheduler:
                 print("[OVERTIME]")
                 for w in warnings:
                     print("  " + w)
-            print("[Result] {} shifts generated".format(len(shifts)))
+            print("[Result] {} shifts".format(len(shifts)))
             return shifts if shifts else None
 
         except Exception as e:
@@ -663,8 +600,6 @@ class ShiftScheduler:
             import traceback
             traceback.print_exc()
             return None
-
-    # ==================== VALIDATION ====================
 
     def _validate(self, shifts):
         violations = 0
@@ -683,8 +618,6 @@ class ShiftScheduler:
             print("  VALIDATION: All slots covered!")
         else:
             print("  VALIDATION: {} violations".format(violations))
-
-    # ==================== GREEDY FALLBACK ====================
 
     def _solve_greedy(self):
         shifts = []
@@ -715,7 +648,6 @@ class ShiftScheduler:
                 best_s = best_o = None
                 best_cov = 0
 
-                # Prioritize: mentors first, then by rank
                 sorted_staff = sorted(
                     self.staff_list,
                     key=lambda s: (
@@ -764,6 +696,6 @@ class ShiftScheduler:
                     break
             shifts.extend(day_shifts)
 
-        print("[Greedy] {} shifts generated".format(len(shifts)))
+        print("[Greedy] {} shifts".format(len(shifts)))
         self._validate(shifts)
         return shifts if shifts else None
