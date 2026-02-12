@@ -182,6 +182,25 @@ const API = {
         });
         return true;
     },
+    // --- RPC (サーバーサイド関数) ---
+    async rpc(functionName, params = {}) {
+        const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`
+            },
+            body: JSON.stringify(params)
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(`RPC Error [${res.status}] ${functionName}:`, errText);
+            throw new Error(`RPC失敗: ${functionName}`);
+        }
+        return await res.json();
+    },
 
     // --- 計算エンジン連携 (Python Cloud Run + Gemini Review) ---
     async generateShifts(payload) {

@@ -301,20 +301,11 @@ const app = {
     async login() {
         console.log('[ShopLogin] Login attempt started...');
         
-        // 要素の取得と存在確認（デバッグ用）
         const contractIdEl = document.getElementById('loginContractId');
-        // HTMLのID変更に対応: loginShopPass (新) or loginPass (旧: キャッシュ対策)
         const passwordEl = document.getElementById('loginShopPass') || document.getElementById('loginPass');
 
-        if (!contractIdEl) {
-            console.error('FATAL: #loginContractId not found in DOM');
-            alert('エラー: 契約ID入力欄が見つかりません。ブラウザのキャッシュをクリアして再読み込みしてください。');
-            return;
-        }
-        
-        if (!passwordEl) {
-            console.error('FATAL: Password input not found in DOM');
-            alert('エラー: パスワード入力欄が見つかりません。ページを再読み込みしてください。');
+        if (!contractIdEl || !passwordEl) {
+            alert('エラー: 入力欄が見つかりません。ページを再読み込みしてください。');
             return;
         }
 
@@ -328,55 +319,34 @@ const app = {
 
         this.showLoading(true);
         try {
-            console.log(`[ShopLogin] Fetching config... Input ContractID: ${contractId}`);
-            
-            // Configテーブルから契約情報を検索
-            // Supabase連携版: API.list は {data: [...]} を返すのでそのまま使える
-            const res = await API.list('config');
-            
-            console.log('[ShopLogin] Config fetched:', res); // レスポンスの中身を確認
+            // サーバーサイドでハッシュ検証
+            const result = await API.rpc('verify_shop_login', {
+                p_contract_id: contractId,
+                p_password: password
+            });
 
-            // Supabase SDK の場合 res.data がnullの場合もあるのでチェック
-            if (!res || !res.data) {
-                console.error('[ShopLogin] Config data is empty or null');
-                // 初回起動などでConfigが空の可能性もあるが、ログイン情報がないと入れない
-                throw new Error('データの取得に失敗しました');
-            }
+            console.log('[ShopLogin] RPC result:', result);
 
-            // 契約IDとパスワードで照合
-            // Supabaseから取得したデータ内に、contract_id, shop_password があるか確認
-            const shopConfig = res.data.find(c => 
-                c.contract_id === contractId && 
-                c.shop_password === password
-            );
-
-            if (shopConfig) {
-                console.log('[ShopLogin] Success!', shopConfig);
-                // ログイン成功 (店舗モード)
+            if (result.success) {
                 this.state.isShopLoggedIn = true;
                 this.state.isAdmin = false;
-                // ここで確実に organization_id (UUID) ではなく contract_id (文字列) を保存する
-                this.state.organization_id = contractId; 
-                
-                // セッション保存（店舗ユーザーとして）
-                const sessionUser = {
-                    contract_id: contractId,
+                this.state.organization_id = result.contract_id;
+
+                API.setSession({
+                    contract_id: result.contract_id,
+                    organization_id: result.organization_id,
                     name: 'Guest (Staff)',
                     role: 'Guest'
-                };
-                API.setSession(sessionUser);
-                
+                });
+
                 this.closeModal('loginModal');
                 this.showToast(`契約ID: ${contractId} でログインしました`, 'success');
-                
-                // データをロードして画面更新
+
                 await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
-                
             } else {
-                console.warn('[ShopLogin] Auth failed. No matching config found.');
-                this.showToast('契約IDまたはパスワードが正しくありません', 'error');
+                this.showToast(result.message || 'ログインに失敗しました', 'error');
             }
 
         } catch (error) {
@@ -387,6 +357,7 @@ const app = {
         }
     },
 
+
     /**
      * 管理者ログイン処理
      */
@@ -394,7 +365,6 @@ const app = {
         const loginId = document.getElementById('adminLoginId').value.trim();
         const password = document.getElementById('adminLoginPass').value.trim();
 
-        // ログ出力を関数の先頭に追加
         console.log(`[AdminLogin] Triggered. Input LoginID: ${loginId}`);
 
         if (!loginId || !password) {
@@ -404,66 +374,49 @@ const app = {
 
         this.showLoading(true);
         try {
-            // 現在の契約IDに紐づくスタッフの中から管理者を検索
-            // Supabase連携版: contract_id (文字列) をキーにする
-            // this.state.organization_id には "demo" (文字列) が入っているはずだが
-            // sessionから復元された場合はUUIDになっている可能性もあるため、
-            // API.session.user.contract_id を最優先で使用する
-            
             let currentContractId = this.state.organization_id;
-            if (API.session && API.session.user && API.session.user.contract_id) {
+            if (API.session?.user?.contract_id) {
                 currentContractId = API.session.user.contract_id;
-            } else if (this.state.config && this.state.config.contract_id) {
-                // state.config からのフォールバックも追加
+            } else if (this.state.config?.contract_id) {
                 currentContractId = this.state.config.contract_id;
             }
-            
-            console.log(`[AdminLogin] Attempting login. ContractID: ${currentContractId}, LoginID: ${loginId}`);
-            
-            // 重要: Supabaseの疎通確認
-            try {
-                // 試しにconfigを1件取得してみる（接続チェック）
-                await API.list('config', { limit: 1 });
-            } catch (connError) {
-                console.error("[AdminLogin] Supabase Connection Failed:", connError);
-                throw new Error("データベースへの接続に失敗しました");
+
+            console.log(`[AdminLogin] ContractID: ${currentContractId}, LoginID: ${loginId}`);
+
+            if (!currentContractId) {
+                this.showToast('先に店舗ログインしてください', 'error');
+                return;
             }
 
-            const res = await API.list('staff');
+            // サーバーサイドでハッシュ検証
+            const result = await API.rpc('verify_admin_login', {
+                p_contract_id: currentContractId,
+                p_login_id: loginId,
+                p_password: password
+            });
 
-            if (!res || !res.data) {
-                console.error("[AdminLogin] API returned no data (staff table is empty or inaccessible)");
-                throw new Error('データの取得に失敗しました');
-            }
-            
-            // デバッグ: 該当しそうなユーザーを探してログに出す
-            const potentialUsers = res.data.filter(u => u.login_id === loginId);
-            console.log("[AdminLogin] Potential users found:", potentialUsers);
+            console.log('[AdminLogin] RPC result:', result);
 
-            const adminUser = res.data.find(u => 
-                u.contract_id === currentContractId && 
-                u.login_id === loginId && 
-                u.password === password &&
-                (u.role === 'Manager' || u.role === 'manager') 
-            );
-            
-            if (adminUser) {
-                console.log("[AdminLogin] Success!", adminUser);
+            if (result.success) {
                 this.state.isAdmin = true;
-                
-                // セッション情報を更新（管理者として）
-                API.setSession(adminUser);
+
+                API.setSession({
+                    id: result.staff_id,
+                    contract_id: currentContractId,
+                    organization_id: result.organization_id,
+                    name: result.name,
+                    role: result.role
+                });
 
                 this.closeModal('adminLoginModal');
-                this.showToast(`管理者: ${adminUser.name} でログインしました`, 'success');
-                
+                this.showToast(`管理者: ${result.name} でログインしました`, 'success');
+
                 this.updateAuthUI();
                 this.updateHeader();
-                // 管理機能が見えるようになったのでリロード不要、UI更新のみ
             } else {
-                console.warn("[AdminLogin] Failed. No matching user found.");
-                this.showToast('管理者IDまたはパスワードが違います', 'error');
+                this.showToast(result.message || '管理者ログインに失敗しました', 'error');
             }
+
         } catch(e) {
             console.error('Admin Login Error:', e);
             this.showToast(`エラーが発生しました: ${e.message}`, 'error');
@@ -471,6 +424,7 @@ const app = {
             this.showLoading(false);
         }
     },
+
 
     signUpMode() {
         alert("新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。");
