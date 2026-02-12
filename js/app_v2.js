@@ -3533,12 +3533,11 @@ const app = {
 
 
     // 一括保存 (大量データの保存)
-        async saveAllShifts(shifts) {
+            async saveAllShifts(shifts) {
         if (!shifts || shifts.length === 0) return;
 
         var targetDates = [...new Set(shifts.map(function(s){ return s.date; }))];
 
-        // 対象日付の既存シフトをDBから一括削除（日付ごとにDELETE）
         console.log("Deleting existing shifts for " + targetDates.length + " days...");
         for (var di = 0; di < targetDates.length; di++) {
             try {
@@ -3550,10 +3549,8 @@ const app = {
             }
         }
 
-        // ローカルstateからも除去
         this.state.shifts = this.state.shifts.filter(function(s){ return targetDates.indexOf(s.date) === -1; });
 
-        // DBカラムだけに絞る（overtimeなど不要フィールド除去）
         var cleanShifts = shifts.map(function(s){
             return {
                 organization_id: this.state.organization_id,
@@ -3561,12 +3558,10 @@ const app = {
                 date: s.date,
                 start_time: s.start_time,
                 end_time: s.end_time,
-                break_minutes: s.break_minutes || 0,
-                status: s.status || 'draft'
+                break_minutes: s.break_minutes || 0
             };
         }.bind(this));
 
-        // 50件ずつバッチ保存
         var batchSize = 50;
         for (var i = 0; i < cleanShifts.length; i += batchSize) {
             var batch = cleanShifts.slice(i, i + batchSize);
