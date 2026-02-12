@@ -7,16 +7,15 @@ from scheduler import ShiftScheduler
 
 app = FastAPI()
 
-# ★★★ CORS設定 (これがないとブラウザから拒否される) ★★★
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # すべてのサイトからのアクセスを許可
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # GET, POSTなど全て許可
-    allow_headers=["*"],  # ヘッダーも全て許可
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# リクエストのデータ型定義
+
 class ShiftRequest(BaseModel):
     staff_list: List[Dict[str, Any]]
     config: Dict[str, Any]
@@ -24,26 +23,45 @@ class ShiftRequest(BaseModel):
     requests: List[Dict[str, Any]] = []
     mode: str = "auto"
 
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Rakushift Engine is Ready"}
 
+
+@app.post("/check")
+def check_feasibility(req: ShiftRequest):
+    try:
+        scheduler = ShiftScheduler(
+            req.staff_list, req.config, req.dates, req.requests)
+        result = scheduler.pre_check()
+        return {"status": "success", "check": result}
+    except Exception as e:
+        print("Check Error: {}".format(e))
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/generate")
 def generate_shifts(req: ShiftRequest):
-    print(f"Received request: {len(req.staff_list)} staff, {len(req.dates)} dates")
-    
+    print("Received request: {} staff, {} dates, mode={}".format(
+        len(req.staff_list), len(req.dates), req.mode))
+
     try:
-        # 数理最適化を実行 (scheduler.py)
-        scheduler = ShiftScheduler(req.staff_list, req.config, req.dates, req.requests)
-        result = scheduler.solve()
-        
-        # 結果を返す
+        scheduler = ShiftScheduler(
+            req.staff_list, req.config, req.dates, req.requests)
+
+        force = (req.mode == "force")
+        result = scheduler.solve(force=force)
+
         if result:
-            return {"status": "success", "mode": "math", "shifts": result}
+            return {
+                "status": "success",
+                "mode": "math_force" if force else "math",
+                "shifts": result
+            }
         else:
-            # 解なしの場合でもエラーにせず空配列を返す
             return {"status": "success", "mode": "math_failed", "shifts": []}
-            
+
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error: {}".format(e))
         return {"status": "error", "message": str(e)}
