@@ -3533,57 +3533,55 @@ const app = {
 
 
     // 一括保存 (大量データの保存)
-    async saveAllShifts(shifts) {
+        async saveAllShifts(shifts) {
         if (!shifts || shifts.length === 0) return;
-        
-        // 生成対象の日付一覧を取得
-        const targetDates = [...new Set(shifts.map(s => s.date))];
-        
-        // 対象日付の既存シフトをDBから削除
-        console.log("Deleting existing shifts for", targetDates.length, "days...");
-        for (const date of targetDates) {
-            const existing = this.state.shifts.filter(s => s.date === date);
-            for (const s of existing) {
-                try {
-                    await API.delete('shifts', s.id);
-                } catch(e) {
-                    console.error("Delete error:", e);
-                }
-            }
-        }
-        
-        // ローカルstateからも削除
-        this.state.shifts = this.state.shifts.filter(s => !targetDates.includes(s.date));
-        
-        // 組織IDを付与して保存
-        shifts.forEach(s => s.organization_id = this.state.organization_id);
-        
-        // 不要フィールド除去（overtime等）
-        const cleanShifts = shifts.map(s => ({
-            organization_id: s.organization_id,
-            staff_id: s.staff_id,
-            date: s.date,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            break_minutes: s.break_minutes || 0,
-            status: s.status || 'draft'
-        }));
-        
-        // 50件ずつ分割して保存
-        const batchSize = 50;
-        for (let i = 0; i < cleanShifts.length; i += batchSize) {
-            const batch = cleanShifts.slice(i, i + batchSize);
+
+        var targetDates = [...new Set(shifts.map(function(s){ return s.date; }))];
+
+        // 対象日付の既存シフトをDBから一括削除（日付ごとにDELETE）
+        console.log("Deleting existing shifts for " + targetDates.length + " days...");
+        for (var di = 0; di < targetDates.length; di++) {
             try {
-                await Promise.all(batch.map(s => API.create('shifts', s)));
+                await API._request('shifts?organization_id=eq.' + this.state.organization_id + '&date=eq.' + targetDates[di], {
+                    method: 'DELETE'
+                });
             } catch(e) {
-                console.error("Background save error:", e);
+                console.error("Delete error for " + targetDates[di] + ":", e);
             }
         }
-        
-        // ローカルstateに追加
-        this.state.shifts.push(...cleanShifts);
+
+        // ローカルstateからも除去
+        this.state.shifts = this.state.shifts.filter(function(s){ return targetDates.indexOf(s.date) === -1; });
+
+        // DBカラムだけに絞る（overtimeなど不要フィールド除去）
+        var cleanShifts = shifts.map(function(s){
+            return {
+                organization_id: this.state.organization_id,
+                staff_id: s.staff_id,
+                date: s.date,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                break_minutes: s.break_minutes || 0,
+                status: s.status || 'draft'
+            };
+        }.bind(this));
+
+        // 50件ずつバッチ保存
+        var batchSize = 50;
+        for (var i = 0; i < cleanShifts.length; i += batchSize) {
+            var batch = cleanShifts.slice(i, i + batchSize);
+            try {
+                await Promise.all(batch.map(function(s){ return API.create('shifts', s); }));
+            } catch(e) {
+                console.error("Batch save error:", e);
+            }
+        }
+
+        this.state.shifts.push.apply(this.state.shifts, cleanShifts);
         console.log("All shifts saved.");
     },
+
+
 
 
 

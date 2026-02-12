@@ -10,6 +10,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 // ★重要: あなたの最新のCloud Run URLに更新済み
 const CALC_API_URL = "https://rakushift-calc-874112922898.asia-northeast1.run.app/generate";
 const CHECK_API_URL = "https://rakushift-calc-874112922898.asia-northeast1.run.app/check";
+
 // Gemini API Endpoint
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -182,6 +183,28 @@ const API = {
         });
         return true;
     },
+    async upsert(table, dataArray) {
+        const res = await this._request(table, {
+            method: 'POST',
+            body: JSON.stringify(dataArray),
+            headers: {
+                'Prefer': 'return=representation,resolution=merge-duplicates'
+            }
+        });
+        return res;
+    },
+    async upsert(table, dataArray) {
+        const res = await this._request(table, {
+            method: 'POST',
+            body: JSON.stringify(dataArray),
+            headers: {
+                'Prefer': 'return=representation,resolution=merge-duplicates'
+            }
+        });
+        return res;
+    },
+
+
     // --- RPC (サーバーサイド関数) ---
     async rpc(functionName, params = {}) {
         const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
