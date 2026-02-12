@@ -9,24 +9,33 @@ class ShiftScheduler:
         self.dates = dates
         self.requests = requests
 
+        # シフトパターン = (start, end) のペアとして保持
         raw_patterns = config.get('custom_shifts', [])
-        self.start_times = []
+        self.shift_patterns = []
         for p in raw_patterns:
             st = p.get('start', '09:00')
-            if st not in self.start_times:
-                self.start_times.append(st)
+            en = p.get('end', '18:00')
+            self.shift_patterns.append({'start': st, 'end': en, 'name': p.get('name', '')})
         
-        if not self.start_times:
-            self.start_times = ['09:00', '14:00', '17:00']
+        if not self.shift_patterns:
+            self.shift_patterns = [
+                {'start': '09:00', 'end': '17:00', 'name': '早番'},
+                {'start': '14:00', 'end': '22:00', 'name': '遅番'},
+            ]
 
         self.op_limit = config.get('opening_time', '09:00')
         self.cl_limit = config.get('closing_time', '22:00')
         
-        self.opening_times = config.get('opening_times', {
-            'weekday': {'start': '09:00', 'end': '22:00'},
-            'weekend': {'start': '10:00', 'end': '20:00'},
-            'holiday': {'start': '10:00', 'end': '20:00'}
-        })
+        # opening_times が空の場合はop_limit/cl_limitからデフォルト生成
+        raw_ot = config.get('opening_times', {})
+        if not raw_ot or not raw_ot.get('weekday'):
+            self.opening_times = {
+                'weekday': {'start': self.op_limit, 'end': self.cl_limit},
+                'weekend': {'start': self.op_limit, 'end': self.cl_limit},
+                'holiday': {'start': self.op_limit, 'end': self.cl_limit}
+            }
+        else:
+            self.opening_times = raw_ot
 
         self.staff_req = config.get('staff_req', {})
         self.min_weekday = int(self.staff_req.get('min_weekday', 2))
@@ -43,6 +52,13 @@ class ShiftScheduler:
         
         self.closed_days = config.get('closed_days', [])
         self.special_holidays = config.get('special_holidays', [])
+
+        # デバッグ: 受信データをログ
+        print(f"[Init] Staff: {len(self.staff_list)}, Dates: {len(self.dates)}")
+        print(f"[Init] Patterns: {self.shift_patterns}")
+        print(f"[Init] Requirements: weekday={self.min_weekday}, weekend={self.min_weekend}, holiday={self.min_holiday}")
+        print(f"[Init] Opening times: {self.opening_times}")
+        print(f"[Init] Time staff req: {self.time_staff_req}")
 
     # =========================================================
     # ヘルパー関数
@@ -140,39 +156,55 @@ class ShiftScheduler:
         return weeks
 
     def _build_shift_options(self, staff, date_str):
+        """
+        スタッフ×日付ごとに可能なシフト候補を返す。
+        シフトパターンの(start, end)をそのまま使い、
+        スタッフのmax_hoursを超えるパターンは除外する。
+        """
         day_open, day_close = self._get_opening_hours(date_str)
         open_min = self._to_minutes(day_open)
         close_min = self._to_minutes(day_close)
         
         salary_type = str(staff.get('salary_type', 'hourly')).lower()
-        max_hours = float(staff.get('max_hours_day', 8))
+        max_hours = float(staff.get('max_hours_day') or 8)
         
-        if salary_type == 'monthly':
-            work_minutes = max(480, int(max_hours * 60))
-        else:
-            work_minutes = int(max_hours * 60)
+        # max_hours が 0 の場合はこのスタッフは使えない
+        if max_hours <= 0:
+            return []
         
         options = []
-        for st in self.start_times:
-            st_min = self._to_minutes(st)
+        for pattern in self.shift_patterns:
+            p_start = self._to_minutes(pattern['start'])
+            p_end = self._to_minutes(pattern['end'])
             
-            if st_min < open_min or st_min >= close_min:
+            # 営業時間外のパターンはスキップ
+            if p_start < open_min or p_end > close_min:
+                # パターンをクリップして使う
+                p_start = max(p_start, open_min)
+                p_end = min(p_end, close_min)
+            
+            if p_start >= p_end:
                 continue
             
-            end_min = min(st_min + work_minutes, close_min)
-            actual_hours = (end_min - st_min) / 60
+            actual_hours = (p_end - p_start) / 60
             
+            # 最低1時間
             if actual_hours < 1:
                 continue
             
+            # スタッフの最大時間を超えるパターンはスキップ
+            if actual_hours > max_hours:
+                continue
+            
+            # 月給社員で8時間未満のパターンはスキップ
             if salary_type == 'monthly' and actual_hours < 8:
                 continue
             
             options.append({
-                'start': self._from_minutes(st_min),
-                'end': self._from_minutes(end_min),
-                'start_min': st_min,
-                'end_min': end_min,
+                'start': self._from_minutes(p_start),
+                'end': self._from_minutes(p_end),
+                'start_min': p_start,
+                'end_min': p_end,
                 'hours': actual_hours
             })
         
@@ -182,10 +214,6 @@ class ShiftScheduler:
     # 時間スロットごとの必要人数マップを生成
     # =========================================================
     def _build_slot_requirements(self, date_str):
-        """
-        15分刻みで各スロットの必要人数を返す
-        Returns: dict { slot_minute: required_count }
-        """
         req_num = self._get_required_staff(date_str)
         if req_num <= 0:
             return {}
@@ -198,7 +226,6 @@ class ShiftScheduler:
         for t in range(op_min, cl_min, 15):
             slots[t] = req_num
         
-        # 時間帯別ルールで上書き (max)
         dt = datetime.strptime(date_str, '%Y-%m-%d')
         js_dow = (dt.weekday() + 1) % 7
         
@@ -277,6 +304,12 @@ class ShiftScheduler:
                             f"x_{s['id']}_{d}_{oi}", 0, 1, pulp.LpBinary
                         )
 
+            # デバッグ: 各スタッフの選択肢数を出力
+            for s in self.staff_list:
+                d0 = self.dates[0] if self.dates else ''
+                opts = staff_options.get((s['id'], d0), [])
+                print(f"  Staff '{s.get('name','')}' options on {d0}: {[f\"{o['start']}-{o['end']}\" for o in opts]}")
+
             penalty = pulp.LpAffineExpression()
 
             # === 制約1: 1日1シフトまで ===
@@ -297,17 +330,17 @@ class ShiftScheduler:
                     for s in self.staff_list:
                         opts = staff_options.get((s['id'], d), [])
                         for oi, opt in enumerate(opts):
-                            # このシフト候補がこの15分スロットをカバーするか
                             if opt['start_min'] <= slot_min < opt['end_min']:
                                 workers.append(x[(s['id'], d, oi)])
                     
                     if workers:
-                        # ★ ハード制約として設定（slackなし）
-                        # ただし、物理的に不可能な場合のためにslackは残すが
-                        # ペナルティを極大にして事実上ハード制約にする
                         slack = pulp.LpVariable(f"slot_{d}_{slot_min}", 0, None, pulp.LpInteger)
                         problem += pulp.lpSum(workers) + slack >= req_count
-                        penalty += slack * 1000000  # 100万ペナルティ = 事実上禁止
+                        penalty += slack * 1000000
+                    else:
+                        # どのスタッフのどのパターンもこのスロットをカバーできない
+                        time_str = self._from_minutes(slot_min)
+                        print(f"  CRITICAL: No staff can cover {d} {time_str} (need {req_count})")
 
             # === 制約3: 管理者最低人数 (全時間スロット) ===
             for d in self.dates:
@@ -334,7 +367,15 @@ class ShiftScheduler:
             # === 制約4: 週の勤務日数上限 ===
             week_groups = self._group_dates_by_week()
             for s in self.staff_list:
-                max_days = int(s.get('max_days_week', 5))
+                max_days = int(s.get('max_days_week') or 5)
+                if max_days <= 0:
+                    # max_days=0 のスタッフは出勤させない
+                    for d in self.dates:
+                        opts = staff_options.get((s['id'], d), [])
+                        for oi in range(len(opts)):
+                            problem += x[(s['id'], d, oi)] == 0
+                    continue
+                    
                 for week_dates in week_groups:
                     week_vars = []
                     for d in week_dates:
@@ -383,7 +424,7 @@ class ShiftScheduler:
                     for oi in range(len(opts)):
                         penalty += x[(sid, d, oi)] * cost
 
-            # 人件費最小化 (時給スタッフ)
+            # 人件費最小化
             for s in self.staff_list:
                 if str(s.get('salary_type', 'hourly')).lower() != 'hourly':
                     continue
@@ -418,7 +459,6 @@ class ShiftScheduler:
                                     "break_minutes": brk
                                 })
                 
-                # 検証: 各時間スロットの充足状況をログ出力
                 self._validate_result(shifts)
                 
                 print(f"Generated {len(shifts)} shifts")
@@ -433,7 +473,6 @@ class ShiftScheduler:
             return None
 
     def _validate_result(self, shifts):
-        """生成結果の検証ログ"""
         violations = 0
         for d in self.dates:
             slot_reqs = self._build_slot_requirements(d)
@@ -458,7 +497,7 @@ class ShiftScheduler:
             print(f"  VALIDATION: {violations} slot violations found")
 
     # =========================================================
-    # フォールバック (時間スロット単位で充填)
+    # フォールバック
     # =========================================================
     def _solve_fallback(self):
         shifts = []
@@ -478,10 +517,8 @@ class ShiftScheduler:
             day_shifts = []
             assigned_staff = set()
             
-            # 各スロットの不足を繰り返し埋める
             max_passes = 20
             for _ in range(max_passes):
-                # 現在のカバー状況を計算
                 deficit_slots = {}
                 for slot_min, req_count in slot_reqs.items():
                     coverage = 0
@@ -495,12 +532,10 @@ class ShiftScheduler:
                         deficit_slots[slot_min] = req_count - coverage
                 
                 if not deficit_slots:
-                    break  # 全スロット充足
+                    break
                 
-                # 最も不足しているスロットを見つける
                 worst_slot = max(deficit_slots, key=deficit_slots.get)
                 
-                # 利用可能スタッフを探す
                 best_staff = None
                 best_option = None
                 best_coverage = 0
@@ -510,7 +545,6 @@ class ShiftScheduler:
                         continue
                     
                     ng = self._get_ng_dates(s)
-                    # 承認済み休暇
                     for req in self.requests:
                         if (req.get('staff_id') == s['id'] and 
                             req.get('type') in ['off', 'holiday'] and 
@@ -522,16 +556,16 @@ class ShiftScheduler:
                     if d in ng:
                         continue
                     
-                    max_days = int(s.get('max_days_week', 5))
+                    max_days = int(s.get('max_days_week') or 5)
+                    if max_days <= 0:
+                        continue
                     current = weekly_count.get(s['id'], {}).get(week_key, 0)
                     if current >= max_days:
                         continue
                     
                     options = self._build_shift_options(s, d)
                     for opt in options:
-                        # このオプションがworst_slotをカバーするか
                         if opt['start_min'] <= worst_slot < opt['end_min']:
-                            # このオプションが不足スロットをいくつカバーするか
                             cov = sum(1 for sm in deficit_slots if opt['start_min'] <= sm < opt['end_min'])
                             if cov > best_coverage:
                                 best_coverage = cov
@@ -554,7 +588,7 @@ class ShiftScheduler:
                         weekly_count[best_staff['id']] = {}
                     weekly_count[best_staff['id']][week_key] = weekly_count[best_staff['id']].get(week_key, 0) + 1
                 else:
-                    break  # これ以上埋められない
+                    break
             
             shifts.extend(day_shifts)
         
