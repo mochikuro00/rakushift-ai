@@ -3349,7 +3349,23 @@ const app = {
 
         const targetType = document.getElementById('autoFillTarget').value;
         this.closeModal('autoFillModal');
-        this.showLoading(true);
+        
+                // --- シフト生成専用ローディングを表示 ---
+                const loadingEl = document.getElementById('globalLoading');
+                const loadingDefault = document.getElementById('loadingDefault');
+                const loadingShiftGen = document.getElementById('loadingShiftGen');
+                const stepEl = document.getElementById('shiftGenStep');
+                const barEl = document.getElementById('shiftGenBar');
+        
+                if (loadingDefault) loadingDefault.style.display = 'none';
+                if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
+                if (loadingEl) loadingEl.classList.remove('hidden');
+                if (stepEl) stepEl.textContent = 'ステップ 1/3: データ準備中...';
+                if (barEl) barEl.style.width = '10%';
+        
+
+
+
 
         try {
             // ★重要: 計算前に最新の設定とスタッフ情報をDBから再取得する
@@ -3399,7 +3415,10 @@ const app = {
             }
 
             // APIに送信
-            this.showToast('AI計算サーバーにリクエスト送信中...', 'info');
+            if (stepEl) stepEl.textContent = 'ステップ 2/3: AI計算サーバーで最適化実行中...';
+            if (barEl) barEl.style.width = '40%';
+
+            
             console.log("Sending request to Calculation Engine..."); 
             
             if (!this.state.config.organization_id) {
@@ -3468,9 +3487,17 @@ const app = {
             console.error('AutoFill Error:', e);
             this.showToast(`エラー: ${e.message}`, 'error');
         } finally {
-            this.showLoading(false);
+            // --- ローディングを確実に閉じる ---
+            const loadingElFinal = document.getElementById('globalLoading');
+            const loadingDefaultFinal = document.getElementById('loadingDefault');
+            const loadingShiftGenFinal = document.getElementById('loadingShiftGen');
+
+            if (loadingShiftGenFinal) loadingShiftGenFinal.style.display = 'none';
+            if (loadingDefaultFinal) loadingDefaultFinal.style.display = 'flex';
+            if (loadingElFinal) loadingElFinal.classList.add('hidden');
         }
     },
+
     // 一括保存 (大量データの保存)
     async saveAllShifts(shifts) {
         if (!shifts || shifts.length === 0) return;
