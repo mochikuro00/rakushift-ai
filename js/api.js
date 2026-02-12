@@ -9,7 +9,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 // 外部計算サーバー (Python)
 // ★重要: あなたの最新のCloud Run URLに更新済み
 const CALC_API_URL = "https://rakushift-calc-874112922898.asia-northeast1.run.app/generate";
-
+const CHECK_API_URL = "https://rakushift-calc-874112922898.asia-northeast1.run.app/check";
 // Gemini API Endpoint
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -201,6 +201,24 @@ const API = {
         }
         return await res.json();
     },
+    // --- 事前チェック (人員不足の検出) ---
+    async checkFeasibility(payload) {
+        try {
+            const res = await fetch(CHECK_API_URL, {
+                method: 'POST',
+                credentials: 'omit',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data.check || null;
+        } catch (e) {
+            console.error("Check failed:", e);
+            return null;
+        }
+    },
+
 
     // --- 計算エンジン連携 (Python Cloud Run + Gemini Review) ---
     async generateShifts(payload) {

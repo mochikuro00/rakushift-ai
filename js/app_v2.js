@@ -3341,7 +3341,6 @@ const app = {
 
        // --- AI自動作成 (Python + Gemini) ---
        async runAutoFill() {
-        // 店舗ログイン状態の確認
         if (!this.state.isShopLoggedIn || !this.state.organization_id) {
             this.showToast('セッションエラー: 再ログインしてください', 'error');
             return;
@@ -3349,30 +3348,23 @@ const app = {
 
         const targetType = document.getElementById('autoFillTarget').value;
         this.closeModal('autoFillModal');
-        
-                // --- シフト生成専用ローディングを表示 ---
-                const loadingEl = document.getElementById('globalLoading');
-                const loadingDefault = document.getElementById('loadingDefault');
-                const loadingShiftGen = document.getElementById('loadingShiftGen');
-                const stepEl = document.getElementById('shiftGenStep');
-                const barEl = document.getElementById('shiftGenBar');
-        
-                if (loadingDefault) loadingDefault.style.display = 'none';
-                if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
-                if (loadingEl) loadingEl.classList.remove('hidden');
-                if (stepEl) stepEl.textContent = 'ステップ 1/3: データ準備中...';
-                if (barEl) barEl.style.width = '10%';
-        
 
+        const loadingEl = document.getElementById('globalLoading');
+        const loadingDefault = document.getElementById('loadingDefault');
+        const loadingShiftGen = document.getElementById('loadingShiftGen');
+        const stepEl = document.getElementById('shiftGenStep');
+        const barEl = document.getElementById('shiftGenBar');
 
-
+        if (loadingDefault) loadingDefault.style.display = 'none';
+        if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
+        if (loadingEl) loadingEl.classList.remove('hidden');
+        if (stepEl) stepEl.textContent = 'ステップ 1/4: データ準備中...';
+        if (barEl) barEl.style.width = '5%';
 
         try {
-            // ★重要: 計算前に最新の設定とスタッフ情報をDBから再取得する
             console.log("Refreshing data before generation...");
-            await this.loadData(); 
+            await this.loadData();
 
-            // 期間計算
             const today = new Date();
             let startDate, endDate;
 
@@ -3381,46 +3373,19 @@ const app = {
                 endDate = new Date(this.state.currentDate.getFullYear(), this.state.currentDate.getMonth() + 1, 0);
             } else if (targetType === 'next_week') {
                 const day = today.getDay();
-                const diff = 7 - day; 
+                const diff = 7 - day;
                 startDate = new Date(today);
                 startDate.setDate(today.getDate() + diff);
                 endDate = new Date(startDate);
                 endDate.setDate(startDate.getDate() + 6);
             }
 
-            // 日付リスト作成
             const dates = [];
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
                 dates.push(dateStr);
             }
 
-            // 削除処理 (reset_all)
-            if (targetType === 'reset_all') {
-                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                
-                const shiftsToDelete = this.state.shifts.filter(s => 
-                    dates.includes(s.date) && 
-                    new Date(s.date) >= today && 
-                    s.id && uuidRegex.test(s.id)
-                );
-                
-                if (shiftsToDelete.length > 0) {
-                    await Promise.all(shiftsToDelete.map(s => API.delete('shifts', s.id)));
-                }
-                
-                this.state.shifts = this.state.shifts.filter(s => 
-                    !(dates.includes(s.date) && new Date(s.date) >= today)
-                );
-            }
-
-            // APIに送信
-            if (stepEl) stepEl.textContent = 'ステップ 2/3: AI計算サーバーで最適化実行中...';
-            if (barEl) barEl.style.width = '40%';
-
-            
-            console.log("Sending request to Calculation Engine..."); 
-            
             if (!this.state.config.organization_id) {
                 this.state.config.organization_id = this.state.organization_id;
             }
@@ -3429,74 +3394,143 @@ const app = {
                 staff_list: this.state.staff,
                 config: this.state.config,
                 dates: dates,
-                requests: this.state.requests,
+                requests: this.state.requests || [],
                 mode: 'auto'
             };
 
+            // === STEP 2: 事前チェック ===
+            if (stepEl) stepEl.textContent = 'ステップ 2/4: 人員充足チェック中...';
+            if (barEl) barEl.style.width = '15%';
+
+            const checkResult = await API.checkFeasibility(payload);
+
+            if (checkResult && !checkResult.feasible) {
+                if (loadingEl) loadingEl.classList.add('hidden');
+
+                const summary = checkResult.summary || {};
+                const details = checkResult.daily_details || [];
+
+                let alertMsg = '⚠️ 人員不足が検出されました\n\n';
+                alertMsg += '稼働可能スタッフ: ' + summary.usable_staff + '/' + summary.total_staff + '名\n';
+                alertMsg += '不足合計: ' + summary.total_shortage_hours + ' 人時\n';
+                alertMsg += '影響日数: ' + summary.affected_days + '日\n\n';
+
+                if (details.length > 0) {
+                    alertMsg += '--- 不足の詳細 (最大5日) ---\n';
+                    for (var di = 0; di < Math.min(details.length, 5); di++) {
+                        var dd = details[di];
+                        alertMsg += dd.date + ': 出勤可能' + dd.available_staff + '名 / 必要' + dd.required_per_slot + '名\n';
+                        for (var ri = 0; ri < dd.shortage_ranges.length; ri++) {
+                            var r = dd.shortage_ranges[ri];
+                            alertMsg += '  ' + r.start + '~' + r.end + ': ' + r.shortage + '名不足\n';
+                        }
+                    }
+                }
+
+                alertMsg += '\n【OK】労働条件を緩和して強行生成\n【キャンセル】中止して人員を調整';
+
+                const forceGenerate = confirm(alertMsg);
+
+                if (!forceGenerate) {
+                    this.showToast('シフト生成を中止しました。スタッフの追加や条件の見直しを検討してください。', 'info');
+                    return;
+                }
+
+                payload.mode = 'force';
+                if (loadingEl) loadingEl.classList.remove('hidden');
+                if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
+                this.showToast('⚠️ 労働条件を緩和して生成します', 'warning');
+            }
+
+            // === STEP 3: 削除処理 ===
+            if (targetType === 'reset_all') {
+                if (stepEl) stepEl.textContent = 'ステップ 3/4: 既存シフト削除中...';
+                if (barEl) barEl.style.width = '30%';
+
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const shiftsToDelete = this.state.shifts.filter(function(s) {
+                    return dates.includes(s.date) && new Date(s.date) >= today && s.id && uuidRegex.test(s.id);
+                });
+                if (shiftsToDelete.length > 0) {
+                    await Promise.all(shiftsToDelete.map(function(s) { return API.delete('shifts', s.id); }));
+                }
+                this.state.shifts = this.state.shifts.filter(function(s) {
+                    return !(dates.includes(s.date) && new Date(s.date) >= today);
+                });
+            }
+
+            // === STEP 4: シフト生成 ===
+            if (stepEl) stepEl.textContent = 'ステップ 4/4: AI計算サーバーで最適化実行中...';
+            if (barEl) barEl.style.width = '50%';
+
+            console.log("Sending request to Calculation Engine...");
             const result = await API.generateShifts(payload);
-            
+
             if (result.status === 'error') {
-                this.showToast(`生成エラー: ${result.message}`, 'error');
+                this.showToast('生成エラー: ' + result.message, 'error');
                 return;
             }
 
             console.log("Server Response:", result);
+            if (barEl) barEl.style.width = '80%';
 
             if (result.status === 'success' && result.shifts) {
-                // 保存処理
                 const newShifts = result.shifts;
-                this.showToast(`${newShifts.length}件のシフト生成完了。保存中...`, 'info');
-                
-                const existing = this.state.shifts.filter(s => dates.includes(s.date));
+                this.showToast(newShifts.length + '件のシフト生成完了。保存中...', 'info');
+
+                const existing = this.state.shifts.filter(function(s) { return dates.includes(s.date); });
                 const finalShifts = [];
-                
-                for (const s of newShifts) {
+
+                for (var i = 0; i < newShifts.length; i++) {
+                    var s = newShifts[i];
                     if (targetType === 'empty_only') {
-                        const exists = existing.find(ex => ex.date === s.date && ex.staff_id === s.staff_id);
+                        var exists = existing.find(function(ex) { return ex.date === s.date && ex.staff_id === s.staff_id; });
                         if (exists) continue;
                     }
                     finalShifts.push(s);
                 }
 
-                // 一括保存
                 await this.saveAllShifts(finalShifts);
 
                 if (targetType === 'reset_all') {
-                    this.state.shifts = this.state.shifts.filter(s => !dates.includes(s.date));
+                    this.state.shifts = this.state.shifts.filter(function(s) { return !dates.includes(s.date); });
                 }
-                
-                // 表示用データの追加
-                const displayShifts = finalShifts.map((s, idx) => ({
-                    ...s,
-                    id: s.id || `temp_${Date.now()}_${idx}`, 
-                    organization_id: this.state.organization_id
-                }));
-                
-                this.state.shifts = [...this.state.shifts, ...displayShifts];
-                
-                console.log(`Generated ${displayShifts.length} shifts. Updating view...`);
+
+                var self = this;
+                const displayShifts = finalShifts.map(function(s, idx) {
+                    return Object.assign({}, s, {
+                        id: s.id || 'temp_' + Date.now() + '_' + idx,
+                        organization_id: self.state.organization_id
+                    });
+                });
+
+                this.state.shifts = this.state.shifts.concat(displayShifts);
+                if (barEl) barEl.style.width = '100%';
+                console.log('Generated ' + displayShifts.length + ' shifts. Updating view...');
 
                 this.renderCurrentView();
                 this.calculateMonthlyStats();
-                this.showToast(`完了しました (Mode: ${result.mode})`, 'success');
+
+                var modeLabel = result.mode;
+                if (payload.mode === 'force') modeLabel += ' [強行モード]';
+                this.showToast('完了しました (Mode: ' + modeLabel + ')', 'success');
             } else {
                 this.showToast('シフト案が生成されませんでした (条件が厳しすぎる可能性があります)', 'warning');
             }
 
         } catch (e) {
             console.error('AutoFill Error:', e);
-            this.showToast(`エラー: ${e.message}`, 'error');
+            this.showToast('エラー: ' + e.message, 'error');
         } finally {
-            // --- ローディングを確実に閉じる ---
             const loadingElFinal = document.getElementById('globalLoading');
             const loadingDefaultFinal = document.getElementById('loadingDefault');
             const loadingShiftGenFinal = document.getElementById('loadingShiftGen');
-
             if (loadingShiftGenFinal) loadingShiftGenFinal.style.display = 'none';
             if (loadingDefaultFinal) loadingDefaultFinal.style.display = 'flex';
             if (loadingElFinal) loadingElFinal.classList.add('hidden');
         }
     },
+
 
     // 一括保存 (大量データの保存)
     async saveAllShifts(shifts) {
