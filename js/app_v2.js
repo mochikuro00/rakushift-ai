@@ -3536,22 +3536,55 @@ const app = {
     async saveAllShifts(shifts) {
         if (!shifts || shifts.length === 0) return;
         
+        // 生成対象の日付一覧を取得
+        const targetDates = [...new Set(shifts.map(s => s.date))];
+        
+        // 対象日付の既存シフトをDBから削除
+        console.log("Deleting existing shifts for", targetDates.length, "days...");
+        for (const date of targetDates) {
+            const existing = this.state.shifts.filter(s => s.date === date);
+            for (const s of existing) {
+                try {
+                    await API.delete('shifts', s.id);
+                } catch(e) {
+                    console.error("Delete error:", e);
+                }
+            }
+        }
+        
+        // ローカルstateからも削除
+        this.state.shifts = this.state.shifts.filter(s => !targetDates.includes(s.date));
+        
+        // 組織IDを付与して保存
+        shifts.forEach(s => s.organization_id = this.state.organization_id);
+        
+        // 不要フィールド除去（overtime等）
+        const cleanShifts = shifts.map(s => ({
+            organization_id: s.organization_id,
+            staff_id: s.staff_id,
+            date: s.date,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            break_minutes: s.break_minutes || 0,
+            status: s.status || 'draft'
+        }));
+        
         // 50件ずつ分割して保存
         const batchSize = 50;
-        for (let i = 0; i < shifts.length; i += batchSize) {
-            const batch = shifts.slice(i, i + batchSize);
-            // 組織IDを付与
-            batch.forEach(s => s.organization_id = this.state.organization_id);
-            
+        for (let i = 0; i < cleanShifts.length; i += batchSize) {
+            const batch = cleanShifts.slice(i, i + batchSize);
             try {
-                // 並列実行で高速化
                 await Promise.all(batch.map(s => API.create('shifts', s)));
             } catch(e) {
                 console.error("Background save error:", e);
             }
         }
+        
+        // ローカルstateに追加
+        this.state.shifts.push(...cleanShifts);
         console.log("All shifts saved.");
     },
+
 
 
     async generateShiftsWithGemini(dateList, outputArray) {
