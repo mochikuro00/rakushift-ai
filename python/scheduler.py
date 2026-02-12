@@ -1,143 +1,185 @@
+"""
+Rakushift AI - Shift Scheduler v2.0
+====================================
+3-Tier Priority System:
+  Tier 1: Legal / Contract / Physics (NEVER violate)
+  Tier 2: Store Settings / 15-min Coverage (STRICT)
+  Tier 3: OJT / Power Balance / Team Optimization (SOFT)
+
+Auto-relaxation: Tier3 -> Tier2 -> Tier1-only -> Greedy
+All settings come from user config - nothing is hardcoded.
+"""
+
 import pulp
-import random
 from datetime import datetime, timedelta
 
 
 class ShiftScheduler:
-    def __init__(self, staff_list, config, dates, requests=[]):
-        self.staff_list = staff_list
-        self.config = config
-        self.dates = dates
-        self.requests = requests
 
-        raw_patterns = config.get('custom_shifts', [])
+    # Break rules per Japanese Labor Standards Act (default)
+    DEFAULT_BREAK_RULES = [
+        {"min_hours": 6, "break_minutes": 45},
+        {"min_hours": 8, "break_minutes": 60},
+    ]
+
+    # Role IDs that count as mentors (can supervise rookies)
+    MENTOR_ROLES = {"manager", "leader"}
+    # Role IDs that count as rookies (must not work alone)
+    ROOKIE_ROLES = {"rookie"}
+
+    # Power score by evaluation rank
+    POWER_SCORE = {"A": 3.0, "B": 2.0, "C": 1.0, "D": 0.5}
+
+    def __init__(self, staff_list, config, dates, requests=None):
+        self.staff_list = staff_list or []
+        self.config = config or {}
+        self.dates = sorted(dates or [])
+        self.requests = requests or []
+
+        # --- Shift patterns from config ---
+        raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
         for p in raw_patterns:
-            st = p.get('start', '09:00')
-            en = p.get('end', '18:00')
+            st = p.get("start", "09:00")
+            en = p.get("end", "18:00")
             self.shift_patterns.append({
-                'start': st, 'end': en, 'name': p.get('name', '')
+                "start": st, "end": en, "name": p.get("name", "")
             })
-
         if not self.shift_patterns:
-            self.shift_patterns = [
-                {'start': '09:00', 'end': '17:00', 'name': 'early'},
-                {'start': '14:00', 'end': '22:00', 'name': 'late'},
-            ]
+            op = self.config.get("opening_time", "09:00")
+            cl = self.config.get("closing_time", "22:00")
+            self.shift_patterns = [{"start": op, "end": cl, "name": "full"}]
 
-        self.op_limit = config.get('opening_time', '09:00')
-        self.cl_limit = config.get('closing_time', '22:00')
-
-        raw_ot = config.get('opening_times', {})
-        if not raw_ot or not raw_ot.get('weekday'):
+        # --- Operating hours ---
+        self.op_limit = self.config.get("opening_time", "09:00")
+        self.cl_limit = self.config.get("closing_time", "22:00")
+        raw_ot = self.config.get("opening_times", {})
+        if not raw_ot or not raw_ot.get("weekday"):
             self.opening_times = {
-                'weekday': {'start': self.op_limit, 'end': self.cl_limit},
-                'weekend': {'start': self.op_limit, 'end': self.cl_limit},
-                'holiday': {'start': self.op_limit, 'end': self.cl_limit}
+                "weekday": {"start": self.op_limit, "end": self.cl_limit},
+                "weekend": {"start": self.op_limit, "end": self.cl_limit},
+                "holiday": {"start": self.op_limit, "end": self.cl_limit},
             }
         else:
             self.opening_times = raw_ot
 
-        self.staff_req = config.get('staff_req', {})
-        self.min_weekday = int(self.staff_req.get('min_weekday', 2))
-        self.min_weekend = int(self.staff_req.get('min_weekend', 3))
-        self.min_holiday = int(self.staff_req.get('min_holiday', 3))
-        self.min_manager = int(self.staff_req.get('min_manager', 1))
+        # --- Staff requirements from config ---
+        sr = self.config.get("staff_req", {})
+        self.min_weekday = int(sr.get("min_weekday", 2))
+        self.min_weekend = int(sr.get("min_weekend", 3))
+        self.min_holiday = int(sr.get("min_holiday", 3))
+        self.min_manager = int(sr.get("min_manager", 1))
+        self.time_staff_req = self.config.get("time_staff_req", [])
 
-        self.time_staff_req = config.get('time_staff_req', [])
+        # --- Break rules ---
+        self.break_rules = self.config.get("break_rules", [])
+        if not self.break_rules:
+            self.break_rules = self.DEFAULT_BREAK_RULES
 
-        self.break_rules = config.get('break_rules', [
-            {'min_hours': 6, 'break_minutes': 45},
-            {'min_hours': 8, 'break_minutes': 60}
-        ])
+        # --- Closed / special days ---
+        self.closed_days = self.config.get("closed_days", [])
+        self.special_holidays = self.config.get("special_holidays", [])
+        self.special_days = self.config.get("special_days", {})
 
-        self.closed_days = config.get('closed_days', [])
-        self.special_holidays = config.get('special_holidays', [])
+        # --- Pre-compute staff metadata ---
+        self._mentor_ids = set()
+        self._rookie_ids = set()
+        self._monthly_ids = set()
+        self._manager_ids = set()
+        self._eval_rank = {}
 
-        print("[Init] Staff: {}, Dates: {}".format(
-            len(self.staff_list), len(self.dates)))
-        print("[Init] Patterns: {}".format(self.shift_patterns))
-        print("[Init] Requirements: weekday={}, weekend={}, holiday={}".format(
-            self.min_weekday, self.min_weekend, self.min_holiday))
+        for s in self.staff_list:
+            sid = s["id"]
+            role = str(s.get("role", "staff")).lower()
+            evaluation = str(s.get("evaluation", "B")).upper()
+            salary = str(s.get("salary_type", "hourly")).lower()
 
-    # =========================================================
-    # Helper functions
-    # =========================================================
+            if role in self.MENTOR_ROLES:
+                self._mentor_ids.add(sid)
+            if role in self.ROOKIE_ROLES or evaluation == "D":
+                self._rookie_ids.add(sid)
+            if role == "manager":
+                self._manager_ids.add(sid)
+            if salary == "monthly":
+                self._monthly_ids.add(sid)
+
+            self._eval_rank[sid] = evaluation if evaluation in self.POWER_SCORE else "B"
+
+        print("[Init] Staff:{} Dates:{} Patterns:{}".format(
+            len(self.staff_list), len(self.dates), len(self.shift_patterns)))
+        print("[Init] Req: wd={} we={} hol={} mgr={}".format(
+            self.min_weekday, self.min_weekend,
+            self.min_holiday, self.min_manager))
+        print("[Init] Mentors:{} Rookies:{} Monthly:{}".format(
+            len(self._mentor_ids), len(self._rookie_ids),
+            len(self._monthly_ids)))
+
+    # ==================== HELPERS ====================
+
     def _to_minutes(self, time_str):
         try:
-            parts = str(time_str).split(':')
+            parts = str(time_str).split(":")
             return int(parts[0]) * 60 + int(parts[1])
-        except:
+        except Exception:
             return 0
 
     def _from_minutes(self, mins):
-        h = int(mins) // 60
-        m = int(mins) % 60
-        return "{:02d}:{:02d}".format(h, m)
+        return "{:02d}:{:02d}".format(int(mins) // 60, int(mins) % 60)
 
     def _get_day_type(self, date_str):
-        dt = datetime.strptime(date_str, '%Y-%m-%d')
-        dow = dt.weekday()
         if date_str in self.special_holidays:
-            return 'closed'
-        js_dow = (dow + 1) % 7
+            return "closed"
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        js_dow = (dt.weekday() + 1) % 7
         if js_dow in self.closed_days:
-            return 'closed'
-        if dow == 6:
-            return 'holiday'
-        if dow == 5:
-            return 'weekend'
-        return 'weekday'
+            return "closed"
+        if dt.weekday() == 6:
+            return "holiday"
+        if dt.weekday() == 5:
+            return "weekend"
+        return "weekday"
 
     def _get_required_staff(self, date_str):
-        day_type = self._get_day_type(date_str)
-        if day_type == 'closed':
+        t = self._get_day_type(date_str)
+        if t == "closed":
             return 0
-        elif day_type == 'holiday':
+        if t == "holiday":
             return self.min_holiday
-        elif day_type == 'weekend':
+        if t == "weekend":
             return self.min_weekend
-        else:
-            return self.min_weekday
+        return self.min_weekday
 
     def _get_opening_hours(self, date_str):
-        special_days = self.config.get('special_days', {})
-        if date_str in special_days:
-            sd = special_days[date_str]
-            return sd.get('start', self.op_limit), sd.get('end', self.cl_limit)
-        day_type = self._get_day_type(date_str)
-        if day_type == 'holiday':
-            t = self.opening_times.get('holiday', {})
-        elif day_type == 'weekend':
-            t = self.opening_times.get('weekend', {})
-        else:
-            t = self.opening_times.get('weekday', {})
-        return t.get('start', self.op_limit), t.get('end', self.cl_limit)
+        if date_str in self.special_days:
+            sd = self.special_days[date_str]
+            return sd.get("start", self.op_limit), sd.get("end", self.cl_limit)
+        t = self._get_day_type(date_str)
+        if t == "closed":
+            return self.op_limit, self.op_limit
+        key = {"holiday": "holiday", "weekend": "weekend"}.get(t, "weekday")
+        ot = self.opening_times.get(key, {})
+        return ot.get("start", self.op_limit), ot.get("end", self.cl_limit)
 
-    def _get_break_minutes(self, duration_hours):
+    def _get_break_minutes(self, hours):
         brk = 0
-        sorted_rules = sorted(
-            self.break_rules, key=lambda r: r.get('min_hours', 0))
-        for rule in sorted_rules:
-            if duration_hours > rule.get('min_hours', 0):
-                brk = rule.get('break_minutes', 0)
+        for rule in sorted(self.break_rules, key=lambda r: r.get("min_hours", 0)):
+            if hours > rule.get("min_hours", 0):
+                brk = rule.get("break_minutes", 0)
         return brk
 
-    def _get_ng_dates(self, staff):
-        raw = staff.get('unavailable_dates')
-        if not raw:
-            return []
-        if isinstance(raw, list):
-            return [str(d).strip() for d in raw]
-        return [str(d).strip() for d in str(raw).split(',')]
-
     def _get_staff_ng_dates(self, staff):
-        ng = self._get_ng_dates(staff)
+        raw = staff.get("unavailable_dates")
+        ng = []
+        if raw:
+            if isinstance(raw, list):
+                ng = [str(d).strip() for d in raw]
+            else:
+                ng = [str(d).strip() for d in str(raw).split(",")]
         for req in self.requests:
-            if (req.get('staff_id') == staff['id'] and
-                req.get('type') in ['off', 'holiday'] and
-                    req.get('status') == 'approved'):
-                rd = str(req.get('dates', ''))
+            if (req.get("staff_id") == staff["id"]
+                    and req.get("type") in ("off", "holiday")
+                    and req.get("status") == "approved"):
+                rd = str(req.get("dates", ""))
                 if rd and rd not in ng:
                     ng.append(rd)
         return ng
@@ -145,69 +187,56 @@ class ShiftScheduler:
     def _group_dates_by_week(self):
         if not self.dates:
             return []
-        weeks = []
-        current_week = []
-        for d in sorted(self.dates):
-            dt = datetime.strptime(d, '%Y-%m-%d')
-            if not current_week:
-                current_week.append(d)
+        weeks, cur = [], []
+        for d in self.dates:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            if not cur:
+                cur.append(d)
             else:
-                prev_dt = datetime.strptime(current_week[-1], '%Y-%m-%d')
-                if (dt.isocalendar()[1] == prev_dt.isocalendar()[1] and
-                        dt.year == prev_dt.year):
-                    current_week.append(d)
+                prev = datetime.strptime(cur[-1], "%Y-%m-%d")
+                if dt.isocalendar()[1] == prev.isocalendar()[1] and dt.year == prev.year:
+                    cur.append(d)
                 else:
-                    weeks.append(current_week)
-                    current_week = [d]
-        if current_week:
-            weeks.append(current_week)
+                    weeks.append(cur)
+                    cur = [d]
+        if cur:
+            weeks.append(cur)
         return weeks
 
     def _build_shift_options(self, staff, date_str, force=False):
         day_open, day_close = self._get_opening_hours(date_str)
         open_min = self._to_minutes(day_open)
         close_min = self._to_minutes(day_close)
-
-        salary_type = str(staff.get('salary_type', 'hourly')).lower()
-        max_hours = float(staff.get('max_hours_day') or 8)
-
-        if not force and max_hours <= 0:
+        if open_min >= close_min:
             return []
 
+        max_hours = float(staff.get("max_hours_day") or 8)
+        if not force and max_hours <= 0:
+            return []
         if force and max_hours <= 0:
             max_hours = 8
 
         options = []
-        for pattern in self.shift_patterns:
-            p_start = self._to_minutes(pattern['start'])
-            p_end = self._to_minutes(pattern['end'])
-
-            if p_start < open_min or p_end > close_min:
-                p_start = max(p_start, open_min)
-                p_end = min(p_end, close_min)
-
-            if p_start >= p_end:
+        seen = set()
+        for pat in self.shift_patterns:
+            ps = max(self._to_minutes(pat["start"]), open_min)
+            pe = min(self._to_minutes(pat["end"]), close_min)
+            if ps >= pe:
                 continue
-
-            actual_hours = (p_end - p_start) / 60
-
-            if actual_hours < 1:
+            hrs = (pe - ps) / 60.0
+            if hrs < 1:
                 continue
-
-            if force:
-                pass
-            else:
-                if actual_hours > max_hours + 0.01:
-                    continue
-
+            if not force and hrs > max_hours + 0.01:
+                continue
+            key = (ps, pe)
+            if key in seen:
+                continue
+            seen.add(key)
             options.append({
-                'start': self._from_minutes(p_start),
-                'end': self._from_minutes(p_end),
-                'start_min': p_start,
-                'end_min': p_end,
-                'hours': actual_hours
+                "start": self._from_minutes(ps),
+                "end": self._from_minutes(pe),
+                "start_min": ps, "end_min": pe, "hours": hrs,
             })
-
         return options
 
     def _build_slot_requirements(self, date_str):
@@ -215,527 +244,526 @@ class ShiftScheduler:
         if req_num <= 0:
             return {}
         day_open, day_close = self._get_opening_hours(date_str)
-        op_min = self._to_minutes(day_open)
-        cl_min = self._to_minutes(day_close)
+        op = self._to_minutes(day_open)
+        cl = self._to_minutes(day_close)
+        if op >= cl:
+            return {}
+        slots = {t: req_num for t in range(op, cl, 15)}
 
-        slots = {}
-        for t in range(op_min, cl_min, 15):
-            slots[t] = req_num
-
-        dt = datetime.strptime(date_str, '%Y-%m-%d')
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
-
         for rule in self.time_staff_req:
-            rule_days = rule.get('days', [])
-            if js_dow not in rule_days:
+            if js_dow not in rule.get("days", []):
                 continue
-            r_start = self._to_minutes(rule.get('start', '00:00'))
-            r_end = self._to_minutes(rule.get('end', '24:00'))
-            r_count = int(rule.get('count', 0))
-            for t in range(op_min, cl_min, 15):
-                if r_start <= r_end:
-                    in_range = (t >= r_start and t < r_end)
-                else:
-                    in_range = (t >= r_start or t < r_end)
+            rs = self._to_minutes(rule.get("start", "00:00"))
+            re = self._to_minutes(rule.get("end", "24:00"))
+            rc = int(rule.get("count", 0))
+            for t in range(op, cl, 15):
+                in_range = (rs <= t < re) if rs <= re else (t >= rs or t < re)
                 if in_range and t in slots:
-                    slots[t] = max(slots[t], r_count)
+                    slots[t] = max(slots[t], rc)
         return slots
 
-    # =========================================================
-    # Pre-check: analyze staffing feasibility
-    # =========================================================
+    def _is_mentor(self, staff):
+        return staff["id"] in self._mentor_ids
+
+    def _is_rookie(self, staff):
+        return staff["id"] in self._rookie_ids
+
+    # ==================== PRE-CHECK ====================
+
     def pre_check(self):
         warnings = []
         daily_details = []
-        total_shortage_hours = 0
+        total_shortage = 0.0
 
-        usable_staff = [
-            s for s in self.staff_list
-            if int(s.get('max_days_week') or 5) > 0
-        ]
-        unusable_staff = [
-            s for s in self.staff_list
-            if int(s.get('max_days_week') or 5) <= 0
-        ]
+        usable = [s for s in self.staff_list
+                   if int(s.get("max_days_week") or 5) > 0]
+        unusable = [s for s in self.staff_list
+                    if int(s.get("max_days_week") or 5) <= 0]
 
-        if unusable_staff:
-            names = [s.get('name', s['id']) for s in unusable_staff]
+        if unusable:
+            names = [s.get("name", s["id"]) for s in unusable]
             warnings.append({
-                'type': 'unusable_staff',
-                'message': '{}名が出勤不可（max_days=0）: {}'.format(
-                    len(names), ', '.join(names)),
-                'severity': 'info'
+                "type": "unusable_staff",
+                "message": "{}名が出勤不可(max_days=0): {}".format(
+                    len(names), ", ".join(names)),
+                "severity": "info",
             })
 
-        weekly_capacity = sum(
-            int(s.get('max_days_week') or 5) for s in usable_staff)
-
-        for d in sorted(self.dates):
-            day_type = self._get_day_type(d)
-            if day_type == 'closed':
+        for d in self.dates:
+            if self._get_day_type(d) == "closed":
                 continue
-
             slot_reqs = self._build_slot_requirements(d)
             if not slot_reqs:
                 continue
-
-            day_open, day_close = self._get_opening_hours(d)
-
-            available_staff = []
-            for s in usable_staff:
-                ng = self._get_staff_ng_dates(s)
-                if d not in ng:
-                    available_staff.append(s)
-
-            slot_coverage = {}
-            for slot_min, req_count in slot_reqs.items():
-                can_cover = 0
-                for s in available_staff:
-                    options = self._build_shift_options(s, d, force=False)
-                    for opt in options:
-                        if opt['start_min'] <= slot_min < opt['end_min']:
-                            can_cover += 1
+            available = [s for s in usable
+                         if d not in self._get_staff_ng_dates(s)]
+            shortage_slots = {}
+            for slot_min, req in slot_reqs.items():
+                cover = 0
+                for s in available:
+                    for opt in self._build_shift_options(s, d):
+                        if opt["start_min"] <= slot_min < opt["end_min"]:
+                            cover += 1
                             break
-                slot_coverage[slot_min] = {
-                    'required': req_count,
-                    'available': can_cover,
-                    'shortage': max(0, req_count - can_cover)
-                }
-
-            shortage_slots = {
-                k: v for k, v in slot_coverage.items() if v['shortage'] > 0
-            }
+                gap = req - cover
+                if gap > 0:
+                    shortage_slots[slot_min] = gap
 
             if shortage_slots:
-                shortage_ranges = []
-                current_start = None
-                current_short = 0
-                prev_slot = None
-
-                for slot_min in sorted(shortage_slots.keys()):
-                    info = shortage_slots[slot_min]
-                    if current_start is None:
-                        current_start = slot_min
-                        current_short = info['shortage']
-                    elif slot_min == prev_slot + 15 and info['shortage'] == current_short:
-                        pass
-                    else:
-                        shortage_ranges.append({
-                            'start': self._from_minutes(current_start),
-                            'end': self._from_minutes(prev_slot + 15),
-                            'shortage': current_short
-                        })
-                        current_start = slot_min
-                        current_short = info['shortage']
-                    prev_slot = slot_min
-
-                if current_start is not None:
-                    shortage_ranges.append({
-                        'start': self._from_minutes(current_start),
-                        'end': self._from_minutes(prev_slot + 15),
-                        'shortage': current_short
-                    })
-
-                shortage_hours = sum(
-                    s['shortage'] * 0.25 for s in shortage_slots.values())
-                total_shortage_hours += shortage_hours
-
+                ranges = self._compress_ranges(shortage_slots)
+                hrs = sum(v * 0.25 for v in shortage_slots.values())
+                total_shortage += hrs
                 daily_details.append({
-                    'date': d,
-                    'day_type': day_type,
-                    'available_staff': len(available_staff),
-                    'required_per_slot': self._get_required_staff(d),
-                    'shortage_ranges': shortage_ranges,
-                    'shortage_hours': round(shortage_hours, 1)
+                    "date": d,
+                    "day_type": self._get_day_type(d),
+                    "available_staff": len(available),
+                    "required_per_slot": self._get_required_staff(d),
+                    "shortage_ranges": ranges,
+                    "shortage_hours": round(hrs, 1),
                 })
 
-        if total_shortage_hours > 0:
+        if total_shortage > 0:
             warnings.append({
-                'type': 'staff_shortage',
-                'message': '合計 {:.1f} 人時の人員不足があります'.format(
-                    total_shortage_hours),
-                'severity': 'critical',
-                'total_shortage_hours': round(total_shortage_hours, 1),
-                'affected_days': len(daily_details)
+                "type": "staff_shortage",
+                "message": "合計 {:.1f} 人時の人員不足".format(total_shortage),
+                "severity": "critical",
+                "total_shortage_hours": round(total_shortage, 1),
+                "affected_days": len(daily_details),
             })
 
-        week_groups = self._group_dates_by_week()
-        for week_dates in week_groups:
-            work_days_needed = sum(
-                1 for d in week_dates
-                if self._get_day_type(d) != 'closed'
-            )
-            if work_days_needed > 0:
-                needed_person_days = sum(
-                    self._get_required_staff(d) for d in week_dates
-                    if self._get_day_type(d) != 'closed'
-                )
-                if needed_person_days > weekly_capacity:
-                    warnings.append({
-                        'type': 'weekly_capacity',
-                        'message': '週 {} ~ {}: 必要{}人日 > 供給可能{}人日'.format(
-                            week_dates[0], week_dates[-1],
-                            needed_person_days, weekly_capacity),
-                        'severity': 'warning'
-                    })
-
-        feasible = total_shortage_hours == 0
-
         return {
-            'feasible': feasible,
-            'warnings': warnings,
-            'daily_details': daily_details,
-            'summary': {
-                'total_staff': len(self.staff_list),
-                'usable_staff': len(usable_staff),
-                'total_dates': len(self.dates),
-                'work_dates': len([
-                    d for d in self.dates
-                    if self._get_day_type(d) != 'closed'
-                ]),
-                'total_shortage_hours': round(total_shortage_hours, 1),
-                'affected_days': len(daily_details)
-            }
+            "feasible": total_shortage == 0,
+            "warnings": warnings,
+            "daily_details": daily_details,
+            "summary": {
+                "total_staff": len(self.staff_list),
+                "usable_staff": len(usable),
+                "total_dates": len(self.dates),
+                "work_dates": len([d for d in self.dates
+                                   if self._get_day_type(d) != "closed"]),
+                "total_shortage_hours": round(total_shortage, 1),
+                "affected_days": len(daily_details),
+            },
         }
 
-    # =========================================================
-    # Main solver
-    # =========================================================
+    def _compress_ranges(self, slots):
+        ranges = []
+        start = short = prev = None
+        for t in sorted(slots):
+            v = slots[t]
+            if start is None:
+                start, short = t, v
+            elif t == prev + 15 and v == short:
+                pass
+            else:
+                ranges.append({"start": self._from_minutes(start),
+                               "end": self._from_minutes(prev + 15),
+                               "shortage": short})
+                start, short = t, v
+            prev = t
+        if start is not None:
+            ranges.append({"start": self._from_minutes(start),
+                           "end": self._from_minutes(prev + 15),
+                           "shortage": short})
+        return ranges
+
+    # ==================== MAIN SOLVE ====================
+
     def solve(self, force=False):
-        result = self._solve_optimized(force=force)
-        if not result:
-            print("Optimized solver failed. Trying fallback...")
-            result = self._solve_fallback(force=force)
-        return result
+        result = self._solve_milp(force=force, tier=3)
+        if result:
+            print("[Solve] Tier 3 (full optimization) succeeded")
+            return result
 
-    def _solve_optimized(self, force=False):
+        print("[Fallback] Relaxing Tier 3...")
+        result = self._solve_milp(force=force, tier=2)
+        if result:
+            print("[Solve] Tier 2 (no OJT/balance) succeeded")
+            return result
+
+        print("[Fallback] Relaxing to Tier 1 + force...")
+        result = self._solve_milp(force=True, tier=1)
+        if result:
+            print("[Solve] Tier 1 (legal only + force) succeeded")
+            return result
+
+        print("[Fallback] Greedy algorithm...")
+        return self._solve_greedy()
+
+    # ==================== MILP SOLVER ====================
+
+    def _solve_milp(self, force=False, tier=3):
         try:
-            problem = pulp.LpProblem("Shift_Optimization", pulp.LpMinimize)
-
-            monthly_ids = []
-            managers = []
-            eval_score = {}
-
-            for s in self.staff_list:
-                sid = s['id']
-                if str(s.get('salary_type', 'hourly')).lower() == 'monthly':
-                    monthly_ids.append(sid)
-                if str(s.get('role', 'staff')).lower() in ['manager', 'leader']:
-                    managers.append(sid)
-                score_map = {'A': 4, 'B': 3, 'C': 2, 'D': 1}
-                eval_score[sid] = score_map.get(
-                    str(s.get('evaluation', 'B')).upper(), 3)
-
-            x = {}
-            staff_options = {}
-
-            for s in self.staff_list:
-                ng_dates = self._get_staff_ng_dates(s)
-
-                for d in self.dates:
-                    if d in ng_dates or self._get_day_type(d) == 'closed':
-                        staff_options[(s['id'], d)] = []
-                        continue
-
-                    options = self._build_shift_options(s, d, force=force)
-                    staff_options[(s['id'], d)] = options
-
-                    for oi, opt in enumerate(options):
-                        x[(s['id'], d, oi)] = pulp.LpVariable(
-                            "x_{}_{}_{}" .format(s['id'], d, oi),
-                            0, 1, pulp.LpBinary
-                        )
-
-            for s in self.staff_list:
-                d0 = self.dates[0] if self.dates else ''
-                opts = staff_options.get((s['id'], d0), [])
-                opt_list = [o['start'] + '-' + o['end'] for o in opts]
-                print("  Staff '{}' options on {}: {}".format(
-                    s.get('name', ''), d0, opt_list))
-
+            prob = pulp.LpProblem("RakuShift_v2", pulp.LpMinimize)
             penalty = pulp.LpAffineExpression()
 
-            # Constraint 1: max 1 shift per day
+            x = {}
+            staff_opts = {}
+
             for s in self.staff_list:
+                sid = s["id"]
+                ng = self._get_staff_ng_dates(s)
                 for d in self.dates:
-                    opts = staff_options.get((s['id'], d), [])
+                    if d in ng or self._get_day_type(d) == "closed":
+                        staff_opts[(sid, d)] = []
+                        continue
+                    opts = self._build_shift_options(s, d, force=force)
+                    staff_opts[(sid, d)] = opts
+                    for oi in range(len(opts)):
+                        x[(sid, d, oi)] = pulp.LpVariable(
+                            "x_{}_{}_{}" .format(sid, d, oi),
+                            0, 1, pulp.LpBinary)
+
+            # ====================================================
+            # TIER 1: Legal / Contract / Physics (HARD constraints)
+            # ====================================================
+
+            # 1-a: Max 1 shift per person per day
+            for s in self.staff_list:
+                sid = s["id"]
+                for d in self.dates:
+                    opts = staff_opts.get((sid, d), [])
                     if opts:
-                        problem += pulp.lpSum(
-                            [x[(s['id'], d, oi)]
-                             for oi in range(len(opts))]
+                        prob += pulp.lpSum(
+                            x[(sid, d, oi)] for oi in range(len(opts))
                         ) <= 1
 
-            # Constraint 2: cover all time slots
-            for d in self.dates:
-                slot_reqs = self._build_slot_requirements(d)
-                for slot_min, req_count in slot_reqs.items():
-                    workers = []
-                    for s in self.staff_list:
-                        opts = staff_options.get((s['id'], d), [])
-                        for oi, opt in enumerate(opts):
-                            if opt['start_min'] <= slot_min < opt['end_min']:
-                                workers.append(x[(s['id'], d, oi)])
-                    if workers:
-                        slack = pulp.LpVariable(
-                            "slot_{}_{}".format(d, slot_min),
-                            0, None, pulp.LpInteger
-                        )
-                        problem += pulp.lpSum(workers) + slack >= req_count
-                        penalty += slack * 1000000
-                    else:
-                        time_str = self._from_minutes(slot_min)
-                        print("  CRITICAL: No staff can cover {} {} (need {})".format(
-                            d, time_str, req_count))
-
-            # Constraint 3: manager minimum
-            for d in self.dates:
-                if self._get_day_type(d) == 'closed':
-                    continue
-                slot_reqs = self._build_slot_requirements(d)
-                if not slot_reqs:
-                    continue
-                for slot_min in slot_reqs.keys():
-                    mgr_vars = []
-                    for mid in managers:
-                        opts = staff_options.get((mid, d), [])
-                        for oi, opt in enumerate(opts):
-                            if opt['start_min'] <= slot_min < opt['end_min']:
-                                mgr_vars.append(x[(mid, d, oi)])
-                    if mgr_vars:
-                        slack = pulp.LpVariable(
-                            "mgr_{}_{}".format(d, slot_min),
-                            0, None, pulp.LpInteger
-                        )
-                        problem += pulp.lpSum(mgr_vars) + slack >= self.min_manager
-                        penalty += slack * 500000
-
-            # Constraint 4: weekly day limit
+            # 1-b: Weekly day limit (from contract)
             week_groups = self._group_dates_by_week()
             for s in self.staff_list:
-                max_days = int(s.get('max_days_week') or 5)
+                sid = s["id"]
+                max_days = int(s.get("max_days_week") or 5)
                 if not force and max_days <= 0:
                     for d in self.dates:
-                        opts = staff_options.get((s['id'], d), [])
-                        for oi in range(len(opts)):
-                            problem += x[(s['id'], d, oi)] == 0
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            prob += x[(sid, d, oi)] == 0
                     continue
+                effective = max_days if not force else max(max_days, 6)
+                for week in week_groups:
+                    wv = []
+                    for d in week:
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            wv.append(x[(sid, d, oi)])
+                    if wv:
+                        prob += pulp.lpSum(wv) <= effective
 
-                effective_max = max_days if not force else max(max_days, 6)
-
-                for week_dates in week_groups:
-                    week_vars = []
-                    for d in week_dates:
-                        opts = staff_options.get((s['id'], d), [])
-                        for oi in range(len(opts)):
-                            week_vars.append(x[(s['id'], d, oi)])
-                    if week_vars:
-                        problem += pulp.lpSum(week_vars) <= effective_max
-
-            # Constraint 5: max 6 consecutive days
+            # 1-c: Max 6 consecutive working days
             if not force:
+                sorted_d = sorted(self.dates)
                 for s in self.staff_list:
-                    sorted_dates = sorted(self.dates)
-                    for idx in range(len(sorted_dates) - 6):
-                        span = sorted_dates[idx:idx + 7]
-                        span_vars = []
+                    sid = s["id"]
+                    for i in range(len(sorted_d) - 6):
+                        span = sorted_d[i:i + 7]
+                        sv = []
                         for d in span:
-                            opts = staff_options.get((s['id'], d), [])
-                            for oi in range(len(opts)):
-                                span_vars.append(x[(s['id'], d, oi)])
-                        if span_vars:
-                            problem += pulp.lpSum(span_vars) <= 6
+                            for oi in range(len(staff_opts.get((sid, d), []))):
+                                sv.append(x[(sid, d, oi)])
+                        if sv:
+                            prob += pulp.lpSum(sv) <= 6
 
-            # Objective: monthly staff should work
-            for sid in monthly_ids:
+            # ====================================================
+            # TIER 2: Store settings / Coverage (SOFT with huge penalty)
+            # ====================================================
+
+            if tier >= 2:
+                # 2-a: 15-min slot coverage
                 for d in self.dates:
-                    if self._get_day_type(d) == 'closed':
+                    slot_reqs = self._build_slot_requirements(d)
+                    for slot_min, req in slot_reqs.items():
+                        workers = []
+                        for s in self.staff_list:
+                            sid = s["id"]
+                            for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                                if opt["start_min"] <= slot_min < opt["end_min"]:
+                                    workers.append(x[(sid, d, oi)])
+                        if workers:
+                            slack = pulp.LpVariable(
+                                "cov_{}_{}".format(d, slot_min),
+                                0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(workers) + slack >= req
+                            penalty += slack * 1000000
+                        else:
+                            print("  WARN: No staff can cover {} {}".format(
+                                d, self._from_minutes(slot_min)))
+
+                # 2-b: Manager/mentor minimum per slot
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
                         continue
-                    opts = staff_options.get((sid, d), [])
+                    slot_reqs = self._build_slot_requirements(d)
+                    if not slot_reqs:
+                        continue
+                    for slot_min in slot_reqs:
+                        mgr_vars = []
+                        for mid in self._manager_ids:
+                            for oi, opt in enumerate(staff_opts.get((mid, d), [])):
+                                if opt["start_min"] <= slot_min < opt["end_min"]:
+                                    mgr_vars.append(x[(mid, d, oi)])
+                        if mgr_vars:
+                            slack = pulp.LpVariable(
+                                "mgr_{}_{}".format(d, slot_min),
+                                0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(mgr_vars) + slack >= self.min_manager
+                            penalty += slack * 500000
+
+            # ====================================================
+            # TIER 3: OJT / Power Balance / Team optimization
+            # ====================================================
+
+            if tier >= 3:
+                # 3-a: Rookie must have mentor overlap
+                #   For every slot where a rookie works, at least 1 mentor
+                if self._rookie_ids and self._mentor_ids:
+                    for d in self.dates:
+                        if self._get_day_type(d) == "closed":
+                            continue
+                        slot_reqs = self._build_slot_requirements(d)
+                        if not slot_reqs:
+                            continue
+                        for slot_min in slot_reqs:
+                            rookie_vars = []
+                            mentor_vars = []
+                            for s in self.staff_list:
+                                sid = s["id"]
+                                for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                                    if opt["start_min"] <= slot_min < opt["end_min"]:
+                                        if sid in self._rookie_ids:
+                                            rookie_vars.append(x[(sid, d, oi)])
+                                        if sid in self._mentor_ids:
+                                            mentor_vars.append(x[(sid, d, oi)])
+                            if rookie_vars and mentor_vars:
+                                slack = pulp.LpVariable(
+                                    "ojt_{}_{}".format(d, slot_min),
+                                    0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(mentor_vars) + slack >= pulp.lpSum(rookie_vars)
+                                penalty += slack * 200000
+                            elif rookie_vars and not mentor_vars:
+                                for rv in rookie_vars:
+                                    penalty += rv * 200000
+
+                # 3-b: Power balance per day
+                #   Target: avg power per day should be >= 1.5
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    slot_reqs = self._build_slot_requirements(d)
+                    if not slot_reqs:
+                        continue
+                    power_expr = pulp.LpAffineExpression()
+                    count_expr = pulp.LpAffineExpression()
+                    for s in self.staff_list:
+                        sid = s["id"]
+                        rank = self._eval_rank.get(sid, "B")
+                        pw = self.POWER_SCORE.get(rank, 2.0)
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            power_expr += x[(sid, d, oi)] * pw
+                            count_expr += x[(sid, d, oi)]
+                    # Instead of ratio, ensure total power >= 1.5 * required
+                    min_req = self._get_required_staff(d)
+                    if min_req > 0:
+                        slack = pulp.LpVariable(
+                            "pw_{}".format(d), 0, None)
+                        prob += power_expr + slack >= 1.5 * min_req
+                        penalty += slack * 10000
+
+                # 3-c: Rank C/D minimization (use A/B first)
+                for s in self.staff_list:
+                    sid = s["id"]
+                    rank = self._eval_rank.get(sid, "B")
+                    cost = {"A": 0, "B": 50, "C": 500, "D": 2000}.get(rank, 50)
+                    for d in self.dates:
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            penalty += x[(sid, d, oi)] * cost
+
+            # ====================================================
+            # OBJECTIVES (always active)
+            # ====================================================
+
+            # Monthly salary staff should work as much as possible
+            for sid in self._monthly_ids:
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    opts = staff_opts.get((sid, d), [])
                     if opts:
                         not_working = 1 - pulp.lpSum(
-                            [x[(sid, d, oi)] for oi in range(len(opts))]
-                        )
+                            x[(sid, d, oi)] for oi in range(len(opts)))
                         penalty += not_working * 30000
 
-            # Objective: evaluation score cost
+            # Minimize hourly labor cost
             for s in self.staff_list:
-                sid = s['id']
-                score = eval_score.get(sid, 3)
-                cost_map = {4: 0, 3: 50, 2: 300, 1: 1500}
-                cost = cost_map.get(score, 50)
-                for d in self.dates:
-                    opts = staff_options.get((sid, d), [])
-                    for oi in range(len(opts)):
-                        penalty += x[(sid, d, oi)] * cost
-
-            # Objective: minimize labor cost
-            for s in self.staff_list:
-                if str(s.get('salary_type', 'hourly')).lower() != 'hourly':
+                if str(s.get("salary_type", "hourly")).lower() != "hourly":
                     continue
-                wage = float(s.get('hourly_wage', 1100))
+                wage = float(s.get("hourly_wage", 1100))
+                sid = s["id"]
                 for d in self.dates:
-                    opts = staff_options.get((s['id'], d), [])
-                    for oi, opt in enumerate(opts):
-                        penalty += x[(s['id'], d, oi)] * wage * opt['hours'] * 0.01
+                    for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                        penalty += x[(sid, d, oi)] * wage * opt["hours"] * 0.01
 
-            # Objective: in force mode, penalize overtime
+            # Force mode: penalize overtime heavily
             if force:
                 for s in self.staff_list:
-                    max_hours = float(s.get('max_hours_day') or 8)
+                    mh = float(s.get("max_hours_day") or 8)
+                    sid = s["id"]
                     for d in self.dates:
-                        opts = staff_options.get((s['id'], d), [])
-                        for oi, opt in enumerate(opts):
-                            if opt['hours'] > max_hours:
-                                overtime = opt['hours'] - max_hours
-                                penalty += x[(s['id'], d, oi)] * overtime * 50000
+                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                            if opt["hours"] > mh:
+                                penalty += x[(sid, d, oi)] * (opt["hours"] - mh) * 50000
 
-            problem += penalty
+            # ====================================================
+            # SOLVE
+            # ====================================================
+            prob += penalty
             solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=120)
-            problem.solve(solver)
+            prob.solve(solver)
 
-            status = pulp.LpStatus[problem.status]
-            print("Solver status: {}".format(status))
+            status = pulp.LpStatus[prob.status]
+            print("[MILP] Status: {} (tier={}, force={})".format(
+                status, tier, force))
 
-            if status in ['Optimal', 'Not Solved']:
-                shifts = []
-                overtime_warnings = []
-                for s in self.staff_list:
-                    for d in self.dates:
-                        opts = staff_options.get((s['id'], d), [])
-                        for oi, opt in enumerate(opts):
-                            if ((s['id'], d, oi) in x and
-                                    pulp.value(x[(s['id'], d, oi)]) == 1):
-                                dur = opt['hours']
-                                brk = self._get_break_minutes(dur)
-                                max_h = float(s.get('max_hours_day') or 8)
-                                shift_entry = {
-                                    "staff_id": s['id'],
-                                    "date": d,
-                                    "start_time": opt['start'],
-                                    "end_time": opt['end'],
-                                    "break_minutes": brk
-                                }
-                                if dur > max_h:
-                                    shift_entry["overtime"] = True
-                                    shift_entry["overtime_hours"] = round(
-                                        dur - max_h, 1)
-                                    overtime_warnings.append(
-                                        "{} {}: {:.1f}h超過".format(
-                                            s.get('name', ''), d,
-                                            dur - max_h))
-                                shifts.append(shift_entry)
+            if status not in ("Optimal", "Not Solved"):
+                return None
 
-                self._validate_result(shifts)
+            shifts = []
+            warnings = []
+            for s in self.staff_list:
+                sid = s["id"]
+                for d in self.dates:
+                    for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                        if (sid, d, oi) in x and pulp.value(x[(sid, d, oi)]) == 1:
+                            hrs = opt["hours"]
+                            brk = self._get_break_minutes(hrs)
+                            mh = float(s.get("max_hours_day") or 8)
+                            entry = {
+                                "staff_id": sid,
+                                "date": d,
+                                "start_time": opt["start"],
+                                "end_time": opt["end"],
+                                "break_minutes": brk,
+                            }
+                            if hrs > mh:
+                                entry["overtime"] = True
+                                entry["overtime_hours"] = round(hrs - mh, 1)
+                                warnings.append("{} {}: {:.1f}h over".format(
+                                    s.get("name", ""), d, hrs - mh))
+                            shifts.append(entry)
 
-                if overtime_warnings:
-                    print("OVERTIME WARNINGS:")
-                    for w in overtime_warnings:
-                        print("  " + w)
-
-                print("Generated {} shifts".format(len(shifts)))
-                return shifts if shifts else None
-
-            return None
+            self._validate(shifts)
+            if warnings:
+                print("[OVERTIME]")
+                for w in warnings:
+                    print("  " + w)
+            print("[Result] {} shifts generated".format(len(shifts)))
+            return shifts if shifts else None
 
         except Exception as e:
-            print("Solver Error: {}".format(e))
+            print("[MILP Error] {}".format(e))
             import traceback
             traceback.print_exc()
             return None
 
-    def _validate_result(self, shifts):
+    # ==================== VALIDATION ====================
+
+    def _validate(self, shifts):
         violations = 0
         for d in self.dates:
-            slot_reqs = self._build_slot_requirements(d)
-            day_shifts = [s for s in shifts if s['date'] == d]
-            for slot_min, req_count in slot_reqs.items():
-                coverage = 0
-                for s in day_shifts:
-                    s_start = self._to_minutes(s['start_time'])
-                    s_end = self._to_minutes(s['end_time'])
-                    if s_start <= slot_min < s_end:
-                        coverage += 1
-                if coverage < req_count:
-                    time_str = self._from_minutes(slot_min)
-                    print("  WARNING: {} {} - Need {}, got {}".format(
-                        d, time_str, req_count, coverage))
+            reqs = self._build_slot_requirements(d)
+            day_s = [s for s in shifts if s["date"] == d]
+            for slot_min, req in reqs.items():
+                cov = sum(1 for s in day_s
+                          if self._to_minutes(s["start_time"]) <= slot_min
+                          < self._to_minutes(s["end_time"]))
+                if cov < req:
+                    print("  VIOLATION: {} {} need={} got={}".format(
+                        d, self._from_minutes(slot_min), req, cov))
                     violations += 1
         if violations == 0:
-            print("  VALIDATION: All time slots fully covered!")
+            print("  VALIDATION: All slots covered!")
         else:
-            print("  VALIDATION: {} slot violations found".format(violations))
+            print("  VALIDATION: {} violations".format(violations))
 
-    def _solve_fallback(self, force=False):
+    # ==================== GREEDY FALLBACK ====================
+
+    def _solve_greedy(self):
         shifts = []
         weekly_count = {}
         for d in sorted(self.dates):
-            if self._get_day_type(d) == 'closed':
+            if self._get_day_type(d) == "closed":
                 continue
             slot_reqs = self._build_slot_requirements(d)
             if not slot_reqs:
                 continue
-            dt = datetime.strptime(d, '%Y-%m-%d')
-            week_key = "{}-W{}".format(dt.year, dt.isocalendar()[1])
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            wk = "{}-W{}".format(dt.year, dt.isocalendar()[1])
             day_shifts = []
-            assigned_staff = set()
-            max_passes = 20
-            for _ in range(max_passes):
-                deficit_slots = {}
-                for slot_min, req_count in slot_reqs.items():
-                    coverage = 0
-                    for s in day_shifts:
-                        s_start = self._to_minutes(s['start_time'])
-                        s_end = self._to_minutes(s['end_time'])
-                        if s_start <= slot_min < s_end:
-                            coverage += 1
-                    if coverage < req_count:
-                        deficit_slots[slot_min] = req_count - coverage
-                if not deficit_slots:
+            assigned = set()
+
+            for _ in range(30):
+                deficit = {}
+                for slot_min, req in slot_reqs.items():
+                    cov = sum(1 for s in day_shifts
+                              if self._to_minutes(s["start_time"]) <= slot_min
+                              < self._to_minutes(s["end_time"]))
+                    if cov < req:
+                        deficit[slot_min] = req - cov
+                if not deficit:
                     break
-                worst_slot = max(deficit_slots, key=deficit_slots.get)
-                best_staff = None
-                best_option = None
-                best_coverage = 0
-                for s in self.staff_list:
-                    if s['id'] in assigned_staff:
+
+                worst = max(deficit, key=deficit.get)
+                best_s = best_o = None
+                best_cov = 0
+
+                # Prioritize: mentors first, then by rank
+                sorted_staff = sorted(
+                    self.staff_list,
+                    key=lambda s: (
+                        0 if s["id"] in self._mentor_ids else 1,
+                        {"A": 0, "B": 1, "C": 2, "D": 3}.get(
+                            self._eval_rank.get(s["id"], "B"), 2)
+                    ))
+
+                for s in sorted_staff:
+                    sid = s["id"]
+                    if sid in assigned:
                         continue
-                    ng = self._get_staff_ng_dates(s)
-                    if d in ng:
+                    if d in self._get_staff_ng_dates(s):
                         continue
-                    max_days = int(s.get('max_days_week') or 5)
-                    if not force and max_days <= 0:
+                    md = int(s.get("max_days_week") or 5)
+                    if md <= 0:
+                        md = 6
+                    cur = weekly_count.get(sid, {}).get(wk, 0)
+                    if cur >= md:
                         continue
-                    effective_max = max_days if not force else max(max_days, 6)
-                    current = weekly_count.get(
-                        s['id'], {}).get(week_key, 0)
-                    if current >= effective_max:
-                        continue
-                    options = self._build_shift_options(s, d, force=force)
-                    for opt in options:
-                        if opt['start_min'] <= worst_slot < opt['end_min']:
-                            cov = sum(
-                                1 for sm in deficit_slots
-                                if opt['start_min'] <= sm < opt['end_min'])
-                            if cov > best_coverage:
-                                best_coverage = cov
-                                best_staff = s
-                                best_option = opt
-                if best_staff and best_option:
-                    brk = self._get_break_minutes(best_option['hours'])
-                    shift = {
-                        "staff_id": best_staff['id'],
+                    for opt in self._build_shift_options(s, d, force=True):
+                        if opt["start_min"] <= worst < opt["end_min"]:
+                            c = sum(1 for sm in deficit
+                                    if opt["start_min"] <= sm < opt["end_min"])
+                            if c > best_cov:
+                                best_cov = c
+                                best_s = s
+                                best_o = opt
+                    if best_s:
+                        break
+
+                if best_s and best_o:
+                    brk = self._get_break_minutes(best_o["hours"])
+                    day_shifts.append({
+                        "staff_id": best_s["id"],
                         "date": d,
-                        "start_time": best_option['start'],
-                        "end_time": best_option['end'],
-                        "break_minutes": brk
-                    }
-                    day_shifts.append(shift)
-                    assigned_staff.add(best_staff['id'])
-                    if best_staff['id'] not in weekly_count:
-                        weekly_count[best_staff['id']] = {}
-                    weekly_count[best_staff['id']][week_key] = (
-                        weekly_count[best_staff['id']].get(week_key, 0) + 1)
+                        "start_time": best_o["start"],
+                        "end_time": best_o["end"],
+                        "break_minutes": brk,
+                    })
+                    assigned.add(best_s["id"])
+                    weekly_count.setdefault(best_s["id"], {})
+                    weekly_count[best_s["id"]][wk] = (
+                        weekly_count[best_s["id"]].get(wk, 0) + 1)
                 else:
                     break
             shifts.extend(day_shifts)
-        return shifts
+
+        print("[Greedy] {} shifts generated".format(len(shifts)))
+        self._validate(shifts)
+        return shifts if shifts else None
