@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+scheduler_backup.py
+ai_scheduler.py
+.env

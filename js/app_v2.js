@@ -1,0 +1,5177 @@
+const app = {
+    // アプリケーションの状態管理
+    state: {
+        currentDate: null, // Initialized in init()
+        view: 'dashboard', // 現在のビュー
+        shiftViewMode: 'table', // 'table' or 'calendar'
+        shiftTablePeriod: 'month', // 'month', 'week', '2weeks'
+        dashboardMode: 'month', // 'month', '2week-1', '2week-2'
+        isShopLoggedIn: false, // 店舗ログイン状態
+        isAdmin: false, // 管理者ログイン状態
+        
+        // データ（APIからロード）
+        config: {},
+        staff: [],
+        shifts: [],
+        requests: [],
+        organization_id: null,
+        
+        // 設定デフォルト値
+        defaultConfig: {
+            admin_password: "0000",
+            opening_time: "09:00",
+            closing_time: "22:00",
+            hourly_wage_default: 1100,
+            
+            // 営業時間（詳細）
+            opening_times: {
+                weekday: { start: "09:00", end: "22:00" },
+                weekend: { start: "10:00", end: "20:00" },
+                holiday: { start: "10:00", end: "20:00" }
+            },
+
+            // 定休日 (0=日, 1=月...)
+            closed_days: [], 
+            
+            // 人員配置ルール（詳細）
+            staff_req: {
+                min_manager: 1,
+                min_weekday: 2,
+                min_weekend: 3,
+                min_holiday: 3
+            },
+            
+            // 役職設定 (ID, 名前, 色, レベル:高いほど権限強)
+            roles: [
+                { id: 'manager', name: '店長', color: 'purple', level: 3 },
+                { id: 'leader', name: 'リーダー', color: 'blue', level: 2 },
+                { id: 'staff', name: 'スタッフ', color: 'gray', level: 1 }
+            ],
+
+            // 臨時休業日 (YYYY-MM-DD)
+            special_holidays: [],
+            
+            // 特定日の営業時間 (YYYY-MM-DD: {start, end, note})
+            special_days: {},
+
+            // 時間帯別人員ルール
+            time_staff_req: [], // [{ days: [0,6], start: '11:00', end: '14:00', count: 4 }]
+
+            // カレンダー備考 (YYYY-MM-DD: "メモ内容")
+            calendar_notes: {},
+
+            // 休憩時間ルール
+            break_rules: [
+                { min_hours: 6, break_minutes: 45 },
+                { min_hours: 8, break_minutes: 60 }
+            ],
+            
+            // お店のルール（自由記述）
+            shop_rules_text: "希望休の提出は前月20日までにお願いします。\n急な欠勤の場合は、必ず店長まで直接連絡してください。\nシフトの変更希望は「休暇・シフト申請」ボタンから行えます。",
+
+            // 旧互換
+            // staffing_rules removed
+            
+            // カスタムシフト設定 (早番・遅番など)
+            custom_shifts: [
+                { name: "早番", start: "09:00", end: "17:00" },
+                { name: "遅番", start: "17:00", end: "22:00" }
+            ],
+            
+            special_days: {} 
+        },
+
+        
+        // チャートインスタンス保持用
+        dashboardChartInstance: null,
+        // ダッシュボード自動更新用タイマー
+        dashboardTimer: null
+    },
+
+    /**
+     * 初期化処理
+     */
+    async init() {
+        console.log("App initializing...");
+        try {
+            await API.init();
+
+            // Use native Date to avoid external dependency issues
+            this.state.currentDate = new Date();
+            this.bindEvents();
+
+            // Stripe決済完了時の処理
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('payment') === 'success') {
+                setTimeout(() => this.showToast('決済が完了しました。プランが有効化されました。', 'success'), 1000);
+                window.history.replaceState({}, '', window.location.pathname);
+            } else if (urlParams.get('payment') === 'cancelled') {
+                setTimeout(() => this.showToast('決済がキャンセルされました。', 'info'), 1000);
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+            
+            // セッションチェック
+            if (API.session) {
+                console.log("Session found. Loading data...");
+                
+                // 【復元処理】
+                // session内のuser情報から状態を復元する
+                const user = API.session.user;
+                if (user) {
+                    // ライセンス状態チェック（セッション復元時）
+                    if (user.contract_id) {
+                        try {
+                            const licenseCheck = await API.rpc('check_license_status', { p_contract_id: user.contract_id });
+                            if (licenseCheck && !licenseCheck.allowed && licenseCheck.status === 'suspended') {
+                                console.log('[Init] License suspended. Forcing logout.');
+                                await API.logout();
+                                this.state.isAdmin = false;
+                                this.state.isShopLoggedIn = false;
+                                this.renderCurrentView();
+                                this.updateHeader();
+                                this.openModal('loginModal');
+                                this.showToast('ライセンスが停止中のため、自動ログアウトしました。運営までお問い合わせください。', 'error');
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('[Init] License check skipped:', e.message);
+                        }
+                    }
+
+                    this.state.isShopLoggedIn = true;
+                    // contract_id を優先的に復元
+                    if (user.contract_id) {
+                        this.state.organization_id = user.contract_id;
+                    }
+                    // 管理者かどうかの復元
+                    if (user.role === 'Manager' || user.role === 'manager') {
+                        this.state.isAdmin = true;
+                    }
+                }
+
+                await this.loadData();
+            } else {
+                console.log("No session. Showing login modal.");
+                // データをロードせず、空の状態で描画してからログインモーダルを出す
+                this.state.isAdmin = false;
+                this.state.isShopLoggedIn = false; // 明示的にfalse
+                this.renderCurrentView();
+                this.updateHeader();
+                this.openModal('loginModal');
+                
+                const loadingEl = document.getElementById('viewContainer').querySelector('.loading-spinner')?.parentElement?.parentElement;
+                if(loadingEl) loadingEl.innerHTML = ''; 
+                return; // ここで終了
+            }
+            
+        } catch (e) {
+            // ... (error handling)
+        } finally {
+            this.updateAuthUI();
+            this.renderCurrentView();
+            this.updateHeader();
+        }
+    },
+
+    /**
+     * イベントリスナー登録
+     */
+    bindEvents() {
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const view = e.currentTarget.dataset.view;
+                this.changeView(view);
+            });
+        });
+
+        document.getElementById('prevPeriod')?.addEventListener('click', () => this.changeMonth(-1));
+        document.getElementById('nextPeriod')?.addEventListener('click', () => this.changeMonth(1));
+        document.getElementById('todayBtn')?.addEventListener('click', () => {
+            this.state.currentDate = new Date();
+            this.renderCurrentView();
+            this.updateHeader();
+        });
+
+        document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
+            document.querySelector('aside').classList.toggle('-translate-x-full');
+        });
+        
+        // Dynamic buttons (autoFill, aiAdvice) are bound in updateAuthUI()
+
+        document.getElementById('authBtn')?.addEventListener('click', () => this.handleAuth());
+    },
+
+    /**
+     * データのロード
+     */
+    async loadData() {
+        if (!this._shiftGenInProgress) this.showLoading(true);
+        try {
+            // 1. organization_id を確定する (セッション → localStorage の順)
+            let orgId = null;
+
+            if (API.session?.user?.organization_id) {
+                orgId = API.session.user.organization_id;
+            }
+            if (!orgId && API.session?.user?.contract_id) {
+                // contract_id からconfig_safeビューを引いてorganization_idを取得
+                try {
+                    const cRes = await API.list('config_safe', { contract_id: `eq.${API.session.user.contract_id}`, select: 'organization_id' });
+                    if (cRes.data?.[0]?.organization_id) {
+                        orgId = cRes.data[0].organization_id;
+                    }
+                } catch(e) { console.warn("Config lookup failed:", e); }
+            }
+            if (!orgId) {
+                orgId = localStorage.getItem('rakushift_org_id') || this.state.organization_id;
+            }
+
+            // orgIdが無ければデータ取得不可 → ログイン画面へ
+            if (!orgId) {
+                console.error("No organization_id available. Cannot load data.");
+                this.showLoading(false);
+                this.openModal('loginModal');
+                return;
+            }
+
+            this.state.organization_id = orgId;
+            localStorage.setItem('rakushift_org_id', orgId);
+
+            // 2. テナント分離: 全クエリにorganization_idフィルタを適用
+            const orgFilter = { organization_id: `eq.${orgId}` };
+
+            console.log(`Loading data for org: ${orgId}`);
+
+            // staffはpasswordフィールドを除外して取得 (セキュリティ)
+            const staffSelect = 'id,organization_id,contract_id,name,login_id,role,evaluation,salary_type,hourly_wage,monthly_salary,annual_holidays,max_days_week,max_hours_day,unavailable_dates';
+            const [configRes, staffRes, shiftsRes, requestsRes] = await Promise.all([
+                API.list('config_safe', orgFilter),
+                API.list('staff', { ...orgFilter, select: staffSelect }),
+                API.list('shifts', orgFilter),
+                API.list('requests', orgFilter)
+            ]);
+
+            // 3. configをマージ (DBの値を優先、足りない項目はデフォルトで補完)
+            if (configRes.data && configRes.data.length > 0) {
+                this.state.config = { ...this.state.defaultConfig, ...configRes.data[0] };
+            } else {
+                if (!this.state.config.id) {
+                    console.log("No config in DB for this org, keeping defaults.");
+                }
+            }
+
+            // 4. データをStateに保存
+            this.state.staff = staffRes.data || [];
+            this.state.shifts = shiftsRes.data || [];
+            this.state.requests = requestsRes.data || [];
+
+            console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts.`);
+            this.updateRequestBadge();
+
+            // スタッフ数がプラン上限を超えていたら警告
+            if (this.isStaffOverLimit()) {
+                this.showStaffOverLimitAlert();
+            } else {
+                this.clearStaffOverLimitAlert();
+            }
+
+            // 決済エラー状態なら警告表示
+            if (this.state.config.subscription_status === 'past_due') {
+                this.showPaymentAlert();
+            }
+
+        } catch (error) {
+            console.error('Data Load Error:', error);
+        } finally {
+            if (!this._shiftGenInProgress) this.showLoading(false);
+        }
+    },
+
+    handleAuth() {
+        if (this.state.isAdmin) {
+            // 管理者ログアウトのみ（店舗ログインは維持）
+            if(confirm('管理者権限からログアウトしますか？')) {
+                this.state.isAdmin = false;
+                // セッション情報を更新（管理者情報を消す）
+                const currentUser = API.session.user;
+                // 契約情報は残すが、個人特定は消すイメージ（ここでは簡易的にisAdminフラグのみ操作）
+                const shopUser = {
+                    contract_id: currentUser.contract_id,
+                    name: 'Guest (Staff)',
+                    role: 'Guest'
+                };
+                API.setSession(shopUser);
+                
+                this.showToast('管理者からログアウトしました', 'info');
+                this.updateAuthUI();
+                this.updateHeader();
+                this.changeView('dashboard');
+            }
+        } else {
+            // 管理者ログインモーダルを開く
+            this.openModal('adminLoginModal');
+        }
+    },
+
+    /**
+     * 契約者（店舗）ログイン処理 - RPC経由bcrypt認証
+     */
+    async login() {
+        console.log('[ShopLogin] Login attempt started...');
+
+        const contractIdEl = document.getElementById('loginContractId');
+        const passwordEl = document.getElementById('loginShopPass');
+
+        if (!contractIdEl) {
+            alert('エラー: 入力欄が見つかりません。ページを再読み込みしてください。');
+            return;
+        }
+
+        const contractId = contractIdEl.value.trim();
+        const password = passwordEl ? passwordEl.value.trim() : '';
+
+        if (!contractId || !password) {
+            this.showToast('契約IDとパスワードを入力してください', 'error');
+            return;
+        }
+
+        this.showLoading(true);
+        try {
+            // 1. ライセンス・サブスクリプション状態チェック
+            try {
+                const subCheck = await API.rpc('check_subscription_status', { p_contract_id: contractId });
+                if (subCheck && !subCheck.allowed) {
+                    if (subCheck.status === 'suspended') {
+                        this.showToast('このアカウントのライセンスは停止中です。運営までお問い合わせください。', 'error');
+                        this.showLoading(false);
+                        return;
+                    } else if (subCheck.status === 'not_found') {
+                        this.showToast('契約IDが見つかりません', 'error');
+                        this.showLoading(false);
+                        return;
+                    } else if (subCheck.status === 'canceled' || subCheck.status === 'unpaid') {
+                        this.showToast('サブスクリプションが無効です。プランを再度ご契約ください。', 'error');
+                        this.showLoading(false);
+                        return;
+                    } else if (subCheck.status === 'past_due') {
+                        this._paymentPastDue = true;
+                    }
+                }
+                // サブスク未契約(free)の場合 → ログインは許可するが決済を促す
+                if (subCheck && subCheck.status === 'free') {
+                    this._pendingPayment = true;
+                } else {
+                    this._pendingPayment = false;
+                }
+            } catch (licenseErr) {
+                console.warn('[ShopLogin] Subscription check skipped:', licenseErr.message);
+            }
+
+            // 2. bcrypt認証 (RPC経由)
+            const authResult = await API.rpc('verify_shop_login', {
+                p_contract_id: contractId,
+                p_password: password
+            });
+
+            console.log('[ShopLogin] Auth result:', authResult);
+
+            if (authResult && authResult.success) {
+                this.state.isShopLoggedIn = true;
+                this.state.isAdmin = false;
+                this.state.organization_id = authResult.organization_id;
+
+                API.setSession({
+                    contract_id: authResult.contract_id,
+                    organization_id: authResult.organization_id,
+                    name: 'Guest (Staff)',
+                    role: 'Guest'
+                });
+
+                this.closeModal('loginModal');
+
+                await this.loadData();
+                this.updateAuthUI();
+                this.updateHeader();
+
+                // サブスク未契約の場合、決済を促す
+                if (this._pendingPayment) {
+                    this.showToast('ご利用にはプランの契約が必要です', 'warning');
+                    this.changeView('settings');
+                    setTimeout(() => {
+                        const section = document.getElementById('subscriptionSection');
+                        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 500);
+                } else if (this._paymentPastDue) {
+                    this.showToast(`契約ID: ${contractId} でログインしました`, 'success');
+                    this.showPaymentAlert();
+                } else {
+                    this.showToast(`契約ID: ${contractId} でログインしました`, 'success');
+                }
+            } else {
+                this.showToast(authResult?.message || 'ログインに失敗しました', 'error');
+            }
+
+        } catch (error) {
+            console.error('[ShopLogin] Error:', error);
+            this.showToast(`ログイン処理中にエラーが発生しました: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+
+    /**
+     * 管理者ログイン処理 - RPC経由bcrypt認証
+     */
+    async adminLogin() {
+        const loginId = document.getElementById('adminLoginId').value.trim();
+        const password = document.getElementById('adminLoginPass')?.value.trim() || '';
+
+        console.log(`[AdminLogin] Triggered. Input LoginID: ${loginId}`);
+
+        if (!loginId || !password) {
+            this.showToast('ログインIDとパスワードを入力してください', 'error');
+            return;
+        }
+
+        this.showLoading(true);
+        try {
+            let currentContractId = null;
+            if (API.session?.user?.contract_id) {
+                currentContractId = API.session.user.contract_id;
+            } else if (this.state.config?.contract_id) {
+                currentContractId = this.state.config.contract_id;
+            }
+
+            console.log(`[AdminLogin] ContractID: ${currentContractId}, LoginID: ${loginId}`);
+
+            if (!currentContractId) {
+                this.showToast('先に店舗ログインしてください', 'error');
+                this.showLoading(false);
+                return;
+            }
+
+            // bcrypt認証 (RPC経由)
+            const authResult = await API.rpc('verify_admin_login', {
+                p_contract_id: currentContractId,
+                p_login_id: loginId,
+                p_password: password
+            });
+
+            console.log('[AdminLogin] Auth result:', authResult);
+
+            if (authResult && authResult.success) {
+                this.state.isAdmin = true;
+
+                API.setSession({
+                    id: authResult.staff_id,
+                    contract_id: currentContractId,
+                    organization_id: authResult.organization_id,
+                    name: authResult.name,
+                    role: authResult.role
+                });
+
+                this.closeModal('adminLoginModal');
+                this.showToast(`管理者: ${authResult.name} でログインしました`, 'success');
+
+                this.updateAuthUI();
+                this.updateHeader();
+            } else {
+                this.showToast(authResult?.message || '認証に失敗しました', 'error');
+            }
+
+        } catch(e) {
+            console.error('Admin Login Error:', e);
+            this.showToast(`エラーが発生しました: ${e.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+
+    signUpMode() {
+        alert("新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。");
+    },
+
+    async logout() {
+        if(!confirm('アプリケーションから完全にログアウトしますか？\n（ログイン画面に戻ります）')) return;
+        
+        await API.logout();
+        this.state.isAdmin = false;
+        this.state.isShopLoggedIn = false;
+        this.state.staff = [];
+        this.state.shifts = [];
+        this.showToast('ログアウトしました', 'info');
+        this.updateAuthUI();
+        this.changeView('dashboard'); 
+        this.openModal('loginModal');
+    },
+
+    updateAuthUI() {
+        const authBtn = document.getElementById('authBtn');
+        const adminLinks = document.querySelectorAll('.admin-link');
+        const adminHeader = document.getElementById('adminHeaderControls');
+        
+        // サイドバーの「管理者ログイン」ボタンの表示
+        if (authBtn) {
+            if (this.state.isAdmin) {
+                authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket w-6 text-center"></i> 管理者ログアウト';
+                authBtn.classList.remove('text-blue-600', 'hover:bg-blue-50');
+                authBtn.classList.add('text-red-600', 'hover:bg-red-50');
+            } else {
+                authBtn.innerHTML = '<i class="fa-solid fa-user-shield w-6 text-center"></i> 管理者ログイン';
+                authBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
+                authBtn.classList.remove('text-red-600', 'hover:bg-red-50');
+            }
+        }
+        
+        // 管理者専用メニューの表示切り替え
+        adminLinks.forEach(link => {
+            if (this.state.isAdmin) {
+                link.classList.remove('hidden');
+            } else {
+                link.classList.add('hidden');
+            }
+        });
+
+        // ヘッダーへの管理者コントロール注入
+        if (adminHeader) {
+            if (this.state.isAdmin) {
+                adminHeader.innerHTML = `
+                    <button onclick="app.openModal('autoFillModal')" class="hidden md:flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded shadow transition-all">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> AIシフト作成
+                    </button>
+                    <div class="h-8 w-px bg-gray-300 mx-2 hidden md:block"></div>
+                    <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all ml-2" title="完全ログアウト">
+                        <i class="fa-solid fa-power-off"></i>
+                    </button>
+                `;
+            } else {
+                // スタッフモード（閲覧のみ）のときはヘッダーに契約IDと完全ログアウトボタンを表示
+                if (this.state.isShopLoggedIn) {
+                     adminHeader.innerHTML = `
+                        <div class="hidden md:block px-3 py-1 text-xs font-mono text-gray-400 border border-gray-200 rounded bg-gray-50 mr-2">
+                            ID: ${this.state.organization_id}
+                        </div>
+                        <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all" title="完全ログアウト">
+                            <i class="fa-solid fa-power-off"></i>
+                        </button>
+                     `;
+                } else {
+                    adminHeader.innerHTML = '';
+                }
+            }
+        }
+        
+        // メニューバッジなどの更新
+        this.updateRequestBadge();
+    },
+
+    changeView(viewName) {
+        // タイマークリア
+        if (this.state.dashboardTimer) {
+            clearInterval(this.state.dashboardTimer);
+            this.state.dashboardTimer = null;
+        }
+
+        this.state.view = viewName;
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            if (link.dataset.view === viewName) {
+                link.classList.add('active', 'bg-blue-50', 'text-blue-600');
+                link.classList.remove('text-gray-600', 'hover:bg-gray-50');
+            } else {
+                link.classList.remove('active', 'bg-blue-50', 'text-blue-600');
+                link.classList.add('text-gray-600', 'hover:bg-gray-50');
+            }
+        });
+        this.renderCurrentView();
+    },
+
+    changeMonth(delta) {
+        this.state.currentDate.setMonth(this.state.currentDate.getMonth() + delta);
+        this.updateHeader();
+        this.renderCurrentView();
+    },
+
+    updateHeader() {
+        const year = this.state.currentDate.getFullYear();
+        const month = this.state.currentDate.getMonth() + 1;
+        const display = document.getElementById('currentPeriodDisplay');
+        if(display) display.textContent = `${year}年 ${month}月`;
+        this.calculateMonthlyStats();
+    },
+
+    renderCurrentView() {
+        const container = document.getElementById('viewContainer');
+        container.innerHTML = '';
+
+        switch (this.state.view) {
+            case 'dashboard':
+                this.renderDashboard(container);
+                break;
+            case 'manual-shift':
+                this.renderShiftView(container);
+                break;
+            case 'staff':
+                this.renderStaffList(container);
+                break;
+            case 'requests':
+                this.renderRequests(container);
+                break;
+            case 'analytics':
+                this.renderAnalytics(container);
+                break;
+            case 'settings':
+                this.renderSettings(container);
+                break;
+            case 'manual':
+                this.renderManual(container);
+                break;
+            default:
+                this.renderDashboard(container);
+        }
+    },
+
+    // --- 開発者用ツール (Dev Tools) ---
+    async devCreateTestData() {
+        // 1. マスターアカウントチェック
+        const currentUser = API.session?.user?.email;
+        console.log("Current user:", currentUser);
+        if (currentUser !== 'master@mochikuro.com') {
+            alert(`現在のアカウント (${currentUser}) ではこの機能を使用できません。\n管理者(master@mochikuro.com)のみ実行可能です。`);
+            return;
+        }
+
+        // 削除確認ではなく「データ整備」の確認に変更
+        if (!confirm("【開発者用】テストデータを整備しますか？\n※既存データは保持され、不足しているスタッフや設定が補充されます。")) return;
+        
+        this.showLoading(true);
+        try {
+            // 2. 組織IDの確保と検証 (自己修復ロジック)
+            let orgId = this.state.organization_id || localStorage.getItem('rakushift_org_id');
+            let isValidOrg = false;
+
+            // IDを持っている場合、DBに実在するか確認
+            if (orgId) {
+                try {
+                    const check = await API.list('organizations', { id: `eq.${orgId}` });
+                    if (check.data && check.data.length > 0) isValidOrg = true;
+                } catch(e) { console.warn("Org check failed", e); }
+            }
+
+            // 無効または持っていない場合、再取得・作成
+            if (!isValidOrg) {
+                console.log("Org ID is invalid or missing. Repairing...");
+                const orgRes = await API.list('organizations');
+                if (orgRes && orgRes.data && orgRes.data.length > 0) {
+                    orgId = orgRes.data[0].id; // 既存のものを採用
+                } else {
+                    console.log("No organizations found. Creating new...");
+                    const newOrg = await API.create('organizations', { name: 'Test Shop' });
+                    orgId = newOrg?.id;
+                }
+                
+                // 新しいIDを保存
+                if (orgId) {
+                    this.state.organization_id = orgId;
+                    localStorage.setItem('rakushift_org_id', orgId);
+                    
+                    // プロフィールも強制更新して紐付け直す
+                    const userId = API.session?.user?.id;
+                    if (userId) {
+                        await API.update('profiles', userId, { organization_id: orgId }).catch(e=>{});
+                    }
+                } else {
+                    throw new Error("組織IDの生成に失敗しました。");
+                }
+            }
+
+            // 3. 既存データの確認 (全削除はしない)
+            const allStaffRes = await API.list('staff', { organization_id: `eq.${orgId}` });
+            const currentStaff = allStaffRes.data || [];
+            
+            // 4. 不足分の補充
+            // 少なくとも10名は確保したい
+            const targetCount = 13;
+            const currentCount = currentStaff.length;
+            
+            if (currentCount < targetCount) {
+                this.showToast(`スタッフを補充中... (${currentCount} -> ${targetCount}名)`, 'info');
+                
+                // 補充用テンプレート (シフトが埋まりやすい「最強バイト」を含める)
+                // ランクA-D, 年間休日対応
+                const templates = [
+                    { name: "【万能】佐藤 (店長)", role: 'manager', max_days: 5, max_hours: 8, wage: 1500, eval: 'A', salary_type: 'monthly', holidays: 105 }, 
+                    { name: "【万能】鈴木 (副店長)", role: 'manager', max_days: 5, max_hours: 8, wage: 1400, eval: 'A', salary_type: 'monthly', holidays: 110 },
+                    { name: "高橋 (リーダー)", role: 'leader', max_days: 5, max_hours: 8, wage: 1300, eval: 'B', salary_type: 'monthly', holidays: 120 },
+                    { name: "田中 (フル)", role: 'staff', max_days: 5, max_hours: 8, wage: 1100, eval: 'B' },
+                    { name: "渡辺 (フル)", role: 'staff', max_days: 5, max_hours: 8, wage: 1100, eval: 'B' },
+                    { name: "フリーターA (長時間)", role: 'staff', max_days: 5, max_hours: 8, wage: 1200, eval: 'C' }, 
+                    { name: "フリーターB (長時間)", role: 'staff', max_days: 5, max_hours: 8, wage: 1200, eval: 'C' },
+                    { name: "学生C (夕方)", role: 'staff', max_days: 4, max_hours: 5, wage: 1000, eval: 'D' },
+                    { name: "学生D (夕方)", role: 'staff', max_days: 4, max_hours: 5, wage: 1000, eval: 'D' },
+                    { name: "主婦E (昼)", role: 'staff', max_days: 4, max_hours: 6, wage: 1050, eval: 'C' },
+                    { name: "主婦F (昼)", role: 'staff', max_days: 4, max_hours: 6, wage: 1050, eval: 'C' },
+                    { name: "週末G (土日)", role: 'staff', max_days: 2, max_hours: 8, wage: 1100, eval: 'D' },
+                    { name: "新人H", role: 'staff', max_days: 3, max_hours: 4, wage: 950, eval: 'D' }
+                ];
+
+                // 足りない人数分だけ追加
+                const addCount = targetCount - currentCount;
+                const createdStaff = [];
+                
+                // 直列実行で確実にIDを紐付ける
+                for (let i = 0; i < addCount; i++) {
+                    const tmpl = templates[i % templates.length];
+                    const uniqueName = currentCount > 0 ? `${tmpl.name} ${i+1}` : tmpl.name;
+                    
+                    // 個別の作成エラーをキャッチせず、失敗したら全体を止める
+                    const data = {
+                        name: uniqueName,
+                        role: tmpl.role,
+                        evaluation: tmpl.eval || 'B',
+                        salary_type: tmpl.salary_type || 'hourly',
+                        hourly_wage: tmpl.wage,
+                        monthly_salary: tmpl.salary_type === 'monthly' ? 250000 : 0,
+                        max_days_week: tmpl.max_days,
+                        max_hours_day: tmpl.max_hours,
+                        organization_id: orgId
+                    };
+                    if (tmpl.holidays) {
+                        data.annual_holidays = tmpl.holidays; // ここで保存
+                    }
+
+                    const res = await API.create('staff', data);
+                    
+                    if (!res) {
+                        throw new Error(`スタッフ「${uniqueName}」のDB保存に失敗しました。RLS設定を確認してください。`);
+                    }
+                    createdStaff.push(res);
+                }
+                
+                // State更新 (既存 + 新規)
+                this.state.staff = [...currentStaff, ...createdStaff];
+                
+                // 画面更新 (リロードなしで即時反映)
+                this.renderCurrentView();
+                this.showToast(`完了！ ${this.state.staff.length}名のスタッフを表示中`, 'success');
+                
+            } else {
+                this.showToast('スタッフ数は十分です (データ維持)', 'success');
+                this.state.staff = currentStaff;
+            }
+
+            // 5. 設定データの修復 (空の場合のみ)
+            if (!this.state.config.id) {
+                // configはcreate_tenant RPCで作成されるため、ここでは再読み込みのみ
+                const confRes = await API.list('config_safe', { organization_id: `eq.${orgId}` });
+                if(confRes.data?.[0]) this.state.config = { ...this.state.defaultConfig, ...confRes.data[0] };
+            }
+
+            this.renderCurrentView();
+            this.showToast(`データ整備完了。現在のスタッフ: ${this.state.staff.length}名`, 'success');
+            
+        } catch(e) {
+            console.error("Test data setup failed:", e);
+            alert("エラーが発生しました: " + e.message);
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    // =================================================================
+    // 1. ダッシュボード (Dashboard)
+    // =================================================================
+    renderDashboard(container) {
+        // タイマークリア（念のため）
+        if (this.state.dashboardTimer) {
+            clearInterval(this.state.dashboardTimer);
+            this.state.dashboardTimer = null;
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const pendingCount = this.state.requests.filter(r => r.status === 'pending').length;
+        const chartData = this.getDashboardChartData();
+
+        const todayShiftsInitial = this.state.shifts.filter(s => s.date === todayStr);
+
+        container.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- 左カラム -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- 承認待ち (管理者の場合のみクリック可) -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border ${pendingCount > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200'} ${this.state.isAdmin ? 'cursor-pointer hover:scale-[1.02]' : ''} transition-transform" ${this.state.isAdmin ? `onclick="app.changeView('requests')"` : ''}>
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase">未承認の申請</p>
+                                    <h3 class="text-2xl font-bold ${pendingCount > 0 ? 'text-red-600' : 'text-gray-700'}">${pendingCount} <span class="text-sm text-gray-500">件</span></h3>
+                                </div>
+                                <div class="w-10 h-10 rounded-full ${pendingCount > 0 ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'} flex items-center justify-center">
+                                    <i class="fa-solid fa-inbox"></i>
+                                </div>
+                            </div>
+                            ${this.state.isAdmin ? (pendingCount > 0 ? '<p class="text-xs text-red-500 mt-2 font-bold">確認してください</p>' : '<p class="text-xs text-gray-400 mt-2">対応は完了しています</p>') : '<p class="text-xs text-gray-400 mt-2">※管理人のみ閲覧可能</p>'}
+                        </div>
+
+                        <!-- 本日のスタッフ数 -->
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                             <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase">本日の出勤</p>
+                                    <h3 class="text-2xl font-bold text-blue-600">${todayShiftsInitial.length} <span class="text-sm text-gray-500">名</span></h3>
+                                </div>
+                                <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                                    <i class="fa-solid fa-users"></i>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">営業時間: ${this.state.config.opening_time} - ${this.state.config.closing_time}</p>
+                        </div>
+                    </div>
+
+                    <!-- 今日のシフトリスト -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                            <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                                <i class="fa-regular fa-calendar-check text-blue-500"></i> 今日のシフト詳細
+                            </h3>
+                            <span class="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded" id="dashboardCurrentTime">${todayStr}</span>
+                        </div>
+                        
+                        <div id="dashboardShiftList" class="divide-y divide-gray-50 max-h-[300px] overflow-y-auto">
+                            <!-- JSで自動更新 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右カラム -->
+                <div class="space-y-6">
+                    <!-- グラフ (管理者のみ表示) -->
+                    ${this.state.isAdmin ? `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                        <h3 class="font-bold text-gray-800 mb-1 text-sm">直近7日間の人件費(概算)</h3>
+                        <p class="text-xs text-gray-400 mb-4">祝日割増・休憩控除を含みます</p>
+                        <div class="h-[200px] w-full">
+                            <canvas id="dashboardChart"></canvas>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- クイックアクション -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                         <h3 class="font-bold text-gray-800 mb-3 text-sm">クイックメニュー</h3>
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            ${this.state.isAdmin ? `
+                            <button onclick="app.openModal('staffModal'); document.getElementById('staffForm').reset(); document.getElementById('staffId').value='';" 
+                                class="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-lg text-sm font-bold text-gray-600 hover:text-blue-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-blue-200">
+                                <i class="fa-solid fa-user-plus text-blue-500 text-lg"></i> スタッフ追加
+                            </button>
+                            ` : ''}
+                            
+                            <button onclick="app.openModal('requestModal'); app.initRequestModal();"
+                                class="w-full text-left px-4 py-3 hover:bg-red-50 rounded-lg text-sm font-bold text-gray-600 hover:text-red-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-red-200">
+                                <i class="fa-solid fa-umbrella-beach text-red-400 text-lg"></i> 休み希望を出す
+                            </button>
+
+                            <button onclick="app.showShopRules()" 
+                                class="w-full text-left px-4 py-3 hover:bg-orange-50 rounded-lg text-sm font-bold text-gray-600 hover:text-orange-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-orange-200">
+                                <i class="fa-solid fa-book-open text-orange-400 text-lg"></i> お店のルール
+                            </button>
+
+                            <button id="btn-quick-shift" onclick="app.changeView('manual-shift')" 
+                                class="w-full text-left px-4 py-3 hover:bg-teal-50 rounded-lg text-sm font-bold text-gray-600 hover:text-teal-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-teal-200">
+                                <i class="fa-solid fa-calendar-days text-teal-500 text-lg"></i> シフト表を確認
+                            </button>
+                         </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 自動更新関数
+        const updateShiftList = () => {
+            const listContainer = document.getElementById('dashboardShiftList');
+            const timeDisplay = document.getElementById('dashboardCurrentTime');
+            if (!listContainer) return;
+
+            const now = new Date();
+            // 修正: 時間もゼロパディングして2桁にする (例: 1:05 -> 01:05)
+            // これにより文字列比較 "01:00" >= "09:00" が正しく false になる
+            const currentHour = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            
+            // 時刻表示更新
+            if(timeDisplay) timeDisplay.textContent = `${todayStr} ${currentHour}`;
+
+            const todayShifts = this.state.shifts
+                .filter(s => s.date === todayStr)
+                .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+            if (todayShifts.length === 0) {
+                listContainer.innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">本日のシフトはありません</div>';
+                return;
+            }
+
+            listContainer.innerHTML = todayShifts.map(s => {
+                const staff = this.getStaff(s.staff_id);
+                
+                // 勤務状況判定 (日またぎ対応)
+                let isWorking = false;
+                let isFinished = false;
+
+                if (s.start_time > s.end_time) {
+                    // 日またぎシフト (例: 22:00 - 05:00)
+                    // 現在時刻が開始時刻以降(22:00-23:59) または 終了時刻以前(00:00-05:00)
+                    if (currentHour >= s.start_time || currentHour <= s.end_time) {
+                        isWorking = true;
+                    } else {
+                        // 勤務時間外
+                        // 例: 06:00 (終了後) -> 21:00 (開始前)
+                        // 今日の日付のシフトとして扱われているため、終了時刻を過ぎていれば「終了」とみなす
+                        isFinished = currentHour > s.end_time && currentHour < s.start_time;
+                    }
+                } else {
+                    // 通常シフト (例: 09:00 - 18:00)
+                    isWorking = currentHour >= s.start_time && currentHour <= s.end_time;
+                    isFinished = currentHour > s.end_time;
+                }
+                
+                const statusClass = isWorking ? 'bg-green-50' : (isFinished ? 'bg-gray-50 opacity-60' : '');
+                const borderClass = isWorking ? 'border-l-4 border-green-500' : 'border-l-4 border-transparent';
+                
+                return `
+                    <div class="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors ${statusClass} ${borderClass}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-xs">
+                                ${staff ? staff.name.charAt(0) : '?'}
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm text-gray-800">${staff ? staff.name : '削除済スタッフ'}</div>
+                                <div class="text-[10px] text-gray-500">${s.start_time} - ${s.end_time}</div>
+                            </div>
+                        </div>
+                        <div>
+                            ${isWorking ? '<span class="text-[10px] font-bold text-green-600 flex items-center gap-1"><span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>勤務中</span>' : ''}
+                            ${isFinished ? '<span class="text-[10px] font-bold text-gray-400">勤務終了</span>' : ''}
+                            ${!isWorking && !isFinished ? '<span class="text-[10px] font-bold text-blue-500">出勤前</span>' : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        // 初回実行
+        updateShiftList();
+
+        // タイマーセット (1分ごと)
+        this.state.dashboardTimer = setInterval(updateShiftList, 60000);
+
+        // チャート描画
+        setTimeout(() => {
+            const ctx = document.getElementById('dashboardChart');
+            if(ctx) {
+                if (this.dashboardChartInstance) this.dashboardChartInstance.destroy();
+
+                this.dashboardChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: '日次人件費 (円)',
+                            data: chartData.data,
+                            backgroundColor: chartData.colors,
+                            borderRadius: 4,
+                            barThickness: 12
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { 
+                            y: { display: true, ticks: { callback: v => '¥' + v/1000 + 'k', font: { size: 10 } }, grid: { color: '#f3f4f6' } }, 
+                            x: { grid: { display: false }, ticks: { font: { size: 10 } } } 
+                        }
+                    }
+                });
+            }
+        }, 100);
+        
+        // Ensure button works
+        setTimeout(() => {
+            const btn = document.getElementById('btn-quick-shift');
+            if(btn) btn.onclick = () => app.changeView('manual-shift');
+        }, 50);
+    },
+
+    getDashboardChartData() {
+        const labels = [];
+        const data = [];
+        const colors = [];
+        const today = new Date();
+
+        for (let i = 6; i >= 0; i--) {
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() - i);
+            const dateStr = targetDate.toISOString().split('T')[0];
+            
+            labels.push(`${targetDate.getMonth()+1}/${targetDate.getDate()}`);
+
+            let dailyCost = 0;
+            const dayShifts = this.state.shifts.filter(s => s.date === dateStr);
+
+            dayShifts.forEach(shift => {
+                const staff = this.getStaff(shift.staff_id);
+                if (!staff || staff.salary_type !== 'hourly') return;
+
+                const start = new Date(`${dateStr}T${shift.start_time}`);
+                const end = new Date(`${dateStr}T${shift.end_time}`);
+                if (end < start) end.setDate(end.getDate() + 1);
+                let hours = (end - start) / (1000 * 60 * 60) - (shift.break_minutes / 60);
+                if (hours < 0) hours = 0;
+
+                let wage = staff.hourly_wage;
+                if (JapaneseHolidays.isHoliday(dateStr)) wage *= 1.25;
+                dailyCost += Math.floor(hours * wage);
+            });
+
+            data.push(dailyCost);
+            colors.push(i === 0 ? '#3b82f6' : '#cbd5e1');
+        }
+        return { labels, data, colors };
+    },
+
+    // =================================================================
+    // 2. 申請リスト (Requests) - Admin Only
+    // =================================================================
+    renderRequests(container) {
+        if (!this.state.isAdmin) {
+             container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-gray-500">
+                    <i class="fa-solid fa-lock text-4xl mb-4 text-gray-300"></i>
+                    <p class="font-bold text-gray-600">権限がありません</p>
+                    <p class="text-sm">申請の管理を行うには管理者としてログインしてください</p>
+                    <button onclick="app.openModal('loginModal')" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700">管理者ログイン</button>
+                </div>
+            `;
+            return;
+        }
+
+        const pending = this.state.requests.filter(r => r.status === 'pending');
+        const history = this.state.requests.filter(r => r.status !== 'pending').sort((a, b) => b.id - a.id).slice(0, 10);
+
+        container.innerHTML = `
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Pending -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-blue-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                            <i class="fa-solid fa-inbox text-blue-600"></i> 承認待ち
+                            <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">${pending.length}</span>
+                        </h3>
+                        ${pending.length > 1 ? `<button onclick="app.handleBatchApprove()" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><i class="fa-solid fa-check-double"></i> 全て承認</button>` : ''}
+                    </div>
+                    <div class="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                        ${pending.length === 0 ? '<div class="p-8 text-center text-gray-400">現在、承認待ちの申請はありません</div>' : ''}
+                        ${pending.map(req => {
+                            const staff = this.getStaff(req.staff_id);
+                            return `
+                                <div class="p-4 hover:bg-gray-50 transition-colors">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-500 text-xs">
+                                                ${staff ? staff.name.charAt(0) : '?'}
+                                            </div>
+                                            <div>
+                                                <div class="font-bold text-gray-800 text-sm">${staff ? staff.name : '不明'}</div>
+                                                <div class="text-xs text-gray-500">${new Date(req.created_at || Date.now()).toLocaleDateString()} 申請</div>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs font-bold px-2 py-1 rounded bg-yellow-100 text-yellow-700">
+                                            ${req.type === 'off' ? '休み希望' : '勤務希望'}
+                                        </span>
+                                    </div>
+                                    <div class="pl-10">
+                                        <div class="text-sm font-bold text-gray-800 mb-1">
+                                            <i class="fa-regular fa-calendar mr-1 text-gray-400"></i> ${req.dates}
+                                            ${req.type === 'work' ? `<span class="ml-2 text-gray-600">${req.start_time} - ${req.end_time}</span>` : ''}
+                                        </div>
+                                        ${req.reason ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-3">"${req.reason}"</div>` : ''}
+                                        
+                                        <div class="flex gap-3 mt-3 justify-end">
+                                            <button onclick="app.handleRequest('${req.id}', 'rejected')" class="px-4 py-1.5 border border-gray-300 rounded text-gray-600 text-xs font-bold hover:bg-gray-50 shadow-sm transition-colors">
+                                                却下
+                                            </button>
+                                            <button onclick="app.handleRequest('${req.id}', 'approved')" class="px-4 py-1.5 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-1">
+                                                <i class="fa-solid fa-check"></i> 承認
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <!-- History -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden opacity-80">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-gray-500"></i> 処理履歴 (直近10件)
+                        </h3>
+                    </div>
+                    <div class="divide-y divide-gray-100">
+                        ${history.map(req => {
+                             const staff = this.getStaff(req.staff_id);
+                             const isApproved = req.status === 'approved';
+                             return `
+                                <div class="p-3 flex justify-between items-center text-sm">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-2 h-2 rounded-full ${isApproved ? 'bg-green-500' : 'bg-red-500'}"></div>
+                                        <div>
+                                            <span class="font-bold text-gray-700">${staff ? staff.name : '不明'}</span>
+                                            <span class="text-gray-400 mx-1">|</span>
+                                            <span class="text-gray-600">${req.dates}</span>
+                                        </div>
+                                    </div>
+                                    <span class="font-bold text-xs ${isApproved ? 'text-green-600' : 'text-red-500'}">
+                                        ${isApproved ? '承認済' : '却下'}
+                                    </span>
+                                </div>
+                             `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    // =================================================================
+    // 3. シフトビュー (Shift View: Table & Calendar)
+    // =================================================================
+    renderShiftView(container) {
+        // Toggle Buttons logic
+        const getBtnClass = (isActive) => isActive 
+            ? 'bg-white text-blue-600 shadow-sm font-bold' 
+            : 'text-gray-500 hover:text-gray-700 font-medium hover:bg-gray-200/50';
+
+        const isTable = this.state.shiftViewMode === 'table';
+        const p = this.state.shiftTablePeriod;
+
+        // Period controls (only for table mode)
+        let periodControls = '';
+        if (isTable) {
+            periodControls = `
+                <div class="flex items-center bg-gray-100 p-1 rounded-lg ml-4">
+                    <button onclick="app.switchShiftTablePeriod('month')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='month')}">月間</button>
+                    <button onclick="app.switchShiftTablePeriod('2weeks')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='2weeks')}">2週間</button>
+                    <button onclick="app.switchShiftTablePeriod('week')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='week')}">1週間</button>
+                </div>
+            `;
+        }
+
+        // Navigation arrows for Week/2Weeks
+        let navControls = '';
+        if (isTable && p !== 'month') {
+            const label = p === 'week' ? '1週間' : '2週間';
+            navControls = `
+                <div class="flex items-center gap-1 ml-2">
+                    <button onclick="app.changeTablePeriod(-1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <span class="text-xs font-bold text-gray-500">${label}移動</span>
+                    <button onclick="app.changeTablePeriod(1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        container.innerHTML = `
+            <div class="flex flex-col h-full space-y-4">
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-lg font-bold text-gray-800">シフト表</h2>
+                        <span class="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-mono whitespace-nowrap">
+                            ${this.state.currentDate.getFullYear()}年${this.state.currentDate.getMonth()+1}月
+                            ${isTable && p !== 'month' ? `<span class="ml-1 text-xs text-blue-600">(${this.state.currentDate.getDate()}日〜)</span>` : ''}
+                        </span>
+                        ${navControls}
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        ${periodControls}
+                        <div class="flex bg-gray-100 p-1 rounded-lg">
+                            <button onclick="app.switchShiftViewMode('table')" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+                                <i class="fa-solid fa-table-list mr-1"></i>表
+                            </button>
+                            <button onclick="app.switchShiftViewMode('calendar')" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+                                <i class="fa-regular fa-calendar-days mr-1"></i>カレンダー
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="shiftViewContent" class="flex-1 overflow-x-auto overflow-y-hidden bg-white rounded-xl shadow-sm border border-gray-200 relative">
+                    <!-- Content injected here -->
+                </div>
+                <div class="flex justify-end pt-2">
+                    <button onclick="app.printShiftTable()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+                        <i class="fa-solid fa-print mr-2"></i>印刷
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        const content = document.getElementById('shiftViewContent');
+        if (this.state.shiftViewMode === 'table') {
+            this.renderShiftTable(content);
+        } else {
+            this.renderCalendar(content);
+        }
+    },
+
+    switchShiftViewMode(mode) {
+        this.state.shiftViewMode = mode;
+        this.renderShiftView(document.getElementById('viewContainer'));
+    },
+
+    switchShiftTablePeriod(period) {
+        this.state.shiftTablePeriod = period;
+        // Align date if switching to week modes
+        if (period !== 'month') {
+            // Align to nearest past Sunday or today if Sunday
+            const d = new Date(this.state.currentDate);
+            const day = d.getDay();
+            d.setDate(d.getDate() - day);
+            this.state.currentDate = d;
+        } else {
+            // Align to 1st of month
+            const d = new Date(this.state.currentDate);
+            d.setDate(1);
+            this.state.currentDate = d;
+        }
+        this.renderShiftView(document.getElementById('viewContainer'));
+    },
+
+    changeTablePeriod(delta) {
+        const d = new Date(this.state.currentDate);
+        if (this.state.shiftTablePeriod === 'week') {
+            d.setDate(d.getDate() + (delta * 7));
+        } else if (this.state.shiftTablePeriod === '2weeks') {
+            d.setDate(d.getDate() + (delta * 14));
+        }
+        this.state.currentDate = d;
+        this.renderShiftView(document.getElementById('viewContainer'));
+    },
+
+    renderShiftTable(container) {
+        const period = this.state.shiftTablePeriod || 'month';
+        const year = this.state.currentDate.getFullYear();
+        const month = this.state.currentDate.getMonth();
+        
+        let days = [];
+        let colWidthClass = 'min-w-[40px]'; // Default narrow
+        let isGanttMode = false;
+
+        if (period === 'month') {
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            days = Array.from({length: lastDay}, (_, i) => {
+                return new Date(year, month, i + 1);
+            });
+        } else {
+            const range = period === 'week' ? 7 : 14;
+            // 1週間ならさらに幅を広げて15分単位を見やすくする (1200px = 1h50px = 15m12.5px)
+            colWidthClass = period === 'week' ? 'min-w-[1200px]' : 'min-w-[600px]';
+            isGanttMode = true; 
+            
+            const start = new Date(this.state.currentDate);
+            days = Array.from({length: range}, (_, i) => {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                return d;
+            });
+        }
+        
+        // ヘッダー生成
+        let headerHtml = `<th class="p-3 sticky left-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>`;
+        days.forEach(date => {
+            const d = date.getDate();
+            const m = date.getMonth() + 1;
+            const dayOfWeek = date.getDay();
+            const dateStr = `${date.getFullYear()}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isHoliday = JapaneseHolidays.isHoliday(dateStr);
+            let colorClass = 'text-gray-700';
+            if (dayOfWeek === 0 || isHoliday) colorClass = 'text-red-500';
+            else if (dayOfWeek === 6) colorClass = 'text-blue-500';
+            
+            // Show Month/Date if crossing months or in week mode
+            const label = period === 'month' ? d : `${m}/${d}`;
+            
+            // 時間スケールをヘッダーに追加 (ガントチャート用)
+            let timeScale = '';
+            if (isGanttMode) {
+                // 1時間おきに数字を表示
+                let scaleHtml = '';
+                for (let i = 0; i <= 24; i++) {
+                    const left = (i / 24) * 100;
+                    // 数字の間引き: 幅が狭い場合は偶数のみ
+                    if (period === '2weeks' && i % 2 !== 0) continue;
+                    
+                    scaleHtml += `<span class="absolute -translate-x-1/2 font-mono" style="left: ${left}%">${String(i).padStart(2,'0')}</span>`;
+                    
+                    // 15分刻みの目盛り (Weekモードのみ)
+                    if (period === 'week' && i < 24) {
+                        for(let m=1; m<4; m++) {
+                            const mLeft = ((i + m/4) / 24) * 100;
+                            scaleHtml += `<span class="absolute -translate-x-1/2 text-[8px] text-gray-300 top-1" style="left: ${mLeft}%">|</span>`;
+                        }
+                    }
+                }
+                
+                timeScale = `
+                    <div class="relative h-5 text-[10px] text-gray-400 font-bold mt-1 border-t border-gray-100 pt-0.5 select-none">
+                        ${scaleHtml}
+                    </div>
+                `;
+            }
+            
+            headerHtml += `<th class="p-2 ${colWidthClass} text-center border-b border-gray-200 bg-gray-50 text-xs font-bold ${colorClass}">
+                <div class="sticky left-0 right-0 flex flex-col items-center justify-center leading-tight">
+                    <span class="text-sm block">${label}</span>
+                    <span class="text-[10px] font-normal block">${['日','月','火','水','木','金','土'][dayOfWeek]}</span>
+                </div>
+                ${timeScale}
+            </th>`;
+        });
+
+        // ボディ生成
+        let bodyHtml = '';
+        this.state.staff.forEach(staff => {
+            bodyHtml += `<tr data-staff-id="${staff.id}">`;
+            bodyHtml += `<td class="p-3 sticky left-0 z-40 bg-white border-b border-r border-gray-100 font-bold text-sm text-gray-800 truncate h-14">${staff.name}</td>`;
+            
+            days.forEach(date => {
+                const y = date.getFullYear();
+                const m = date.getMonth() + 1;
+                const d = date.getDate();
+                const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                
+                // 過去日判定
+                const checkDate = new Date(date);
+                checkDate.setHours(0,0,0,0);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const isPast = checkDate < today;
+
+                // シフト検索
+                const shift = this.state.shifts.find(s => s.staff_id === staff.id && s.date === dateStr);
+                
+                // セル背景色
+                const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
+                let bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines' : 'bg-white';
+                
+                if (isPast) {
+                    bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines opacity-75' : 'bg-gray-100';
+                } else if (!shift && !isSpecialHoliday) {
+                    bgClass = 'hover:bg-gray-50';
+                }
+
+                // セルアクション (ガントモードではバーのドラッグ操作があるため、空セルのみクリックイベント)
+                let action = '';
+                let cursor = '';
+                if (this.state.isAdmin) {
+                    if (isGanttMode) {
+                        action = shift ? '' : `onclick="app.openAddShift('${dateStr}'); document.getElementById('editShiftStaffSelect').value='${staff.id}';"`;
+                    } else {
+                        action = shift ? `onclick="app.openEditShift('${shift.id}')"` : `onclick="app.openAddShift('${dateStr}'); document.getElementById('editShiftStaffSelect').value='${staff.id}';"`;
+                    }
+                    cursor = 'cursor-pointer';
+                }
+
+                // ガントチャート用: 営業時間の背景（Open-Close以外をグレーアウト）を生成するための時間取得
+                let openTime = "09:00";
+                let closeTime = "22:00";
+                if (isGanttMode) {
+                    const dayOfWeek = new Date(dateStr).getDay();
+                    const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
+                    const isHoliday = jh ? jh.isHoliday(dateStr) : false;
+                    
+                    // 特定日設定
+                    const specialDay = (this.state.config.special_days || {})[dateStr];
+                    if (specialDay) {
+                        openTime = specialDay.start;
+                        closeTime = specialDay.end;
+                    } else {
+                        // 通常営業設定
+                        const times = this.state.config.opening_times || {};
+                        const defTimes = this.state.defaultConfig.opening_times;
+                        const getStart = (type) => times[type]?.start || defTimes[type].start;
+                        const getEnd = (type) => times[type]?.end || defTimes[type].end;
+
+                        if (isHoliday) {
+                            openTime = getStart('holiday');
+                            closeTime = getEnd('holiday');
+                        } else if (dayOfWeek === 0 || dayOfWeek === 6) { 
+                            openTime = getStart('weekend');
+                            closeTime = getEnd('weekend');
+                        } else {
+                            openTime = getStart('weekday');
+                            closeTime = getEnd('weekday');
+                        }
+                    }
+                }
+
+                let content = '';
+                if (shift) {
+                    const startH = parseInt(shift.start_time);
+                    let barColor = 'bg-blue-100 text-blue-700 border-blue-500'; // base
+                    if (startH < 10) barColor = 'bg-yellow-100 text-yellow-800 border-yellow-500';
+                    if (startH >= 17) barColor = 'bg-purple-100 text-purple-700 border-purple-500';
+                    
+                    // 過去の場合はグレーアウト
+                    if (isPast) {
+                        barColor = 'bg-gray-200 text-gray-500 border-gray-400 opacity-80';
+                    }
+
+                    if (isGanttMode) {
+                        // === Gantt Style (Bar inside timeline) ===
+                        const timeToPct = (t) => {
+                            const [h, m] = t.split(':').map(Number);
+                            return ((h + m/60) / 24) * 100;
+                        };
+                        const startPct = timeToPct(shift.start_time);
+                        const endPct = timeToPct(shift.end_time);
+                        const widthPct = endPct - startPct;
+                        
+                        // 営業時間外マスク (Open前、Close後)
+                        const openPct = timeToPct(openTime);
+                        const closePct = timeToPct(closeTime);
+                        
+                        // CSS Gradientで細かいグリッドを描画
+                        // 1h = 100/24 %, 15m = 1h/4
+                        const oneHour = 100/24;
+                        const oneFifteen = oneHour / 4;
+                        const bgGuides = `
+                            <!-- Fine Grid (CSS Gradient) -->
+                            <div class="absolute top-0 bottom-0 left-0 right-0 pointer-events-none" 
+                                 style="
+                                    background-image: 
+                                        linear-gradient(to right, #d1d5db 1px, transparent 1px), /* 1h: Stronger */
+                                        linear-gradient(to right, #f3f4f6 1px, transparent 1px); /* 15m: Lighter */
+                                    background-size: 
+                                        ${oneHour}% 100%, 
+                                        ${oneFifteen}% 100%;
+                                 ">
+                            </div>
+                            <!-- 6h Major Lines -->
+                            <div class="absolute top-0 bottom-0 left-[25%] w-px bg-gray-400 z-0"></div>
+                            <div class="absolute top-0 bottom-0 left-[50%] w-px bg-gray-400 z-0"></div>
+                            <div class="absolute top-0 bottom-0 left-[75%] w-px bg-gray-400 z-0"></div>
+                            
+                            <!-- Business Hours Mask (Outside of Open-Close is grayed out) -->
+                            <div class="absolute top-0 bottom-0 left-0 bg-gray-200/50 pointer-events-none z-0" style="width: ${openPct}%;"></div>
+                            <div class="absolute top-0 bottom-0 right-0 bg-gray-200/50 pointer-events-none z-0" style="left: ${closePct}%;"></div>
+                        `;
+                        
+                        const adminDrag = this.state.isAdmin ? `data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px; cursor: grab;"` : `style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px;"`;
+                        const resizeHandles = this.state.isAdmin ? `
+                                    <div class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-20 hover:bg-black/10 rounded-l" style="touch-action:none;"></div>
+                                    <div class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-20 hover:bg-black/10 rounded-r" style="touch-action:none;"></div>
+                        ` : '';
+                        content = `
+                            <div class="w-full h-full relative group bg-white overflow-hidden">
+                                ${bgGuides}
+                                <!-- Bar with text -->
+                                <div class="absolute top-1/2 -translate-y-1/2 h-8 ${period==='week'?'':'h-6'} rounded ${barColor} border shadow-sm flex items-center justify-center overflow-hidden z-10 hover:brightness-95 transition-all px-1"
+                                     ${adminDrag}
+                                     ondblclick="app.openEditShift('${shift.id}')">
+                                     ${resizeHandles}
+                                     <span class="text-[9px] md:text-[10px] font-bold whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none select-none">
+                                        ${shift.start_time} - ${shift.end_time}
+                                     </span>
+                                </div>
+
+                                <!-- Tooltip on hover -->
+                                <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 z-20 pointer-events-none whitespace-nowrap shadow-lg">
+                                    ${shift.start_time} - ${shift.end_time}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // === Month Style (Block) ===
+                        content = `<div class="w-full h-full p-1"><div class="${barColor} border-l-2 rounded text-[10px] font-bold text-center leading-tight py-1 truncate shadow-sm">${shift.start_time}<br>|${shift.end_time}</div></div>`;
+                    }
+                } else if (isSpecialHoliday) {
+                    content = `<div class="w-full h-full flex items-center justify-center"><span class="text-[10px] text-red-300 font-bold">休</span></div>`;
+                }
+
+                // Ganttモードの場合は空セルにもガイド線を表示
+                if (!shift && isGanttMode && !isSpecialHoliday) {
+                    // 営業時間取得 (繰り返しロジックになるが、shift有無に関わらず必要)
+                    // 上記で計算済み変数を再利用
+                    const timeToPct = (t) => {
+                        const [h, m] = t.split(':').map(Number);
+                        return ((h + m/60) / 24) * 100;
+                    };
+                    const openPct = timeToPct(openTime);
+                    const closePct = timeToPct(closeTime);
+
+                    // CSS Gradientで細かいグリッドを描画
+                    const oneHour = 100/24;
+                    const oneFifteen = oneHour / 4;
+                    const guides = `
+                        <!-- Fine Grid (CSS Gradient) -->
+                        <div class="absolute top-0 bottom-0 left-0 right-0 pointer-events-none" 
+                                style="
+                                background-image: 
+                                    linear-gradient(to right, #d1d5db 1px, transparent 1px), /* 1h */
+                                    linear-gradient(to right, #f3f4f6 1px, transparent 1px); /* 15m */
+                                background-size: 
+                                    ${oneHour}% 100%, 
+                                    ${oneFifteen}% 100%;
+                                ">
+                        </div>
+                        <!-- 6h Major Lines -->
+                        <div class="absolute top-0 bottom-0 left-[25%] w-px bg-gray-400"></div>
+                        <div class="absolute top-0 bottom-0 left-[50%] w-px bg-gray-400"></div>
+                        <div class="absolute top-0 bottom-0 left-[75%] w-px bg-gray-400"></div>
+                        
+                        <!-- Business Hours Mask -->
+                        <div class="absolute top-0 bottom-0 left-0 bg-gray-200/50 pointer-events-none" style="width: ${openPct}%;"></div>
+                        <div class="absolute top-0 bottom-0 right-0 bg-gray-200/50 pointer-events-none" style="left: ${closePct}%;"></div>
+                    `;
+                    content = `<div class="w-full h-full relative group overflow-hidden bg-white">${guides}</div>`;
+                }
+
+                bodyHtml += `<td class="p-0 border-b border-r border-gray-100 h-14 relative transition-colors ${bgClass} ${cursor}" ${action}>${content}</td>`;
+            });
+            bodyHtml += `</tr>`;
+        });
+
+        container.innerHTML = `
+            <div class="h-full overflow-auto custom-scrollbar">
+                <table class="w-full border-collapse">
+                    <thead><tr>${headerHtml}</tr></thead>
+                    <tbody id="shiftTableBody">${bodyHtml}</tbody>
+                </table>
+            </div>
+        `;
+    },
+
+    renderCalendar(container) {
+        const year = this.state.currentDate.getFullYear();
+        const month = this.state.currentDate.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        
+        let html = `
+            <div class="h-full overflow-y-auto custom-scrollbar">
+                <div class="bg-white rounded-t-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="grid grid-cols-7 border-b border-gray-200 bg-gray-50 sticky top-0 z-10 shadow-sm">
+                        ${['日', '月', '火', '水', '木', '金', '土'].map((day, i) => 
+                            `<div class="py-3 text-center text-sm font-bold ${i===0 ? 'text-red-500' : i===6 ? 'text-blue-500' : 'text-gray-600'}">${day}</div>`
+                        ).join('')}
+                    </div>
+                    <div class="grid grid-cols-7 auto-rows-fr bg-gray-200 gap-px border-b border-gray-200">
+        `;
+
+        for (let i = 0; i < firstDay.getDay(); i++) {
+            html += `<div class="bg-gray-50 min-h-[120px]"></div>`;
+        }
+
+        for (let day = 1; day <= lastDay.getDate(); day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
+            const holidayName = jh ? jh.getHolidayName(dateStr) : null;
+            const currentD = new Date(year, month, day);
+            const isToday = new Date().toDateString() === currentD.toDateString();
+            const dayOfWeek = currentD.getDay();
+            
+            // 過去日判定
+            const todayD = new Date();
+            todayD.setHours(0,0,0,0);
+            const isPast = currentD < todayD;
+
+            let dateColorClass = 'text-gray-700';
+            let dateBgClass = isPast ? 'bg-gray-100' : '';
+            if (isPast) dateColorClass = 'text-gray-400';
+            
+            // 臨時休業判定
+            const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
+            // 特定日判定 (短縮営業など)
+            const specialDayConfig = (this.state.config.special_days || {})[dateStr];
+            // 備考メモ
+            const note = (this.state.config.calendar_notes || {})[dateStr];
+            
+            if (dayOfWeek === 0 || holidayName) dateColorClass = 'text-red-500';
+            else if (dayOfWeek === 6) dateColorClass = 'text-blue-500';
+            
+            if (isSpecialHoliday) {
+                dateColorClass = 'text-red-600';
+                dateBgClass = 'bg-red-50 pattern-diagonal-lines';
+            } else if (specialDayConfig) {
+                dateBgClass = 'bg-yellow-50';
+            }
+
+            const dayShifts = this.state.shifts
+                .filter(s => s.date === dateStr)
+                .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+            // Admin: Click to add shift. Guest: No click action.
+            const cellAction = this.state.isAdmin ? `onclick="app.openAddShift('${dateStr}')"` : `onclick="app.showToast('シフトの編集は管理者のみ可能です')"` ;
+            const hoverClass = this.state.isAdmin ? 'hover:bg-blue-50/30 cursor-pointer' : '';
+            
+            // アクションボタン群 (管理者のみ)
+            let actionBtns = '';
+            if (this.state.isAdmin) {
+                actionBtns = `
+                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="event.stopPropagation(); app.openCalendarNoteModal('${dateStr}')" class="text-gray-400 hover:text-yellow-500 w-5 h-5 flex items-center justify-center rounded hover:bg-yellow-50" title="メモ編集">
+                            <i class="fa-regular fa-note-sticky"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); app.openAddShift('${dateStr}')" class="text-gray-400 hover:text-blue-600 w-5 h-5 flex items-center justify-center rounded hover:bg-blue-50" title="シフト追加">
+                            <i class="fa-solid fa-plus-circle"></i>
+                        </button>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="bg-white calendar-cell p-1.5 flex flex-col gap-1 relative group min-h-[160px] transition-colors ${hoverClass} ${dateBgClass}" 
+                     ${cellAction}>
+                    <div class="flex justify-between items-start px-1 mb-1">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold ${dateColorClass} ${isToday ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md' : ''}">
+                                ${day}
+                            </span>
+                            ${holidayName ? `<span class="text-[10px] font-bold text-red-500 truncate max-w-[60px] leading-tight">${holidayName}</span>` : ''}
+                        </div>
+                        ${actionBtns}
+                    </div>
+                    
+                    <div class="flex-1 flex flex-col gap-1 mt-1 overflow-y-auto custom-scrollbar">
+                        ${dayShifts.map(shift => {
+                            const staff = this.getStaff(shift.staff_id);
+                            if (!staff) return '';
+                            const shiftCursorClass = this.state.isAdmin ? 'cursor-pointer hover:brightness-95' : '';
+                            const shiftClickAction = this.state.isAdmin ? `onclick="event.stopPropagation(); app.openEditShift('${shift.id}')"` : '';
+                            return `
+                                <div class="text-xs px-2 py-1.5 rounded-md border-l-4 shadow-sm transition-all bg-blue-50 border-blue-500 text-blue-900 ${shiftCursorClass}"
+                                     ${shiftClickAction} title="${staff.name} ${shift.start_time}-${shift.end_time}">
+                                    <div class="font-bold truncate">${staff.name}</div>
+                                    <div class="font-mono text-[10px] opacity-90">${shift.start_time} - ${shift.end_time}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        html += `</div></div></div>`;
+        // Removed standalone print button as it is now in the view header
+        container.innerHTML = html;
+    },
+
+    openCalendarNoteModal(dateStr) {
+        if (!this.state.isAdmin) return;
+        document.getElementById('noteDate').value = dateStr;
+        document.getElementById('noteDateDisplay').textContent = dateStr;
+        
+        const note = (this.state.config.calendar_notes || {})[dateStr] || '';
+        document.getElementById('noteText').value = note;
+        
+        this.openModal('calendarNoteModal');
+    },
+
+    async saveCalendarNote() {
+        const date = document.getElementById('noteDate').value;
+        const text = document.getElementById('noteText').value.trim();
+        
+        if (!this.state.config.calendar_notes) this.state.config.calendar_notes = {};
+        
+        if (text) {
+            this.state.config.calendar_notes[date] = text;
+        } else {
+            delete this.state.config.calendar_notes[date];
+        }
+
+        this.showLoading(true);
+        try {
+            await API.rpc('update_config_safe', {
+                p_config_id: this.state.config.id,
+                p_data: { calendar_notes: this.state.config.calendar_notes }
+            });
+
+            // カレンダー再描画
+            if (this.state.shiftViewMode === 'calendar') {
+                this.renderCalendar(document.getElementById('shiftViewContent'));
+            }
+            this.closeModal('calendarNoteModal');
+            this.showToast('メモを保存しました', 'success');
+        } catch (e) {
+            console.error(e);
+            this.showToast('保存に失敗しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    async deleteCalendarNote() {
+        if (!confirm('このメモを削除しますか？')) return;
+        const date = document.getElementById('noteDate').value;
+        
+        if (this.state.config.calendar_notes && this.state.config.calendar_notes[date]) {
+            delete this.state.config.calendar_notes[date];
+            
+            this.showLoading(true);
+            try {
+                await API.rpc('update_config_safe', {
+                    p_config_id: this.state.config.id,
+                    p_data: { calendar_notes: this.state.config.calendar_notes }
+                });
+
+                // カレンダー再描画
+                if (this.state.shiftViewMode === 'calendar') {
+                    this.renderCalendar(document.getElementById('shiftViewContent'));
+                }
+                this.closeModal('calendarNoteModal');
+                this.showToast('メモを削除しました', 'success');
+            } catch (e) {
+                this.showToast('削除に失敗しました', 'error');
+            } finally {
+                this.showLoading(false);
+            }
+        } else {
+            this.closeModal('calendarNoteModal');
+        }
+    },
+
+    // =================================================================
+    // 4. 分析 (Analytics) - Admin Only
+    // =================================================================
+    renderAnalytics(container) {
+        if (!this.state.isAdmin) return; // Sidebar should hide this, but safe guard.
+        
+        const stats = this.calculateMonthlyAnalytics();
+        
+        // ヘルパー関数: 日本語通貨表記
+        const formatMoney = (n) => {
+            if(n < 10000) return '¥' + n.toLocaleString();
+            const man = Math.floor(n / 10000);
+            const rest = n % 10000;
+            return `${man}万${rest > 0 ? rest.toLocaleString() : ''}円`;
+        };
+
+        container.innerHTML = `
+            <div class="space-y-6">
+                <h2 class="text-xl font-bold text-gray-800">分析レポート (${this.state.currentDate.getFullYear()}年${this.state.currentDate.getMonth()+1}月)</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+                        <p class="text-sm font-bold text-gray-500 uppercase">月間推定人件費</p>
+                        <h3 class="text-2xl font-bold text-gray-800 mt-2 truncate" title="${stats.totalCost.toLocaleString()}円">
+                            ${formatMoney(stats.totalCost)}
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">※祝日割増・深夜手当を含む概算</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                        <p class="text-sm font-bold text-gray-500 uppercase">総労働時間</p>
+                        <h3 class="text-2xl font-bold text-blue-600 mt-2">${stats.totalHours.toFixed(1)}h</h3>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                        <p class="text-sm font-bold text-gray-500 uppercase">スタッフ稼働数</p>
+                        <h3 class="text-2xl font-bold text-indigo-600 mt-2">${stats.activeStaffCount} <span class="text-lg text-gray-500">名</span></h3>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">日次コスト推移</h3><div class="h-[200px] sm:h-[300px]"><canvas id="dailyCostChart"></canvas></div></div>
+                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">スタッフ別コスト構成比</h3><div class="h-[200px] sm:h-[300px] flex justify-center"><canvas id="staffShareChart"></canvas></div></div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50"><h3 class="font-bold text-gray-800">スタッフ別詳細・労働時間チェック</h3></div>
+                    <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                        <thead class="bg-gray-50 text-gray-500 border-b border-gray-200">
+                            <tr>
+                                <th class="p-4 font-medium">スタッフ名</th>
+                                <th class="p-4 font-medium text-right">出勤日数</th>
+                                <th class="p-4 font-medium text-right">労働時間</th>
+                                <th class="p-4 font-medium text-right">法定目安(176h)との差</th>
+                                <th class="p-4 font-medium text-right">推定支給額</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${stats.staffStats.map(s => {
+                                const limit = 176; // 月間法定労働時間の目安 (40週 * 4.4週)
+                                const diff = s.hours - limit;
+                                const isOver = diff > 0;
+                                const diffText = isOver ? `+${diff.toFixed(1)}h` : 'OK';
+                                const rowClass = isOver ? 'bg-red-50' : 'hover:bg-gray-50';
+                                const textClass = isOver ? 'text-red-600 font-bold' : 'text-green-600';
+                                const icon = isOver ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>' : '<i class="fa-solid fa-check mr-1"></i>';
+
+                                return `
+                                <tr class="${rowClass}">
+                                    <td class="p-4 font-bold text-gray-700">${s.name}</td>
+                                    <td class="p-4 text-right">${s.days}日</td>
+                                    <td class="p-4 text-right">${s.hours.toFixed(1)}h</td>
+                                    <td class="p-4 text-right ${textClass}">${icon}${diffText}</td>
+                                    <td class="p-4 text-right font-mono">¥${s.cost.toLocaleString()}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table></div>
+                </div>
+            </div>
+        `;
+        setTimeout(() => this.renderAnalyticsCharts(stats), 100);
+    },
+
+    calculateMonthlyAnalytics() {
+        const year = this.state.currentDate.getFullYear();
+        const month = this.state.currentDate.getMonth() + 1;
+        const prefix = `${year}-${String(month).padStart(2, '0')}`;
+        const monthShifts = this.state.shifts.filter(s => s.date.startsWith(prefix));
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        let totalCost = 0, totalHours = 0;
+        const dailyCosts = new Array(daysInMonth).fill(0);
+        const dailyLabels = Array.from({length: daysInMonth}, (_, i) => `${i+1}日`);
+        const staffMap = {};
+
+        monthShifts.forEach(shift => {
+            const staff = this.getStaff(shift.staff_id);
+            if (!staff) return;
+            const start = new Date(`${shift.date}T${shift.start_time}`);
+            const end = new Date(`${shift.date}T${shift.end_time}`);
+            if (end < start) end.setDate(end.getDate() + 1);
+            let hours = (end - start) / (1000 * 60 * 60) - (shift.break_minutes / 60);
+            if (hours < 0) hours = 0;
+
+            let cost = 0;
+            if (staff.salary_type === 'hourly') {
+                let wage = staff.hourly_wage;
+                if (JapaneseHolidays.isHoliday(shift.date)) wage *= 1.25;
+                cost = Math.floor(hours * wage);
+            }
+
+            totalCost += cost;
+            totalHours += hours;
+            const dayIndex = parseInt(shift.date.split('-')[2]) - 1;
+            dailyCosts[dayIndex] += cost;
+
+            if (!staffMap[staff.id]) staffMap[staff.id] = { name: staff.name, cost: 0, hours: 0, days: new Set() };
+            staffMap[staff.id].cost += cost;
+            staffMap[staff.id].hours += hours;
+            staffMap[staff.id].days.add(shift.date);
+        });
+
+        this.state.staff.forEach(s => {
+            if (s.salary_type === 'monthly') {
+                totalCost += (s.monthly_salary || 0);
+                if (!staffMap[s.id]) staffMap[s.id] = { name: s.name, cost: 0, hours: 0, days: new Set() };
+                staffMap[s.id].cost += (s.monthly_salary || 0);
+            }
+        });
+
+        const staffStats = Object.values(staffMap).map(s => ({ ...s, days: s.days.size })).sort((a, b) => b.cost - a.cost);
+        return { totalCost, totalHours, daysCount: daysInMonth, activeStaffCount: Object.keys(staffMap).length, dailyCosts, dailyLabels, staffStats };
+    },
+
+    renderAnalyticsCharts(stats) {
+        new Chart(document.getElementById('dailyCostChart'), {
+            type: 'line',
+            data: { labels: stats.dailyLabels, datasets: [{ label: '日次人件費', data: stats.dailyCosts, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+        const topStaff = stats.staffStats.slice(0, 5);
+        const otherCost = stats.staffStats.slice(5).reduce((sum, s) => sum + s.cost, 0);
+        const labels = topStaff.map(s => s.name);
+        const data = topStaff.map(s => s.cost);
+        if (otherCost > 0) { labels.push('その他'); data.push(otherCost); }
+
+        new Chart(document.getElementById('staffShareChart'), {
+            type: 'doughnut',
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ec4899', '#9ca3af'] }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+    },
+
+    // =================================================================
+    // 5. スタッフ管理 (Staff) - Admin Only
+    // =================================================================
+    renderStaffList(container) {
+        if (!this.state.isAdmin) return;
+
+        container.innerHTML = `
+            <div class="max-w-6xl mx-auto space-y-6 pb-20">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold text-gray-800">スタッフ管理</h2>
+                    <button onclick="app.prepareStaffModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
+                        <i class="fa-solid fa-plus mr-2"></i>新規登録
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-4 whitespace-nowrap min-w-[200px]">名前</th>
+                                    <th class="p-4 whitespace-nowrap">役割</th>
+                                    <th class="p-4 whitespace-nowrap">評価</th>
+                                    <th class="p-4 whitespace-nowrap">給与形態</th>
+                                    <th class="p-4 whitespace-nowrap">勤務制約</th>
+                                    <th class="p-4 text-right whitespace-nowrap">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${this.state.staff.map(s => {
+                                    // 安全策: config.rolesが無い場合はデフォルトを使う
+                                    const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
+                                    const role = roleList.find(r => r.id === s.role) || { name: '未設定', color: 'gray' };
+                                    const colorMap = {
+                                        purple: 'bg-purple-50 text-purple-700 border-purple-100',
+                                        blue: 'bg-blue-50 text-blue-700 border-blue-100',
+                                        green: 'bg-green-50 text-green-700 border-green-100',
+                                        yellow: 'bg-yellow-50 text-yellow-700 border-yellow-100',
+                                        red: 'bg-red-50 text-red-700 border-red-100',
+                                        gray: 'bg-gray-50 text-gray-700 border-gray-100'
+                                    };
+                                    const badgeClass = colorMap[role.color] || colorMap['gray'];
+                                    
+                                    return `
+                                <tr class="hover:bg-gray-50 group transition-colors">
+                                    <td class="p-4 whitespace-nowrap">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-gray-500 font-bold text-sm shadow-sm">
+                                                ${s.name.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <div class="font-bold text-gray-800 text-sm">${s.name}</div>
+                                                <div class="text-[10px] text-gray-400 font-mono">ID: ${s.id ? s.id.substr(0, 6) : '---'}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="p-4 whitespace-nowrap">
+                                        <span class="px-2.5 py-1 text-xs font-bold rounded-full border shadow-sm ${badgeClass}">
+                                            ${role.name}
+                                        </span>
+                                    </td>
+                                    <td class="p-4 whitespace-nowrap">
+                                        ${s.evaluation === 'A' ? '<span class="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-md border border-yellow-200 shadow-sm">A</span>' : ''}
+                                        ${s.evaluation === 'B' ? '<span class="bg-blue-50 text-blue-800 text-xs font-bold px-2 py-1 rounded-md border border-blue-100 shadow-sm">B</span>' : ''}
+                                        ${s.evaluation === 'C' ? '<span class="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded-md border border-gray-200 shadow-sm">C</span>' : ''}
+                                        ${s.evaluation === 'D' ? '<span class="bg-red-50 text-red-600 text-xs font-bold px-2 py-1 rounded-md border border-red-100 shadow-sm">D</span>' : ''}
+                                        ${!['A','B','C','D'].includes(s.evaluation) ? '<span class="text-xs text-gray-400">-</span>' : ''}
+                                    </td>
+                                    <td class="p-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                                        ${s.salary_type === 'hourly' 
+                                            ? `<div class="flex items-center gap-2"><span class="px-1.5 py-0.5 rounded bg-gray-100 text-[10px] text-gray-500 font-bold">時給</span> <span class="font-bold">¥${s.hourly_wage ? s.hourly_wage.toLocaleString() : '0'}</span></div>` 
+                                            : `<div class="flex items-center gap-2"><span class="px-1.5 py-0.5 rounded bg-gray-100 text-[10px] text-gray-500 font-bold">月給</span> <span class="font-bold">¥${s.monthly_salary ? s.monthly_salary.toLocaleString() : '0'}</span></div>`}
+                                    </td>
+                                    <td class="p-4 whitespace-nowrap text-xs text-gray-500">
+                                        <div class="flex items-center gap-3">
+                                            <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100" title="週の勤務日数上限"><i class="fa-regular fa-calendar-check text-gray-400"></i> 週${s.max_days_week || '-'}日</span>
+                                            <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100" title="1日の勤務時間上限"><i class="fa-regular fa-clock text-gray-400"></i> 1日${s.max_hours_day || '-'}h</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-4 text-right whitespace-nowrap">
+                                        <div class="flex justify-end gap-2">
+                                            <button onclick="app.editStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" title="編集">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button onclick="app.deleteStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="削除">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>`}).join('')}
+                                ${this.state.staff.length === 0 ? '<tr><td colspan="5" class="p-12 text-center text-gray-400 flex flex-col items-center gap-2"><i class="fa-solid fa-users-slash text-3xl mb-2 text-gray-300"></i><span>スタッフが登録されていません</span></td></tr>' : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    // =================================================================
+    // 6. 設定 (Settings) - Admin Only
+    // =================================================================
+    renderSettings(container) {
+        if (!this.state.isAdmin) return;
+        const config = this.state.config;
+        
+        const times = config.opening_times || this.state.defaultConfig.opening_times;
+        const reqs = config.staff_req || this.state.defaultConfig.staff_req;
+        const closedDays = config.closed_days || [];
+        const customShifts = config.custom_shifts || [];
+        const roles = config.roles || this.state.defaultConfig.roles;
+        const breakRules = config.break_rules || this.state.defaultConfig.break_rules;
+        const shopRulesText = config.shop_rules_text || this.state.defaultConfig.shop_rules_text;
+        const specialHolidays = config.special_holidays || [];
+        const specialDays = config.special_days || {};
+        const timeStaffReq = config.time_staff_req || [];
+
+        container.innerHTML = `
+            <div class="max-w-4xl mx-auto space-y-8 pb-24">
+                <div class="flex items-center justify-between border-b border-gray-200 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">店舗設定</h2>
+                        <p class="text-sm text-gray-500 mt-1">店舗の基本ルール、シフトパターン、人員配置要件を一括管理します。</p>
+                    </div>
+                    <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
+                        <i class="fa-solid fa-save mr-2"></i>設定を保存
+                    </button>
+                </div>
+
+                <!-- 1. 役職・ロール設定 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-id-badge text-indigo-500"></i> 役職・ロール設定</h3>
+                        <button onclick="app.addRole()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
+                            <i class="fa-solid fa-plus mr-1"></i>役職追加
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
+                                    <tr>
+                                        <th class="p-3 rounded-l-lg">役職名</th>
+                                        <th class="p-3">識別ID</th>
+                                        <th class="p-3">バッジカラー</th>
+                                        <th class="p-3 text-right rounded-r-lg">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100" id="rolesBody">
+                                    ${roles.map((role, index) => `
+                                        <tr class="group hover:bg-gray-50">
+                                            <td class="p-2">
+                                                <input type="text" class="setting-role-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${role.name}" placeholder="役職名">
+                                            </td>
+                                            <td class="p-2">
+                                                <input type="text" class="setting-role-id w-full border-gray-300 rounded px-2 py-1.5 text-sm bg-gray-50" value="${role.id}" readonly title="IDは変更できません">
+                                            </td>
+                                            <td class="p-2">
+                                                <select class="setting-role-color w-full border-gray-300 rounded px-2 py-1.5 text-sm">
+                                                    <option value="purple" ${role.color==='purple'?'selected':''}>紫 (Manager)</option>
+                                                    <option value="blue" ${role.color==='blue'?'selected':''}>青 (Leader)</option>
+                                                    <option value="green" ${role.color==='green'?'selected':''}>緑 (Staff)</option>
+                                                    <option value="yellow" ${role.color==='yellow'?'selected':''}>黄 (Rookie)</option>
+                                                    <option value="red" ${role.color==='red'?'selected':''}>赤 (Admin)</option>
+                                                    <option value="gray" ${role.color==='gray'?'selected':''}>灰 (Other)</option>
+                                                </select>
+                                            </td>
+                                            <td class="p-2 text-right">
+                                                <button onclick="app.deleteRole(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition" ${role.id==='manager'||role.id==='staff'?'disabled title="基本役職は削除できません" style="opacity:0.3"':''}>
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-3">※ IDはシステム内部で使用するため変更できません。新規追加時のみ自動生成されます。</p>
+                    </div>
+                </div>
+
+                <!-- 2. 営業時間・定休日 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-regular fa-clock text-blue-500"></i> 営業時間 & 定休日</h3>
+                    </div>
+                    <div class="p-6 space-y-8">
+                        <!-- 営業時間 -->
+                        <div class="space-y-4">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
+                                <div class="md:col-span-3 font-bold text-gray-700">平日 (月-金)</div>
+                                <div class="md:col-span-9 flex items-center gap-3">
+                                    ${this.get15MinTimeSelect(times.weekday?.start || '09:00', 'time_weekday_start', 'form-input border-gray-300 rounded-lg w-full')}
+                                    <span class="text-gray-400">～</span>
+                                    ${this.get15MinTimeSelect(times.weekday?.end || '22:00', 'time_weekday_end', 'form-input border-gray-300 rounded-lg w-full')}
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
+                                <div class="md:col-span-3 font-bold text-blue-600">土曜日</div>
+                                <div class="md:col-span-9 flex items-center gap-3">
+                                    ${this.get15MinTimeSelect(times.weekend?.start || '10:00', 'time_weekend_start', 'form-input border-gray-300 rounded-lg w-full')}
+                                    <span class="text-gray-400">～</span>
+                                    ${this.get15MinTimeSelect(times.weekend?.end || '20:00', 'time_weekend_end', 'form-input border-gray-300 rounded-lg w-full')}
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                <div class="md:col-span-3 font-bold text-red-600">日祝日</div>
+                                <div class="md:col-span-9 flex items-center gap-3">
+                                    ${this.get15MinTimeSelect(times.holiday?.start || '10:00', 'time_holiday_start', 'form-input border-gray-300 rounded-lg w-full')}
+                                    <span class="text-gray-400">～</span>
+                                    ${this.get15MinTimeSelect(times.holiday?.end || '20:00', 'time_holiday_end', 'form-input border-gray-300 rounded-lg w-full')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 定休日 -->
+                        <div class="pt-4 border-t border-gray-100">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">定休日設定</h4>
+                            <div class="flex flex-wrap gap-4 mb-4">
+                                ${['日', '月', '火', '水', '木', '金', '土'].map((day, i) => `
+                                    <label class="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition">
+                                        <input type="checkbox" name="setting_closed_days" value="${i}" class="w-5 h-5 text-red-500 rounded focus:ring-red-500 border-gray-300" ${closedDays.includes(i) ? 'checked' : ''}>
+                                        <span class="font-bold ${i===0?'text-red-500':i===6?'text-blue-500':'text-gray-700'}">${day}曜日</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                            
+                            <!-- 臨時休業 -->
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">臨時休業設定</h4>
+                            <div class="flex items-center gap-3 mb-3">
+                                <input type="date" id="newSpecialHoliday" class="border-gray-300 rounded-lg px-3 py-1.5 text-sm">
+                                <button onclick="app.addSpecialHoliday()" class="bg-red-50 text-red-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition">追加</button>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                ${specialHolidays.map((date, idx) => `
+                                    <div class="bg-red-50 border border-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2">
+                                        ${date} <button onclick="app.removeSpecialHoliday(${idx})" class="hover:text-red-900"><i class="fa-solid fa-times"></i></button>
+                                    </div>
+                                `).join('')}
+                                ${specialHolidays.length === 0 ? '<span class="text-xs text-gray-400">設定なし</span>' : ''}
+                            </div>
+                            
+                            <!-- 特定日の営業時間（短縮営業など） -->
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-3">特定日の営業時間変更 (短縮営業など)</h4>
+                            <div class="space-y-3" id="specialDaysContainer">
+                                <div class="flex items-center gap-2 flex-wrap bg-yellow-50 p-2 rounded-lg border border-yellow-100">
+                                    <input type="date" id="newSpecialDayDate" class="border-gray-300 rounded px-2 py-1 text-sm">
+                                    <div class="w-24">${this.get15MinTimeSelect('', 'newSpecialDayStart', 'border-gray-300 rounded px-2 py-1 text-sm w-full')}</div>
+                                    <span class="text-gray-400 text-xs">～</span>
+                                    <div class="w-24">${this.get15MinTimeSelect('', 'newSpecialDayEnd', 'border-gray-300 rounded px-2 py-1 text-sm w-full')}</div>
+                                    <input type="text" id="newSpecialDayNote" class="border-gray-300 rounded px-2 py-1 text-sm w-24" placeholder="メモ (例: 短縮)">
+                                    <button onclick="app.addSpecialDay()" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded text-xs font-bold hover:bg-yellow-200 transition">追加</button>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    ${Object.entries(specialDays).map(([date, conf]) => `
+                                        <div class="flex items-center justify-between bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm">
+                                            <div class="flex items-center gap-3">
+                                                <span class="font-bold text-gray-800">${date}</span>
+                                                <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs font-mono">${conf.start} - ${conf.end}</span>
+                                                <span class="text-gray-500 text-xs">${conf.note || ''}</span>
+                                            </div>
+                                            <button onclick="app.removeSpecialDay('${date}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    `).join('')}
+                                    ${Object.keys(specialDays).length === 0 ? '<p class="text-xs text-gray-400 pl-2">設定なし</p>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. シフトパターン設定 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> シフトパターン (早番/遅番など)</h3>
+                        <button onclick="app.addShiftPattern()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-200 transition">
+                            <i class="fa-solid fa-plus mr-1"></i>追加
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
+                                    <tr>
+                                        <th class="p-3 rounded-l-lg">パターン名</th>
+                                        <th class="p-3">開始時間</th>
+                                        <th class="p-3">終了時間</th>
+                                        <th class="p-3 text-right rounded-r-lg">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100" id="shiftPatternsBody">
+                                    ${customShifts.map((shift, index) => `
+                                        <tr class="group hover:bg-gray-50">
+                                            <td class="p-2">
+                                                <input type="text" class="setting-shift-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${shift.name}" placeholder="例: 早番">
+                                            </td>
+                                            <td class="p-2">
+                                                ${this.get15MinTimeSelect(shift.start, '', 'setting-shift-start w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
+                                            </td>
+                                            <td class="p-2">
+                                                ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
+                                            </td>
+                                            <td class="p-2 text-right">
+                                                <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンから登録してください。</td></tr>' : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-3">※ ここで設定したパターンは、シフト作成時に参照されます。</p>
+                    </div>
+                </div>
+
+                <!-- 4. 人員配置ルール -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-users text-green-500"></i> 人員配置要件</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                            <div>
+                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">管理者要件</h4>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 mb-1">最低管理者数 (店長/リーダー)</label>
+                                    <input type="number" id="req_min_manager" class="w-full border-gray-300 rounded-lg px-3 py-2" value="${reqs.min_manager || 1}">
+                                    <p class="text-xs text-gray-400 mt-1">※各シフトに最低1名は必要</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">スタッフ総数要件</h4>
+                                <div class="space-y-4">
+                                    <div class="grid grid-cols-3 gap-2 items-center">
+                                        <label class="text-xs font-bold text-gray-600">平日</label>
+                                        <input type="number" id="req_min_weekday" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekday || reqs.min_total || 2}">
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 items-center">
+                                        <label class="text-xs font-bold text-blue-600">土日</label>
+                                        <input type="number" id="req_min_weekend" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekend || reqs.min_total || 3}">
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 items-center">
+                                        <label class="text-xs font-bold text-red-600">祝日</label>
+                                        <input type="number" id="req_min_holiday" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_holiday || reqs.min_total || 3}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 時間帯別人員配置 -->
+                        <div class="border-t border-gray-100 pt-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">時間帯別・曜日別 人員増強</h4>
+                                <button onclick="app.addTimeStaffReq()" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-bold hover:bg-green-200 transition">
+                                    <i class="fa-solid fa-plus mr-1"></i>ルール追加
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-gray-50 text-xs text-gray-500">
+                                        <tr>
+                                            <th class="p-2 w-1/3">曜日</th>
+                                            <th class="p-2">開始</th>
+                                            <th class="p-2">終了</th>
+                                            <th class="p-2">人数</th>
+                                            <th class="p-2 text-right"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="timeStaffReqBody" class="divide-y divide-gray-50">
+                                        ${timeStaffReq.map((rule, idx) => {
+                                            const daysStr = ['日','月','火','水','木','金','土'];
+                                            return `
+                                            <tr>
+                                                <td class="p-2">
+                                                    <div class="flex flex-wrap gap-1">
+                                                    ${daysStr.map((d, i) => `
+                                                        <label class="cursor-pointer select-none">
+                                                            <input type="checkbox" class="hidden peer setting-time-req-day-${idx}" value="${i}" ${rule.days.includes(i) ? 'checked' : ''}>
+                                                            <span class="block w-6 h-6 text-center leading-6 rounded text-xs font-bold peer-checked:bg-green-500 peer-checked:text-white bg-gray-100 text-gray-400 hover:bg-gray-200 transition-colors">${d}</span>
+                                                        </label>
+                                                    `).join('')}
+                                                    </div>
+                                                </td>
+                                                <td class="p-2">
+                                                    ${this.get15MinTimeSelect(rule.start, '', 'setting-time-req-start border-gray-300 rounded px-2 py-1 text-xs w-full')}
+                                                </td>
+                                                <td class="p-2">
+                                                    ${this.get15MinTimeSelect(rule.end, '', 'setting-time-req-end border-gray-300 rounded px-2 py-1 text-xs w-full')}
+                                                </td>
+                                                <td class="p-2"><input type="number" class="setting-time-req-count border-gray-300 rounded px-2 py-1 text-xs w-12 text-center font-bold" value="${rule.count}"></td>
+                                                <td class="p-2 text-right"><button onclick="app.removeTimeStaffReq(${idx})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button></td>
+                                            </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                                ${timeStaffReq.length === 0 ? '<p class="text-xs text-gray-400 text-center py-4">特定の時間帯（例：ランチタイム）に必要な人数を設定できます</p>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. システム設定 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-gears text-gray-500"></i> システム設定</h3>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">デフォルト時給 (円)</label>
+                                <input type="number" id="settingHourlyWage" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="${config.hourly_wage_default || 1100}">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード</label>
+                                <input type="text" id="settingPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono tracking-wider" value="${config.admin_password || '0000'}">
+                            </div>
+                        </div>
+
+                        <!-- AI設定 (運営管理のため非表示) -->
+                        
+                        <!-- 休憩時間ルール -->
+                        <div class="border-t border-gray-100 pt-4">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">休憩時間ルール</h4>
+                            <div class="space-y-3" id="breakRulesContainer">
+                                ${breakRules.map((rule, idx) => `
+                                    <div class="flex items-center gap-3">
+                                        <div class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                                            <input type="number" class="setting-break-hours w-16 border-gray-300 rounded px-2 py-1 text-sm text-center font-bold" value="${rule.min_hours}">
+                                            <span class="text-xs text-gray-500">時間超で</span>
+                                        </div>
+                                        <i class="fa-solid fa-arrow-right text-gray-300 text-xs"></i>
+                                        <div class="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
+                                            <input type="number" class="setting-break-minutes w-16 border-blue-200 rounded px-2 py-1 text-sm text-center font-bold text-blue-700" value="${rule.break_minutes}">
+                                            <span class="text-xs text-blue-500">分休憩</span>
+                                        </div>
+                                        <button onclick="app.removeBreakRule(${idx})" class="text-gray-400 hover:text-red-500 ml-2"><i class="fa-solid fa-times"></i></button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <button onclick="app.addBreakRule()" class="mt-3 text-xs flex items-center gap-1 text-blue-600 font-bold hover:text-blue-800"><i class="fa-solid fa-plus-circle"></i> ルールを追加</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. 運用ルール (お店のルール) -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-orange-500"></i> 運用ルール (スタッフ向け表示)</h3>
+                    </div>
+                    <div class="p-6">
+                        <label class="block text-xs font-bold text-gray-500 mb-2">お店のルール・連絡事項</label>
+                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提出期限や注意事項などを入力してください...">${shopRulesText}</textarea>
+                        <p class="text-xs text-gray-400 mt-2">※ ここに入力した内容は、スタッフ画面の「お店のルール」に表示されます。</p>
+                    </div>
+                </div>
+                
+                <!-- 7. アカウント情報 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-user-gear text-indigo-500"></i> アカウント情報</h3>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
+                            <p class="font-mono text-lg font-bold text-gray-800">${config.contract_id || '-'}</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">登録メールアドレス</label>
+                            <div class="flex gap-2">
+                                <input type="email" id="settingEmail" value="${config.customer_email || ''}" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="メールアドレスを入力">
+                                <button onclick="app.updateEmail()" class="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
+                                    <i class="fa-solid fa-save mr-1"></i>変更
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">案内メールの送信先アドレスです</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. プラン管理 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-credit-card text-green-500"></i> プラン管理</h3>
+                    </div>
+                    <div class="p-6 space-y-5" id="subscriptionSection">
+                        <!-- 現在のプラン表示 -->
+                        <div class="bg-gradient-to-r ${
+                            (config.stripe_plan === 'premium') ? 'from-purple-500 to-indigo-600' :
+                            (config.stripe_plan === 'pro') ? 'from-green-500 to-emerald-600' :
+                            'from-blue-500 to-indigo-600'
+                        } rounded-xl p-5 text-white">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-white/70 text-xs font-medium">現在ご利用中のプラン</p>
+                                    <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium'}[config.stripe_plan] || 'Standard'}</p>
+                                    <p class="text-white/80 text-sm mt-1">${{standard:'2,980円/月 - スタッフ10名まで', pro:'4,480円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限'}[config.stripe_plan] || '2,980円/月 - スタッフ10名まで'}</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-sm font-bold backdrop-blur-sm">
+                                        <i class="fa-solid fa-circle-check text-xs"></i> 有効
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- プラン変更カード -->
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">プラン変更</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                ${[
+                                    { key: 'standard', name: 'Standard', price: '2,980', staffs: '10名', color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
+                                    { key: 'pro', name: 'Pro', price: '4,480', staffs: '50名', color: 'green', badge: '人気', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
+                                    { key: 'premium', name: 'Premium', price: '9,980', staffs: '無制限', color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応', '専属サポート'] },
+                                ].map(p => {
+                                    const currentPlanKey = (config.stripe_plan && config.stripe_plan !== 'free') ? config.stripe_plan : 'standard';
+                                    const isCurrent = currentPlanKey === p.key;
+                                    const planOrder = {standard: 0, pro: 1, premium: 2};
+                                    const currentOrder = planOrder[currentPlanKey] || 0;
+                                    const thisOrder = planOrder[p.key] || 0;
+                                    const isUpgrade = thisOrder > currentOrder;
+                                    const isDowngrade = thisOrder < currentOrder;
+
+                                    const borderClass = isCurrent
+                                        ? (p.color === 'blue' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : p.color === 'green' ? 'border-green-500 bg-green-50 ring-2 ring-green-200' : 'border-purple-500 bg-purple-50 ring-2 ring-purple-200')
+                                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md';
+
+                                    const badgeHtml = p.badge && !isCurrent ? '<div class="text-[10px] font-bold text-green-700 bg-green-200 rounded-full px-2 py-0.5 inline-block mb-1">人気</div>' : '';
+                                    const currentBadge = isCurrent ? '<div class="text-[10px] font-bold text-white bg-gray-800 rounded-full px-2 py-0.5 inline-block mb-1">現在のプラン</div>' : '';
+
+                                    let btnHtml = '';
+                                    if (isCurrent) {
+                                        btnHtml = '<p class="mt-3 text-xs font-bold text-gray-500 text-center py-1.5"><i class="fa-solid fa-circle-check mr-1"></i>ご利用中</p>';
+                                    } else if (isUpgrade) {
+                                        const btnColor = p.color === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700';
+                                        btnHtml = '<button onclick="app.startCheckout(&#39;'+p.key+'&#39;)" class="mt-3 w-full py-2 '+btnColor+' text-white rounded-lg text-xs font-bold transition"><i class="fa-solid fa-arrow-up mr-1"></i>アップグレード</button>';
+                                    } else {
+                                        btnHtml = '<button onclick="app.startCheckout(&#39;'+p.key+'&#39;)" class="mt-3 w-full py-2 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300 transition"><i class="fa-solid fa-arrow-down mr-1"></i>ダウングレード</button>';
+                                    }
+
+                                    const checkColor = p.color === 'blue' ? 'text-blue-500' : p.color === 'green' ? 'text-green-500' : 'text-purple-500';
+                                    const nameColor = p.color === 'blue' ? 'text-blue-600' : p.color === 'green' ? 'text-green-600' : 'text-purple-600';
+
+                                    return '<div class="p-4 rounded-xl border-2 '+borderClass+' transition-all duration-200 text-center flex flex-col hover:-translate-y-1 hover:shadow-xl">'
+                                        + currentBadge + badgeHtml
+                                        + '<p class="font-bold '+nameColor+' text-lg">'+p.name+'</p>'
+                                        + '<p class="text-2xl font-extrabold text-gray-900 mt-1">'+p.price+'<span class="text-sm font-normal text-gray-400">円/月</span></p>'
+                                        + '<p class="text-xs text-gray-500 mt-1">スタッフ'+p.staffs+'</p>'
+                                        + '<ul class="text-xs text-gray-600 mt-3 space-y-1 text-left flex-1">'
+                                        + p.features.map(f => '<li class="flex items-center gap-1.5"><i class="fa-solid fa-check '+checkColor+' text-[10px]"></i>'+f+'</li>').join('')
+                                        + '</ul>'
+                                        + '<div class="mt-auto pt-3">'+btnHtml+'</div>'
+                                        + '</div>';
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Stripeポータルリンク -->
+                        ${config.stripe_subscription_id ? `
+                        <div class="border-t border-gray-100 pt-4 flex justify-between items-center">
+                            <p class="text-xs text-gray-400">請求書・支払い方法の変更・解約はStripeポータルから</p>
+                            <button onclick="app.openStripePortal()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200 transition">
+                                <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> 請求管理ポータル
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- データリセット -->
+                <div class="text-right">
+                    <button onclick="if(confirm('【警告】全てのデータを削除して初期化しますか？')) { localStorage.clear(); location.reload(); }" class="text-red-500 text-xs hover:text-red-700 font-bold opacity-60 hover:opacity-100 transition">
+                        <i class="fa-solid fa-trash mr-1"></i>全データをリセット
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    toggleLlmSettings() {
+        const provider = document.querySelector('input[name="settingLlmProvider"]:checked')?.value;
+        if (provider === 'openai') {
+            document.getElementById('openaiSettings').classList.remove('hidden');
+            document.getElementById('geminiSettings').classList.add('hidden');
+        } else {
+            document.getElementById('openaiSettings').classList.add('hidden');
+            document.getElementById('geminiSettings').classList.remove('hidden');
+        }
+    },
+
+    addRole() {
+        this.state.config = this.readSettingsFromDOM();
+        if(!this.state.config.roles) this.state.config.roles = [];
+        // ユニークID生成
+        const newId = 'role_' + Math.random().toString(36).substr(2, 5);
+        this.state.config.roles.push({ id: newId, name: '新規役職', color: 'gray', level: 1 });
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    deleteRole(index) {
+        this.state.config = this.readSettingsFromDOM();
+        const role = this.state.config.roles[index];
+        if(role.id === 'manager' || role.id === 'staff') {
+            this.showToast('この役職は削除できません', 'error');
+            return;
+        }
+        this.state.config.roles.splice(index, 1);
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    addBreakRule() {
+        this.state.config = this.readSettingsFromDOM();
+        if(!this.state.config.break_rules) this.state.config.break_rules = [];
+        this.state.config.break_rules.push({ min_hours: 0, break_minutes: 60 });
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    removeBreakRule(index) {
+        this.state.config = this.readSettingsFromDOM();
+        this.state.config.break_rules.splice(index, 1);
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    addSpecialHoliday() {
+        const dateInput = document.getElementById('newSpecialHoliday');
+        const date = dateInput.value;
+        if(!date) return;
+        
+        this.state.config = this.readSettingsFromDOM();
+        if(!this.state.config.special_holidays) this.state.config.special_holidays = [];
+        if(!this.state.config.special_holidays.includes(date)) {
+            this.state.config.special_holidays.push(date);
+            this.state.config.special_holidays.sort();
+        }
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    removeSpecialHoliday(index) {
+        this.state.config = this.readSettingsFromDOM(); // 現在の入力を保存
+        if(this.state.config.special_holidays) {
+            this.state.config.special_holidays.splice(index, 1);
+        }
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    addSpecialDay() {
+        const date = document.getElementById('newSpecialDayDate').value;
+        const start = document.getElementById('newSpecialDayStart').value;
+        const end = document.getElementById('newSpecialDayEnd').value;
+        const note = document.getElementById('newSpecialDayNote').value;
+
+        if(!date || !start || !end) return;
+
+        this.state.config = this.readSettingsFromDOM(); // 現在の入力を保存
+        if(!this.state.config.special_days) this.state.config.special_days = {};
+        
+        this.state.config.special_days[date] = { start, end, note };
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    removeSpecialDay(date) {
+        this.state.config = this.readSettingsFromDOM(); // 現在の入力を保存
+        if(this.state.config.special_days) {
+            delete this.state.config.special_days[date];
+        }
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    addTimeStaffReq() {
+        this.state.config = this.readSettingsFromDOM();
+        if(!this.state.config.time_staff_req) this.state.config.time_staff_req = [];
+        this.state.config.time_staff_req.push({ days: [1,2,3,4,5], start: '11:00', end: '14:00', count: 2 });
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    removeTimeStaffReq(index) {
+        this.state.config = this.readSettingsFromDOM();
+        this.state.config.time_staff_req.splice(index, 1);
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    addShiftPattern() {
+        // 現在の入力を一時保存
+        this.state.config = this.readSettingsFromDOM();
+        // 新しい空行を追加
+        if(!this.state.config.custom_shifts) this.state.config.custom_shifts = [];
+        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00' });
+        // 再描画
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    deleteShiftPattern(index) {
+        // 現在の入力を一時保存
+        this.state.config = this.readSettingsFromDOM();
+        // 削除
+        this.state.config.custom_shifts.splice(index, 1);
+        // 再描画
+        this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    readSettingsFromDOM() {
+        const config = { ...this.state.config }; // 既存の設定をコピー
+
+        // 基本設定
+        config.hourly_wage_default = Number(document.getElementById('settingHourlyWage')?.value || 1100);
+        config.admin_password = document.getElementById('settingPassword')?.value || config.admin_password;
+        config.shop_rules_text = document.getElementById('settingShopRules')?.value || '';
+
+        // 営業時間
+        const getVal = (id) => document.getElementById(id)?.value;
+        config.opening_times = {
+            weekday: { start: getVal('time_weekday_start') || '09:00', end: getVal('time_weekday_end') || '22:00' },
+            weekend: { start: getVal('time_weekend_start') || '10:00', end: getVal('time_weekend_end') || '20:00' },
+            holiday: { start: getVal('time_holiday_start') || '10:00', end: getVal('time_holiday_end') || '20:00' }
+        };
+        // 旧互換
+        config.opening_time = config.opening_times.weekday.start;
+        config.closing_time = config.opening_times.weekday.end;
+
+        // 定休日
+        config.closed_days = Array.from(document.querySelectorAll('input[name="setting_closed_days"]:checked')).map(el => parseInt(el.value));
+
+        // 役職・ロール設定
+        const roleNames = document.querySelectorAll('.setting-role-name');
+        const roleIds = document.querySelectorAll('.setting-role-id');
+        const roleColors = document.querySelectorAll('.setting-role-color');
+
+        const existingRoles = this.state.config.roles || [];
+        config.roles = [];
+        roleNames.forEach((el, i) => {
+            if (el.value) {
+                const rId = roleIds[i].value;
+                const prev = existingRoles.find(r => r.id === rId);
+                config.roles.push({
+                    id: rId,
+                    name: el.value,
+                    color: roleColors[i].value,
+                    level: prev ? prev.level : 1
+                });
+            }
+        });
+
+        // シフトパターン
+        const shiftNames = document.querySelectorAll('.setting-shift-name');
+        const shiftStarts = document.querySelectorAll('.setting-shift-start');
+        const shiftEnds = document.querySelectorAll('.setting-shift-end');
+
+        config.custom_shifts = [];
+        shiftNames.forEach((el, i) => {
+            if (el.value) {
+                config.custom_shifts.push({
+                    name: el.value,
+                    start: shiftStarts[i].value,
+                    end: shiftEnds[i].value
+                });
+            }
+        });
+
+        // 人員配置ルール
+        config.staff_req = {
+            min_manager: Number(document.getElementById('req_min_manager')?.value || 1),
+            min_weekday: Number(document.getElementById('req_min_weekday')?.value || 2),
+            min_weekend: Number(document.getElementById('req_min_weekend')?.value || 3),
+            min_holiday: Number(document.getElementById('req_min_holiday')?.value || 3)
+        };
+
+        // 休憩ルール
+        const breakRules = [];
+        const breakRuleDivs = document.querySelectorAll('#breakRulesContainer > div');
+        breakRuleDivs.forEach(div => {
+            const h = Number(div.querySelector('.setting-break-hours')?.value || 0);
+            const m = Number(div.querySelector('.setting-break-minutes')?.value || 0);
+            if (h > 0) breakRules.push({ min_hours: h, break_minutes: m });
+        });
+        breakRules.sort((a, b) => a.min_hours - b.min_hours);
+        config.break_rules = breakRules.length > 0 ? breakRules : config.break_rules;
+
+        // 時間帯別ルール
+        config.time_staff_req = [];
+        const timeReqRows = document.querySelectorAll('#timeStaffReqBody tr');
+        timeReqRows.forEach((row, idx) => {
+            const start = row.querySelector('.setting-time-req-start')?.value;
+            const end = row.querySelector('.setting-time-req-end')?.value;
+            const count = Number(row.querySelector('.setting-time-req-count')?.value || 0);
+
+            const daysChecks = document.querySelectorAll(`.setting-time-req-day-${idx}:checked`);
+            const days = Array.from(daysChecks).map(c => Number(c.value));
+
+            if (days.length > 0 && start && end && count > 0) {
+                config.time_staff_req.push({ days, start, end, count });
+            }
+        });
+
+        return config;
+    },
+
+    async saveSettings() {
+        const newConfig = this.readSettingsFromDOM();
+
+        const configId = this.state.config.id;
+        if (!configId) {
+            this.showToast('設定IDが見つかりません。再ログインしてください。', 'error');
+            return;
+        }
+
+        this.showLoading(true);
+        try {
+            // RPC経由で安全に設定を更新 (機密フィールドは個別関数で更新)
+            const updateData = {
+                opening_time: newConfig.opening_time,
+                closing_time: newConfig.closing_time,
+                hourly_wage_default: newConfig.hourly_wage_default,
+                opening_times: newConfig.opening_times,
+                closed_days: newConfig.closed_days,
+                staff_req: newConfig.staff_req,
+                roles: newConfig.roles,
+                special_holidays: newConfig.special_holidays,
+                special_days: newConfig.special_days,
+                time_staff_req: newConfig.time_staff_req,
+                calendar_notes: newConfig.calendar_notes || {},
+                break_rules: newConfig.break_rules,
+                shop_rules_text: newConfig.shop_rules_text,
+                custom_shifts: newConfig.custom_shifts,
+            };
+
+            await API.rpc('update_config_safe', {
+                p_config_id: configId,
+                p_data: updateData
+            });
+
+            // 管理者パスワードが変更されていたら、staffテーブルの管理者アカウントも更新
+            if (newConfig.admin_password && newConfig.admin_password !== this.state.config.admin_password) {
+                const adminStaff = this.state.staff.find(s => s.login_id === 'admin');
+                if (adminStaff) {
+                    try {
+                        await API.rpc('update_staff_password', {
+                            p_staff_id: adminStaff.id,
+                            p_new_password: newConfig.admin_password
+                        });
+                        // config側のadmin_passwordも更新（表示用のフォールバック）
+                        await API.rpc('update_config_safe', {
+                            p_config_id: configId,
+                            p_data: { admin_password: newConfig.admin_password }
+                        });
+                        console.log('[Settings] Admin password updated in staff and config');
+                    } catch (pwErr) {
+                        console.error('[Settings] Password update failed:', pwErr);
+                        this.showToast('パスワード更新に失敗しました', 'error');
+                    }
+                }
+            }
+
+            // Stateを更新
+            this.state.config = { ...this.state.config, ...newConfig };
+            this.showToast('設定を保存しました', 'success');
+        } catch (e) {
+            console.error(e);
+            this.showToast('保存エラー: ' + e.message, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    // --- 印刷機能 (完全版 v7・分割レイアウト & PDF対応) ---
+    // Fixed syntax error
+    printShiftTable() {
+        // 現在の表示モードと期間を取得
+        const period = this.state.shiftTablePeriod || 'month';
+        const year = this.state.currentDate.getFullYear();
+        const month = this.state.currentDate.getMonth();
+        
+        let allDays = [];
+        
+        // 1. 全期間の日付リスト生成
+        if (period === 'month') {
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            allDays = Array.from({length: lastDay}, (_, i) => new Date(year, month, i + 1));
+        } else {
+            const range = period === 'week' ? 7 : 14;
+            const start = new Date(this.state.currentDate);
+            allDays = Array.from({length: range}, (_, i) => {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                return d;
+            });
+        }
+
+        // 2. 期間分割 (A4横に収まるよう 7日区切り でテーブルを生成)
+        const CHUNK_SIZE = 7; // 1週間ずつ
+        const dayChunks = [];
+        for (let i = 0; i < allDays.length; i += CHUNK_SIZE) {
+            dayChunks.push(allDays.slice(i, i + CHUNK_SIZE));
+        }
+
+        // 3. 印刷用ウィンドウ作成
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('ポップアップがブロックされました。「許可」してください。');
+            return;
+        }
+
+        // --- コンテンツ生成関数 ---
+        const generateTableHTML = (days, chunkIndex, totalChunks) => {
+            // 時間目盛り
+            const timeScaleHtml = `
+                <div style="display: flex; justify-content: space-between; font-size: 8px; color: #555; margin-top: 2px; border-top: 1px solid #ccc;">
+                    <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
+                </div>
+            `;
+
+            // ヘッダー生成
+            const headerCols = days.map(date => {
+                const d = date.getDate();
+                const m = date.getMonth() + 1;
+                const w = ['日','月','火','水','木','金','土'][date.getDay()];
+                const isSun = date.getDay() === 0;
+                const isSat = date.getDay() === 6;
+                const colorStyle = isSun ? 'color:#d32f2f;' : isSat ? 'color:#1976d2;' : 'color:#111;';
+                const bgStyle = isSun ? 'background-color:#fff5f5;' : isSat ? 'background-color:#f0f9ff;' : 'background-color:#f9fafb;';
+                
+                return `
+                    <th style="${bgStyle} border: 1px solid #666; padding: 4px; width: 130px; min-width: 130px;">
+                        <div style="${colorStyle} font-size: 11px; font-weight: bold;">${m}/${d} (${w})</div>
+                        ${timeScaleHtml}
+                    </th>
+                `;
+            }).join('');
+
+            // ボディ生成
+            const bodyRows = this.state.staff.map(staff => {
+                const cols = days.map(date => {
+                    const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                    const shift = this.state.shifts.find(s => s.staff_id === staff.id && s.date === dateStr);
+                    
+                    let cellContent = '';
+                    
+                    if (shift) {
+                        const startH = parseInt(shift.start_time.split(':')[0]);
+                        const startM = parseInt(shift.start_time.split(':')[1]);
+                        const endH = parseInt(shift.end_time.split(':')[0]);
+                        const endM = parseInt(shift.end_time.split(':')[1]);
+                        
+                        const startMin = startH * 60 + startM;
+                        const endMin = endH * 60 + endM;
+                        const endMinAdjusted = endMin < startMin ? endMin + 1440 : endMin;
+                        
+                        // 1日 = 1440分
+                        const startPct = (startMin / 1440) * 100;
+                        const widthPct = ((endMinAdjusted - startMin) / 1440) * 100;
+                        
+                        let bgColor = '#dbeafe'; 
+                        let borderColor = '#2563eb';
+                        if (startH < 10) { bgColor = '#fef9c3'; borderColor = '#ca8a04'; }
+                        else if (startH >= 17) { bgColor = '#f3e8ff'; borderColor = '#9333ea'; }
+
+                        const timeText = `${shift.start_time} - ${shift.end_time}`;
+
+                        cellContent = `
+                            <div style="
+                                position: absolute;
+                                left: ${startPct}%;
+                                width: ${Math.max(widthPct, 1)}%;
+                                top: 6px; 
+                                bottom: 6px;
+                                background-color: ${bgColor};
+                                border: 1px solid ${borderColor};
+                                border-radius: 3px;
+                                z-index: 10;
+                                overflow: visible; /* 文字はみ出し許可 */
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            ">
+                                <span style="
+                                    font-size: 10px; 
+                                    font-weight: bold; 
+                                    color: #000; 
+                                    white-space: nowrap; 
+                                    text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+                                    pointer-events: none;
+                                    position: relative;
+                                    z-index: 20;
+                                ">${timeText}</span>
+                            </div>
+                        `;
+                    }
+                    
+                    // 背景グリッド
+                    const gridLines = `
+                        <div style="position:absolute; left:25%; top:0; bottom:0; border-left:1px dotted #ccc; z-index:0;"></div>
+                        <div style="position:absolute; left:50%; top:0; bottom:0; border-left:1px solid #ccc; z-index:0;"></div>
+                        <div style="position:absolute; left:75%; top:0; bottom:0; border-left:1px dotted #ccc; z-index:0;"></div>
+                    `;
+
+                    const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
+                    const bgStyle = isSpecialHoliday ? 'background-color: #ffebee;' : ''; 
+
+                    return `<td style="position: relative; padding: 0; height: 38px; border: 1px solid #666; ${bgStyle}">
+                        ${gridLines}
+                        ${cellContent}
+                    </td>`;
+                }).join('');
+
+                return `
+                    <tr style="page-break-inside: avoid;">
+                        <td style="padding: 4px 8px; font-weight: bold; background-color: #f3f4f6; text-align: left; width: 140px; border: 1px solid #666; font-size: 11px;">
+                            ${staff.name}
+                        </td>
+                        ${cols}
+                    </tr>
+                `;
+            }).join('');
+
+            // 期間表示
+            const startStr = `${days[0].getMonth()+1}/${days[0].getDate()}`;
+            const endStr = `${days[days.length-1].getMonth()+1}/${days[days.length-1].getDate()}`;
+
+            return `
+                <div class="table-chunk" style="margin-bottom: 20px; page-break-after: always;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 16px; border-left: 5px solid #2563eb; padding-left: 10px;">
+                        期間: ${startStr} 〜 ${endStr}
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 140px; background-color: #e5e7eb; border: 1px solid #666; padding: 4px;">スタッフ</th>
+                                ${headerCols}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${bodyRows}
+                        </tbody>
+                    </table>
+                    <div style="text-align: right; font-size: 10px; color: #666; margin-top: 5px;">
+                        Page ${chunkIndex + 1} / ${totalChunks}
+                    </div>
+                </div>
+            `;
+        };
+
+        // 全チャンクのHTML結合
+        const allTablesHtml = dayChunks.map((chunk, idx) => generateTableHTML(chunk, idx, dayChunks.length)).join('');
+
+        const html = `
+            <!DOCTYPE html>
+            <html lang="ja">
+            <head>
+                <meta charset="UTF-8">
+                <title>シフト表印刷</title>
+                <style>
+                    @page { size: landscape; margin: 8mm; }
+                    body { font-family: "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 10px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    .no-print { margin-bottom: 20px; padding: 15px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; }
+                    button { cursor: pointer; padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-right: 10px; }
+                    @media print { .no-print { display: none; } .table-chunk:last-child { page-break-after: auto !important; } }
+                </style>
+            </head>
+            <body>
+                <div class="no-print">
+                    <h2 style="margin-top:0;">🖨 印刷プレビュー (分割レイアウト版)</h2>
+                    <p style="font-size: 14px; line-height: 1.6;">
+                        視認性を確保するため、<strong>7日ごとに分割して表示</strong>しています。<br>
+                        「印刷」ボタンを押し、送信先で<strong>「PDFに保存」</strong>を選択すると、全期間を含むPDFファイルが作成できます。<br>
+                        ※ 紙に印刷する場合も、A4横サイズで綺麗にページ分けされます。
+                    </p>
+                    <div style="margin-top: 15px;">
+                        <button onclick="window.print()">🖨 印刷 / PDF保存</button>
+                    </div>
+                </div>
+
+                <h1 style="font-size: 24px; margin-bottom: 20px;">
+                    ${year}年 ${month + 1}月 シフト表
+                </h1>
+
+                ${allTablesHtml}
+
+            </body>
+            </html>
+        `;
+
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+    },
+
+    // =================================================================
+    // ロジック・ヘルパー関数
+    // =================================================================
+
+    // --- シフト編集 ---
+    get15MinTimeSelect(currentVal, id, className) {
+        let options = '';
+        const normalizedVal = currentVal ? currentVal.substr(0, 5) : '';
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 15) {
+                const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                const selected = (normalizedVal === time) ? 'selected' : '';
+                options += `<option value="${time}" ${selected}>${time}</option>`;
+            }
+        }
+        // Fallback for custom values
+        if (normalizedVal && !options.includes(`value="${normalizedVal}"`)) {
+             options += `<option value="${normalizedVal}" selected>${normalizedVal}</option>`;
+        }
+        
+        const idAttr = id ? `id="${id}"` : '';
+        // 既存の input が持っていたクラスを継承しつつ、appearance-none でブラウザデフォルトのスタイルを消す
+        const finalClass = `${className || ''} appearance-none cursor-pointer bg-white`;
+        
+        return `
+            <div class="relative w-full">
+                <select ${idAttr} class="${finalClass}" style="padding-right: 2rem;">
+                    ${options}
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <i class="fa-solid fa-chevron-down text-xs"></i>
+                </div>
+            </div>
+        `;
+    },
+
+    generateTimeOptionsHTML(selectedValue) {
+        // 正規化: 秒が含まれている場合(HH:mm:ss)はHH:mmに切り詰める
+        const normalizedSelected = selectedValue ? selectedValue.substr(0, 5) : '';
+        
+        let options = [];
+        let found = false;
+        // 15分刻みの選択肢を生成
+        for (let i = 0; i < 24; i++) {
+            for (let j = 0; j < 60; j += 15) {
+                const h = String(i).padStart(2, '0');
+                const m = String(j).padStart(2, '0');
+                const time = `${h}:${m}`;
+                if (time === normalizedSelected) found = true;
+                options.push(time);
+            }
+        }
+        // 既存の値が15分刻みでない場合も、表示崩れを防ぐために選択肢に追加
+        if (normalizedSelected && !found) {
+            options.push(normalizedSelected);
+            options.sort(); 
+        }
+        return options.map(t => `<option value="${t}" ${t === normalizedSelected ? 'selected' : ''}>${t}</option>`).join('');
+    },
+
+    openAddShift(dateStr) {
+        document.getElementById('shiftForm')?.reset();
+        document.getElementById('editShiftId').value = ''; 
+        document.getElementById('editShiftDate').value = dateStr;
+        document.getElementById('editShiftTitle').textContent = 'シフト追加';
+        document.getElementById('editShiftDateDisplay').textContent = dateStr;
+        document.getElementById('deleteShiftBtn').classList.add('hidden');
+        
+        const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタッフを選択</option>${this.state.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select>`;
+        document.getElementById('editShiftStaffName').innerHTML = staffSelectHtml;
+        
+        // Selectボックスの初期化
+        const defStart = (this.state.config.opening_time || '09:00').substr(0, 5);
+        const defEnd = (this.state.config.closing_time || '18:00').substr(0, 5);
+        
+        const startEl = document.getElementById('editShiftStart');
+        const endEl = document.getElementById('editShiftEnd');
+        
+        startEl.innerHTML = this.generateTimeOptionsHTML(defStart);
+        endEl.innerHTML = this.generateTimeOptionsHTML(defEnd);
+        
+        // 値を明示的にセットして確実にする
+        startEl.value = defStart;
+        endEl.value = defEnd;
+
+        document.getElementById('editShiftBreak').value = 60;
+
+        this.openModal('editShiftModal');
+        const saveBtn = document.getElementById('saveShiftBtn');
+        const newSaveBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+        newSaveBtn.addEventListener('click', () => this.saveShift());
+    },
+
+    async updateShiftDrag(shiftId, updates) {
+        try {
+            await API.update('shifts', shiftId, updates);
+            // ローカルステートも更新
+            const shift = this.state.shifts.find(s => s.id === shiftId);
+            if (shift) {
+                Object.assign(shift, updates);
+            }
+            // 休憩時間を再計算
+            if (shift && (updates.start_time || updates.end_time)) {
+                const [sh, sm] = shift.start_time.split(':').map(Number);
+                const [eh, em] = shift.end_time.split(':').map(Number);
+                let hours = (eh + em / 60) - (sh + sm / 60);
+                if (hours <= 0) hours += 24; // 日またぎ対応
+                const breakRules = this.state.config.break_rules || this.state.defaultConfig.break_rules || [];
+                let brk = 0;
+                for (const rule of breakRules.sort((a, b) => a.min_hours - b.min_hours)) {
+                    if (hours > rule.min_hours) brk = rule.break_minutes;
+                }
+                if (shift.break_minutes !== brk) {
+                    shift.break_minutes = brk;
+                    await API.update('shifts', shiftId, { break_minutes: brk });
+                }
+            }
+            this.renderCurrentView();
+            this.updateHeader();
+            const staff = this.getStaff(updates.staff_id || shift?.staff_id);
+            this.showToast(`シフトを更新しました${staff ? ' (' + staff.name + ')' : ''}`, 'success');
+        } catch (e) {
+            console.error('Drag update failed:', e);
+            this.showToast('シフト更新に失敗しました', 'error');
+            this.renderCurrentView();
+        }
+    },
+
+    openEditShift(shiftId) {
+        const shift = this.state.shifts.find(s => s.id == shiftId);
+        if (!shift) return;
+        const staff = this.getStaff(shift.staff_id);
+        document.getElementById('editShiftId').value = shift.id;
+        document.getElementById('editShiftDate').value = shift.date;
+        document.getElementById('editShiftStaffId').value = shift.staff_id;
+        document.getElementById('editShiftTitle').textContent = 'シフト編集';
+        document.getElementById('editShiftDateDisplay').textContent = shift.date;
+        document.getElementById('editShiftStaffName').innerHTML = `<div class="py-2 text-xl text-gray-800">${staff ? staff.name : '不明なスタッフ'}</div>`;
+        
+        // 時間の正規化 (HH:mm:ss -> HH:mm)
+        const startTime = shift.start_time.substr(0, 5);
+        const endTime = shift.end_time.substr(0, 5);
+
+        // Selectボックスの初期化
+        const startEl = document.getElementById('editShiftStart');
+        const endEl = document.getElementById('editShiftEnd');
+        
+        startEl.innerHTML = this.generateTimeOptionsHTML(startTime);
+        endEl.innerHTML = this.generateTimeOptionsHTML(endTime);
+        
+        // 値を明示的にセットして確実にする
+        startEl.value = startTime;
+        endEl.value = endTime;
+        
+        document.getElementById('editShiftBreak').value = shift.break_minutes;
+        document.getElementById('deleteShiftBtn').classList.remove('hidden');
+
+        const deleteBtn = document.getElementById('deleteShiftBtn');
+        deleteBtn.onclick = () => this.deleteShift(shift.id);
+        const saveBtn = document.getElementById('saveShiftBtn');
+        const newSaveBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+        newSaveBtn.addEventListener('click', () => this.saveShift());
+        this.openModal('editShiftModal');
+    },
+
+    async saveShift() {
+        const id = document.getElementById('editShiftId').value;
+        const date = document.getElementById('editShiftDate').value;
+        const start = document.getElementById('editShiftStart').value;
+        const end = document.getElementById('editShiftEnd').value;
+        const breakMins = Number(document.getElementById('editShiftBreak').value);
+        let staffId = document.getElementById('editShiftStaffId').value;
+        const selectEl = document.getElementById('editShiftStaffSelect');
+        if (selectEl) staffId = selectEl.value;
+
+        if (!staffId || !start || !end) { alert('必須項目を入力してください'); return; }
+        if (start >= end) { alert('時間の順序が不正です'); return; }
+        if (document.getElementById('editShiftHoliday').checked && id) { await this.deleteShift(id); this.closeModal('editShiftModal'); return; }
+
+        const data = { staff_id: staffId, date, start_time: start, end_time: end, break_minutes: breakMins };
+        if (!id) data.organization_id = this.state.organization_id;
+        
+        this.showLoading(true);
+        try {
+            if (id) await API.update('shifts', id, data); else await API.create('shifts', data);
+            await this.loadData();
+            
+            // ビューの更新 (カレンダーに戻らず、現在のモードを維持)
+            if (this.state.view === 'manual-shift' && document.getElementById('shiftViewContent')) {
+                const content = document.getElementById('shiftViewContent');
+                // スクロール位置の保持を試みる
+                const scrollEl = content.firstElementChild;
+                const sTop = scrollEl ? scrollEl.scrollTop : 0;
+                const sLeft = scrollEl ? scrollEl.scrollLeft : 0;
+                
+                if (this.state.shiftViewMode === 'table') {
+                    this.renderShiftTable(content);
+                } else {
+                    this.renderCalendar(content);
+                }
+                
+                // スクロール復元
+                if (content.firstElementChild) {
+                    content.firstElementChild.scrollTop = sTop;
+                    content.firstElementChild.scrollLeft = sLeft;
+                }
+            } else {
+                this.renderCurrentView();
+            }
+
+            // ヘッダーの分析数値（人件費など）を更新
+            this.calculateMonthlyStats();
+
+            this.closeModal('editShiftModal');
+            this.showToast('シフトを保存しました', 'success');
+        } catch (e) { this.showToast('保存に失敗しました', 'error'); } finally { this.showLoading(false); }
+    },
+
+    async deleteShift(id) {
+        if (!confirm('削除しますか？')) return;
+        this.showLoading(true);
+        try {
+            await API.delete('shifts', id);
+            await this.loadData();
+            
+            // ビューの更新 (カレンダーに戻らず、現在のモードを維持)
+            if (this.state.view === 'manual-shift' && document.getElementById('shiftViewContent')) {
+                const content = document.getElementById('shiftViewContent');
+                // スクロール位置の保持
+                const scrollEl = content.firstElementChild;
+                const sTop = scrollEl ? scrollEl.scrollTop : 0;
+                const sLeft = scrollEl ? scrollEl.scrollLeft : 0;
+
+                if (this.state.shiftViewMode === 'table') {
+                    this.renderShiftTable(content);
+                } else {
+                    this.renderCalendar(content);
+                }
+
+                // スクロール復元
+                if (content.firstElementChild) {
+                    content.firstElementChild.scrollTop = sTop;
+                    content.firstElementChild.scrollLeft = sLeft;
+                }
+            } else {
+                this.renderCurrentView();
+            }
+
+            // ヘッダーの分析数値（人件費など）を更新
+            this.calculateMonthlyStats();
+
+            this.closeModal('editShiftModal');
+            this.showToast('削除しました', 'success');
+        } catch (e) { this.showToast('失敗しました', 'error'); } finally { this.showLoading(false); }
+    },
+
+    // --- スタッフ管理 ---
+    prepareStaffModal() {
+        this.updateStaffRoleSelect();
+        this.openModal('staffModal');
+        document.getElementById('staffForm').reset();
+        document.getElementById('staffId').value='';
+    },
+    
+    updateStaffRoleSelect() {
+        const select = document.getElementById('staffRole');
+        if(!select) return;
+        
+        const roles = this.state.config.roles || this.state.defaultConfig.roles;
+        select.innerHTML = roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    },
+
+    // プラン別スタッフ上限
+    getStaffLimit() {
+        const plan = this.state.config.stripe_plan || '';
+        if (plan === 'premium') return 9999;
+        if (plan === 'pro') return 50;
+        if (plan === 'standard') return 10;
+        return 10; // デフォルト
+    },
+
+    // スタッフ数がプラン上限を超えているかチェック
+    isStaffOverLimit() {
+        const limit = this.getStaffLimit();
+        return this.state.staff.length > limit;
+    },
+
+    // スタッフ超過警告を表示（ダウングレード後など）
+    showStaffOverLimitAlert() {
+        const limit = this.getStaffLimit();
+        const current = this.state.staff.length;
+        const over = current - limit;
+        const planName = {standard: 'Standard', pro: 'Pro', premium: 'Premium'}[this.state.config.stripe_plan] || 'Standard';
+
+        const alertEl = document.getElementById('staffOverLimitAlert');
+        if (alertEl) alertEl.remove();
+
+        const alert = document.createElement('div');
+        alert.id = 'staffOverLimitAlert';
+        alert.className = 'fixed top-0 left-0 right-0 z-[200] bg-red-600 text-white px-4 py-3 text-center shadow-lg';
+        alert.innerHTML = `
+            <div class="max-w-3xl mx-auto flex items-center justify-center gap-3 flex-wrap">
+                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                <span class="font-bold">${planName}プランのスタッフ上限(${limit}名)を${over}名超過しています。</span>
+                <span class="text-red-200">スタッフを${over}名削除するまでシフト作成はできません。</span>
+                <button onclick="app.changeView('staff'); document.getElementById('staffOverLimitAlert')?.remove();" class="px-4 py-1 bg-white text-red-600 rounded font-bold text-sm hover:bg-red-50 transition">
+                    スタッフ管理へ
+                </button>
+            </div>
+        `;
+        document.body.prepend(alert);
+    },
+
+    // スタッフ超過警告を消す
+    clearStaffOverLimitAlert() {
+        const alertEl = document.getElementById('staffOverLimitAlert');
+        if (alertEl) alertEl.remove();
+    },
+
+    // 決済エラーアラート表示
+    showPaymentAlert() {
+        const existing = document.getElementById('paymentAlert');
+        if (existing) existing.remove();
+
+        const alert = document.createElement('div');
+        alert.id = 'paymentAlert';
+        alert.className = 'fixed top-0 left-0 right-0 z-[200] bg-orange-500 text-white px-4 py-3 shadow-lg';
+        alert.innerHTML = `
+            <div class="max-w-3xl mx-auto flex items-center justify-center gap-3 flex-wrap">
+                <i class="fa-solid fa-credit-card text-lg animate-pulse"></i>
+                <span class="font-bold">決済エラーが発生しています</span>
+                <span class="text-orange-100">お支払い方法を更新してください。未対応の場合サービスが停止されます。</span>
+                <button onclick="app.openStripePortal()" class="px-4 py-1.5 bg-white text-orange-600 rounded font-bold text-sm hover:bg-orange-50 transition">
+                    <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>支払い方法を更新
+                </button>
+                <button onclick="document.getElementById('paymentAlert')?.remove()" class="text-orange-200 hover:text-white ml-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        `;
+        document.body.prepend(alert);
+    },
+
+    async saveStaff() {
+        const id = document.getElementById('staffId').value;
+
+        // テナント情報を確実に取得
+        const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+        const orgId = this.state.config.organization_id || this.state.organization_id || API.session?.user?.organization_id;
+
+        if (!contractId || !orgId) {
+            this.showToast('テナント情報が取得できません。再ログインしてください。', 'error');
+            return;
+        }
+
+        // 新規作成時: プラン別スタッフ数制限チェック
+        if (!id) {
+            const limit = this.getStaffLimit();
+            const currentCount = this.state.staff.length;
+            if (currentCount >= limit) {
+                this.showUpgradeModal();
+                return;
+            }
+        }
+
+        const data = {
+            name: document.getElementById('staffName').value,
+            role: document.getElementById('staffRole').value,
+            evaluation: document.getElementById('staffEvaluation').value,
+            salary_type: document.getElementById('staffSalaryType').value,
+            hourly_wage: Number(document.getElementById('staffHourlyWage').value),
+            monthly_salary: Number(document.getElementById('staffMonthlySalary').value),
+            max_days_week: Number(document.getElementById('staffMaxDaysPerWeek').value),
+            max_hours_day: Number(document.getElementById('staffMaxHoursPerDay').value),
+            contract_id: contractId
+        };
+        // 新規作成時は組織IDを付与
+        if (!id) {
+            data.organization_id = orgId;
+        }
+
+        this.showLoading(true);
+        try {
+            let result;
+            if (id) {
+                // 更新: 先に画面のStateを更新してしまう（表示速度と確実性のため）
+                const index = this.state.staff.findIndex(s => s.id === id);
+                if (index !== -1) {
+                    // フォームの内容(data)でStateを即時上書き
+                    this.state.staff[index] = { ...this.state.staff[index], ...data };
+                }
+                
+                // その後でAPI送信
+                await API.update('staff', id, data);
+            } else {
+                // 新規作成
+                result = await API.create('staff', data);
+                // IDがない場合のフォールバック
+                if (!result) {
+                    data.id = 'temp_' + Date.now();
+                    this.state.staff.push(data);
+                } else {
+                    this.state.staff.push(result);
+                }
+            }
+            
+            this.renderStaffList(document.getElementById('viewContainer'));
+            this.closeModal('staffModal');
+            this.showToast('保存しました', 'success');
+        } catch (e) { 
+            console.error(e);
+            this.showToast('保存には成功しましたが、同期に時間がかかっています: ' + e.message, 'info'); 
+            // エラーでも画面上の変更は維持する
+            this.renderStaffList(document.getElementById('viewContainer'));
+            this.closeModal('staffModal');
+        } finally { 
+            this.showLoading(false); 
+        }
+    },
+    editStaff(id) {
+        const s = this.getStaff(id);
+        if(!s) return;
+        this.updateStaffRoleSelect(); // Selectを最新化
+        document.getElementById('staffId').value = s.id;
+        document.getElementById('staffName').value = s.name;
+        document.getElementById('staffRole').value = s.role;
+        document.getElementById('staffEvaluation').value = s.evaluation || 'B';
+        document.getElementById('staffSalaryType').value = s.salary_type;
+        document.getElementById('staffHourlyWage').value = s.hourly_wage;
+        document.getElementById('staffMonthlySalary').value = s.monthly_salary;
+        document.getElementById('staffMaxDaysPerWeek').value = s.max_days_week || 5;
+        document.getElementById('staffMaxHoursPerDay').value = s.max_hours_day || 8;
+        this.toggleSalaryInputs();
+        this.openModal('staffModal');
+    },
+    async deleteStaff(id) {
+        const staff = this.state.staff.find(s => s.id === id);
+        if (staff && staff.login_id === 'admin') {
+            this.showToast('初期管理者アカウント（admin）は削除できません。', 'error');
+            return;
+        }
+        if(!confirm('本当に削除しますか？\n※関連するシフトや申請データも削除されます')) return;
+        this.showLoading(true);
+        try {
+            await API.delete('staff', id);
+            
+            // ローカルのStateから削除（再読み込みしない）
+            this.state.staff = this.state.staff.filter(s => s.id !== id);
+            
+            // await this.loadData(); // ←削除
+            
+            this.renderStaffList(document.getElementById('viewContainer'));
+            this.showToast('削除しました', 'success');
+        } catch (e) {
+            console.error(e);
+            this.showToast('失敗しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+    toggleSalaryInputs() {
+        const type = document.getElementById('staffSalaryType').value;
+        if(type === 'hourly') {
+            document.getElementById('hourlyInputGroup').classList.remove('hidden');
+            document.getElementById('monthlyInputGroup').classList.add('hidden');
+        } else {
+            document.getElementById('hourlyInputGroup').classList.add('hidden');
+            document.getElementById('monthlyInputGroup').classList.remove('hidden');
+        }
+    },
+
+    // --- 申請 ---
+    _selectedRequestDates: [],
+    _requestCalendarMonth: null,
+
+    initRequestModal() {
+        const select = document.getElementById('requestStaffId');
+        if (!select) return;
+        select.innerHTML = this.state.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+        this._selectedRequestDates = [];
+        this._requestCalendarMonth = new Date();
+        this._requestCalendarMonth.setDate(1);
+        this._renderRequestCalendar();
+    },
+
+    _renderRequestCalendar() {
+        const container = document.getElementById('requestDatePicker');
+        const display = document.getElementById('selectedDatesDisplay');
+        const titleEl = document.getElementById('requestCalendarTitle');
+        const countEl = document.getElementById('selectedDateCount');
+        if (!container || !display) return;
+        const month = this._requestCalendarMonth;
+        if (!month) return;
+        const year = month.getFullYear();
+        const m = month.getMonth();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+
+        if (titleEl) titleEl.textContent = `${year}年 ${monthNames[m]}`;
+
+        const firstDay = new Date(year, m, 1).getDay();
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+
+        let html = `<div class="grid grid-cols-7 gap-1 text-center">`;
+        html += dayNames.map((d, i) => `<div class="text-[10px] font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}">${d}</div>`).join('');
+
+        for (let i = 0; i < firstDay; i++) {
+            html += `<div></div>`;
+        }
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const dateObj = new Date(year, m, d);
+            const isPast = dateObj < today;
+            const isSelected = this._selectedRequestDates.includes(dateStr);
+            const dow = dateObj.getDay();
+            const textColor = dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-700';
+
+            if (isPast) {
+                html += `<div class="text-xs py-2 text-gray-300 rounded-lg">${d}</div>`;
+            } else {
+                html += `<div onclick="app._toggleRequestDate('${dateStr}')" class="text-xs py-2 cursor-pointer rounded-lg transition-all active:scale-90 ${isSelected ? 'bg-indigo-600 text-white font-bold shadow-sm' : textColor + ' hover:bg-indigo-50 hover:font-bold'}">${d}</div>`;
+            }
+        }
+
+        html += `</div>`;
+        container.innerHTML = html;
+
+        // 選択日の表示
+        const sorted = [...this._selectedRequestDates].sort();
+        if (countEl) countEl.textContent = sorted.length;
+
+        if (sorted.length === 0) {
+            display.innerHTML = '<span class="text-xs text-gray-300">カレンダーから日付を選んでください</span>';
+        } else {
+            display.innerHTML = sorted.map(d => {
+                const dt = new Date(d);
+                const dayLabel = ['日','月','火','水','木','金','土'][dt.getDay()];
+                const short = `${dt.getMonth()+1}/${dt.getDate()}(${dayLabel})`;
+                return `<span class="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                    ${short}
+                    <button onclick="app._toggleRequestDate('${d}')" class="hover:text-red-500 ml-0.5"><i class="fa-solid fa-xmark text-[10px]"></i></button>
+                </span>`;
+            }).join('');
+        }
+    },
+
+    _changeRequestMonth(delta) {
+        this._requestCalendarMonth.setMonth(this._requestCalendarMonth.getMonth() + delta);
+        this._renderRequestCalendar();
+    },
+
+    _toggleRequestDate(dateStr) {
+        const idx = this._selectedRequestDates.indexOf(dateStr);
+        if (idx >= 0) {
+            this._selectedRequestDates.splice(idx, 1);
+        } else {
+            this._selectedRequestDates.push(dateStr);
+        }
+        this._renderRequestCalendar();
+    },
+
+    async submitRequest() {
+        const staffId = document.getElementById('requestStaffId').value;
+        const type = document.querySelector('input[name="requestType"]:checked').value;
+        const dates = [...this._selectedRequestDates].sort();
+        const reason = document.getElementById('requestReason').value;
+
+        if (!staffId || dates.length === 0) {
+            alert('スタッフと日付を選択してください');
+            return;
+        }
+
+        const typeStr = type === 'off' ? '【休み希望】' : '【勤務希望】';
+        const datesStr = dates.join(', ');
+        const confirmMsg = `以下の内容で申請を提出します。\n\n日付: ${datesStr}\n件数: ${dates.length}日分\n内容: ${typeStr}\n理由: ${reason || 'なし'}\n\n送信しますか？`;
+
+        if (!confirm(confirmMsg)) return;
+
+        this.showLoading(true);
+        try {
+            // 日付ごとに1件ずつ申請を作成
+            for (const date of dates) {
+                const data = {
+                    staff_id: staffId,
+                    type,
+                    dates: date,
+                    reason,
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                    organization_id: this.state.organization_id
+                };
+
+                if (type === 'work') {
+                    data.start_time = document.getElementById('requestStartTime').value;
+                    data.end_time = document.getElementById('requestEndTime').value;
+                    if (!data.start_time || !data.end_time) { alert('時間を入力してください'); return; }
+                }
+
+                await API.create('requests', data);
+            }
+
+            await this.loadData();
+            this.closeModal('requestModal');
+            this.showToast(`${dates.length}件の申請を送信しました`, 'success');
+            if (this.state.view === 'requests') this.renderRequests(document.getElementById('viewContainer'));
+        } catch (e) {
+            this.showToast('送信失敗', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    async submitMultiRequest() { return this.submitRequest(); },
+
+    async handleRequest(id, status) {
+        if (!confirm(status === 'approved' ? '承認しますか？' : '却下しますか？')) return;
+        this.showLoading(true);
+        try {
+            await API.update('requests', id, { status: status });
+            
+            // 承認時の追加処理
+            if (status === 'approved') {
+                const req = this.state.requests.find(r => r.id == id);
+                if (req) {
+                    // 1. 勤務希望ならシフト作成
+                    if (req.type === 'work') {
+                        // 開始・終了時間が指定されていない場合は店舗設定から取得などのロジックが必要だが
+                        // ここではリクエストになければデフォルト値を入れる
+                        const start = req.start_time || this.state.config.opening_time || '09:00';
+                        const end = req.end_time || this.state.config.closing_time || '18:00';
+                        await API.create('shifts', { 
+                            staff_id: req.staff_id, 
+                            date: req.dates, 
+                            start_time: start, 
+                            end_time: end, 
+                            break_minutes: 60, // デフォルト
+                            organization_id: this.state.organization_id
+                        });
+                    }
+                    // 2. 休み希望なら unavailable_dates を更新
+                    else if (req.type === 'off' || req.type === 'holiday') {
+                        const staff = this.getStaff(req.staff_id);
+                        if (staff) {
+                            // 複数日カンマ区切り対応
+                            const reqDates = String(req.dates).split(',').map(d => d.trim()).filter(d => d);
+                            let uDates = [];
+                            if (staff.unavailable_dates) {
+                                uDates = Array.isArray(staff.unavailable_dates)
+                                    ? [...staff.unavailable_dates]
+                                    : String(staff.unavailable_dates).split(',').map(d => d.trim()).filter(d => d);
+                            }
+                            let changed = false;
+                            for (const dateStr of reqDates) {
+                                if (!uDates.includes(dateStr)) {
+                                    uDates.push(dateStr);
+                                    changed = true;
+                                }
+                            }
+                            if (changed) {
+                                const newDatesStr = uDates.join(', ');
+                                await API.update('staff', staff.id, {
+                                    unavailable_dates: newDatesStr
+                                });
+                                staff.unavailable_dates = uDates;
+                            }
+                        }
+                    }
+                }
+            }
+            await this.loadData();
+            this.renderRequests(document.getElementById('viewContainer'));
+            this.showToast('処理完了', 'success');
+        } catch(e) { this.showToast('エラー発生', 'error'); } finally { this.showLoading(false); }
+    },
+
+    async handleBatchApprove() {
+        const pending = this.state.requests.filter(r => r.status === 'pending');
+        if (pending.length === 0) return;
+        if (!confirm(`承認待ち ${pending.length}件 を全て承認しますか？`)) return;
+
+        this.showLoading(true);
+        try {
+            for (const req of pending) {
+                await this.handleRequest(req.id, 'approved');
+            }
+        } catch (e) {
+            this.showToast('一括承認中にエラーが発生しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    updateRequestBadge() {
+        const count = this.state.requests.filter(r => r.status === 'pending').length;
+        const badge = document.getElementById('pendingRequestsBadge');
+        if(badge) {
+            badge.textContent = count;
+            badge.classList.toggle('hidden', count === 0);
+        }
+    },
+
+       // --- AIシフト作成 (Python + Gemini) ---
+       _shiftGenTips: [
+            '労基法32条: 1日8時間・週40時間が法定労働時間の上限です',
+            '労基法34条: 6時間超で45分、8時間超で60分の休憩が必要です',
+            '労基法35条: 週1日以上の休日が必要です（連続6日まで）',
+            'AIが各スタッフの希望休を尊重しながら最適配置を計算中...',
+            '土日祝は割増賃金(1.25倍)を考慮してコスト最適化しています',
+            '管理者が各シフトに最低1名配置されるよう調整しています',
+            'スタッフの評価・スキルに応じてバランスよく配置します',
+            '新人スタッフにはメンター（管理者）を配置します',
+            '月間の総人件費が最小になるよう数理最適化を実行中...',
+            'Pythonで一次案を作成 → AIで労基法チェック＆最終調整',
+        ],
+        _tipTimer: null,
+
+       async runAutoFill() {
+        if (this._shiftGenInProgress) return;
+        if (!this.state.isShopLoggedIn || !this.state.organization_id) {
+            this.showToast('セッションエラー: 再ログインしてください', 'error');
+            return;
+        }
+
+        // スタッフ超過チェック（ダウングレード後のハック防止）
+        if (this.isStaffOverLimit()) {
+            const limit = this.getStaffLimit();
+            const over = this.state.staff.length - limit;
+            const planName = {standard: 'Standard', pro: 'Pro', premium: 'Premium'}[this.state.config.stripe_plan] || 'Standard';
+            this.closeModal('autoFillModal');
+            this.showStaffOverLimitAlert();
+            this.showToast(`${planName}プランの上限(${limit}名)を${over}名超過しています。スタッフを削除してください。`, 'error');
+            this.changeView('staff');
+            return;
+        }
+
+        const targetType = document.getElementById('autoFillTarget').value;
+        this.closeModal('autoFillModal');
+
+        const loadingEl = document.getElementById('globalLoading');
+        const loadingDefault = document.getElementById('loadingDefault');
+        const loadingShiftGen = document.getElementById('loadingShiftGen');
+        const stepEl = document.getElementById('shiftGenStep');
+        const barEl = document.getElementById('shiftGenBar');
+        const tipEl = document.getElementById('shiftGenTip');
+
+        this._shiftGenInProgress = true;
+
+        if (loadingDefault) loadingDefault.style.display = 'none';
+        if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
+        if (loadingEl) loadingEl.classList.remove('hidden');
+        if (stepEl) stepEl.textContent = 'スタッフ情報を読み込んでいます...';
+        if (barEl) { barEl.style.transition = 'width 2s ease'; barEl.style.width = '5%'; }
+
+        // 最低表示時間を保証
+        const loadingStartTime = Date.now();
+        const MIN_LOADING_MS = 12000;
+
+        // プログレスバーを滑らかに進める（実処理と独立）
+        let fakeProgress = 5;
+        const progressTimer = setInterval(() => {
+            if (fakeProgress < 90) {
+                fakeProgress += Math.random() * 3 + 1;
+                if (fakeProgress > 90) fakeProgress = 90;
+                if (barEl) barEl.style.width = fakeProgress + '%';
+            }
+        }, 800);
+
+        // 豆知識ローテーション開始
+        let tipIdx = 0;
+        if (this._tipTimer) clearInterval(this._tipTimer);
+        this._tipTimer = setInterval(() => {
+            tipIdx = (tipIdx + 1) % this._shiftGenTips.length;
+            if (tipEl) {
+                tipEl.style.opacity = '0';
+                setTimeout(() => {
+                    tipEl.textContent = this._shiftGenTips[tipIdx];
+                    tipEl.style.opacity = '1';
+                }, 200);
+            }
+        }, 4000);
+
+        // ステップメッセージをゆっくり切り替え
+        const steps = [
+            { delay: 2000, msg: '人員配置の事前チェック中...' },
+            { delay: 4500, msg: 'AIがシフトを最適化しています...' },
+            { delay: 7000, msg: '労働基準法に基づいて検証中...' },
+            { delay: 9500, msg: '最終調整を行っています...' },
+        ];
+        const stepTimers = steps.map(s => setTimeout(() => { if (stepEl) stepEl.textContent = s.msg; }, s.delay));
+
+        try {
+            console.log("Refreshing data before generation...");
+            await this.loadData();
+
+            const today = new Date();
+            let startDate, endDate;
+
+            if (targetType === 'reset_all' || targetType === 'empty_only') {
+                startDate = new Date(this.state.currentDate.getFullYear(), this.state.currentDate.getMonth(), 1);
+                endDate = new Date(this.state.currentDate.getFullYear(), this.state.currentDate.getMonth() + 1, 0);
+            } else if (targetType === 'next_week') {
+                const day = today.getDay();
+                const diff = 7 - day;
+                startDate = new Date(today);
+                startDate.setDate(today.getDate() + diff);
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 6);
+            }
+
+            const dates = [];
+            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                dates.push(dateStr);
+            }
+
+            if (!this.state.config.organization_id) {
+                this.state.config.organization_id = this.state.organization_id;
+            }
+
+            const payload = {
+                staff_list: this.state.staff,
+                config: this.state.config,
+                dates: dates,
+                requests: this.state.requests || [],
+                mode: 'auto'
+            };
+
+            // === STEP 2: 事前チェック ===
+
+            const checkResult = await API.checkFeasibility(payload);
+
+            if (checkResult && !checkResult.feasible) {
+                if (loadingEl) loadingEl.classList.add('hidden');
+
+                const summary = checkResult.summary || {};
+                const details = checkResult.daily_details || [];
+
+                let alertMsg = '⚠️ 人員不足が検出されました\n\n';
+                alertMsg += '稼働可能スタッフ: ' + summary.usable_staff + '/' + summary.total_staff + '名\n';
+                alertMsg += '不足合計: ' + summary.total_shortage_hours + ' 人時\n';
+                alertMsg += '影響日数: ' + summary.affected_days + '日\n\n';
+
+                if (details.length > 0) {
+                    alertMsg += '--- 不足の詳細 (最大5日) ---\n';
+                    for (var di = 0; di < Math.min(details.length, 5); di++) {
+                        var dd = details[di];
+                        alertMsg += dd.date + ': 出勤可能' + dd.available_staff + '名 / 必要' + dd.required_per_slot + '名\n';
+                        for (var ri = 0; ri < dd.shortage_ranges.length; ri++) {
+                            var r = dd.shortage_ranges[ri];
+                            alertMsg += '  ' + r.start + '~' + r.end + ': ' + r.shortage + '名不足\n';
+                        }
+                    }
+                }
+
+                alertMsg += '\n【OK】労働条件を緩和して強行生成\n【キャンセル】中止して人員を調整';
+
+                const forceGenerate = confirm(alertMsg);
+
+                if (!forceGenerate) {
+                    if (this._tipTimer) { clearInterval(this._tipTimer); this._tipTimer = null; }
+                    clearInterval(progressTimer);
+                    stepTimers.forEach(t => clearTimeout(t));
+                    this._shiftGenInProgress = false;
+                    if (loadingShiftGen) loadingShiftGen.style.display = 'none';
+                    if (loadingDefault) loadingDefault.style.display = 'flex';
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    this.showToast('シフト生成を中止しました。スタッフの追加や条件の見直しを検討してください。', 'info');
+                    return;
+                }
+
+                payload.mode = 'force';
+                if (loadingEl) loadingEl.classList.remove('hidden');
+                if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
+                this.showToast('⚠️ 労働条件を緩和して生成します', 'warning');
+            }
+
+            // === STEP 3: 削除処理 ===
+            if (targetType === 'reset_all') {
+
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const shiftsToDelete = this.state.shifts.filter(function(s) {
+                    return dates.includes(s.date) && new Date(s.date) >= today && s.id && uuidRegex.test(s.id);
+                });
+                if (shiftsToDelete.length > 0) {
+                    await Promise.all(shiftsToDelete.map(function(s) { return API.delete('shifts', s.id); }));
+                }
+                this.state.shifts = this.state.shifts.filter(function(s) {
+                    return !(dates.includes(s.date) && new Date(s.date) >= today);
+                });
+            }
+
+            // === STEP 4: シフト生成 ===
+
+            console.log("Sending request to Calculation Engine...");
+            const result = await API.generateShifts(payload);
+
+            if (result.status === 'error') {
+                this.showToast('生成エラー: ' + result.message, 'error');
+                this._generationSuccess = false;
+                return;
+            }
+
+            console.log("Server Response:", result);
+            if (barEl) barEl.style.width = '80%';
+
+            if (result.status === 'success' && result.shifts && result.shifts.length > 0) {
+                const newShifts = result.shifts;
+
+                const existing = this.state.shifts.filter(function(s) { return dates.includes(s.date); });
+                const finalShifts = [];
+
+                for (var i = 0; i < newShifts.length; i++) {
+                    var s = newShifts[i];
+                    if (targetType === 'empty_only') {
+                        var exists = existing.find(function(ex) { return ex.date === s.date && ex.staff_id === s.staff_id; });
+                        if (exists) continue;
+                    }
+                    finalShifts.push(s);
+                }
+
+                if (finalShifts.length > 0) {
+                    await this.saveAllShifts(finalShifts);
+                }
+
+                if (targetType === 'reset_all') {
+                    this.state.shifts = this.state.shifts.filter(function(s) { return !dates.includes(s.date); });
+                }
+
+                // DB保存後にDBから最新状態をリロード（二重追加防止）
+                await this.loadData();
+                console.log('Generated ' + finalShifts.length + ' shifts.');
+
+                // === STEP 5: AI最終チェック（裏で実行、モーダル表示なし） ===
+                if (finalShifts.length > 0) {
+                    try {
+                        await API.diagnose({
+                            contract_id: this.state.config?.contract_id || API.session?.user?.contract_id,
+                            config: { opening_time: this.state.config.opening_time, closing_time: this.state.config.closing_time, staff_req: this.state.config.staff_req },
+                            staff_count: this.state.staff.length,
+                            shift_count: this.state.shifts.length,
+                            shifts: this.state.shifts.map(s => ({ staff_id: s.staff_id, date: s.date, start_time: s.start_time, end_time: s.end_time })),
+                            staff_list: this.state.staff.map(s => ({ id: s.id, name: s.name, role: s.role, max_days_week: s.max_days_week, max_hours_day: s.max_hours_day }))
+                        });
+                    } catch (diagErr) {
+                        console.error('Auto AI Diagnosis error:', diagErr);
+                    }
+                }
+
+                this._generationSuccess = finalShifts.length > 0;
+                this._generationCount = finalShifts.length;
+            } else if (result.status === 'success' && result.mode === 'math_failed') {
+                // 数理最適化が解を見つけられなかった
+                console.warn('Math optimization failed - no feasible solution');
+                this.showToast('最適化エンジンが解を見つけられませんでした。スタッフの勤務条件を緩和するか、スタッフを追加してください。', 'warning');
+                this._generationSuccess = false;
+            } else if (result.status === 'success' && (!result.shifts || result.shifts.length === 0)) {
+                // シフトが0件
+                console.warn('No shifts generated');
+                this.showToast('生成可能なシフトがありませんでした。スタッフの設定や休暇申請を確認してください。', 'warning');
+                this._generationSuccess = false;
+            } else {
+                this._generationSuccess = false;
+            }
+
+        } catch (e) {
+            console.error('AutoFill Error:', e);
+            this._generationSuccess = false;
+        } finally {
+            // タイマー全クリア
+            clearInterval(progressTimer);
+            stepTimers.forEach(t => clearTimeout(t));
+            if (this._tipTimer) { clearInterval(this._tipTimer); this._tipTimer = null; }
+
+            // 最低表示時間を待つ
+            const elapsed = Date.now() - loadingStartTime;
+            if (elapsed < MIN_LOADING_MS) {
+                if (stepEl) stepEl.textContent = this._generationSuccess ? 'シフトの最終確認中...' : '処理を完了しています...';
+                if (barEl) barEl.style.width = '95%';
+                await new Promise(r => setTimeout(r, MIN_LOADING_MS - elapsed));
+            }
+
+            // 100%にしてから少し待つ
+            if (barEl) barEl.style.width = '100%';
+            if (stepEl) stepEl.textContent = this._generationSuccess ? '完了しました！' : '処理が終了しました';
+            if (tipEl) { tipEl.style.opacity = '0'; setTimeout(() => { tipEl.textContent = 'カレンダーに反映します'; tipEl.style.opacity = '1'; }, 200); }
+            await new Promise(r => setTimeout(r, 1500));
+
+            // フェードアウト
+            const loadingElFinal = document.getElementById('globalLoading');
+            const loadingDefaultFinal = document.getElementById('loadingDefault');
+            const loadingShiftGenFinal = document.getElementById('loadingShiftGen');
+
+            if (loadingElFinal) { loadingElFinal.style.transition = 'opacity 0.6s'; loadingElFinal.style.opacity = '0'; }
+            await new Promise(r => setTimeout(r, 600));
+
+            if (loadingShiftGenFinal) loadingShiftGenFinal.style.display = 'none';
+            if (loadingDefaultFinal) loadingDefaultFinal.style.display = 'flex';
+            if (loadingElFinal) { loadingElFinal.classList.add('hidden'); loadingElFinal.style.opacity = ''; loadingElFinal.style.transition = ''; }
+
+            // カレンダー更新
+            this.renderCurrentView();
+            this.calculateMonthlyStats();
+
+            this._shiftGenInProgress = false;
+
+            if (this._generationSuccess) {
+                this.showToast('シフト作成が完了しました', 'success');
+            } else {
+                this.showToast('シフト作成に問題がありました。条件を見直してください。', 'warning');
+            }
+        }
+    },
+
+
+    // 一括保存 (大量データの保存)
+            async saveAllShifts(shifts) {
+        if (!shifts || shifts.length === 0) return;
+
+        var targetDates = [...new Set(shifts.map(function(s){ return s.date; }))];
+
+        console.log("Deleting existing shifts for " + targetDates.length + " days...");
+        for (var di = 0; di < targetDates.length; di++) {
+            try {
+                await API._request('shifts?organization_id=eq.' + this.state.organization_id + '&date=eq.' + targetDates[di], {
+                    method: 'DELETE'
+                });
+            } catch(e) {
+                console.error("Delete error for " + targetDates[di] + ":", e);
+            }
+        }
+
+        this.state.shifts = this.state.shifts.filter(function(s){ return targetDates.indexOf(s.date) === -1; });
+
+        var cleanShifts = shifts.map(function(s){
+            return {
+                organization_id: this.state.organization_id,
+                staff_id: s.staff_id,
+                date: s.date,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                break_minutes: s.break_minutes || 0
+            };
+        }.bind(this));
+
+        var batchSize = 50;
+        for (var i = 0; i < cleanShifts.length; i += batchSize) {
+            var batch = cleanShifts.slice(i, i + batchSize);
+            try {
+                await Promise.all(batch.map(function(s){ return API.create('shifts', s); }));
+            } catch(e) {
+                console.error("Batch save error:", e);
+            }
+        }
+
+        this.state.shifts.push.apply(this.state.shifts, cleanShifts);
+        console.log("All shifts saved.");
+    },
+
+
+
+
+
+    async generateShiftsForDay(dateStr, existingShifts, generatedShiftsSoFar = []) {
+        // ---------------------------------------------------------
+        // 0. 日付と設定の初期化 (厳格モード)
+        // ---------------------------------------------------------
+        const dateObj = new Date(dateStr.replace(/-/g, '/'));
+        const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+        const config = this.state.config;
+        
+        // 祝日判定
+        const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
+        const isHoliday = jh ? jh.isHoliday(dateStr) : false;
+
+        // 営業時間の決定
+        let openTime = "09:00";
+        let closeTime = "22:00";
+        
+        const specialDay = (config.special_days || {})[dateStr];
+        if (specialDay && specialDay.start && specialDay.end) {
+            openTime = specialDay.start;
+            closeTime = specialDay.end;
+        } else {
+            const times = config.opening_times || {};
+            const defTimes = this.state.defaultConfig.opening_times;
+            const getT = (key) => (times[key] || defTimes[key]);
+            
+            if (isHoliday) { openTime = getT('holiday').start; closeTime = getT('holiday').end; }
+            else if (dayOfWeek === 0 || dayOfWeek === 6) { openTime = getT('weekend').start; closeTime = getT('weekend').end; }
+            else { openTime = getT('weekday').start; closeTime = getT('weekday').end; }
+        }
+
+        // 時間変換ヘルパー (分単位)
+        const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+        const fromMins = (m) => { 
+            let h = Math.floor(m / 60); 
+            let min = m % 60;
+            // 24時間表記正規化
+            if (h >= 24) h -= 24;
+            return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        };
+
+        const startMins = toMins(openTime);
+        const endMins = toMins(closeTime);
+        // 日またぎ対応 (close < open なら +24h)
+        const effectiveEndMins = endMins < startMins ? endMins + (24 * 60) : endMins;
+
+        // ---------------------------------------------------------
+        // 1. 必要人数の算出 (15分刻みバケット)
+        // ---------------------------------------------------------
+        const timeReqs = new Map(); // key: minutes, val: count
+        const timeReqManager = new Map(); // key: minutes, val: count (1 or 0)
+
+        // ベース要件
+        let baseReq = 2;
+        const sReq = config.staff_req || {};
+        if (isHoliday) baseReq = sReq.min_holiday || 3;
+        else if (dayOfWeek === 0 || dayOfWeek === 6) baseReq = sReq.min_weekend || 3;
+        else baseReq = sReq.min_weekday || 2;
+        
+        const reqManager = sReq.min_manager || 1;
+
+        // 全スロット初期化 (15分刻み)
+        for (let t = startMins; t < effectiveEndMins; t += 15) {
+            timeReqs.set(t, Number(baseReq));
+            timeReqManager.set(t, Number(reqManager));
+        }
+
+        // 時間帯別ルールの適用 (time_staff_req)
+        const timeRules = (config.time_staff_req || []).filter(r => r.days.includes(dayOfWeek));
+        timeRules.forEach(rule => {
+            const rStart = toMins(rule.start);
+            let rEnd = toMins(rule.end);
+            if (rEnd < rStart) rEnd += 24*60;
+            
+            for (let t = startMins; t < effectiveEndMins; t += 15) {
+                // ルール期間内か (絶対値 or 日またぎ考慮)
+                // 簡易判定として、シフト生成日(当日)の営業範囲内で、ルールの開始〜終了に合致するか
+                
+                // ※日またぎ同士の厳密判定は複雑だが、ここでは「営業日」という概念内の絶対分で比較する
+                // rule.start が "22:00"(1320), rule.end が "02:00"(1560)
+                // t が "23:00"(1380) なら範囲内。
+                // 営業時間が "18:00"(1080) ~ "26:00"(1560) であれば、t=1380 は範囲内。
+                
+                // ただし、rule.start が "01:00"(60) で rule.end が "02:00"(120) の場合（深夜のみ指定）
+                // 営業時間が深夜に及ぶ場合、t=60 は "翌日の01:00" を指す可能性がある。
+                // startMinsが540(9:00)でeffectiveEndMinsが1320(22:00)なら、t=60は存在しない。
+                // startMinsが1080(18:00)でeffectiveEndMinsが1560(26:00)なら、t=1500(25:00=01:00)が存在する。
+                // 入力された rule.start(01:00) をどう解釈するか？
+                // 通常、「営業時間内の 01:00」とみなすべき。
+                // => t を 24h正規化した値 (t % 1440) と ruleの時刻を比較する？
+                
+                // ここではシンプルに、ruleも絶対分(startMins基準)に変換できればベストだが、
+                // ruleはただの時刻文字列。
+                // 「開始時刻 >= rule.start && 開始時刻 < rule.end」
+                
+                // A. ruleが日またぎでない (11:00-14:00)
+                // B. ruleが日またぎ (22:00-02:00)
+                
+                // tの時刻表現
+                const tMod = t % 1440;
+                
+                let inRule = false;
+                if (rStart < rEnd) {
+                    // 通常
+                    inRule = (tMod >= rStart && tMod < rEnd);
+                } else {
+                    // 日またぎ (22:00 <= t < 24:00 OR 00:00 <= t < 02:00)
+                    inRule = (tMod >= rStart || tMod < rEnd);
+                }
+                
+                // さらに、t自体が「営業開始前」の深夜（早朝）でないことの保証が必要だが、
+                // loop範囲が startMins〜effectiveEndMins なのでOK。
+                
+                if (inRule) {
+                    const current = timeReqs.get(t) || 0;
+                    timeReqs.set(t, Math.max(current, Number(rule.count)));
+                }
+            }
+        });
+
+        // ---------------------------------------------------------
+        // 2. 現在の充足状況マップ作成
+        // ---------------------------------------------------------
+        const currentDayNewShifts = [];
+        const getAllShifts = () => [...existingShifts, ...generatedShiftsSoFar, ...currentDayNewShifts];
+
+        const getCoverage = () => {
+            const coverage = new Map();
+            const managerCoverage = new Map();
+            
+            for (let t = startMins; t < effectiveEndMins; t += 15) {
+                coverage.set(t, 0);
+                managerCoverage.set(t, 0);
+            }
+
+            const shifts = getAllShifts().filter(s => s.date === dateStr);
+            shifts.forEach(s => {
+                const sStart = toMins(s.start_time);
+                let sEnd = toMins(s.end_time);
+                if (sEnd < sStart) sEnd += 24*60;
+                
+                const staff = this.getStaff(s.staff_id);
+                const isManager = staff && (staff.role === 'manager' || staff.role === 'leader');
+
+                for (let t = startMins; t < effectiveEndMins; t += 15) {
+                    if (t >= sStart && t < sEnd) {
+                        coverage.set(t, (coverage.get(t) || 0) + 1);
+                        if (isManager) managerCoverage.set(t, (managerCoverage.get(t) || 0) + 1);
+                    }
+                }
+            });
+            return { coverage, managerCoverage };
+        };
+
+        // ---------------------------------------------------------
+        // 3. 承認済みシフトの適用 (Requests)
+        // ---------------------------------------------------------
+        const workReqs = this.state.requests.filter(r => 
+            r.dates === dateStr && r.type === 'work' && r.status === 'approved'
+        );
+        workReqs.forEach(req => {
+            const already = getAllShifts().some(s => s.staff_id === req.staff_id && s.date === dateStr);
+            if (!already) {
+                const s = this.getStaff(req.staff_id);
+                if (s) {
+                    const rs = req.start_time || openTime;
+                    const re = req.end_time || closeTime;
+                    currentDayNewShifts.push(this.createShiftObject(s.id, dateStr, rs, re));
+                }
+            }
+        });
+
+        // ---------------------------------------------------------
+        // 4. スタッフリストの準備 (ランク順 A>B>C)
+        // ---------------------------------------------------------
+        const offStaffIds = this.state.requests
+            .filter(r => r.dates === dateStr && (r.type === 'off' || r.type === 'holiday') && r.status === 'approved')
+            .map(r => r.staff_id);
+
+        let sortedStaff = [...this.state.staff].filter(s => !offStaffIds.includes(s.id));
+        
+        sortedStaff.sort((a, b) => {
+            const rankScore = { 'A': 3, 'B': 2, 'C': 1 };
+            const rA = rankScore[a.evaluation] || 2;
+            const rB = rankScore[b.evaluation] || 2;
+            if (rA !== rB) return rB - rA;
+            const roleScore = { 'manager': 3, 'leader': 2, 'staff': 1 };
+            const rolA = roleScore[a.role] || 1;
+            const rolB = roleScore[b.role] || 1;
+            if (rolA !== rolB) return rolB - rolA;
+            return Math.random() - 0.5;
+        });
+
+        // ---------------------------------------------------------
+        // 5. 不足分の充填 (Gap Filling) - 強化版
+        // ---------------------------------------------------------
+        const ignoredSlots = new Set(); // 埋められなかったスロットを記憶して無限ループ回避
+
+        // ループ処理 (最大100パス)
+        for (let pass = 0; pass < 100; pass++) {
+            const { coverage, managerCoverage } = getCoverage();
+            
+            // 不足スロット探索
+            let deficitSlot = -1;
+            let missingType = null;
+
+            for (let t = startMins; t < effectiveEndMins; t += 15) {
+                if (ignoredSlots.has(t)) continue; // 諦めたスロットはスキップ
+
+                if (managerCoverage.get(t) < timeReqManager.get(t)) {
+                    deficitSlot = t;
+                    missingType = 'manager';
+                    break;
+                }
+                if (coverage.get(t) < timeReqs.get(t)) {
+                    deficitSlot = t;
+                    missingType = 'staff';
+                    break;
+                }
+            }
+
+            if (deficitSlot === -1) break; // 全充足 (または全て諦めた)
+
+            let shiftAddedOrExtended = false;
+            
+            const targetEnd = Math.min(deficitSlot + 480, effectiveEndMins); // 基本は+8時間
+            const reqTimeRange = { start: fromMins(deficitSlot), end: fromMins(targetEnd) };
+            const roleFilter = missingType === 'manager' ? (s) => (s.role === 'manager' || s.role === 'leader') : null;
+
+            // =========================================================
+            // 戦略1: 既存シフトの延長 (通常時間内)
+            // =========================================================
+            for (const s of currentDayNewShifts) {
+                const sEnd = toMins(s.end_time) + (s.end_time < s.start_time ? 24*60 : 0);
+                
+                // ギャップが60分以内なら結合対象
+                if (sEnd <= deficitSlot && (deficitSlot - sEnd) <= 60) {
+                    const staff = this.getStaff(s.staff_id);
+                    if (roleFilter && !roleFilter(staff)) continue;
+
+                    const maxMins = (Number(staff.max_hours_day) || 8) * 60;
+                    // 延長後の終了時間 (最低でもdeficitを埋めるために+3h)
+                    const newEndMins = Math.min(deficitSlot + 180, effectiveEndMins);
+                    const sStart = toMins(s.start_time);
+                    const newDurMins = newEndMins - sStart;
+
+                    // 通常上限内であれば延長
+                    if (newDurMins <= maxMins) {
+                        s.end_time = fromMins(newEndMins);
+                        if (newDurMins > 480) s.break_minutes = 60; else if (newDurMins > 360) s.break_minutes = 45;
+                        shiftAddedOrExtended = true;
+                        break;
+                    }
+                }
+            }
+            if (shiftAddedOrExtended) continue;
+
+            // =========================================================
+            // 戦略2: 新規シフト追加 (通常時間内)
+            // =========================================================
+            let candidate = this.findAvailableStaff(sortedStaff, dateStr, getAllShifts(), roleFilter, { timeRange: reqTimeRange });
+            
+            if (candidate) {
+                const maxH = Number(candidate.max_hours_day) || 8;
+                const dur = Math.min(480, maxH * 60);
+                const endT = Math.min(deficitSlot + dur, effectiveEndMins);
+                // オーバータイム許可なし(第4引数省略)で作成
+                const newShift = this.createShiftObject(candidate.id, dateStr, fromMins(deficitSlot), fromMins(endT));
+                currentDayNewShifts.push(newShift);
+                shiftAddedOrExtended = true;
+                continue;
+            }
+
+            // =========================================================
+            // 戦略3: 既存シフトの延長 (残業 +3h許容)
+            // =========================================================
+            for (const s of currentDayNewShifts) {
+                const sEnd = toMins(s.end_time) + (s.end_time < s.start_time ? 24*60 : 0);
+                
+                if (sEnd <= deficitSlot && (deficitSlot - sEnd) <= 60) {
+                    const staff = this.getStaff(s.staff_id);
+                    if (roleFilter && !roleFilter(staff)) continue;
+
+                    const maxMins = (Number(staff.max_hours_day) || 8) * 60;
+                    const limitMins = Math.min(maxMins + 180, 660); // Max 11h
+                    const newEndMins = Math.min(deficitSlot + 180, effectiveEndMins);
+                    const sStart = toMins(s.start_time);
+                    const newDurMins = newEndMins - sStart;
+
+                    if (newDurMins <= limitMins) {
+                        s.end_time = fromMins(newEndMins);
+                        if (newDurMins > 480) s.break_minutes = 60; else if (newDurMins > 360) s.break_minutes = 45;
+                        shiftAddedOrExtended = true;
+                        break;
+                    }
+                }
+            }
+            if (shiftAddedOrExtended) continue;
+
+            // =========================================================
+            // 戦略4: 新規シフト追加 (緊急モード: 週制限無視 & 残業許容)
+            // =========================================================
+            // まず週制限だけ無視して探す
+            candidate = this.findAvailableStaff(sortedStaff, dateStr, getAllShifts(), roleFilter, { timeRange: reqTimeRange, ignoreWeekLimit: true });
+            
+            // それでもいなければ、重複以外なんでもあり (Manager欠員など深刻な場合)
+            if (!candidate) {
+                 candidate = this.findAvailableStaff(sortedStaff, dateStr, getAllShifts(), roleFilter, { 
+                     timeRange: reqTimeRange, ignoreWeekLimit: true, ignoreOverlap: false 
+                 });
+            }
+
+            if (candidate) {
+                const maxH = Number(candidate.max_hours_day) || 8;
+                // 緊急時は+3hまで許容
+                const limitMins = Math.min((maxH + 3) * 60, 660);
+                const dur = Math.min(480, limitMins);
+                const endT = Math.min(deficitSlot + dur, effectiveEndMins);
+                
+                // createShiftObjectにオーバータイム許可フラグ(true)を渡す
+                const newShift = this.createShiftObject(candidate.id, dateStr, fromMins(deficitSlot), fromMins(endT), true);
+                currentDayNewShifts.push(newShift);
+                shiftAddedOrExtended = true;
+                continue;
+            }
+
+            // 手詰まり
+            if (!shiftAddedOrExtended) {
+                ignoredSlots.add(deficitSlot);
+            }
+        }
+
+        return currentDayNewShifts;
+    },
+
+    findAvailableStaff(staffList, dateStr, allShiftsContext, filterFn = null, options = {}) {
+        const { ignoreWeekLimit = false, timeRange = null } = options;
+        
+        // 日付範囲計算
+        const dateObj = new Date(dateStr.replace(/-/g, '/'));
+        const day = dateObj.getDay();
+        const startOfWeek = new Date(dateObj);
+        startOfWeek.setDate(dateObj.getDate() - day);
+        const formatYMD = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const startStr = formatYMD(startOfWeek);
+        const endStr = formatYMD(new Date(startOfWeek.getTime() + 6*24*60*60*1000));
+
+        // 時間変換
+        const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+        for (const staff of staffList) {
+            // 基本フィルター
+            if (filterFn && !filterFn(staff)) continue;
+
+            // 1. 休み希望チェック
+            const isOff = this.state.requests.some(r => 
+                r.staff_id === staff.id && r.dates === dateStr && (r.type === 'off' || r.type === 'holiday') && r.status === 'approved'
+            );
+            if (isOff && !ignoreWeekLimit) continue; 
+
+            // 2. 重複チェック & 勤務時間
+            const dailyShifts = allShiftsContext.filter(s => s.staff_id === staff.id && s.date === dateStr);
+            
+            if (timeRange) {
+                const newStart = toMins(timeRange.start);
+                let newEnd = toMins(timeRange.end);
+                if (newEnd < newStart) newEnd += 24*60;
+
+                // 時間被り
+                const isOverlap = dailyShifts.some(s => {
+                    const sStart = toMins(s.start_time);
+                    let sEnd = toMins(s.end_time);
+                    if (sEnd < sStart) sEnd += 24*60;
+                    return sStart < newEnd && sEnd > newStart; 
+                });
+                if (isOverlap) continue;
+            } else {
+                if (dailyShifts.length > 0) continue; 
+            }
+
+            // 3. 勤務時間上限 (日) - 既存シフト + 新規
+            const maxMins = (Number(staff.max_hours_day) || 8) * 60;
+            const limitMins = ignoreWeekLimit ? Math.min(maxMins + 180, 660) : maxMins; 
+            
+            const currentMins = dailyShifts.reduce((acc, s) => {
+                 const sStart = toMins(s.start_time);
+                 let sEnd = toMins(s.end_time);
+                 if (sEnd < sStart) sEnd += 24*60;
+                 return acc + (sEnd - sStart);
+            }, 0);
+            
+            let newDur = 180; // 仮
+            if (timeRange) {
+                const ns = toMins(timeRange.start);
+                let ne = toMins(timeRange.end);
+                if (ne < ns) ne += 24*60;
+                newDur = ne - ns;
+            }
+            
+            if (currentMins + newDur > limitMins) continue;
+
+            // 4. 週勤務日数チェック
+            if (!ignoreWeekLimit) {
+                const weekShifts = allShiftsContext.filter(s => s.staff_id === staff.id && s.date >= startStr && s.date <= endStr);
+                const workedDays = new Set(weekShifts.map(s => s.date)).size;
+                const maxDays = Number(staff.max_days_week) || 5;
+                
+                const workedToday = dailyShifts.length > 0;
+                if (!workedToday && workedDays >= maxDays) continue;
+            }
+
+            return staff; 
+        }
+        return null;
+    },
+
+    createShiftObject(staffId, date, start, end, allowOvertime = false) {
+        if (!staffId || !date || !start || !end) {
+            console.warn('Shift creation skipped due to missing data', { staffId, date, start, end });
+            // ダミーを返してエラーを防ぐが、保存時に除外されるようにする（あるいはバリデーションで弾く）
+            return { staff_id: staffId, date, start_time: start || '00:00', end_time: end || '00:00', break_minutes: 0, _invalid: true };
+        }
+
+        // --- スタッフの勤務時間を厳格に守るためのファイヤーウォール ---
+        const staff = this.getStaff(staffId);
+        let maxHours = (staff && staff.max_hours_day) ? Number(staff.max_hours_day) : 8;
+        
+        // オーバータイム許可時は最大11時間まで拡張
+        if (allowOvertime) {
+            maxHours = Math.min(maxHours + 3, 11);
+        }
+
+        let startDate = new Date(`2000-01-01T${start}`);
+        let endDate = new Date(`2000-01-01T${end}`);
+        // 日付またぎ対応
+        if (endDate < startDate) {
+            endDate.setDate(endDate.getDate() + 1);
+        }
+
+        let duration = (endDate - startDate) / 3600000;
+
+        // 最大勤務時間を超えている場合、強制的に短縮する
+        if (duration > maxHours) {
+            // 短縮ロジック:
+            // 基本的には「終了時間を早める」ことで調整する。
+            // ただし、元のシフトが「遅番（例: 17-22）」のような場合、
+            // 「17-20 (早上がり)」にするか「19-22 (遅入り)」にするかは文脈による。
+            // ここでは安全策として「終了時間を基準」に調整（遅入り）するロジックを採用するケースも考慮したいが、
+            // 最も汎用的なのは「開始時間を維持して早上がり」させることである。
+            // しかし、ユーザーの苦情「17-22シフト」に対し「3時間制限」がある場合、
+            // 17-20になるのが自然。
+            
+            // 例外対応: もしシフトが「店舗の閉店時間(config.closing_time)」と一致して終わる場合、
+            // 「ラストまで」という意味合いが強いため、「開始時間を遅らせる」ほうが適切かもしれない。
+            // が、configへのアクセスが複雑になるため、ここではシンプルに
+            // 「開始時間を維持し、終了時間をmaxHours後に設定する」方式で統一し、
+            // 絶対にmaxHoursを超えないことを保証する。
+            
+            // もし呼び出し元で「遅番だから遅く始めてほしい」場合は、
+            // 呼び出し元で時間を計算して渡すべきである。
+            // ここは「最終防衛ライン」として機能させる。
+
+            const newEndMillis = startDate.getTime() + (maxHours * 3600000);
+            endDate = new Date(newEndMillis);
+            
+            // end文字列を再生成 (HH:mm)
+            end = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+            
+            // 再計算
+            duration = maxHours;
+        }
+
+        let breakMins = 0;
+        // 設定された休憩ルールを適用
+        const rules = this.state.config.break_rules || this.state.defaultConfig.break_rules;
+        // 降順にソートして、最大の条件に合致するものを適用
+        const sortedRules = [...rules].sort((a,b) => b.min_hours - a.min_hours);
+        
+        for(const rule of sortedRules) {
+            if(duration >= rule.min_hours) {
+                breakMins = rule.break_minutes;
+                break;
+            }
+        }
+        
+        return { staff_id: staffId, date, start_time: start, end_time: end, break_minutes: breakMins };
+    },
+
+    // --- マニュアル ---
+    renderManual(container) {
+        if (!this.state.isAdmin) { this.changeView('dashboard'); return; }
+        container.innerHTML = `
+        <div class="max-w-4xl mx-auto space-y-6 pb-20">
+            <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-book mr-2 text-indigo-500"></i>システムマニュアル</h2>
+
+            <!-- 目次 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="font-bold text-gray-800 mb-3">目次</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
+                    <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタッフ評価 (A〜D)</a>
+                    <a href="#m-shift" class="text-indigo-600 hover:underline">3. AIシフト作成</a>
+                    <a href="#m-labor" class="text-indigo-600 hover:underline">4. 労働基準法ルール</a>
+                    <a href="#m-break" class="text-indigo-600 hover:underline">5. 休憩ルール</a>
+                    <a href="#m-request" class="text-indigo-600 hover:underline">6. 休み希望</a>
+                    <a href="#m-settings" class="text-indigo-600 hover:underline">7. 店舗設定</a>
+                    <a href="#m-plan" class="text-indigo-600 hover:underline">8. プラン・課金</a>
+                    <a href="#m-auth" class="text-indigo-600 hover:underline">9. 権限 (管理者/スタッフ)</a>
+                    <a href="#m-analytics" class="text-indigo-600 hover:underline">10. 分析・レポート</a>
+                    <a href="#m-other" class="text-indigo-600 hover:underline">11. その他機能</a>
+                </div>
+            </div>
+
+            <!-- 1. 役職 -->
+            <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">1.</span>役職・ロール</h3>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border">毎営業日に最低1名配置必須</td></tr>
+                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border">店長と同様メンター枠にカウント</td></tr>
+                        <tr><td class="p-2 border font-bold">スタッフ (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長/リーダー）と同日配置</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 2. 評価 -->
+            <div id="m-eval" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">2.</span>スタッフ評価 (A〜D)</h3>
+                <p class="text-sm text-gray-600 mb-3">評価はAIシフト生成時のチーム編成・配置優先度に影響します。</p>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">評価</th><th class="p-2 text-left border">意味</th><th class="p-2 text-left border">戦力スコア</th><th class="p-2 text-left border">影響</th></tr></thead>
+                    <tbody>
+                        <tr class="bg-yellow-50"><td class="p-2 border font-bold text-yellow-700">A</td><td class="p-2 border">優秀</td><td class="p-2 border">3.0</td><td class="p-2 border">優先的に配置、ペナルティなし</td></tr>
+                        <tr class="bg-blue-50"><td class="p-2 border font-bold text-blue-700">B</td><td class="p-2 border">良好</td><td class="p-2 border">2.0</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold text-gray-500">C</td><td class="p-2 border">普通</td><td class="p-2 border">1.0</td><td class="p-2 border">やや控えめに配置</td></tr>
+                        <tr class="bg-red-50"><td class="p-2 border font-bold text-red-600">D</td><td class="p-2 border">研修中・要指導</td><td class="p-2 border">0.5</td><td class="p-2 border">メンター必須、単独配置不可</td></tr>
+                    </tbody>
+                </table>
+                <p class="text-xs text-gray-400 mt-2">※ チーム全体の戦力スコアが基準を満たすようAIが自動調整します</p>
+            </div>
+
+            <!-- 3. AIシフト作成 -->
+            <div id="m-shift" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">3.</span>AIシフト作成</h3>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <p><strong>「AIシフト作成」ボタン1つ</strong>で以下が自動実行されます:</p>
+                    <ol class="list-decimal list-inside space-y-1 ml-2">
+                        <li>スタッフの条件・希望休・週勤務日数を読み込み</li>
+                        <li>Python数理最適化エンジン(PuLP)でベースシフト生成</li>
+                        <li>AI(Gemini)が労基法チェック・違反修正・最適化</li>
+                        <li>シフト保存→AI診断レポート表示</li>
+                    </ol>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                        <p class="text-xs text-blue-700"><strong>作成範囲の選択肢:</strong></p>
+                        <ul class="text-xs text-blue-600 mt-1 space-y-0.5">
+                            <li>・今月の空きシフトのみ埋める</li>
+                            <li>・来週分を作成</li>
+                            <li>・現在のシフトをリセットして再構築</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 労基法 -->
+            <div id="m-labor" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>労働基準法ルール（自動遵守）</h3>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条項</th><th class="p-2 text-left border">内容</th><th class="p-2 text-left border">システムの制御</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">1日8時間以内</td><td class="p-2 border">スタッフ個別設定で上書き可</td></tr>
+                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">週40時間以内</td><td class="p-2 border">自動計算で制限</td></tr>
+                        <tr><td class="p-2 border">労基法34条</td><td class="p-2 border">6h超→45分休憩、8h超→60分休憩</td><td class="p-2 border">自動付与（設定変更可）</td></tr>
+                        <tr><td class="p-2 border">労基法35条</td><td class="p-2 border">週1日以上の休日（連続6日まで）</td><td class="p-2 border">自動遵守</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 5. 休憩ルール -->
+            <div id="m-break" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休憩ルール</h3>
+                <p class="text-sm text-gray-600 mb-2">シフト作成時に勤務時間から自動計算されます。店舗設定で変更可能です。</p>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">勤務時間</th><th class="p-2 text-left border">休憩時間</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border">6時間超</td><td class="p-2 border">45分以上</td></tr>
+                        <tr><td class="p-2 border">8時間超</td><td class="p-2 border">60分以上</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 6. 休み希望 -->
+            <div id="m-request" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">6.</span>休み希望</h3>
+                <div class="space-y-2 text-sm text-gray-700">
+                    <p><strong>スタッフ側:</strong> カレンダーから複数日をタップ選択→「休み希望を提出」</p>
+                    <p><strong>管理者側:</strong> 申請リストで確認→承認/却下</p>
+                    <p><strong>承認された休み希望</strong>はAIシフト作成時に自動反映され、その日にはシフトが配置されません。</p>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <p class="text-xs text-amber-700"><strong>ポイント:</strong> 勤務日数はスタッフの「週最大勤務日数」設定で自動管理されます。休み希望は追加の休日指定です。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. 店舗設定 -->
+            <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>店舗設定</h3>
+                <div class="space-y-2 text-sm text-gray-700">
+                    <p><strong>営業時間:</strong> 平日・土日・祝日ごとに設定。特別営業日は個別上書き可。</p>
+                    <p><strong>定休日:</strong> 曜日ベース（毎週水曜など）。臨時休業は日付指定。</p>
+                    <p><strong>シフトパターン:</strong> 早番・遅番などのテンプレートを登録。</p>
+                    <p><strong>最低人員:</strong> 平日/土日/祝日ごと、時間帯ごとの最低配置人数。</p>
+                    <p><strong>役職設定:</strong> 役職名のカスタマイズ。</p>
+                    <p><strong>運用ルール:</strong> スタッフ向けに表示されるお店のルールテキスト。</p>
+                </div>
+            </div>
+
+            <!-- 8. プラン -->
+            <div id="m-plan" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">8.</span>プラン・課金</h3>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月額</th><th class="p-2 text-left border">スタッフ上限</th><th class="p-2 text-left border">機能</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">2,980円</td><td class="p-2 border">10名</td><td class="p-2 border">全AI機能・シフト管理全機能</td></tr>
+                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,480円</td><td class="p-2 border">50名</td><td class="p-2 border">+ 優先サポート・分析レポート</td></tr>
+                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">+ 複数店舗対応・専属サポート</td></tr>
+                    </tbody>
+                </table>
+                <div class="mt-3 space-y-1 text-xs text-gray-500">
+                    <p>・上限超過時はスタッフ追加・シフト作成がブロックされます</p>
+                    <p>・ダウングレード時、超過分のスタッフを削除するまでシフト作成不可</p>
+                    <p>・解約後もデータは6ヶ月間保持されます</p>
+                    <p>・決済不備から3週間未対応でサービス一時停止</p>
+                </div>
+            </div>
+
+            <!-- 9. 権限 -->
+            <div id="m-auth" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">9.</span>権限 (管理者 / スタッフ)</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <h4 class="font-bold text-green-600 mb-2">管理者ができること</h4>
+                        <ul class="space-y-1 text-gray-700">
+                            <li>・AIシフト作成</li>
+                            <li>・シフトの手動編集・ドラッグ移動</li>
+                            <li>・スタッフの追加・編集・削除</li>
+                            <li>・休み希望の承認・却下</li>
+                            <li>・店舗設定の変更</li>
+                            <li>・分析レポートの閲覧</li>
+                            <li>・プラン変更</li>
+                            <li>・このマニュアルの閲覧</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-blue-600 mb-2">スタッフができること</h4>
+                        <ul class="space-y-1 text-gray-700">
+                            <li>・自分のシフト確認</li>
+                            <li>・休み希望の提出</li>
+                            <li>・お店のルール確認</li>
+                        </ul>
+                        <p class="text-xs text-gray-400 mt-2">※ スタッフは他のスタッフの情報やシフト編集にはアクセスできません</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 10. 分析 -->
+            <div id="m-analytics" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">10.</span>分析・レポート</h3>
+                <div class="space-y-2 text-sm text-gray-700">
+                    <p><strong>月間推定人件費:</strong> 時給スタッフの実績＋月給スタッフの固定額。祝日割増(1.25倍)含む。</p>
+                    <p><strong>日次コスト推移:</strong> 日ごとの人件費グラフ。</p>
+                    <p><strong>スタッフ別詳細:</strong> 出勤日数・労働時間・法定目安(176h)との比較・推定支給額。</p>
+                    <p><strong>コスト構成比:</strong> スタッフ別の人件費割合（円グラフ）。</p>
+                </div>
+            </div>
+
+            <!-- 11. その他 -->
+            <div id="m-other" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">11.</span>その他機能</h3>
+                <div class="space-y-2 text-sm text-gray-700">
+                    <p><strong>カレンダーメモ:</strong> 特定の日にメモを残せます（イベント・団体予約など）。</p>
+                    <p><strong>ドラッグ&ドロップ:</strong> シフト表でシフトをドラッグして時間変更・スタッフ変更が可能（管理者のみ）。</p>
+                    <p><strong>印刷:</strong> シフト表をPDF/印刷できます。</p>
+                    <p><strong>データリセット:</strong> 設定画面の最下部から全データを初期化できます（注意：復元不可）。</p>
+                </div>
+            </div>
+        </div>`;
+    },
+
+    // --- その他 ---
+    calculateMonthlyStats() {
+        const year = this.state.currentDate.getFullYear();
+        const month = this.state.currentDate.getMonth() + 1;
+        const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+        let totalCost = 0, totalHours = 0;
+        
+        this.state.shifts.filter(s => s.date.startsWith(monthPrefix)).forEach(shift => {
+            const staff = this.getStaff(shift.staff_id);
+            if (!staff) return;
+            const start = new Date(`${shift.date}T${shift.start_time}`);
+            const end = new Date(`${shift.date}T${shift.end_time}`);
+            if (end < start) end.setDate(end.getDate() + 1);
+            const hours = (end - start) / (1000 * 60 * 60) - (shift.break_minutes / 60);
+            if (hours > 0) {
+                totalHours += hours;
+                if (staff.salary_type === 'hourly') {
+                    let wage = staff.hourly_wage || this.state.config.hourly_wage_default;
+                    if (JapaneseHolidays.isHoliday(shift.date)) wage *= 1.25;
+                    totalCost += wage * hours;
+                }
+            }
+        });
+        this.state.staff.filter(s => s.salary_type === 'monthly').forEach(s => totalCost += (s.monthly_salary || 0));
+        
+        // 要素が存在する場合のみ表示を更新（スタッフ画面では要素がないためスキップされる）
+        const costEl = document.getElementById('headerTotalCost');
+        const hoursEl = document.getElementById('headerTotalHours');
+        
+        if(costEl) costEl.textContent = `¥${Math.floor(totalCost).toLocaleString()}`;
+        if(hoursEl) hoursEl.textContent = `${Math.floor(totalHours)}h`;
+    },
+
+    // --- AI診断 (サーバーサイド経由) ---
+    async runAIDiagnosis() {
+        this.openModal('aiAdviceModal');
+        const content = document.getElementById('aiAnalysisContent');
+        content.innerHTML = `<div class="flex justify-center py-8"><div class="loading-spinner"></div><p class="ml-3 text-gray-500">AIがシフトを分析中...</p></div>`;
+
+        try {
+            const result = await API.diagnose({
+                contract_id: this.state.config?.contract_id || API.session?.user?.contract_id,
+                config: {
+                    opening_time: this.state.config.opening_time,
+                    closing_time: this.state.config.closing_time,
+                    staff_req: this.state.config.staff_req
+                },
+                staff_count: this.state.staff.length,
+                shift_count: this.state.shifts.length,
+                shifts: this.state.shifts.map(s => ({
+                    staff_id: s.staff_id,
+                    date: s.date,
+                    start_time: s.start_time,
+                    end_time: s.end_time
+                })),
+                staff_list: this.state.staff.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    role: s.role,
+                    max_days_week: s.max_days_week,
+                    max_hours_day: s.max_hours_day
+                }))
+            });
+
+            if (!result || !Array.isArray(result)) throw new Error("AIからの応答がありません");
+
+            content.innerHTML = result.map(s => {
+                const typeStyles = {
+                    danger: { border: 'border-red-300 bg-red-50', icon: '<i class="fa-solid fa-circle-exclamation text-red-600 text-xl"></i>' },
+                    warning: { border: 'border-orange-200 bg-orange-50', icon: '<i class="fa-solid fa-triangle-exclamation text-orange-500 text-xl"></i>' },
+                    info: { border: 'border-blue-200 bg-blue-50', icon: '<i class="fa-solid fa-lightbulb text-blue-500 text-xl"></i>' },
+                };
+                const style = typeStyles[s.type] || typeStyles.info;
+                return `
+                <div class="bg-white border ${style.border} rounded-lg p-4 flex gap-4">
+                    <div class="mt-1">${style.icon}</div>
+                    <div>
+                        <h4 class="font-bold text-gray-800 mb-1">${s.title}</h4>
+                        <p class="text-sm text-gray-600 mb-3">${s.desc}</p>
+                        <p class="text-xs font-bold text-gray-500">${s.action}</p>
+                    </div>
+                </div>`;
+            }).join('');
+
+        } catch (e) {
+            console.error(e);
+            content.innerHTML = `<div class="text-red-500 p-4"><i class="fa-solid fa-circle-exclamation mr-2"></i>診断エラー: ${e.message}</div>`;
+        }
+    },
+    
+    applyAiFixes() { this.closeModal('aiAdviceModal'); this.showToast('修正案を適用しました', 'success'); },
+
+    // --- Stripe決済 ---
+    async startCheckout(plan) {
+        const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
+        if (!contractId) {
+            this.showToast('ログインが必要です', 'error');
+            return;
+        }
+        this.showLoading(true);
+        try {
+            const result = await API.createCheckout(contractId, plan);
+            if (result && result.url) {
+                window.location.href = result.url;
+            } else {
+                this.showToast('チェックアウトURLの取得に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('Checkout Error:', e);
+            this.showToast('決済エラー: ' + e.message, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    async openStripePortal() {
+        const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
+        if (!contractId) {
+            this.showToast('ログインが必要です', 'error');
+            return;
+        }
+        this.showLoading(true);
+        try {
+            const result = await API.createPortal(contractId);
+            if (result && result.url) {
+                window.location.href = result.url;
+            } else {
+                this.showToast('ポータルURLの取得に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('Portal Error:', e);
+            this.showToast('エラー: ' + e.message, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    _markFieldError(id, show) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (show) {
+            el.classList.add('border-red-500', 'ring-2', 'ring-red-200');
+            el.classList.remove('border-gray-300');
+        } else {
+            el.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
+            el.classList.add('border-gray-300');
+        }
+    },
+
+    // 「なし」相当の入力かどうか判定
+    _isReferrerNone(code) {
+        const normalized = (code || '').trim().toLowerCase();
+        return ['なし', '無し', '無', 'none', 'nashi', 'no', 'n/a', 'na'].includes(normalized);
+    },
+
+    copyCompanyPhoneToContact() {
+        const company = document.getElementById('newSubPhone')?.value.trim();
+        if (!company) {
+            this.showToast('代表電話番号を先に入力してください', 'error');
+            return;
+        }
+        const target = document.getElementById('newSubContactPhone');
+        if (target) {
+            target.value = company;
+            this._markFieldError('newSubContactPhone', false);
+        }
+    },
+
+    async validateReferrerCode() {
+        const raw = document.getElementById('newSubReferrerCode')?.value.trim();
+        const status = document.getElementById('referrerCodeStatus');
+        if (!raw) {
+            status.innerHTML = '<span class="text-gray-400">コードを入力してください（紹介者がいない場合は「なし」）</span>';
+            return;
+        }
+        // 「なし」系の入力
+        if (this._isReferrerNone(raw)) {
+            status.innerHTML = '<span class="text-blue-600"><i class="fa-solid fa-circle-info mr-1"></i>紹介者なしで登録します</span>';
+            this._markFieldError('newSubReferrerCode', false);
+            return;
+        }
+        const code = raw.toUpperCase();
+        try {
+            const SUPA_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_URL) || '';
+            const SUPA_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_ANON_KEY) || '';
+            const res = await fetch(`${SUPA_URL}/rest/v1/rpc/validate_referrer_code`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPA_KEY,
+                    'Authorization': 'Bearer ' + SUPA_KEY,
+                },
+                body: JSON.stringify({ p_code: code })
+            });
+            const result = await res.json();
+            if (result.valid) {
+                status.innerHTML = `<span class="text-green-600"><i class="fa-solid fa-circle-check mr-1"></i>有効: ${result.name}</span>`;
+                this._markFieldError('newSubReferrerCode', false);
+            } else {
+                status.innerHTML = `<span class="text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${result.message || '無効なコードです'}（紹介者がいない場合は「なし」と入力）</span>`;
+                this._markFieldError('newSubReferrerCode', true);
+            }
+        } catch (e) {
+            status.innerHTML = '<span class="text-red-500">確認に失敗しました</span>';
+        }
+    },
+
+    async startNewSubscription() {
+        const orgName = document.getElementById('newSubOrgName')?.value.trim();
+        const contact = document.getElementById('newSubContact')?.value.trim();
+        const email = document.getElementById('newSubEmail')?.value.trim();
+        const phone = document.getElementById('newSubPhone')?.value.trim();
+        const contactPhone = document.getElementById('newSubContactPhone')?.value.trim();
+        const address = document.getElementById('newSubAddress')?.value.trim();
+        const referrerInput = document.getElementById('newSubReferrerCode')?.value.trim() || '';
+        const plan = document.querySelector('input[name="newSubPlan"]:checked')?.value;
+
+        // 全フィールドリセット
+        ['newSubOrgName','newSubContact','newSubEmail','newSubPhone','newSubContactPhone','newSubAddress','newSubReferrerCode'].forEach(id => this._markFieldError(id, false));
+
+        const errors = [];
+        if (!orgName) { errors.push('事業者名'); this._markFieldError('newSubOrgName', true); }
+        if (!contact) { errors.push('担当者名'); this._markFieldError('newSubContact', true); }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) { errors.push('メールアドレス'); this._markFieldError('newSubEmail', true); }
+        const phoneRegex = /^[0-9\-\+]{10,15}$/;
+        if (!phone || !phoneRegex.test(phone.replace(/[\s\(\)]/g, ''))) { errors.push('代表電話番号'); this._markFieldError('newSubPhone', true); }
+        if (!contactPhone || !phoneRegex.test(contactPhone.replace(/[\s\(\)]/g, ''))) { errors.push('担当者電話番号'); this._markFieldError('newSubContactPhone', true); }
+        if (!address || address.length < 5) { errors.push('住所'); this._markFieldError('newSubAddress', true); }
+        if (!referrerInput) { errors.push('紹介者コード（不明な場合は「なし」と入力）'); this._markFieldError('newSubReferrerCode', true); }
+        if (!plan) { errors.push('プラン'); }
+
+        if (errors.length > 0) {
+            this.showToast(`以下の項目を正しく入力してください: ${errors.join('、')}`, 'error');
+            return;
+        }
+
+        // 紹介者コード処理
+        let referrerCode = '';  // 「なし」の場合は空文字をDBに保存
+        if (!this._isReferrerNone(referrerInput)) {
+            referrerCode = referrerInput.toUpperCase();
+            try {
+                const SUPA_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_URL) || '';
+                const SUPA_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_ANON_KEY) || '';
+                const vres = await fetch(`${SUPA_URL}/rest/v1/rpc/validate_referrer_code`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPA_KEY,
+                        'Authorization': 'Bearer ' + SUPA_KEY,
+                    },
+                    body: JSON.stringify({ p_code: referrerCode })
+                });
+                const vresult = await vres.json();
+                if (!vresult.valid) {
+                    this._markFieldError('newSubReferrerCode', true);
+                    this.showToast(`紹介者コード: ${vresult.message || '無効'}（紹介者がいない場合は「なし」と入力）`, 'error');
+                    return;
+                }
+            } catch (e) {
+                this.showToast('紹介者コードの検証に失敗しました', 'error');
+                return;
+            }
+        }
+
+        this.showLoading(true);
+        try {
+            const result = await API.createNewSubscription(email, orgName, plan, contact, phone, address, referrerCode, contactPhone);
+            if (result && result.url) {
+                window.location.href = result.url;
+            } else {
+                this.showToast('決済ページの作成に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('New Subscription Error:', e);
+            this.showToast('エラー: ' + e.message, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    async updateEmail() {
+        const email = document.getElementById('settingEmail')?.value.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            this.showToast('有効なメールアドレスを入力してください', 'error');
+            return;
+        }
+        const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+        if (!contractId) {
+            this.showToast('ログインが必要です', 'error');
+            return;
+        }
+        try {
+            await API._request(`config?contract_id=eq.${contractId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ customer_email: email })
+            });
+            this.state.config.customer_email = email;
+            this.showToast('メールアドレスを更新しました', 'success');
+        } catch (e) {
+            this.showToast('更新に失敗しました: ' + e.message, 'error');
+        }
+    },
+
+    openPricingModal() {
+        // 設定画面のサブスクリプションセクションまでスクロール
+        const section = document.getElementById('subscriptionSection');
+        if (section) {
+            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            section.classList.add('ring-2', 'ring-blue-400');
+            setTimeout(() => section.classList.remove('ring-2', 'ring-blue-400'), 2000);
+        }
+    },
+    
+    showShopRules() {
+        const config = this.state.config;
+        const content = document.getElementById('shopRulesContent');
+        const rulesText = config.shop_rules_text || this.state.defaultConfig.shop_rules_text;
+        // 改行をリストアイテムに変換
+        const rulesList = rulesText.split('\n').filter(line => line.trim() !== '').map(line => `<li>${line}</li>`).join('');
+        
+        // 金銭情報を完全に削除し、業務ルールのみを表示
+        content.innerHTML = `
+            <div class="space-y-4">
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <h4 class="font-bold text-blue-800 text-sm mb-2"><i class="fa-regular fa-clock mr-2"></i>営業時間</h4>
+                    <p class="text-2xl font-bold text-gray-800 text-center">${config.opening_time || '09:00'} <span class="text-sm text-gray-400 mx-2">〜</span> ${config.closing_time || '22:00'}</p>
+                </div>
+                
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <h4 class="font-bold text-gray-600 text-xs mb-1">最低勤務人数</h4>
+                    <p class="text-lg font-bold text-gray-800">${config.staff_req?.min_weekday || 2}名</p>
+                </div>
+
+                <div class="border-t border-gray-100 pt-4">
+                    <h4 class="font-bold text-gray-800 text-sm mb-2">シフト申請について・お知らせ</h4>
+                    <ul class="text-sm text-gray-600 space-y-1 list-disc pl-5">
+                        ${rulesList}
+                    </ul>
+                </div>
+            </div>
+        `;
+        this.openModal('shopRulesModal');
+    },
+
+    getStaff(id) { return this.state.staff.find(s => s.id === id); },
+    showLoading(show) { const el = document.getElementById('globalLoading'); if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); },
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        let colorClass = type === 'success' ? 'border-green-200 text-green-600' : type === 'error' ? 'border-red-200 text-red-600' : 'border-gray-200 text-gray-600';
+        let icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-circle-xmark' : 'fa-info-circle';
+        toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 min-w-[300px] ${colorClass}`;
+        toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="text-sm font-medium text-gray-700">${message}</span>`;
+        container.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+        setTimeout(() => { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); }, 3000);
+    },
+    showUpgradeModal() {
+        const currentPlan = this.state.config.stripe_plan || 'standard';
+        const limit = this.getStaffLimit();
+        const currentCount = this.state.staff.length;
+        const planNames = {standard: 'Standard', pro: 'Pro', premium: 'Premium'};
+
+        // 現在プラン情報
+        const infoEl = document.getElementById('upgradeCurrentInfo');
+        if (infoEl) {
+            infoEl.textContent = `現在: ${planNames[currentPlan] || 'Standard'}プラン（${currentCount}/${limit}名）`;
+        }
+
+        // アップグレード先プランカードを動的生成
+        const plansEl = document.getElementById('upgradePlans');
+        if (!plansEl) return;
+
+        const plans = [
+            { key: 'standard', name: 'Standard', price: '2,980', limit: 10, color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
+            { key: 'pro', name: 'Pro', price: '4,480', limit: 50, badge: '人気', color: 'green', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
+            { key: 'premium', name: 'Premium', price: '9,980', limit: 9999, color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応', '専属サポート'] },
+        ];
+
+        // 現在より上のプランのみ表示
+        const upgradePlans = plans.filter(p => p.limit > limit);
+
+        const colorMap = {
+            green:  { ring: 'ring-2 ring-green-400 border-green-400', text: 'text-green-600', check: 'text-green-500', badge: 'bg-green-500', btn: 'bg-green-600 hover:bg-green-700' },
+            purple: { ring: 'ring-2 ring-purple-400 border-purple-400', text: 'text-purple-600', check: 'text-purple-500', badge: 'bg-purple-500', btn: 'bg-purple-600 hover:bg-purple-700' },
+            blue:   { ring: 'ring-2 ring-blue-400 border-blue-400', text: 'text-blue-600', check: 'text-blue-500', badge: 'bg-blue-500', btn: 'bg-blue-600 hover:bg-blue-700' },
+        };
+
+        plansEl.innerHTML = upgradePlans.map((p, i) => {
+            const isRecommended = i === 0;
+            const c = colorMap[p.color];
+            const ringClass = isRecommended ? c.ring : 'border-gray-200';
+            const badgeHtml = p.badge ? `<span class="absolute -top-2 right-3 ${c.badge} text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">${p.badge}</span>` : '';
+            const recommendHtml = isRecommended ? '<span class="absolute -top-2 left-3 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1"><i class="fa-solid fa-star text-[8px]"></i>おすすめ</span>' : '';
+
+            return `
+                <div class="relative border-2 ${ringClass} rounded-xl p-5 hover:shadow-lg transition-all cursor-pointer group" onclick="app.upgradeFromModal('${p.key}')">
+                    ${recommendHtml}${badgeHtml}
+                    <div class="text-center mb-3">
+                        <p class="font-bold ${c.text} text-lg">${p.name}</p>
+                        <p class="text-3xl font-extrabold text-gray-900 mt-1">${p.price}<span class="text-sm font-normal text-gray-400">円/月</span></p>
+                    </div>
+                    <ul class="text-xs text-gray-600 space-y-1.5 mb-4">
+                        ${p.features.map(f => `<li class="flex items-center gap-1.5"><i class="fa-solid fa-check ${c.check} text-[10px]"></i>${f}</li>`).join('')}
+                    </ul>
+                    <button class="w-full py-2.5 ${c.btn} text-white rounded-lg text-sm font-bold transition group-hover:shadow-md">
+                        <i class="fa-solid fa-rocket mr-1"></i>このプランに変更
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        this.openModal('upgradeModal');
+    },
+
+    upgradeFromModal(plan) {
+        this.closeModal('upgradeModal');
+        this.startCheckout(plan);
+    },
+
+    openModal(id) {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('active');
+    },
+    closeModal(id) {
+        const el = document.getElementById(id);
+        if(el) el.classList.remove('active');
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => { app.init(); });

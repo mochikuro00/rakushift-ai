@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ラクシフトAI - 運営管理画面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --primary-light: #eef2ff;
+            --surface: #ffffff;
+            --bg: #f8fafc;
+            --bg-subtle: #f1f5f9;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* === Modal === */
+        .modal { opacity: 0; visibility: hidden; transition: all 0.2s ease-in-out; }
+        .modal.active { opacity: 1; visibility: visible; }
+        .modal.active .modal-content { transform: scale(1); }
+        .modal-content { transform: scale(0.96); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* === テーブル === */
+        .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-scroll table { min-width: 1100px; }
+        .table-scroll thead th {
+            position: sticky;
+            top: 0;
+            background: #f8fafc;
+            z-index: 10;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            text-transform: uppercase;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 14px 12px;
+        }
+        .table-scroll tbody tr {
+            transition: background 0.15s ease;
+        }
+        .table-scroll tbody tr:hover { background: #f8fafc; }
+        .table-scroll tbody td { padding: 14px 12px; vertical-align: middle; }
+
+        /* === スクロールバー === */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; border: 2px solid transparent; background-clip: padding-box; }
+
+        /* === カード === */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            transition: all 0.2s ease;
+        }
+        .card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.06);
+        }
+        .stat-card .stat-icon {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        /* === タブ === */
+        .tab-btn {
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 10px;
+            transition: all 0.15s ease;
+            color: #64748b;
+            background: transparent;
+            border: 1px solid transparent;
+        }
+        .tab-btn:hover { background: var(--bg-subtle); color: var(--text); }
+        .tab-btn.active {
+            background: var(--surface);
+            color: var(--primary);
+            border-color: var(--border);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+
+        /* === ボタン === */
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 2px rgba(79,70,229,0.2);
+        }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(79,70,229,0.3); }
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text);
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { background: var(--bg-subtle); border-color: #cbd5e1; }
+        .btn-danger {
+            background: #fef2f2;
+            color: var(--danger);
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #fecaca;
+        }
+        .btn-danger:hover { background: #fee2e2; }
+
+        /* === 入力 === */
+        .input, .select, .textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            color: var(--text);
+            transition: all 0.15s ease;
+        }
+        .input:hover, .select:hover, .textarea:hover { border-color: #cbd5e1; }
+        .input:focus, .select:focus, .textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+
+        /* === バッジ === */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        .badge-success { background: #dcfce7; color: #15803d; }
+        .badge-danger { background: #fee2e2; color: #b91c1c; }
+        .badge-warning { background: #fef3c7; color: #b45309; }
+        .badge-info { background: #dbeafe; color: #1d4ed8; }
+        .badge-neutral { background: #f1f5f9; color: #475569; }
+        .badge-purple { background: #f3e8ff; color: #7e22ce; }
+        .badge-amber { background: #fef3c7; color: #b45309; }
+
+        /* === セクションタイトル === */
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .section-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* === アニメーション === */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .panel { animation: fadeIn 0.25s ease; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- ========== ログイン画面 ========== -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a8a 100%);">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
+                    <i class="fas fa-shield-halved text-2xl text-white"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 tracking-tight">運営管理コンソール</h1>
+                <p class="text-sm text-gray-500 mt-1">ラクシフトAI プラットフォーム管理</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">ログインID</label>
+                    <input type="text" id="adminLoginId" class="input" placeholder="admin">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">パスワード</label>
+                    <input type="password" id="adminLoginPass" class="input" placeholder="••••••••"
+                        onkeydown="if(event.key==='Enter') platformLogin()">
+                </div>
+                <button onclick="platformLogin()" class="w-full text-white py-3 rounded-xl font-semibold transition shadow-lg" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
+                    <i class="fas fa-right-to-bracket mr-2"></i>ログイン
+                </button>
+                <div id="loginError" class="text-red-500 text-sm text-center hidden bg-red-50 px-3 py-2 rounded-lg border border-red-200"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 管理画面メイン ========== -->
+    <div id="adminPanel" class="hidden">
+        <!-- ヘッダー -->
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-30 backdrop-blur-md bg-white/95">
+            <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);">
+                        <i class="fas fa-shield-halved text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold text-gray-900 tracking-tight">ラクシフトAI <span class="text-gray-400 font-normal">/ 運営管理</span></h1>
+                        <p class="text-[11px] text-gray-500 mt-0.5"><i class="fas fa-circle text-green-500 text-[6px] mr-1"></i><span id="adminName">管理者</span></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="loadTenants()" class="btn-secondary" title="データ更新">
+                        <i class="fas fa-arrows-rotate"></i><span class="hidden sm:inline">更新</span>
+                    </button>
+                    <button onclick="platformLogout()" class="btn-danger">
+                        <i class="fas fa-right-from-bracket"></i><span class="hidden sm:inline">ログアウト</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- タブ切替 -->
+            <div class="flex gap-1 mb-6 flex-wrap p-1 bg-white rounded-xl border border-gray-200 inline-flex">
+                <button id="tabTenants" onclick="switchTab('tenants')" class="tab-btn active">
+                    <i class="fas fa-building mr-1.5"></i>テナント管理
+                </button>
+                <button id="tabRevenue" onclick="switchTab('revenue')" class="tab-btn">
+                    <i class="fas fa-chart-line mr-1.5"></i>事業収益
+                </button>
+                <button id="tabReferrers" onclick="switchTab('referrers')" class="tab-btn">
+                    <i class="fas fa-user-group mr-1.5"></i>紹介者管理
+                </button>
+            </div>
+
+            <!-- 統計カード -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fas fa-building"></i></div>
+                    <p class="text-xs text-gray-500 font-medium">総テナント</p>
+                    <p class="text-3xl font-bold text-gray-900 mt-2 tracking-tight" id="statTotal">0</p>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#dcfce7;color:#15803d;"><i class="fas fa-check"></i></div>
+                    <p class="text-xs text-gray-500 font-medium">アクティブ</p>
+                    <p class="text-3xl font-bold text-green-600 mt-2 tracking-tight" id="statActive">0</p>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fef3c7;color:#b45309;"><i class="fas fa-pause"></i></div>
+                    <p class="text-xs text-gray-500 font-medium">停止中</p>
+                    <p class="text-3xl font-bold text-amber-600 mt-2 tracking-tight" id="statSuspended">0</p>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fee2e2;color:#b91c1c;"><i class="fas fa-trash"></i></div>
+                    <p class="text-xs text-gray-500 font-medium">削除予定</p>
+                    <p class="text-3xl font-bold text-red-600 mt-2 tracking-tight" id="statExpired">0</p>
+                </div>
+                <div class="stat-card text-white relative" style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border: none;">
+                    <div class="stat-icon" style="background:rgba(255,255,255,0.2);color:white;"><i class="fas fa-yen-sign"></i></div>
+                    <p class="text-xs text-white/80 font-medium">月間売上 (税別)</p>
+                    <p class="text-3xl font-bold mt-2 tracking-tight" id="statMRR">¥0</p>
+                </div>
+            </div>
+
+            <!-- ===== テナント管理タブ ===== -->
+            <div id="panelTenants" class="panel">
+
+            <!-- プラットフォーム設定 -->
+            <div class="card mb-6 overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition" onclick="toggleSettingsPanel()">
+                    <h3 class="font-semibold text-gray-900 flex items-center gap-2.5">
+                        <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="fas fa-key text-sm"></i></span>
+                        APIキー・プラットフォーム設定
+                    </h3>
+                    <i id="settingsToggleIcon" class="fas fa-chevron-down text-gray-400 transition-transform"></i>
+                </div>
+                <div id="settingsPanel" class="hidden p-5">
+                    <p class="text-sm text-gray-500 mb-4"><i class="fas fa-info-circle mr-1"></i>ここで設定したキーはPython計算サーバーが自動的に読み込みます。変更は即座に反映されます（最大5分）。</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="settingsGrid">
+                        <div class="text-center text-gray-400 py-4">読み込み中...</div>
+                    </div>
+                    <div class="mt-5 flex justify-end">
+                        <button onclick="savePlatformSettings()" class="btn-primary">
+                            <i class="fas fa-save"></i>設定を保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- アクションバー -->
+            <div class="card p-4 mb-4">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="section-title">テナント一覧</h2>
+                        <p class="section-subtitle">登録されたすべての契約者を管理</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                            <input type="text" id="searchInput" placeholder="契約ID・名前・紹介者で検索..."
+                                class="input pl-9 w-full sm:w-72"
+                                oninput="filterTenants()">
+                        </div>
+                        <select id="statusFilter" class="select w-auto" onchange="filterTenants()">
+                            <option value="all">すべての状態</option>
+                            <option value="active">アクティブのみ</option>
+                            <option value="suspended">停止中のみ</option>
+                        </select>
+                        <select id="referrerFilter" class="select w-auto" onchange="filterTenants()">
+                            <option value="all">すべての紹介者</option>
+                            <option value="none">紹介者なし</option>
+                        </select>
+                        <button onclick="openCreateTenantModal()" class="btn-primary">
+                            <i class="fas fa-plus"></i>新規テナント
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- テナントテーブル -->
+            <div class="card overflow-hidden">
+                <div class="table-scroll">
+                    <table class="w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">組織名</th>
+                                <th class="text-left">契約ID</th>
+                                <th class="text-center">状態</th>
+                                <th class="text-center">プラン</th>
+                                <th class="text-left">担当者</th>
+                                <th class="text-left">メール</th>
+                                <th class="text-left">代表電話</th>
+                                <th class="text-left">担当者電話</th>
+                                <th class="text-center">紹介者</th>
+                                <th class="text-center">スタッフ</th>
+                                <th class="text-left">登録日</th>
+                                <th class="text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tenantTableBody" class="divide-y divide-gray-100">
+                            <tr><td colspan="12" class="py-12 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div><!-- /panelTenants -->
+
+            <!-- ===== 事業収益タブ ===== -->
+            <div id="panelRevenue" class="hidden panel">
+                <div class="space-y-6">
+                    <!-- 収益サマリー -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fas fa-chart-line"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">月間MRR</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2 tracking-tight" id="revMRR">¥0</p>
+                            <p class="text-[11px] text-gray-400 mt-1">Monthly Recurring Revenue</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-arrow-trend-up"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">年間ARR（見込み）</p>
+                            <p class="text-3xl font-bold text-blue-600 mt-2 tracking-tight" id="revARR">¥0</p>
+                            <p class="text-[11px] text-gray-400 mt-1">MRR × 12ヶ月</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#dcfce7;color:#15803d;"><i class="fas fa-handshake"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">有料契約数</p>
+                            <p class="text-3xl font-bold text-green-600 mt-2 tracking-tight" id="revPaidCount">0</p>
+                            <p class="text-[11px] text-gray-400 mt-1">アクティブ課金中</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#f3e8ff;color:#7e22ce;"><i class="fas fa-user"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">平均単価 (ARPU)</p>
+                            <p class="text-3xl font-bold text-purple-600 mt-2 tracking-tight" id="revARPU">¥0</p>
+                            <p class="text-[11px] text-gray-400 mt-1">MRR ÷ 契約数</p>
+                        </div>
+                    </div>
+
+                    <!-- プラン別内訳 -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="card p-6">
+                            <h3 class="section-title flex items-center gap-2.5 mb-1">
+                                <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><i class="fas fa-chart-pie text-sm"></i></span>
+                                プラン別内訳
+                            </h3>
+                            <p class="section-subtitle mb-5">各プランの契約数と売上構成</p>
+                            <div class="space-y-4" id="revPlanBreakdown"></div>
+                        </div>
+                        <div class="card p-6">
+                            <h3 class="section-title flex items-center gap-2.5 mb-1">
+                                <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center"><i class="fas fa-chart-bar text-sm"></i></span>
+                                プラン別売上構成
+                            </h3>
+                            <p class="section-subtitle mb-5">プラン毎の売上比率</p>
+                            <div class="h-[280px]"><canvas id="revPlanChart"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- 顧客一覧（単価付き） -->
+                    <div class="card overflow-hidden">
+                        <div class="p-5 border-b border-gray-100">
+                            <h3 class="section-title flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-users text-sm"></i></span>
+                                顧客別収益一覧
+                            </h3>
+                        </div>
+                        <div class="table-scroll">
+                            <table class="w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left">組織名</th>
+                                        <th class="text-left">契約ID</th>
+                                        <th class="text-left">担当者</th>
+                                        <th class="text-left">メール</th>
+                                        <th class="text-left">電話</th>
+                                        <th class="text-center">プラン</th>
+                                        <th class="text-right">月額</th>
+                                        <th class="text-center">ステータス</th>
+                                        <th class="text-left">登録日</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="revCustomerTable" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /panelRevenue -->
+
+            <!-- ===== 紹介者管理タブ ===== -->
+            <div id="panelReferrers" class="hidden panel">
+                <div class="space-y-6">
+                    <!-- サマリーカード -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#fef3c7;color:#b45309;"><i class="fas fa-user-group"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">紹介者総数</p>
+                            <p class="text-3xl font-bold text-gray-900 mt-2 tracking-tight" id="refTotalCount">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-building"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">紹介経由テナント</p>
+                            <p class="text-3xl font-bold text-blue-600 mt-2 tracking-tight" id="refTenantCount">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background:#dcfce7;color:#15803d;"><i class="fas fa-yen-sign"></i></div>
+                            <p class="text-xs text-gray-500 font-medium">紹介経由MRR</p>
+                            <p class="text-3xl font-bold text-green-600 mt-2 tracking-tight" id="refMRR">¥0</p>
+                        </div>
+                        <div class="stat-card text-white relative" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border: none;">
+                            <div class="stat-icon" style="background:rgba(255,255,255,0.2);color:white;"><i class="fas fa-coins"></i></div>
+                            <p class="text-xs text-white/80 font-medium">月間報酬合計</p>
+                            <p class="text-3xl font-bold mt-2 tracking-tight" id="refCommission">¥0</p>
+                        </div>
+                    </div>
+
+                    <!-- アクションバー -->
+                    <div class="card p-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h2 class="section-title">紹介者一覧</h2>
+                                <p class="section-subtitle">紹介コードを発行し、報酬を管理</p>
+                            </div>
+                            <button onclick="openCreateReferrerModal()" class="btn-primary">
+                                <i class="fas fa-user-plus"></i>紹介者を新規発行
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 紹介者テーブル -->
+                    <div class="card overflow-hidden">
+                        <div class="table-scroll">
+                            <table class="w-full">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left">紹介者名</th>
+                                        <th class="text-left">コード</th>
+                                        <th class="text-left">メール</th>
+                                        <th class="text-center">報酬</th>
+                                        <th class="text-center">紹介数</th>
+                                        <th class="text-center">課金中</th>
+                                        <th class="text-right">月間売上</th>
+                                        <th class="text-right">月間報酬</th>
+                                        <th class="text-center">状態</th>
+                                        <th class="text-center">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="referrerTableBody" class="divide-y divide-gray-100">
+                                    <tr><td colspan="10" class="py-12 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /panelReferrers -->
+
+    </div>
+
+    <!-- ========== 紹介者新規/編集モーダル ========== -->
+    <div id="referrerModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style="max-height: 95vh;">
+            <!-- ヘッダー (固定) -->
+            <div class="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-t-2xl">
+                <h3 class="text-lg font-bold" id="referrerModalTitle"><i class="fas fa-handshake mr-2"></i>紹介者を新規発行</h3>
+                <button onclick="closeModal('referrerModal')" class="text-white/80 hover:text-white">
+                    <i class="fas fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- コンテンツ (スクロール) -->
+            <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                <input type="hidden" id="refEditId" value="">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">紹介者名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="refName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 山田 太郎">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">紹介者コード <span class="text-xs text-gray-400">（空欄で自動生成）</span></label>
+                    <input type="text" id="refCode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm uppercase" placeholder="例: YAMADA001（任意）" style="text-transform: uppercase;">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">メールアドレス</label>
+                        <input type="email" id="refEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="任意">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">電話番号</label>
+                        <input type="tel" id="refPhone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="任意">
+                    </div>
+                </div>
+                <div class="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3">
+                    <label class="block text-xs font-bold text-indigo-700 uppercase tracking-wider mb-2"><i class="fas fa-yen-sign mr-1"></i>報酬タイプ <span class="text-red-500">*</span></label>
+                    <div class="flex gap-2 mb-2">
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="refCommissionType" value="percent" checked onchange="toggleCommissionInputs()" class="hidden peer">
+                            <div class="px-2 py-2 text-center border-2 border-gray-200 rounded-lg peer-checked:border-indigo-500 peer-checked:bg-white text-xs font-medium transition">
+                                <i class="fas fa-percent mr-1"></i>売上に対する％
+                            </div>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="refCommissionType" value="fixed" onchange="toggleCommissionInputs()" class="hidden peer">
+                            <div class="px-2 py-2 text-center border-2 border-gray-200 rounded-lg peer-checked:border-indigo-500 peer-checked:bg-white text-xs font-medium transition">
+                                <i class="fas fa-yen-sign mr-1"></i>1件あたり固定額
+                            </div>
+                        </label>
+                    </div>
+                    <div id="refCommissionRateWrap">
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="refCommissionRate" min="0" max="100" step="0.5" value="30" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <span class="text-sm text-gray-500">%</span>
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">月間売上 × ○% が報酬として計算されます</p>
+                    </div>
+                    <div id="refCommissionAmountWrap" style="display:none;">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">¥</span>
+                            <input type="number" id="refCommissionAmount" min="0" step="100" value="1000" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <span class="text-sm text-gray-500">/件・月</span>
+                        </div>
+                        <p class="text-[10px] text-gray-400 mt-1">課金中テナント1件あたりの月額固定報酬</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">備考</label>
+                    <textarea id="refNote" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="任意"></textarea>
+                </div>
+                <div class="flex items-center" id="refActiveWrap" style="display:none;">
+                    <input type="checkbox" id="refActive" class="mr-2 w-4 h-4" checked>
+                    <label for="refActive" class="text-sm text-gray-700">有効</label>
+                </div>
+            </div>
+
+            <!-- フッター (固定) -->
+            <div class="flex-shrink-0 px-5 py-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex gap-3">
+                <button onclick="closeModal('referrerModal')" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">キャンセル</button>
+                <button onclick="saveReferrer()" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition">
+                    <i class="fas fa-save mr-1"></i>保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== テナント新規作成モーダル ========== -->
+    <div id="createTenantModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col" style="max-height: 95vh;">
+            <!-- ヘッダー (固定) -->
+            <div class="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-t-2xl">
+                <div>
+                    <h3 class="text-lg font-bold"><i class="fas fa-plus-circle mr-2"></i>新規テナント作成</h3>
+                    <p class="text-xs text-white/80 mt-0.5">スクロールして全項目を入力</p>
+                </div>
+                <button onclick="closeModal('createTenantModal')" class="text-white/80 hover:text-white">
+                    <i class="fas fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- コンテンツ (スクロール) -->
+            <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <!-- プラン選択 -->
+                <div class="bg-purple-50/50 border border-purple-100 rounded-xl p-3">
+                    <h4 class="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2"><i class="fas fa-tags mr-1"></i>プラン選択</h4>
+                    <select id="newTenantPlan" onchange="onTenantPlanChange()" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                        <option value="standard">Standard - 2,980円/月 (10名まで)</option>
+                        <option value="pro" selected>Pro - 4,480円/月 (50名まで)</option>
+                        <option value="premium">Premium - 9,980円/月 (無制限)</option>
+                        <option value="oem">OEM代理店 - 4,000円/月 (手動管理・Stripe非連動)</option>
+                    </select>
+                    <div id="oemPlanNote" class="hidden mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
+                        <i class="fas fa-circle-info mr-1"></i>OEMプラン: 月額¥4,000・紹介料¥3,200/件・Stripe非連動の手動管理
+                    </div>
+                </div>
+
+                <!-- 事業者情報 -->
+                <div class="bg-blue-50/50 border border-blue-100 rounded-xl p-3">
+                    <h4 class="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2"><i class="fas fa-building mr-1"></i>事業者情報</h4>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">組織名 <span class="text-red-500">*</span></label>
+                            <input type="text" id="newOrgName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: サンプル株式会社">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">住所</label>
+                            <input type="text" id="newOrgAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 東京都渋谷区...">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">代表電話 <span class="text-red-500">*</span></label>
+                            <input type="tel" id="newCompanyPhone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 03-1234-5678">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 担当者情報 -->
+                <div class="bg-green-50/50 border border-green-100 rounded-xl p-3">
+                    <h4 class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2"><i class="fas fa-user mr-1"></i>担当者情報</h4>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">担当者名 <span class="text-red-500">*</span></label>
+                            <input type="text" id="newContactName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 山田 太郎">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">メールアドレス <span class="text-red-500">*</span></label>
+                            <input type="email" id="newOrgEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: customer@example.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">担当者電話 <span class="text-red-500">*</span></label>
+                            <div class="flex gap-1">
+                                <input type="tel" id="newContactPhone" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 090-1234-5678">
+                                <button type="button" onclick="copyAdminCompanyPhone()" class="px-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[10px] whitespace-nowrap"><i class="fas fa-copy"></i> 代表と同じ</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 紹介者 -->
+                <div class="bg-amber-50/50 border border-amber-100 rounded-xl p-3">
+                    <h4 class="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2"><i class="fas fa-handshake mr-1"></i>紹介者</h4>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">紹介者コード <span id="newReferrerLabel" class="text-xs text-gray-400">（任意）</span></label>
+                    <select id="newReferrerCode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                        <option value="">— 紹介者なし —</option>
+                    </select>
+                </div>
+
+                <!-- 注意 -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+                    <p class="text-gray-500"><i class="fas fa-info-circle mr-1"></i>契約IDは15桁のランダム数字で自動生成されます</p>
+                    <p class="text-gray-500"><i class="fas fa-lock mr-1"></i>初期パスワード: <span class="font-mono font-medium text-gray-700">rakushift1234</span></p>
+                </div>
+
+                <div id="createResult" class="hidden"></div>
+            </div>
+
+            <!-- フッター (固定) -->
+            <div class="flex-shrink-0 px-5 py-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+                <button onclick="createTenant()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition">
+                    <i class="fas fa-plus mr-1"></i>テナント作成
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ライセンス操作確認モーダル ========== -->
+    <div id="licenseConfirmModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-base font-bold text-gray-900" id="licenseModalTitle">ライセンス操作</h3>
+                <button onclick="closeModal('licenseConfirmModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div id="licenseModalBody"></div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1.5">備考（任意）</label>
+                    <textarea id="licenseNote" class="textarea" rows="2" placeholder="理由やメモを記入..."></textarea>
+                </div>
+            </div>
+            <div class="flex gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50">
+                <button onclick="closeModal('licenseConfirmModal')" class="btn-secondary flex-1 justify-center">キャンセル</button>
+                <button id="licenseConfirmBtn" onclick="" class="flex-1 px-4 py-2.5 rounded-lg font-medium transition justify-center text-sm">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== トースト通知 ========== -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden" style="animation: fadeIn 0.2s ease;">
+        <div class="px-5 py-3.5 rounded-xl shadow-2xl text-white text-sm font-medium flex items-center gap-3 min-w-[280px]">
+            <i id="toastIcon" class="fas text-base"></i>
+            <span id="toastMessage"></span>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script>
+    // =========================================================
+    // 運営管理画面 JavaScript
+    // 設定値は js/config.js から読み込み
+    // =========================================================
+    const SUPABASE_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_URL) || "";
+    const SUPABASE_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_ANON_KEY) || "";
+
+    let adminSession = null;
+    let allTenants = [];
+
+    // --- Supabase RPC呼び出し ---
+    async function rpc(functionName, params = {}) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`
+            },
+            body: JSON.stringify(params)
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`RPC Error: ${functionName} - ${errText}`);
+        }
+        return await res.json();
+    }
+
+    // --- 運営管理者ログイン ---
+    async function platformLogin() {
+        const loginId = document.getElementById('adminLoginId').value.trim();
+        const password = document.getElementById('adminLoginPass').value.trim();
+        const errorEl = document.getElementById('loginError');
+
+        if (!loginId || !password) {
+            errorEl.textContent = '全ての項目を入力してください';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            errorEl.classList.add('hidden');
+            const result = await rpc('verify_platform_admin_login', {
+                p_login_id: loginId,
+                p_password: password
+            });
+
+            if (result.success) {
+                adminSession = result;
+                sessionStorage.setItem('platform_admin', JSON.stringify(result));
+                document.getElementById('adminName').textContent = result.name;
+                showAdminPanel();
+                await loadTenants();
+            } else {
+                errorEl.textContent = result.message;
+                errorEl.classList.remove('hidden');
+            }
+        } catch (e) {
+            errorEl.textContent = 'ログインに失敗しました: ' + e.message;
+            errorEl.classList.remove('hidden');
+        }
+    }
+
+    function platformLogout() {
+        adminSession = null;
+        sessionStorage.removeItem('platform_admin');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('adminPanel').classList.add('hidden');
+    }
+
+    function showAdminPanel() {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+    }
+
+    // --- テナント一覧読み込み ---
+    async function loadTenants() {
+        try {
+            const data = await rpc('list_tenants');
+            allTenants = data || [];
+            updateStats();
+            updateReferrerFilterOptions();
+            renderTenants(allTenants);
+        } catch (e) {
+            showToast('テナント一覧の取得に失敗しました: ' + e.message, 'error');
+        }
+    }
+
+    function updateStats() {
+        const total = allTenants.length;
+        const active = allTenants.filter(t => t.license_status === 'active').length;
+        const suspended = allTenants.filter(t => t.license_status === 'suspended').length;
+        const expired = allTenants.filter(t =>
+            t.license_status === 'suspended' &&
+            t.data_deletion_scheduled_at &&
+            new Date(t.data_deletion_scheduled_at) < new Date()
+        ).length;
+
+        document.getElementById('statTotal').textContent = total;
+        document.getElementById('statActive').textContent = active;
+        document.getElementById('statSuspended').textContent = suspended;
+        document.getElementById('statExpired').textContent = expired;
+
+        // MRR計算（Stripe決済済み + OEMプラン）
+        const prices = { standard: 2980, pro: 4480, premium: 9980, oem: 4000 };
+        let mrr = 0;
+        allTenants.filter(t => t.subscription_status === 'active' && (t.stripe_customer_id || t.stripe_plan === 'oem')).forEach(t => {
+            const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : null;
+            if (plan && prices[plan]) mrr += prices[plan];
+        });
+        document.getElementById('statMRR').textContent = '¥' + mrr.toLocaleString();
+    }
+
+    function renderTenants(tenants) {
+        const tbody = document.getElementById('tenantTableBody');
+
+        if (!tenants || tenants.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="12" class="py-12 text-center text-gray-400"><i class="fas fa-inbox text-3xl mb-2 block"></i>テナントがありません</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = tenants.map(t => {
+            const isActive = t.license_status === 'active';
+            const isExpired = t.license_status === 'suspended' && t.data_deletion_scheduled_at && new Date(t.data_deletion_scheduled_at) < new Date();
+
+            const statusBadge = isActive
+                ? '<span class="badge badge-success"><i class="fas fa-circle text-[6px]"></i>アクティブ</span>'
+                : isExpired
+                    ? '<span class="badge badge-danger"><i class="fas fa-triangle-exclamation text-[10px]"></i>期限切れ</span>'
+                    : '<span class="badge badge-warning"><i class="fas fa-circle-pause text-[10px]"></i>停止中</span>';
+
+            const actionBtn = isActive
+                ? `<button onclick="confirmSuspend('${t.organization_id}', '${escapeHtml(t.name)}')" class="px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition font-medium border border-red-100"><i class="fas fa-pause"></i></button>`
+                : `<button onclick="confirmActivate('${t.organization_id}', '${escapeHtml(t.name)}')" class="px-2.5 py-1 text-xs bg-green-50 text-green-600 rounded-md hover:bg-green-100 transition font-medium border border-green-100"><i class="fas fa-play"></i></button>`;
+
+            const deleteBtn = !isActive
+                ? ` <button onclick="confirmDelete('${t.organization_id}', '${escapeHtml(t.name)}')" class="px-2.5 py-1 text-xs bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 transition font-medium border border-gray-200"><i class="fas fa-trash"></i></button>`
+                : '';
+
+            // プラン表示
+            const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
+            const planNameMap = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
+            const currentPlan = (t.stripe_plan === 'oem')
+                ? 'oem'
+                : ((t.stripe_customer_id && t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : 'free');
+            const planBadge = `<span class="badge ${planBadgeClass[currentPlan] || 'badge-neutral'}">${planNameMap[currentPlan]}</span>`;
+
+            const createdAt = t.created_at ? formatDate(t.created_at) : '-';
+
+            return `
+                <tr>
+                    <td class="text-left">
+                        <div class="font-semibold text-gray-900 text-sm">${escapeHtml(t.name)}</div>
+                    </td>
+                    <td class="text-left"><span class="font-mono text-[11px] text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">${escapeHtml(t.contract_id)}</span></td>
+                    <td class="text-center">${statusBadge}</td>
+                    <td class="text-center">${planBadge}</td>
+                    <td class="text-left text-sm text-gray-700">${escapeHtml(t.contact_name || '-')}</td>
+                    <td class="text-left text-xs text-gray-500">${escapeHtml(t.customer_email || '-')}</td>
+                    <td class="text-left text-xs text-gray-500">${escapeHtml(t.phone || '-')}</td>
+                    <td class="text-left text-xs text-gray-500">${escapeHtml(t.contact_phone || '-')}</td>
+                    <td class="text-center">${t.referrer_code ? `<span class="badge badge-amber font-mono">${escapeHtml(t.referrer_code)}</span>` : '<span class="text-gray-300">—</span>'}</td>
+                    <td class="text-center"><span class="text-sm font-medium text-gray-700">${t.staff_count || 0}</span></td>
+                    <td class="text-left text-xs text-gray-500">${createdAt}</td>
+                    <td class="text-center whitespace-nowrap">
+                        ${actionBtn}${deleteBtn}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterTenants() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const status = document.getElementById('statusFilter').value;
+        const refFilter = document.getElementById('referrerFilter')?.value || 'all';
+
+        let filtered = allTenants;
+        if (search) {
+            filtered = filtered.filter(t =>
+                (t.name || '').toLowerCase().includes(search) ||
+                (t.contract_id || '').toLowerCase().includes(search) ||
+                (t.referrer_code || '').toLowerCase().includes(search)
+            );
+        }
+        if (status !== 'all') {
+            filtered = filtered.filter(t => t.license_status === status);
+        }
+        if (refFilter === 'none') {
+            filtered = filtered.filter(t => !t.referrer_code);
+        } else if (refFilter !== 'all') {
+            filtered = filtered.filter(t => t.referrer_code === refFilter);
+        }
+        renderTenants(filtered);
+    }
+
+    // 紹介者一覧でフィルタプルダウンを更新
+    function updateReferrerFilterOptions() {
+        const sel = document.getElementById('referrerFilter');
+        if (!sel) return;
+        const current = sel.value;
+        const codes = [...new Set(allTenants.map(t => t.referrer_code).filter(Boolean))].sort();
+        sel.innerHTML = '<option value="all">紹介者: 全て</option>'
+            + '<option value="none">紹介者なし</option>'
+            + codes.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
+    }
+
+    // --- ライセンス操作 ---
+    function confirmSuspend(orgId, orgName) {
+        document.getElementById('licenseModalTitle').textContent = 'ライセンス停止';
+        document.getElementById('licenseModalBody').innerHTML = `
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+                <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-pause"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-gray-900">${orgName} を停止しますか？</p>
+                    <p class="text-xs text-gray-600 mt-1.5">テナントはログインできなくなりますが、データは<strong class="text-amber-700">6ヶ月間</strong>保持され、いつでも復活できます。</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('licenseNote').value = '';
+        const btn = document.getElementById('licenseConfirmBtn');
+        btn.innerHTML = '<i class="fas fa-pause mr-1"></i>停止する';
+        btn.className = 'flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 transition justify-center text-sm';
+        btn.onclick = () => executeSuspend(orgId);
+        openModal('licenseConfirmModal');
+    }
+
+    function confirmActivate(orgId, orgName) {
+        document.getElementById('licenseModalTitle').textContent = 'ライセンス復活';
+        document.getElementById('licenseModalBody').innerHTML = `
+            <div class="bg-green-50 border border-green-200 rounded-xl p-4 flex gap-3">
+                <div class="w-9 h-9 rounded-lg bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-play"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-gray-900">${orgName} を復活しますか？</p>
+                    <p class="text-xs text-gray-600 mt-1.5">テナントは再びログイン・利用できるようになります。データはすべて保持されています。</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('licenseNote').value = '';
+        const btn = document.getElementById('licenseConfirmBtn');
+        btn.innerHTML = '<i class="fas fa-play mr-1"></i>復活する';
+        btn.className = 'flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition justify-center text-sm';
+        btn.onclick = () => executeActivate(orgId);
+        openModal('licenseConfirmModal');
+    }
+
+    function confirmDelete(orgId, orgName) {
+        document.getElementById('licenseModalTitle').textContent = 'テナントデータ完全削除';
+        document.getElementById('licenseModalBody').innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
+                <div class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-bold text-red-900">この操作は取り消せません</p>
+                    <p class="text-xs text-gray-700 mt-1.5"><strong>${orgName}</strong> の全データ（スタッフ・シフト・リクエスト・設定）を完全に削除します。</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('licenseNote').value = '';
+        const btn = document.getElementById('licenseConfirmBtn');
+        btn.innerHTML = '<i class="fas fa-trash mr-1"></i>完全削除する';
+        btn.className = 'flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition justify-center text-sm';
+        btn.onclick = () => executeDelete(orgId);
+        openModal('licenseConfirmModal');
+    }
+
+    async function executeSuspend(orgId) {
+        const note = document.getElementById('licenseNote').value.trim();
+        try {
+            const result = await rpc('suspend_license', { p_organization_id: orgId, p_note: note });
+            if (result.success) {
+                showToast(result.message, 'success');
+                closeModal('licenseConfirmModal');
+                await loadTenants();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    async function executeActivate(orgId) {
+        const note = document.getElementById('licenseNote').value.trim();
+        try {
+            const result = await rpc('activate_license', { p_organization_id: orgId, p_note: note });
+            if (result.success) {
+                showToast(result.message, 'success');
+                closeModal('licenseConfirmModal');
+                await loadTenants();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    async function executeDelete(orgId) {
+        try {
+            const result = await rpc('delete_tenant_data', { p_organization_id: orgId });
+            if (result.success) {
+                showToast(result.message, 'success');
+                closeModal('licenseConfirmModal');
+                await loadTenants();
+            } else {
+                showToast(result.message, 'error');
+            }
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    // --- テナント新規作成 ---
+    function onTenantPlanChange() {
+        const plan = document.getElementById('newTenantPlan').value;
+        const note = document.getElementById('oemPlanNote');
+        const refLabel = document.getElementById('newReferrerLabel');
+        if (plan === 'oem') {
+            note.classList.remove('hidden');
+            refLabel.textContent = '（推奨：OEM代理店を選択）';
+            refLabel.className = 'text-xs text-amber-600';
+        } else {
+            note.classList.add('hidden');
+            refLabel.textContent = '（任意）';
+            refLabel.className = 'text-xs text-gray-400';
+        }
+    }
+
+    function copyAdminCompanyPhone() {
+        const v = document.getElementById('newCompanyPhone').value.trim();
+        if (!v) { showToast('代表電話を先に入力してください', 'error'); return; }
+        document.getElementById('newContactPhone').value = v;
+    }
+
+    function openCreateTenantModal() {
+        document.getElementById('newOrgName').value = '';
+        document.getElementById('newContactName').value = '';
+        document.getElementById('newOrgEmail').value = '';
+        document.getElementById('newCompanyPhone').value = '';
+        document.getElementById('newContactPhone').value = '';
+        document.getElementById('newOrgAddress').value = '';
+        document.getElementById('newReferrerCode').value = '';
+        document.getElementById('newTenantPlan').value = 'pro';
+        document.getElementById('createResult').classList.add('hidden');
+        // 紹介者プルダウン更新
+        populateReferrerDropdown();
+        onTenantPlanChange();
+        openModal('createTenantModal');
+    }
+
+    async function populateReferrerDropdown() {
+        try {
+            const data = await rpc('list_referrers');
+            const sel = document.getElementById('newReferrerCode');
+            sel.innerHTML = '<option value="">— 紹介者なし —</option>'
+                + (data || []).filter(r => r.active).map(r =>
+                    `<option value="${escapeHtml(r.code)}">${escapeHtml(r.code)} - ${escapeHtml(r.name)}</option>`
+                ).join('');
+        } catch (e) {
+            console.error('紹介者リスト取得失敗', e);
+        }
+    }
+
+    async function createTenant() {
+        const orgName = document.getElementById('newOrgName').value.trim();
+        const contactName = document.getElementById('newContactName').value.trim();
+        const orgEmail = document.getElementById('newOrgEmail').value.trim();
+        const companyPhone = document.getElementById('newCompanyPhone').value.trim();
+        const contactPhone = document.getElementById('newContactPhone').value.trim();
+        const address = document.getElementById('newOrgAddress').value.trim();
+        const referrerCode = document.getElementById('newReferrerCode').value.trim();
+        const plan = document.getElementById('newTenantPlan').value;
+
+        if (!orgName) { showToast('組織名を入力してください', 'error'); return; }
+        if (!contactName) { showToast('担当者名を入力してください', 'error'); return; }
+        if (!orgEmail || !orgEmail.includes('@')) { showToast('有効なメールアドレスを入力してください', 'error'); return; }
+        if (!companyPhone) { showToast('代表電話を入力してください', 'error'); return; }
+        if (!contactPhone) { showToast('担当者電話を入力してください', 'error'); return; }
+
+        try {
+            const result = await rpc('create_tenant', { p_org_name: orgName });
+            if (result.status !== 'success') {
+                showToast(result.message || '作成に失敗しました', 'error');
+                return;
+            }
+
+            // configに顧客情報を保存
+            const SUPA_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_URL) || SUPABASE_URL;
+            const SUPA_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_ANON_KEY) || SUPABASE_KEY;
+            const configBody = {
+                customer_email: orgEmail,
+                contact_name: contactName,
+                phone: companyPhone,
+                contact_phone: contactPhone,
+                address: address,
+                referrer_code: referrerCode || null,
+            };
+            // OEMプランは手動でstripe_plan + active状態を設定
+            if (plan === 'oem') {
+                configBody.stripe_plan = 'oem';
+                configBody.subscription_status = 'active';
+            }
+            await fetch(`${SUPA_URL}/rest/v1/config?contract_id=eq.${result.contract_id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPA_KEY,
+                    'Authorization': 'Bearer ' + SUPA_KEY,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify(configBody)
+            });
+
+            const planLabel = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM代理店' }[plan] || plan;
+            const resultEl = document.getElementById('createResult');
+            resultEl.innerHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p class="text-sm font-medium text-green-800"><i class="fas fa-circle-check mr-1"></i>テナントを作成しました（${planLabel}）</p>
+                    <div class="mt-2 space-y-1">
+                        <p class="text-sm text-green-700">契約ID: <span class="font-mono font-bold text-lg select-all">${result.contract_id}</span></p>
+                        <p class="text-sm text-green-700">パスワード: <span class="font-mono font-medium">rakushift1234</span></p>
+                        <p class="text-sm text-green-700">メール: <span class="font-medium">${orgEmail}</span></p>
+                        ${referrerCode ? `<p class="text-sm text-green-700">紹介者コード: <span class="font-mono font-medium">${referrerCode}</span></p>` : ''}
+                    </div>
+                    <p class="text-xs text-green-600 mt-2"><i class="fas fa-envelope mr-1"></i>テナント一覧の「案内送信」ボタンでログイン情報をメール送信できます</p>
+                </div>
+            `;
+            resultEl.classList.remove('hidden');
+            showToast(`テナント「${orgName}」を作成しました`, 'success');
+            await loadTenants();
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    // --- タブ切替 ---
+    function switchTab(tab) {
+        const tenants = document.getElementById('panelTenants');
+        const revenue = document.getElementById('panelRevenue');
+        const referrers = document.getElementById('panelReferrers');
+        const btnT = document.getElementById('tabTenants');
+        const btnR = document.getElementById('tabRevenue');
+        const btnRef = document.getElementById('tabReferrers');
+        const activeCls = 'px-4 py-2 text-sm font-bold rounded-lg transition bg-indigo-600 text-white';
+        const inactiveCls = 'px-4 py-2 text-sm font-bold rounded-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200';
+
+        tenants.classList.add('hidden');
+        revenue.classList.add('hidden');
+        referrers.classList.add('hidden');
+        btnT.className = inactiveCls;
+        btnR.className = inactiveCls;
+        btnRef.className = inactiveCls;
+
+        if (tab === 'tenants') {
+            tenants.classList.remove('hidden');
+            btnT.className = activeCls;
+        } else if (tab === 'revenue') {
+            revenue.classList.remove('hidden');
+            btnR.className = activeCls;
+            renderRevenue();
+        } else if (tab === 'referrers') {
+            referrers.classList.remove('hidden');
+            btnRef.className = activeCls;
+            loadReferrers();
+        }
+    }
+
+    // --- 収益計算・表示 ---
+    const PLAN_PRICES = { standard: 2980, pro: 4480, premium: 9980, oem: 4000 };
+    const PLAN_NAMES = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM' };
+    const PLAN_COLORS = { standard: '#3b82f6', pro: '#22c55e', premium: '#a855f7', oem: '#f59e0b' };
+
+    function renderRevenue() {
+        // 課金中: Stripe決済済み or OEMプラン (active)
+        const paying = allTenants.filter(t => t.subscription_status === 'active' && (t.stripe_customer_id || t.stripe_plan === 'oem'));
+
+        // プラン別集計
+        const planCounts = { standard: 0, pro: 0, premium: 0, oem: 0 };
+        const planRevenue = { standard: 0, pro: 0, premium: 0, oem: 0 };
+
+        paying.forEach(t => {
+            const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : null;
+            if (plan && PLAN_PRICES[plan]) {
+                planCounts[plan]++;
+                planRevenue[plan] += PLAN_PRICES[plan];
+            }
+        });
+
+        const mrr = Object.values(planRevenue).reduce((a, b) => a + b, 0);
+        const paidCount = Object.values(planCounts).reduce((a, b) => a + b, 0);
+        const arpu = paidCount > 0 ? Math.round(mrr / paidCount) : 0;
+
+        // サマリー更新
+        document.getElementById('revMRR').textContent = '¥' + mrr.toLocaleString();
+        document.getElementById('revARR').textContent = '¥' + (mrr * 12).toLocaleString();
+        document.getElementById('revPaidCount').textContent = paidCount;
+        document.getElementById('revARPU').textContent = '¥' + arpu.toLocaleString();
+        document.getElementById('statMRR').textContent = '¥' + mrr.toLocaleString();
+
+        // プラン別内訳
+        const breakdown = document.getElementById('revPlanBreakdown');
+        breakdown.innerHTML = ['standard', 'pro', 'premium', 'oem'].map(plan => {
+            const count = planCounts[plan];
+            const rev = planRevenue[plan];
+            const pct = mrr > 0 ? Math.round(rev / mrr * 100) : 0;
+            const barColor = { standard: '#3b82f6', pro: '#22c55e', premium: '#a855f7', oem: '#f59e0b' }[plan];
+            const textColor = { standard: 'text-blue-600', pro: 'text-green-600', premium: 'text-purple-600', oem: 'text-amber-600' }[plan];
+            const bgColor = { standard: 'bg-blue-50', pro: 'bg-green-50', premium: 'bg-purple-50', oem: 'bg-amber-50' }[plan];
+            return `
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full" style="background:${barColor}"></span>
+                            <span class="text-sm font-bold ${textColor}">${PLAN_NAMES[plan]}</span>
+                            <span class="text-xs text-gray-400">${count}件</span>
+                        </div>
+                        <div class="text-sm">
+                            <span class="font-bold text-gray-900">¥${rev.toLocaleString()}</span>
+                            <span class="text-gray-400 text-xs ml-1">${pct}%</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                        <div class="h-2 rounded-full transition-all duration-700" style="width: ${pct}%; background:${barColor};"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // チャート
+        const chartEl = document.getElementById('revPlanChart');
+        if (chartEl && typeof Chart !== 'undefined') {
+            if (chartEl._chart) chartEl._chart.destroy();
+            chartEl._chart = new Chart(chartEl, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Standard', 'Pro', 'Premium', 'OEM'],
+                    datasets: [{
+                        data: [planRevenue.standard, planRevenue.pro, planRevenue.premium, planRevenue.oem],
+                        backgroundColor: [PLAN_COLORS.standard, PLAN_COLORS.pro, PLAN_COLORS.premium, PLAN_COLORS.oem],
+                        borderWidth: 0,
+                        hoverOffset: 8,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 16, font: { size: 12, family: 'Inter' }, usePointStyle: true, pointStyle: 'circle' }
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            padding: 10,
+                            cornerRadius: 8,
+                            titleFont: { size: 13, weight: '600' },
+                            bodyFont: { size: 12 },
+                            callbacks: {
+                                label: function(ctx) {
+                                    return ` ¥${ctx.parsed.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 顧客一覧テーブル
+        const tbody = document.getElementById('revCustomerTable');
+        tbody.innerHTML = allTenants.map(t => {
+            const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : 'free';
+            const isPaying = t.subscription_status === 'active' && (t.stripe_customer_id || plan === 'oem');
+            const price = isPaying ? (PLAN_PRICES[plan] || 0) : 0;
+            const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
+            const statusBadge = t.license_status === 'active'
+                ? '<span class="badge badge-success">有効</span>'
+                : '<span class="badge badge-danger">停止</span>';
+            const created = t.created_at ? formatDate(t.created_at) : '-';
+
+            return `<tr>
+                <td class="text-left font-semibold text-gray-900 text-sm">${escapeHtml(t.name)}</td>
+                <td class="text-left"><span class="font-mono text-[11px] text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">${escapeHtml(t.contract_id)}</span></td>
+                <td class="text-left text-sm text-gray-700">${escapeHtml(t.contact_name || '-')}</td>
+                <td class="text-left text-xs text-gray-500">${escapeHtml(t.customer_email || '-')}</td>
+                <td class="text-left text-xs text-gray-500">${escapeHtml(t.phone || '-')}</td>
+                <td class="text-center"><span class="badge ${planBadgeClass[plan] || 'badge-neutral'}">${PLAN_NAMES[plan] || '未契約'}</span></td>
+                <td class="text-right font-mono font-bold text-gray-900">${price > 0 ? '¥' + price.toLocaleString() : '<span class="text-gray-300">—</span>'}</td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-left text-xs text-gray-500">${created}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // =========================================================
+    // --- 紹介者管理 ---
+    // =========================================================
+    let allReferrers = [];
+
+    async function loadReferrers() {
+        try {
+            const data = await rpc('list_referrers');
+            allReferrers = data || [];
+            renderReferrers();
+        } catch (e) {
+            showToast('紹介者一覧の取得に失敗: ' + e.message, 'error');
+        }
+    }
+
+    function calcCommission(r) {
+        // DB側で計算済みなら（OEM分を含む）それを使う
+        if (r.monthly_commission != null) return r.monthly_commission;
+        // フォールバック計算
+        const oemPart = (r.oem_count || 0) * 3200;
+        if ((r.commission_type || 'percent') === 'fixed') {
+            return oemPart + Math.round((r.paying_count || 0) * (r.commission_amount || 0));
+        }
+        return oemPart + Math.round((r.monthly_revenue || 0) * (r.commission_rate || 0) / 100);
+    }
+
+    function commissionLabel(r) {
+        if ((r.commission_type || 'percent') === 'fixed') {
+            return `¥${Number(r.commission_amount || 0).toLocaleString()}/件`;
+        }
+        return `${r.commission_rate}%`;
+    }
+
+    function renderReferrers() {
+        const tbody = document.getElementById('referrerTableBody');
+        if (!allReferrers.length) {
+            tbody.innerHTML = '<tr><td colspan="10" class="py-12 text-center text-gray-400"><i class="fas fa-user-plus text-3xl mb-2 block"></i>紹介者がまだ登録されていません</td></tr>';
+            document.getElementById('refTotalCount').textContent = '0';
+            document.getElementById('refTenantCount').textContent = '0';
+            document.getElementById('refMRR').textContent = '¥0';
+            document.getElementById('refCommission').textContent = '¥0';
+            return;
+        }
+
+        let totalTenants = 0, totalMRR = 0, totalCommission = 0;
+        allReferrers.forEach(r => {
+            totalTenants += (r.paying_count || 0) + (r.oem_count || 0);
+            totalMRR += (r.monthly_revenue || 0) + (r.oem_revenue || 0);
+            totalCommission += calcCommission(r);
+        });
+        document.getElementById('refTotalCount').textContent = allReferrers.length;
+        document.getElementById('refTenantCount').textContent = totalTenants;
+        document.getElementById('refMRR').textContent = '¥' + totalMRR.toLocaleString();
+        document.getElementById('refCommission').textContent = '¥' + totalCommission.toLocaleString();
+
+        tbody.innerHTML = allReferrers.map(r => {
+            const commission = calcCommission(r);
+            const totalRev = (r.monthly_revenue || 0) + (r.oem_revenue || 0);
+            const oemCount = r.oem_count || 0;
+            const payCount = r.paying_count || 0;
+            const statusBadge = r.active
+                ? '<span class="badge badge-success">有効</span>'
+                : '<span class="badge badge-neutral">無効</span>';
+            const payDetail = oemCount > 0
+                ? `<span class="text-sm font-medium">${payCount}</span><span class="text-xs text-amber-600 ml-1">+OEM ${oemCount}</span>`
+                : `<span class="text-sm font-medium">${payCount}</span>`;
+            return `<tr>
+                <td class="text-left">
+                    <div class="font-semibold text-gray-900 text-sm">${escapeHtml(r.name)}</div>
+                </td>
+                <td class="text-left"><span class="badge badge-amber font-mono">${escapeHtml(r.code)}</span></td>
+                <td class="text-left text-xs text-gray-500">${escapeHtml(r.email || '-')}</td>
+                <td class="text-center">
+                    <div class="font-bold text-indigo-600 text-sm">${commissionLabel(r)}</div>
+                    <div class="text-[10px] text-gray-400 mt-0.5">+OEM ¥3,200/件</div>
+                </td>
+                <td class="text-center text-sm font-medium text-gray-700">${r.tenant_count || 0}</td>
+                <td class="text-center">${payDetail}</td>
+                <td class="text-right font-mono text-sm text-gray-700">¥${totalRev.toLocaleString()}</td>
+                <td class="text-right font-mono font-bold text-purple-600">¥${commission.toLocaleString()}</td>
+                <td class="text-center">${statusBadge}</td>
+                <td class="text-center whitespace-nowrap">
+                    <button onclick="openEditReferrerModal('${r.id}')" class="px-2.5 py-1 text-xs bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition border border-blue-100"><i class="fas fa-pen"></i></button>
+                    <button onclick="confirmDeleteReferrer('${r.id}', '${escapeHtml(r.name).replace(/'/g, "\\'")}')" class="px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition border border-red-100 ml-1"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function toggleCommissionInputs() {
+        const type = document.querySelector('input[name="refCommissionType"]:checked')?.value || 'percent';
+        document.getElementById('refCommissionRateWrap').style.display = type === 'percent' ? 'block' : 'none';
+        document.getElementById('refCommissionAmountWrap').style.display = type === 'fixed' ? 'block' : 'none';
+    }
+
+    function openCreateReferrerModal() {
+        document.getElementById('referrerModalTitle').textContent = '紹介者を新規発行';
+        document.getElementById('refEditId').value = '';
+        document.getElementById('refName').value = '';
+        document.getElementById('refCode').value = '';
+        document.getElementById('refEmail').value = '';
+        document.getElementById('refPhone').value = '';
+        document.getElementById('refCommissionRate').value = '30';
+        document.getElementById('refCommissionAmount').value = '1000';
+        document.querySelector('input[name="refCommissionType"][value="percent"]').checked = true;
+        document.getElementById('refNote').value = '';
+        document.getElementById('refActiveWrap').style.display = 'none';
+        document.getElementById('refCode').disabled = false;
+        toggleCommissionInputs();
+        openModal('referrerModal');
+    }
+
+    function openEditReferrerModal(id) {
+        const r = allReferrers.find(x => x.id === id);
+        if (!r) return;
+        document.getElementById('referrerModalTitle').textContent = '紹介者を編集';
+        document.getElementById('refEditId').value = r.id;
+        document.getElementById('refName').value = r.name || '';
+        document.getElementById('refCode').value = r.code || '';
+        document.getElementById('refCode').disabled = true; // コードは編集不可
+        document.getElementById('refEmail').value = r.email || '';
+        document.getElementById('refPhone').value = r.phone || '';
+        document.getElementById('refCommissionRate').value = r.commission_rate || 30;
+        document.getElementById('refCommissionAmount').value = r.commission_amount || 0;
+        const type = r.commission_type || 'percent';
+        document.querySelector(`input[name="refCommissionType"][value="${type}"]`).checked = true;
+        document.getElementById('refNote').value = r.note || '';
+        document.getElementById('refActiveWrap').style.display = 'flex';
+        document.getElementById('refActive').checked = !!r.active;
+        toggleCommissionInputs();
+        openModal('referrerModal');
+    }
+
+    async function saveReferrer() {
+        const id = document.getElementById('refEditId').value;
+        const name = document.getElementById('refName').value.trim();
+        const code = document.getElementById('refCode').value.trim().toUpperCase();
+        const email = document.getElementById('refEmail').value.trim();
+        const phone = document.getElementById('refPhone').value.trim();
+        const type = document.querySelector('input[name="refCommissionType"]:checked')?.value || 'percent';
+        const rate = parseFloat(document.getElementById('refCommissionRate').value) || 0;
+        const amount = parseFloat(document.getElementById('refCommissionAmount').value) || 0;
+        const note = document.getElementById('refNote').value.trim();
+        const active = document.getElementById('refActive').checked;
+
+        if (!name) { showToast('紹介者名を入力してください', 'error'); return; }
+        if (type === 'percent') {
+            if (isNaN(rate) || rate < 0 || rate > 100) { showToast('報酬率は0〜100の数値で入力してください', 'error'); return; }
+        } else {
+            if (isNaN(amount) || amount < 0) { showToast('報酬金額は0以上の数値で入力してください', 'error'); return; }
+        }
+
+        try {
+            if (id) {
+                // 編集
+                const result = await rpc('update_referrer', {
+                    p_id: id, p_name: name, p_email: email, p_phone: phone,
+                    p_commission_rate: rate, p_commission_amount: amount, p_commission_type: type,
+                    p_active: active, p_note: note
+                });
+                if (result.success) {
+                    showToast('紹介者を更新しました', 'success');
+                    closeModal('referrerModal');
+                    await loadReferrers();
+                } else {
+                    showToast(result.message || '更新に失敗', 'error');
+                }
+            } else {
+                // 新規
+                const result = await rpc('create_referrer', {
+                    p_name: name, p_code: code || null, p_email: email, p_phone: phone,
+                    p_commission_rate: rate, p_commission_amount: amount, p_commission_type: type,
+                    p_note: note
+                });
+                if (result.success) {
+                    showToast(`紹介者「${name}」を発行しました（コード: ${result.code}）`, 'success');
+                    closeModal('referrerModal');
+                    await loadReferrers();
+                } else {
+                    showToast(result.message || '発行に失敗', 'error');
+                }
+            }
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    async function confirmDeleteReferrer(id, name) {
+        if (!confirm(`紹介者「${name}」を削除しますか？\n（紐付け済みテナントがある場合は無効化のみ行われます）`)) return;
+        try {
+            const result = await rpc('delete_referrer', { p_id: id });
+            if (result.success) {
+                showToast(result.message || '削除しました', 'success');
+                await loadReferrers();
+            } else {
+                showToast(result.message || '削除に失敗', 'error');
+            }
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    // --- ユーティリティ ---
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function getRemainingDays(dateStr) {
+        const target = new Date(dateStr);
+        const now = new Date();
+        const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+        if (diff < 0) return `${Math.abs(diff)}日超過`;
+        if (diff === 0) return '本日期限';
+        return `残り${diff}日`;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function openModal(id) {
+        document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const icon = document.getElementById('toastIcon');
+        const msg = document.getElementById('toastMessage');
+
+        const config = {
+            success: { bg: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', icon: 'fa-circle-check' },
+            error: { bg: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', icon: 'fa-circle-xmark' },
+            info: { bg: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', icon: 'fa-circle-info' }
+        };
+        const c = config[type] || config.info;
+
+        const inner = toast.querySelector('div');
+        inner.className = 'px-5 py-3.5 rounded-xl shadow-2xl text-white text-sm font-medium flex items-center gap-3 min-w-[280px]';
+        inner.style.background = c.bg;
+        icon.className = `fas ${c.icon} text-base`;
+        msg.textContent = message;
+
+        toast.classList.remove('hidden');
+        clearTimeout(window._toastTimer);
+        window._toastTimer = setTimeout(() => toast.classList.add('hidden'), 4000);
+    }
+
+    // --- プラットフォーム設定管理 ---
+    const SETTING_LABELS = {
+        stripe_secret_key: { label: 'Stripe Secret Key', placeholder: 'sk_live_xxxx', type: 'password' },
+        stripe_webhook_secret: { label: 'Stripe Webhookシークレット', placeholder: 'whsec_xxxx', type: 'password' },
+        stripe_price_standard: { label: 'Standard価格ID (2,980円/月)', placeholder: 'price_xxxx', type: 'text' },
+        stripe_price_pro: { label: 'Pro価格ID (4,480円/月)', placeholder: 'price_xxxx', type: 'text' },
+        stripe_price_premium: { label: 'Premium価格ID (9,980円/月)', placeholder: 'price_xxxx', type: 'text' },
+        gemini_api_key: { label: 'Gemini APIキー', placeholder: 'AIza...', type: 'password' },
+        gemini_model: { label: 'Geminiモデル', placeholder: 'gemini-2.0-flash', type: 'text' },
+        openai_api_key: { label: 'OpenAI APIキー', placeholder: 'sk-...', type: 'password' },
+        supabase_service_key: { label: 'Supabase Service Key', placeholder: 'eyJ...', type: 'password' },
+        smtp_host: { label: 'メール送信サーバー(SMTP)', placeholder: 'smtp.gmail.com', type: 'text' },
+        smtp_port: { label: 'SMTPポート', placeholder: '587', type: 'text' },
+        smtp_user: { label: 'SMTPユーザー(メールアドレス)', placeholder: 'info@example.com', type: 'text' },
+        smtp_pass: { label: 'SMTPパスワード', placeholder: 'アプリパスワード', type: 'password' },
+        smtp_from: { label: '送信元アドレス', placeholder: 'noreply@rakushift.ai', type: 'text' },
+    };
+
+    function toggleSettingsPanel() {
+        const panel = document.getElementById('settingsPanel');
+        const icon = document.getElementById('settingsToggleIcon');
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            icon.style.transform = 'rotate(180deg)';
+            loadPlatformSettings();
+        } else {
+            panel.classList.add('hidden');
+            icon.style.transform = '';
+        }
+    }
+
+    async function loadPlatformSettings() {
+        try {
+            const settings = await rpc('get_platform_settings_masked');
+            const grid = document.getElementById('settingsGrid');
+            if (!settings || !Array.isArray(settings)) {
+                grid.innerHTML = '<p class="text-red-500 text-sm col-span-2">設定の読み込みに失敗しました。SQLマイグレーションを実行してください。</p>';
+                return;
+            }
+
+            grid.innerHTML = settings.map(s => {
+                const meta = SETTING_LABELS[s.key] || { label: s.key, placeholder: '', type: 'text' };
+                const statusBadge = s.has_value
+                    ? '<span class="badge badge-success ml-auto"><i class="fas fa-check text-[8px]"></i>設定済</span>'
+                    : '<span class="badge badge-neutral ml-auto">未設定</span>';
+                return `
+                    <div class="border border-gray-200 rounded-xl p-3.5 bg-gray-50/50 hover:bg-white transition">
+                        <label class="text-xs font-semibold text-gray-700 flex items-center gap-1 mb-2">
+                            ${meta.label}
+                            ${statusBadge}
+                        </label>
+                        <input type="${meta.type}" id="setting_${s.key}"
+                            class="input font-mono text-sm"
+                            placeholder="${s.has_value ? s.masked_value : meta.placeholder}">
+                        <p class="text-[11px] text-gray-400 mt-1.5">${s.description || ''}</p>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            document.getElementById('settingsGrid').innerHTML =
+                `<p class="text-red-500 text-sm col-span-2">エラー: ${e.message}</p>`;
+        }
+    }
+
+    async function savePlatformSettings() {
+        const updates = {};
+        let hasChanges = false;
+
+        Object.keys(SETTING_LABELS).forEach(key => {
+            const input = document.getElementById('setting_' + key);
+            if (input && input.value.trim()) {
+                updates[key] = input.value.trim();
+                hasChanges = true;
+            }
+        });
+
+        if (!hasChanges) {
+            showToast('変更がありません（空欄は既存の値を維持します）', 'info');
+            return;
+        }
+
+        try {
+            const result = await rpc('update_platform_settings_batch', { p_settings: updates });
+            if (result.success) {
+                showToast(`${result.updated}件の設定を更新しました`, 'success');
+                // 入力欄をクリアして再読み込み
+                Object.keys(SETTING_LABELS).forEach(key => {
+                    const input = document.getElementById('setting_' + key);
+                    if (input) input.value = '';
+                });
+                await loadPlatformSettings();
+            } else {
+                showToast('保存に失敗しました', 'error');
+            }
+        } catch (e) {
+            showToast('エラー: ' + e.message, 'error');
+        }
+    }
+
+    // --- 初期化 ---
+    (function init() {
+        const saved = sessionStorage.getItem('platform_admin');
+        if (saved) {
+            try {
+                adminSession = JSON.parse(saved);
+                document.getElementById('adminName').textContent = adminSession.name;
+                showAdminPanel();
+                loadTenants();
+            } catch (e) {
+                sessionStorage.removeItem('platform_admin');
+            }
+        }
+    })();
+    </script>
+</body>
+</html>

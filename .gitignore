@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+fix_scheduler_midnight.py
+python/scheduler_backup.py
+python/ai_scheduler.py
+
+# 機密設定ファイル
+# 注意: js/config.js はSupabase Anonキー（パブリック）のみ含むため、
+# Cloudflare Pagesデプロイのためにgitに含めています。
+# Supabase Service Keyなどの機密情報は環境変数で管理してください。
+
+# Supabase local
+supabase/.temp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
