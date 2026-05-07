@@ -724,11 +724,63 @@
             return false;
         };
     </script>
-    <script src="js/holidays.js?v=20260503"></script>
-    <script src="js/config.js?v=20260503"></script>
-    <script src="js/api.js?v=20260503"></script>
-    <script src="js/app_v2.js?v=20260503"></script>
-    <script src="js/gantt_drag.js?v=20260503"></script>
+
+    <!-- ================= お知らせポップアップモーダル ================= -->
+    <div id="announcementModal" class="modal fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+            <!-- ヘッダー -->
+            <div class="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-6">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-8 translate-x-8"></div>
+                <div class="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full translate-y-6 -translate-x-4"></div>
+                <div class="relative">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                            <i class="fa-solid fa-bell text-sm"></i>
+                        </span>
+                        <span class="text-xs font-bold tracking-wider uppercase opacity-80">お知らせ</span>
+                    </div>
+                    <h3 id="announcementTitle" class="text-xl font-bold leading-tight">新しいお知らせ</h3>
+                </div>
+                <button onclick="app.closeAnnouncementModal()" class="absolute top-4 right-4 text-white/70 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <!-- コンテンツ -->
+            <div class="p-6">
+                <div id="announcementBody" class="text-sm text-gray-700 leading-relaxed space-y-3">
+                    <!-- JS で挿入 -->
+                </div>
+                <div id="announcementAction" class="mt-5 hidden">
+                    <a id="announcementLink" href="#" target="_blank"
+                       class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:scale-[1.02] transition-all">
+                        <i class="fa-solid fa-external-link-alt"></i>
+                        <span id="announcementBtnText">詳しく見る</span>
+                    </a>
+                </div>
+            </div>
+            <!-- フッター (ページネーション) -->
+            <div id="announcementFooter" class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <span id="announcementCounter" class="text-xs text-gray-400">1 / 1</span>
+                <div class="flex gap-2">
+                    <button id="announcementPrev" onclick="app.prevAnnouncement()" class="px-3 py-1.5 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition hidden">
+                        <i class="fa-solid fa-chevron-left mr-1"></i>前へ
+                    </button>
+                    <button id="announcementNext" onclick="app.nextAnnouncement()" class="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition hidden">
+                        次へ<i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                    <button id="announcementClose" onclick="app.closeAnnouncementModal()" class="px-4 py-1.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition">
+                        閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/holidays.js?v=20260508"></script>
+    <script src="js/config.js?v=20260508"></script>
+    <script src="js/api.js?v=20260508"></script>
+    <script src="js/app_v2.js?v=20260508"></script>
+    <script src="js/gantt_drag.js?v=20260508"></script>
     
 </body>
 </html>

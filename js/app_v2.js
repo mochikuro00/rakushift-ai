@@ -408,6 +408,9 @@ const app = {
                 } else {
                     this.showToast(`契約ID: ${contractId} でログインしました`, 'success');
                 }
+
+                // お知らせポップアップ表示
+                this.showAnnouncementsAfterLogin();
             } else {
                 this.showToast(authResult?.message || 'ログインに失敗しました', 'error');
             }
@@ -5171,6 +5174,110 @@ const app = {
     closeModal(id) {
         const el = document.getElementById(id);
         if(el) el.classList.remove('active');
+    },
+
+    // =========================================================
+    // お知らせポップアップ機能
+    // =========================================================
+    _announcements: [],
+    _announcementIndex: 0,
+
+    /**
+     * ログイン成功後にお知らせを取得してポップアップ表示
+     */
+    async showAnnouncementsAfterLogin() {
+        try {
+            const announcements = await API.rpc('list_active_announcements');
+            if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
+                return; // お知らせなし
+            }
+            this._announcements = announcements;
+            this._announcementIndex = 0;
+            // 少し遅延させてからポップアップ表示（ログイントーストと被らないように）
+            setTimeout(() => this._renderAnnouncement(), 1500);
+        } catch (e) {
+            console.warn('[Announcements] Load failed:', e.message);
+        }
+    },
+
+    /**
+     * 現在のお知らせをモーダルに描画
+     */
+    _renderAnnouncement() {
+        const list = this._announcements;
+        const idx = this._announcementIndex;
+        if (!list || idx >= list.length) return;
+
+        const item = list[idx];
+        const typeIcons = {
+            info: 'fa-circle-info',
+            warning: 'fa-triangle-exclamation',
+            promotion: 'fa-gift',
+            update: 'fa-rocket'
+        };
+        const typeColors = {
+            info: 'from-blue-600 via-indigo-600 to-purple-600',
+            warning: 'from-amber-500 via-orange-500 to-red-500',
+            promotion: 'from-emerald-500 via-teal-500 to-cyan-500',
+            update: 'from-violet-600 via-purple-600 to-fuchsia-600'
+        };
+
+        // ヘッダー色変更
+        const headerEl = document.querySelector('#announcementModal .modal-content > div:first-child');
+        if (headerEl) {
+            headerEl.className = `relative bg-gradient-to-r ${typeColors[item.type] || typeColors.info} text-white p-6`;
+        }
+
+        // タイトル
+        document.getElementById('announcementTitle').textContent = item.title;
+
+        // 本文 (改行をbrに変換)
+        const bodyEl = document.getElementById('announcementBody');
+        bodyEl.innerHTML = item.content.split('\n').map(line => `<p>${line}</p>`).join('');
+
+        // アクションボタン
+        const actionEl = document.getElementById('announcementAction');
+        if (item.target_url) {
+            actionEl.classList.remove('hidden');
+            document.getElementById('announcementLink').href = item.target_url;
+            document.getElementById('announcementBtnText').textContent = item.button_text || '詳しく見る';
+        } else {
+            actionEl.classList.add('hidden');
+        }
+
+        // カウンター
+        document.getElementById('announcementCounter').textContent = `${idx + 1} / ${list.length}`;
+
+        // ナビゲーションボタン
+        const prevBtn = document.getElementById('announcementPrev');
+        const nextBtn = document.getElementById('announcementNext');
+        if (list.length > 1) {
+            prevBtn.classList.toggle('hidden', idx === 0);
+            nextBtn.classList.toggle('hidden', idx === list.length - 1);
+        } else {
+            prevBtn.classList.add('hidden');
+            nextBtn.classList.add('hidden');
+        }
+
+        this.openModal('announcementModal');
+    },
+
+    prevAnnouncement() {
+        if (this._announcementIndex > 0) {
+            this._announcementIndex--;
+            this._renderAnnouncement();
+        }
+    },
+
+    nextAnnouncement() {
+        if (this._announcementIndex < this._announcements.length - 1) {
+            this._announcementIndex++;
+            this._renderAnnouncement();
+        }
+    },
+
+    closeAnnouncementModal() {
+        this.closeModal('announcementModal');
     }
 };
 

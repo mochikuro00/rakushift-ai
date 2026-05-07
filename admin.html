@@ -288,6 +288,9 @@
                 <button id="tabReferrers" onclick="switchTab('referrers')" class="tab-btn">
                     <i class="fas fa-user-group mr-1.5"></i>紹介者管理
                 </button>
+                <button id="tabAnnouncements" onclick="switchTab('announcements')" class="tab-btn">
+                    <i class="fas fa-bullhorn mr-1.5"></i>お知らせ管理
+                </button>
             </div>
 
             <!-- 統計カード -->
@@ -549,6 +552,29 @@
                     </div>
                 </div>
             </div><!-- /panelReferrers -->
+
+            <!-- ===== お知らせ管理タブ ===== -->
+            <div id="panelAnnouncements" class="hidden panel">
+                <div class="space-y-6">
+                    <!-- アクションバー -->
+                    <div class="card p-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h2 class="section-title">お知らせ管理</h2>
+                                <p class="section-subtitle">テナントのログイン時に表示されるお知らせを管理</p>
+                            </div>
+                            <button onclick="openCreateAnnouncementModal()" class="btn-primary">
+                                <i class="fas fa-plus"></i>新規お知らせ作成
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- お知らせ一覧 -->
+                    <div id="announcementsList" class="space-y-3">
+                        <div class="card p-8 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...</div>
+                    </div>
+                </div>
+            </div><!-- /panelAnnouncements -->
 
     </div>
 
@@ -1214,18 +1240,22 @@
         const tenants = document.getElementById('panelTenants');
         const revenue = document.getElementById('panelRevenue');
         const referrers = document.getElementById('panelReferrers');
+        const announcements = document.getElementById('panelAnnouncements');
         const btnT = document.getElementById('tabTenants');
         const btnR = document.getElementById('tabRevenue');
         const btnRef = document.getElementById('tabReferrers');
+        const btnAnn = document.getElementById('tabAnnouncements');
         const activeCls = 'px-4 py-2 text-sm font-bold rounded-lg transition bg-indigo-600 text-white';
         const inactiveCls = 'px-4 py-2 text-sm font-bold rounded-lg transition bg-gray-100 text-gray-600 hover:bg-gray-200';
 
         tenants.classList.add('hidden');
         revenue.classList.add('hidden');
         referrers.classList.add('hidden');
+        announcements.classList.add('hidden');
         btnT.className = inactiveCls;
         btnR.className = inactiveCls;
         btnRef.className = inactiveCls;
+        btnAnn.className = inactiveCls;
 
         if (tab === 'tenants') {
             tenants.classList.remove('hidden');
@@ -1238,6 +1268,10 @@
             referrers.classList.remove('hidden');
             btnRef.className = activeCls;
             loadReferrers();
+        } else if (tab === 'announcements') {
+            announcements.classList.remove('hidden');
+            btnAnn.className = activeCls;
+            loadAnnouncements();
         }
     }
 
@@ -1738,6 +1772,220 @@
             }
         }
     })();
+    </script>
+
+    <!-- ========== お知らせ作成/編集モーダル ========== -->
+    <div id="announcementEditModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col" style="max-height: 95vh;">
+            <div class="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-2xl">
+                <h3 class="text-lg font-bold" id="annModalTitle"><i class="fas fa-bullhorn mr-2"></i>新規お知らせ作成</h3>
+                <button onclick="closeModal('announcementEditModal')" class="text-white/80 hover:text-white">
+                    <i class="fas fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                <input type="hidden" id="annEditId" value="">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">タイトル <span class="text-red-500">*</span></label>
+                    <input type="text" id="annTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 新機能リリースのお知らせ">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">本文 <span class="text-red-500">*</span></label>
+                    <textarea id="annContent" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="お知らせの本文を入力してください..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">タイプ</label>
+                        <select id="annType" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <option value="info">ℹ️ お知らせ</option>
+                            <option value="promotion">🎁 キャンペーン</option>
+                            <option value="update">🚀 アップデート</option>
+                            <option value="warning">⚠️ 注意</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">優先度</label>
+                        <input type="number" id="annPriority" value="0" min="0" max="100" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="0">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">遷移先URL <span class="text-xs text-gray-400">（任意）</span></label>
+                    <input type="url" id="annTargetUrl" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="https://...">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">ボタンテキスト <span class="text-xs text-gray-400">（URL設定時に表示）</span></label>
+                    <input type="text" id="annBtnText" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: 詳しく見る">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">有効期限 <span class="text-xs text-gray-400">（任意・空欄で無期限）</span></label>
+                    <input type="datetime-local" id="annExpiresAt" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                </div>
+                <div class="flex items-center" id="annActiveWrap" style="display:none;">
+                    <input type="checkbox" id="annActive" class="mr-2 w-4 h-4" checked>
+                    <label for="annActive" class="text-sm text-gray-700">有効</label>
+                </div>
+            </div>
+            <div class="flex-shrink-0 px-5 py-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex gap-3">
+                <button onclick="closeModal('announcementEditModal')" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">キャンセル</button>
+                <button onclick="saveAnnouncement()" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition">
+                    <i class="fas fa-save mr-1"></i>保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // =========================================================
+    // お知らせ管理 JavaScript
+    // =========================================================
+    let allAnnouncements = [];
+
+    async function loadAnnouncements() {
+        try {
+            const data = await rpc('list_all_announcements');
+            allAnnouncements = Array.isArray(data) ? data : [];
+            renderAnnouncementsList();
+        } catch (e) {
+            document.getElementById('announcementsList').innerHTML =
+                `<div class="card p-8 text-center text-red-400"><i class="fas fa-exclamation-circle mr-2"></i>読み込みエラー: ${e.message}</div>`;
+        }
+    }
+
+    function renderAnnouncementsList() {
+        const container = document.getElementById('announcementsList');
+        if (!allAnnouncements.length) {
+            container.innerHTML = `<div class="card p-12 text-center"><div class="text-gray-300 text-5xl mb-4"><i class="fas fa-bullhorn"></i></div><p class="text-gray-500 font-medium">お知らせがありません</p><p class="text-sm text-gray-400 mt-1">「新規お知らせ作成」ボタンから作成してください</p></div>`;
+            return;
+        }
+        const typeLabels = { info: '📢 お知らせ', promotion: '🎁 キャンペーン', update: '🚀 アップデート', warning: '⚠️ 注意' };
+        const typeBadges = { info: 'badge-info', promotion: 'badge-success', update: 'badge-purple', warning: 'badge-warning' };
+        container.innerHTML = allAnnouncements.map(a => {
+            const isActive = a.is_active && (!a.expires_at || new Date(a.expires_at) > new Date());
+            const dateStr = new Date(a.created_at).toLocaleDateString('ja-JP');
+            const expiresStr = a.expires_at ? new Date(a.expires_at).toLocaleDateString('ja-JP') : '無期限';
+            return `
+                <div class="card p-5 ${!isActive ? 'opacity-60' : ''}">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                <span class="badge ${typeBadges[a.type] || 'badge-info'}">${typeLabels[a.type] || a.type}</span>
+                                ${isActive ? '<span class="badge badge-success">公開中</span>' : '<span class="badge badge-neutral">非公開</span>'}
+                                ${a.priority > 0 ? `<span class="badge badge-amber">優先度: ${a.priority}</span>` : ''}
+                            </div>
+                            <h3 class="font-bold text-gray-900 text-base mb-1">${a.title}</h3>
+                            <p class="text-sm text-gray-500 line-clamp-2">${a.content.substring(0, 100)}${a.content.length > 100 ? '...' : ''}</p>
+                            <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                <span><i class="fas fa-calendar mr-1"></i>作成: ${dateStr}</span>
+                                <span><i class="fas fa-clock mr-1"></i>期限: ${expiresStr}</span>
+                                ${a.target_url ? '<span><i class="fas fa-link mr-1"></i>URL設定あり</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1 flex-shrink-0">
+                            <button onclick="editAnnouncement('${a.id}')" class="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition flex items-center justify-center" title="編集">
+                                <i class="fas fa-pen text-xs"></i>
+                            </button>
+                            <button onclick="toggleAnnouncement('${a.id}', ${!a.is_active})" class="w-9 h-9 rounded-lg ${a.is_active ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-green-50 text-green-600 hover:bg-green-100'} transition flex items-center justify-center" title="${a.is_active ? '非公開にする' : '公開する'}">
+                                <i class="fas ${a.is_active ? 'fa-eye-slash' : 'fa-eye'} text-xs"></i>
+                            </button>
+                            <button onclick="deleteAnnouncement('${a.id}')" class="w-9 h-9 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition flex items-center justify-center" title="削除">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function openCreateAnnouncementModal() {
+        document.getElementById('annEditId').value = '';
+        document.getElementById('annTitle').value = '';
+        document.getElementById('annContent').value = '';
+        document.getElementById('annType').value = 'info';
+        document.getElementById('annPriority').value = '0';
+        document.getElementById('annTargetUrl').value = '';
+        document.getElementById('annBtnText').value = '';
+        document.getElementById('annExpiresAt').value = '';
+        document.getElementById('annActiveWrap').style.display = 'none';
+        document.getElementById('annModalTitle').innerHTML = '<i class="fas fa-bullhorn mr-2"></i>新規お知らせ作成';
+        openModal('announcementEditModal');
+    }
+
+    function editAnnouncement(id) {
+        const a = allAnnouncements.find(x => x.id === id);
+        if (!a) return;
+        document.getElementById('annEditId').value = a.id;
+        document.getElementById('annTitle').value = a.title;
+        document.getElementById('annContent').value = a.content;
+        document.getElementById('annType').value = a.type;
+        document.getElementById('annPriority').value = a.priority;
+        document.getElementById('annTargetUrl').value = a.target_url || '';
+        document.getElementById('annBtnText').value = a.button_text || '';
+        document.getElementById('annExpiresAt').value = a.expires_at ? a.expires_at.slice(0, 16) : '';
+        document.getElementById('annActiveWrap').style.display = 'flex';
+        document.getElementById('annActive').checked = a.is_active;
+        document.getElementById('annModalTitle').innerHTML = '<i class="fas fa-pen mr-2"></i>お知らせ編集';
+        openModal('announcementEditModal');
+    }
+
+    async function saveAnnouncement() {
+        const id = document.getElementById('annEditId').value;
+        const title = document.getElementById('annTitle').value.trim();
+        const content = document.getElementById('annContent').value.trim();
+        if (!title) { showToast('タイトルを入力してください', 'error'); return; }
+
+        const params = {
+            p_title: title,
+            p_content: content,
+            p_type: document.getElementById('annType').value,
+            p_target_url: document.getElementById('annTargetUrl').value.trim(),
+            p_button_text: document.getElementById('annBtnText').value.trim(),
+            p_priority: parseInt(document.getElementById('annPriority').value) || 0,
+            p_expires_at: document.getElementById('annExpiresAt').value ? new Date(document.getElementById('annExpiresAt').value).toISOString() : null,
+        };
+
+        try {
+            if (id) {
+                params.p_id = id;
+                params.p_is_active = document.getElementById('annActive').checked;
+                await rpc('update_announcement', params);
+                showToast('お知らせを更新しました', 'success');
+            } else {
+                await rpc('create_announcement', params);
+                showToast('お知らせを作成しました', 'success');
+            }
+            closeModal('announcementEditModal');
+            await loadAnnouncements();
+        } catch (e) {
+            showToast('保存エラー: ' + e.message, 'error');
+        }
+    }
+
+    async function toggleAnnouncement(id, newState) {
+        try {
+            await rpc('update_announcement', { p_id: id, p_is_active: newState });
+            showToast(newState ? 'お知らせを公開しました' : 'お知らせを非公開にしました', 'success');
+            await loadAnnouncements();
+        } catch (e) {
+            showToast('更新エラー: ' + e.message, 'error');
+        }
+    }
+
+    async function deleteAnnouncement(id) {
+        if (!confirm('このお知らせを削除しますか？')) return;
+        try {
+            await rpc('delete_announcement', { p_id: id });
+            showToast('お知らせを削除しました', 'success');
+            await loadAnnouncements();
+        } catch (e) {
+            showToast('削除エラー: ' + e.message, 'error');
+        }
+    }
+
+    function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('active');
+    }
     </script>
 </body>
 </html>
