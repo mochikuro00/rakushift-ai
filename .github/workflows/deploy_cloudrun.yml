@@ -1,11 +1,12 @@
 name: Deploy to Cloud Run
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'python/**'
   workflow_dispatch:
+  # Railwayに移行したため、pushトリガーを無効化
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'python/**'
 
 env:
   PROJECT_ID: raku-shiftai
