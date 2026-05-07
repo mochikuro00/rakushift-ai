@@ -14,5 +14,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # コードのコピー
 COPY . .
 
-# サーバー起動 (Cloud Runの環境変数PORTを確実に読み込む設定)
+# サーバー起動（$PORT環境変数でポートを動的に設定）
 CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"
