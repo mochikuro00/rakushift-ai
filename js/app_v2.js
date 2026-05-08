@@ -157,7 +157,12 @@ const app = {
                 this.state.isShopLoggedIn = false; // 明示的にfalse
                 this.renderCurrentView();
                 this.updateHeader();
-                this.openModal('loginModal');
+
+                // ページ訪問時にお知らせを表示（お知らせ閉じた後にログインモーダルを表示）
+                const hasAnnouncements = await this.showAnnouncementsOnPageLoad();
+                if (!hasAnnouncements) {
+                    this.openModal('loginModal');
+                }
                 
                 const loadingEl = document.getElementById('viewContainer').querySelector('.loading-spinner')?.parentElement?.parentElement;
                 if(loadingEl) loadingEl.innerHTML = ''; 
@@ -5278,6 +5283,32 @@ const app = {
 
     closeAnnouncementModal() {
         this.closeModal('announcementModal');
+        // ページ訪問時のお知らせの場合、閉じた後にログインモーダルを表示
+        if (this._showLoginAfterAnnouncement) {
+            this._showLoginAfterAnnouncement = false;
+            setTimeout(() => this.openModal('loginModal'), 300);
+        }
+    },
+
+    /**
+     * ページ訪問時（ログイン前）にお知らせを表示
+     * @returns {boolean} お知らせがあった場合true
+     */
+    async showAnnouncementsOnPageLoad() {
+        try {
+            const announcements = await API.rpc('list_active_announcements');
+            if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
+                return false;
+            }
+            this._announcements = announcements;
+            this._announcementIndex = 0;
+            this._showLoginAfterAnnouncement = true;
+            setTimeout(() => this._renderAnnouncement(), 500);
+            return true;
+        } catch (e) {
+            console.warn('[Announcements] Page load fetch failed:', e.message);
+            return false;
+        }
     }
 };
 
