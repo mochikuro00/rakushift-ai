@@ -9,13 +9,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from scheduler import ShiftScheduler
 
+# レート制限設定
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="Rakushift AI Engine", version="3.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS設定: 本番ドメインのみ許可
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
+if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == [""]:
+    ALLOWED_ORIGINS = [
+        "https://rakushift-ai.pages.dev",
+        "https://*.rakushift-ai.pages.dev",
+        "http://localhost:3000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -202,7 +221,8 @@ async def keepalive():
 # =============================================================
 
 @app.post("/check")
-def check_feasibility(req: ShiftRequest):
+@limiter.limit("20/minute")
+def check_feasibility(request: Request, req: ShiftRequest):
     try:
         scheduler = ShiftScheduler(
             req.staff_list, req.config, req.dates, req.requests)
@@ -214,7 +234,8 @@ def check_feasibility(req: ShiftRequest):
 
 
 @app.post("/generate")
-def generate_shifts(req: ShiftRequest):
+@limiter.limit("10/minute")
+def generate_shifts(request: Request, req: ShiftRequest):
     print("Received request: {} staff, {} dates, mode={}".format(
         len(req.staff_list), len(req.dates), req.mode))
 
@@ -282,7 +303,8 @@ def generate_shifts(req: ShiftRequest):
 # =============================================================
 
 @app.post("/diagnose")
-def diagnose_shifts(req: DiagnoseRequest):
+@limiter.limit("10/minute")
+def diagnose_shifts(request: Request, req: DiagnoseRequest):
     try:
         gemini_key, gemini_model = get_gemini_key()
         if not gemini_key:
@@ -627,7 +649,8 @@ async def send_welcome_email(to_email: str, org_name: str, contract_id: str,
 
 
 @app.post("/stripe/new-subscription")
-async def new_subscription(req: NewSubscriptionRequest):
+@limiter.limit("5/minute")
+async def new_subscription(request: Request, req: NewSubscriptionRequest):
     """新規お申し込み: 決済完了後にテナント自動作成+メール送信"""
     _load_platform_settings()
     sk = _get_setting("stripe_secret_key")
@@ -716,7 +739,8 @@ async def new_subscription(req: NewSubscriptionRequest):
 
 
 @app.post("/stripe/create-checkout")
-async def create_checkout_session(req: CheckoutRequest):
+@limiter.limit("5/minute")
+async def create_checkout_session(request: Request, req: CheckoutRequest):
     """Stripeチェックアウトセッション作成"""
     _load_platform_settings()
     sk = _get_setting("stripe_secret_key")

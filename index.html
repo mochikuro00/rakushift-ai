@@ -578,6 +578,66 @@
         </div>
     </div>
 
+    <!-- シフト生成プレビューモーダル -->
+    <div id="shiftPreviewModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-teal-600 flex justify-between items-center shrink-0">
+                <div>
+                    <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-eye"></i> シフト生成プレビュー</h3>
+                    <p class="text-white/70 text-xs mt-0.5">保存前に生成結果を確認できます</p>
+                </div>
+                <button onclick="app.cancelShiftPreview()" class="text-white/60 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <!-- サマリー統計 -->
+            <div id="previewSummary" class="p-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
+                <!-- JSで動的に挿入 -->
+            </div>
+            <!-- プレビューテーブル -->
+            <div id="previewContent" class="p-4 overflow-y-auto flex-1">
+                <!-- JSで動的に挿入 -->
+            </div>
+            <div class="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center shrink-0">
+                <p class="text-xs text-gray-400"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
+                <div class="flex gap-3">
+                    <button onclick="app.cancelShiftPreview()" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                    <button onclick="app.confirmShiftPreview()" class="px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center gap-2">
+                        <i class="fa-solid fa-check"></i> 確定して保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- パスワード変更モーダル -->
+    <div id="changePasswordModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+        <div class="modal-content bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500 to-orange-500">
+                <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-key"></i> 店舗パスワード変更</h3>
+                <p class="text-white/70 text-xs mt-0.5">ログイン用パスワードを変更します</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">現在のパスワード</label>
+                    <input type="password" id="currentPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="現在のパスワード">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">新しいパスワード</label>
+                    <input type="password" id="newPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="新しいパスワード (6文字以上)">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">新しいパスワード（確認）</label>
+                    <input type="password" id="confirmPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="もう一度入力">
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t border-gray-100 flex gap-3 justify-end">
+                <button onclick="app.closeModal('changePasswordModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                <button onclick="app.changeShopPassword()" class="px-5 py-2 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-lg shadow-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-save"></i> 変更する
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- AI Advice Modal -->
     <div id="aiAdviceModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
         <div class="modal-content bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">

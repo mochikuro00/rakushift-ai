@@ -834,7 +834,7 @@ const app = {
                                     <i class="fa-solid fa-users"></i>
                                 </div>
                             </div>
-                            <p class="text-xs text-gray-400 mt-2">営業時間: ${this.state.config.opening_time} - ${this.state.config.closing_time}</p>
+                            <p class="text-xs text-gray-400 mt-2">営業時間: ${this.state.config.opening_time || '09:00'} - ${this.state.config.closing_time || '22:00'}</p>
                         </div>
                     </div>
 
@@ -2213,11 +2213,28 @@ const app = {
                                             </td>
                                         </tr>
                                     `).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンから登録してください。</td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
                         <p class="text-xs text-gray-400 mt-3">※ ここで設定したパターンは、シフト作成時に参照されます。</p>
+                        <div class="mt-4 pt-4 border-t border-gray-100">
+                            <p class="text-xs font-bold text-gray-500 mb-2"><i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-1"></i>プリセットから一括追加</p>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="app.applyShiftPreset('restaurant')" class="text-xs bg-orange-50 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-lg font-bold hover:bg-orange-100 transition">
+                                    <i class="fa-solid fa-utensils mr-1"></i>飲食店向け
+                                </button>
+                                <button onclick="app.applyShiftPreset('office')" class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition">
+                                    <i class="fa-solid fa-building mr-1"></i>オフィス向け
+                                </button>
+                                <button onclick="app.applyShiftPreset('retail')" class="text-xs bg-green-50 text-green-600 border border-green-200 px-3 py-1.5 rounded-lg font-bold hover:bg-green-100 transition">
+                                    <i class="fa-solid fa-store mr-1"></i>小売店向け
+                                </button>
+                                <button onclick="app.applyShiftPreset('medical')" class="text-xs bg-pink-50 text-pink-600 border border-pink-200 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition">
+                                    <i class="fa-solid fa-hospital mr-1"></i>医療・介護向け
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2324,6 +2341,13 @@ const app = {
                                 <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード</label>
                                 <input type="text" id="settingPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono tracking-wider" value="${config.admin_password || '0000'}">
                             </div>
+                        </div>
+                        
+                        <div class="border-t border-gray-100 pt-4">
+                            <button onclick="app.openModal('changePasswordModal')" class="flex items-center gap-2 text-sm font-bold text-amber-600 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-lg hover:bg-amber-100 transition">
+                                <i class="fa-solid fa-key"></i> 店舗ログインパスワードを変更
+                            </button>
+                            <p class="text-xs text-gray-400 mt-1">※ 店舗ログイン時に使用するパスワードを変更できます</p>
                         </div>
 
                         <!-- AI設定 (運営管理のため非表示) -->
@@ -3919,36 +3943,13 @@ const app = {
                     finalShifts.push(s);
                 }
 
-                if (finalShifts.length > 0) {
-                    await this.saveAllShifts(finalShifts);
-                }
-
-                if (targetType === 'reset_all') {
-                    this.state.shifts = this.state.shifts.filter(function(s) { return !dates.includes(s.date); });
-                }
-
-                // DB保存後にDBから最新状態をリロード（二重追加防止）
-                await this.loadData();
-                console.log('Generated ' + finalShifts.length + ' shifts.');
-
-                // === STEP 5: AI最終チェック（裏で実行、モーダル表示なし） ===
-                if (finalShifts.length > 0) {
-                    try {
-                        await API.diagnose({
-                            contract_id: this.state.config?.contract_id || API.session?.user?.contract_id,
-                            config: { opening_time: this.state.config.opening_time, closing_time: this.state.config.closing_time, staff_req: this.state.config.staff_req },
-                            staff_count: this.state.staff.length,
-                            shift_count: this.state.shifts.length,
-                            shifts: this.state.shifts.map(s => ({ staff_id: s.staff_id, date: s.date, start_time: s.start_time, end_time: s.end_time })),
-                            staff_list: this.state.staff.map(s => ({ id: s.id, name: s.name, role: s.role, max_days_week: s.max_days_week, max_hours_day: s.max_hours_day }))
-                        });
-                    } catch (diagErr) {
-                        console.error('Auto AI Diagnosis error:', diagErr);
-                    }
-                }
-
+                // プレビュー表示 (DB保存はプレビュー承認後に実行)
                 this._generationSuccess = finalShifts.length > 0;
                 this._generationCount = finalShifts.length;
+                this._pendingPreviewShifts = finalShifts;
+                this._pendingPreviewTargetType = targetType;
+                this._pendingPreviewDates = dates;
+
             } else if (result.status === 'success' && result.mode === 'math_failed') {
                 // 数理最適化が解を見つけられなかった
                 console.warn('Math optimization failed - no feasible solution');
@@ -4004,9 +4005,15 @@ const app = {
 
             this._shiftGenInProgress = false;
 
-            if (this._generationSuccess) {
-                this.showToast('シフト作成が完了しました', 'success');
-            } else {
+            // プレビューモーダルを表示（生成成功時）
+            if (this._generationSuccess && this._pendingPreviewShifts && this._pendingPreviewShifts.length > 0) {
+                setTimeout(() => {
+                    this.showShiftPreview(this._pendingPreviewShifts, this._pendingPreviewTargetType, this._pendingPreviewDates);
+                    this._pendingPreviewShifts = null;
+                    this._pendingPreviewTargetType = null;
+                    this._pendingPreviewDates = null;
+                }, 300);
+            } else if (!this._generationSuccess) {
                 this.showToast('シフト作成に問題がありました。条件を見直してください。', 'warning');
             }
         }
@@ -5309,6 +5316,365 @@ const app = {
             console.warn('[Announcements] Page load fetch failed:', e.message);
             return false;
         }
+    },
+
+    // ===========================================================
+    // シフト生成プレビュー機能
+    // ===========================================================
+
+    // プレビュー用の一時データ
+    _previewShifts: null,
+    _previewTargetType: null,
+    _previewDates: null,
+
+    /**
+     * プレビューモーダルを表示
+     * @param {Array} shifts - 生成されたシフト配列
+     * @param {string} targetType - 'reset_all' | 'empty_only'
+     * @param {Array} dates - 対象日付配列
+     */
+    showShiftPreview(shifts, targetType, dates) {
+        this._previewShifts = shifts;
+        this._previewTargetType = targetType;
+        this._previewDates = dates;
+
+        // サマリー統計
+        const totalShifts = shifts.length;
+        const uniqueDates = [...new Set(shifts.map(s => s.date))].sort();
+        const uniqueStaff = [...new Set(shifts.map(s => s.staff_id))];
+        const totalHours = shifts.reduce((sum, s) => {
+            const startParts = s.start_time.split(':');
+            const endParts = s.end_time.split(':');
+            let startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+            let endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+            if (endMin <= startMin) endMin += 1440;
+            return sum + (endMin - startMin) / 60;
+        }, 0);
+
+        const summaryEl = document.getElementById('previewSummary');
+        if (summaryEl) {
+            summaryEl.innerHTML = `
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold text-emerald-600">${totalShifts}</p>
+                    <p class="text-xs text-gray-500 mt-1">生成シフト数</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold text-blue-600">${uniqueDates.length}</p>
+                    <p class="text-xs text-gray-500 mt-1">対象日数</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold text-purple-600">${uniqueStaff.length}</p>
+                    <p class="text-xs text-gray-500 mt-1">配置スタッフ数</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                    <p class="text-2xl font-bold text-orange-600">${totalHours.toFixed(1)}</p>
+                    <p class="text-xs text-gray-500 mt-1">合計労働時間</p>
+                </div>
+            `;
+        }
+
+        // 日付ごとのテーブル生成
+        const contentEl = document.getElementById('previewContent');
+        if (contentEl) {
+            let html = '';
+            const staffMap = {};
+            (this.state.staff || []).forEach(s => { staffMap[s.id] = s; });
+
+            for (const dateStr of uniqueDates) {
+                const dayShifts = shifts.filter(s => s.date === dateStr);
+                const dt = new Date(dateStr + 'T00:00:00');
+                const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                const dow = dayNames[dt.getDay()];
+                const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+
+                html += `
+                    <div class="mb-4">
+                        <h4 class="text-sm font-bold ${isWeekend ? 'text-red-600' : 'text-gray-700'} mb-2 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full ${isWeekend ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'} flex items-center justify-center text-xs font-bold">${dow}</span>
+                            ${dateStr}
+                            <span class="text-xs text-gray-400 font-normal">(${dayShifts.length}名配置)</span>
+                        </h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-xs text-gray-500">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left rounded-l-lg">スタッフ</th>
+                                        <th class="px-3 py-2 text-left">役職</th>
+                                        <th class="px-3 py-2 text-center">出勤</th>
+                                        <th class="px-3 py-2 text-center">退勤</th>
+                                        <th class="px-3 py-2 text-center">休憩</th>
+                                        <th class="px-3 py-2 text-center rounded-r-lg">実働</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                `;
+
+                for (const shift of dayShifts) {
+                    const staff = staffMap[shift.staff_id] || { name: shift.staff_id, role: '' };
+                    const roleBadge = staff.role === 'manager' ? '<span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-bold">管理者</span>' :
+                                     staff.role === 'leader' ? '<span class="inline-block bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-bold">リーダー</span>' :
+                                     '<span class="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">スタッフ</span>';
+                    const breakMin = shift.break_minutes || 0;
+                    const startParts = shift.start_time.split(':');
+                    const endParts = shift.end_time.split(':');
+                    let startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+                    let endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+                    if (endMin <= startMin) endMin += 1440;
+                    const workHours = ((endMin - startMin) - breakMin) / 60;
+
+                    html += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 font-bold text-gray-800">${staff.name || '不明'}</td>
+                            <td class="px-3 py-2">${roleBadge}</td>
+                            <td class="px-3 py-2 text-center font-mono text-emerald-600 font-bold">${shift.start_time}</td>
+                            <td class="px-3 py-2 text-center font-mono text-red-500 font-bold">${shift.end_time}</td>
+                            <td class="px-3 py-2 text-center text-gray-500">${breakMin}分</td>
+                            <td class="px-3 py-2 text-center font-bold">${workHours.toFixed(1)}h</td>
+                        </tr>
+                    `;
+                }
+
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            contentEl.innerHTML = html;
+        }
+
+        this.openModal('shiftPreviewModal');
+    },
+
+    /**
+     * プレビューを承認してDB保存を実行
+     */
+    async confirmShiftPreview() {
+        if (!this._previewShifts || this._previewShifts.length === 0) {
+            this.showToast('保存するシフトがありません', 'error');
+            return;
+        }
+
+        this.closeModal('shiftPreviewModal');
+
+        // ローディング表示
+        const loadingEl = document.getElementById('globalLoading');
+        const loadingDefault = document.getElementById('loadingDefault');
+        if (loadingDefault) loadingDefault.style.display = 'flex';
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        try {
+            const dates = this._previewDates;
+            const targetType = this._previewTargetType;
+
+            // reset_allの場合は既存削除
+            if (targetType === 'reset_all') {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const shiftsToDelete = this.state.shifts.filter(function(s) {
+                    return dates.includes(s.date) && new Date(s.date) >= today && s.id && uuidRegex.test(s.id);
+                });
+                if (shiftsToDelete.length > 0) {
+                    await Promise.all(shiftsToDelete.map(function(s) { return API.delete('shifts', s.id); }));
+                }
+                this.state.shifts = this.state.shifts.filter(function(s) {
+                    return !(dates.includes(s.date) && new Date(s.date) >= today);
+                });
+            }
+
+            // DB保存
+            const existing = this.state.shifts.filter(s => dates.includes(s.date));
+            const finalShifts = [];
+            for (const s of this._previewShifts) {
+                if (targetType === 'empty_only') {
+                    const exists = existing.find(ex => ex.date === s.date && ex.staff_id === s.staff_id);
+                    if (exists) continue;
+                }
+                finalShifts.push(s);
+            }
+
+            if (finalShifts.length > 0) {
+                await this.saveAllShifts(finalShifts);
+            }
+
+            if (targetType === 'reset_all') {
+                this.state.shifts = this.state.shifts.filter(s => !dates.includes(s.date));
+            }
+
+            await this.loadData();
+            this.renderCurrentView();
+            this.calculateMonthlyStats();
+
+            // バックグラウンドAI診断
+            try {
+                await API.diagnose({
+                    contract_id: this.state.config?.contract_id || API.session?.user?.contract_id,
+                    config: { opening_time: this.state.config.opening_time, closing_time: this.state.config.closing_time, staff_req: this.state.config.staff_req },
+                    staff_count: this.state.staff.length,
+                    shift_count: this.state.shifts.length,
+                    shifts: this.state.shifts.map(s => ({ staff_id: s.staff_id, date: s.date, start_time: s.start_time, end_time: s.end_time })),
+                    staff_list: this.state.staff.map(s => ({ id: s.id, name: s.name, role: s.role, max_days_week: s.max_days_week, max_hours_day: s.max_hours_day }))
+                });
+            } catch (diagErr) {
+                console.error('Auto AI Diagnosis error:', diagErr);
+            }
+
+            this.showToast(`${finalShifts.length}件のシフトを保存しました`, 'success');
+        } catch (e) {
+            console.error('Preview Save Error:', e);
+            this.showToast('シフトの保存に失敗しました: ' + e.message, 'error');
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+            this._previewShifts = null;
+            this._previewTargetType = null;
+            this._previewDates = null;
+        }
+    },
+
+    /**
+     * プレビューをキャンセル（破棄）
+     */
+    cancelShiftPreview() {
+        this._previewShifts = null;
+        this._previewTargetType = null;
+        this._previewDates = null;
+        this.closeModal('shiftPreviewModal');
+        this.showToast('シフト生成をキャンセルしました', 'info');
+    },
+
+    // ===========================================================
+    // パスワード変更機能
+    // ===========================================================
+
+    /**
+     * 店舗パスワードを変更
+     */
+    async changeShopPassword() {
+        const currentPass = document.getElementById('currentPassword')?.value || '';
+        const newPass = document.getElementById('newPassword')?.value || '';
+        const confirmPass = document.getElementById('confirmPassword')?.value || '';
+
+        if (!currentPass) {
+            this.showToast('現在のパスワードを入力してください', 'error');
+            return;
+        }
+        if (!newPass || newPass.length < 6) {
+            this.showToast('新しいパスワードは6文字以上で入力してください', 'error');
+            return;
+        }
+        if (newPass !== confirmPass) {
+            this.showToast('新しいパスワードが一致しません', 'error');
+            return;
+        }
+
+        try {
+            const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
+            if (!contractId) {
+                this.showToast('セッションエラー: 再ログインしてください', 'error');
+                return;
+            }
+
+            // 現在のパスワード確認 (verify_shop_login RPC)
+            const verifyResult = await API.rpc('verify_shop_login', {
+                p_contract_id: contractId,
+                p_password: currentPass
+            });
+
+            if (!verifyResult || verifyResult.length === 0 || !verifyResult[0]?.organization_id) {
+                this.showToast('現在のパスワードが正しくありません', 'error');
+                return;
+            }
+
+            // 新しいパスワードに更新 (update_shop_password RPC)
+            await API.rpc('update_shop_password', {
+                p_contract_id: contractId,
+                p_new_password: newPass
+            });
+
+            this.closeModal('changePasswordModal');
+            // フォームクリア
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+
+            this.showToast('パスワードが正常に変更されました', 'success');
+        } catch (e) {
+            console.error('Password change error:', e);
+            this.showToast('パスワード変更に失敗しました: ' + e.message, 'error');
+        }
+    },
+
+    // ===========================================================
+    // シフトパターンプリセット機能
+    // ===========================================================
+
+    SHIFT_PRESETS: {
+        restaurant: {
+            name: '飲食店向け',
+            patterns: [
+                { name: '早番', start: '09:00', end: '15:00' },
+                { name: '中番', start: '12:00', end: '18:00' },
+                { name: '遅番', start: '16:00', end: '22:00' },
+                { name: '通し', start: '09:00', end: '22:00' },
+                { name: 'ランチ', start: '10:00', end: '14:00' },
+                { name: 'ディナー', start: '17:00', end: '22:00' },
+            ]
+        },
+        office: {
+            name: 'オフィス向け',
+            patterns: [
+                { name: '日勤', start: '09:00', end: '18:00' },
+                { name: '早番', start: '08:00', end: '17:00' },
+                { name: '遅番', start: '10:00', end: '19:00' },
+                { name: '半日AM', start: '09:00', end: '13:00' },
+                { name: '半日PM', start: '13:00', end: '18:00' },
+            ]
+        },
+        retail: {
+            name: '小売店向け',
+            patterns: [
+                { name: '早番', start: '09:00', end: '15:00' },
+                { name: '遅番', start: '14:00', end: '21:00' },
+                { name: '通し', start: '09:00', end: '21:00' },
+                { name: '午前', start: '09:00', end: '13:00' },
+                { name: '午後', start: '13:00', end: '17:00' },
+                { name: '夕方', start: '17:00', end: '21:00' },
+            ]
+        },
+        medical: {
+            name: '医療・介護向け',
+            patterns: [
+                { name: '日勤', start: '08:30', end: '17:30' },
+                { name: '早番', start: '07:00', end: '16:00' },
+                { name: '遅番', start: '10:00', end: '19:00' },
+                { name: '夜勤', start: '16:30', end: '09:00' },
+                { name: '準夜勤', start: '16:30', end: '01:00' },
+                { name: '半日', start: '08:30', end: '12:30' },
+            ]
+        }
+    },
+
+    /**
+     * プリセットのシフトパターンを一括適用
+     * @param {string} presetKey - 'restaurant' | 'office' | 'retail' | 'medical'
+     */
+    applyShiftPreset(presetKey) {
+        const preset = this.SHIFT_PRESETS[presetKey];
+        if (!preset) return;
+
+        const existing = this.state.config.custom_shifts || [];
+        if (existing.length > 0) {
+            if (!confirm(`現在のシフトパターン(${existing.length}件)を上書きしますか？\n「${preset.name}」(${preset.patterns.length}パターン)に置き換えます。`)) {
+                return;
+            }
+        }
+
+        this.state.config.custom_shifts = preset.patterns.map(p => ({ ...p }));
+        this.renderCurrentView();
+        this.showToast(`「${preset.name}」プリセット(${preset.patterns.length}パターン)を適用しました`, 'success');
     }
 };
 

@@ -3,3 +3,4 @@ uvicorn
 pulp
 httpx
 stripe
+slowapi
