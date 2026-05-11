@@ -1,7 +1,7 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "python/Dockerfile"
-watchPatterns = ["python/**", "railway.toml"]
+dockerfilePath = "Dockerfile"
+watchPatterns = ["**"]
 
 [deploy]
 healthcheckPath = "/keepalive"
