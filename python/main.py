@@ -1179,3 +1179,5 @@ async def get_subscription_status(contract_id: str):
     except Exception as e:
         print("Status Error: {}".format(e))
         return {"status": "error", "message": str(e)}
+
+# deploy: 20260511-2132
