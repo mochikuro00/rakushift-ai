@@ -207,13 +207,14 @@ async def keepalive():
         return {"status": "ok", "db": "skipped", "reason": "no credentials"}
     try:
         result = await supabase_query(
-            "config_safe", "select=id&limit=1", method="GET")
+            "organizations", "select=id&limit=1", method="GET")
         row_count = len(result) if isinstance(result, list) else 0
         print("[Keepalive] Supabase ping OK - {} rows".format(row_count))
         return {"status": "ok", "db": "alive", "rows": row_count}
     except Exception as e:
-        print("[Keepalive] Supabase ping FAILED: {}".format(e))
-        return {"status": "ok", "db": "error", "message": str(e)}
+        msg = repr(e)
+        print("[Keepalive] Supabase ping FAILED: {}".format(msg))
+        return {"status": "ok", "db": "error", "message": msg}
 
 
 # =============================================================
