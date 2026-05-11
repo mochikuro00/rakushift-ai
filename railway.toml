@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "python/Dockerfile"
 watchPatterns = ["python/**"]
 
 [deploy]
