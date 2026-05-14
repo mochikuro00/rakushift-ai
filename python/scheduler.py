@@ -209,11 +209,17 @@ class ShiftScheduler:
             if (req.get("staff_id") == staff["id"]
                     and req.get("type") in ("off", "holiday")
                     and req.get("status") == "approved"):
-                rd = str(req.get("dates", ""))
-                for single_date in rd.split(","):
-                    single_date = single_date.strip()
-                    if single_date:
-                        ng.add(single_date)
+                rd = req.get("dates", [])
+                if isinstance(rd, list):
+                    for single_date in rd:
+                        single_date = str(single_date).strip()
+                        if single_date:
+                            ng.add(single_date)
+                else:
+                    for single_date in str(rd).split(","):
+                        single_date = single_date.strip()
+                        if single_date:
+                            ng.add(single_date)
         return ng
 
     def _get_staff_ng_dates(self, staff):
@@ -226,10 +232,14 @@ class ShiftScheduler:
         for req in self.requests:
             if (req.get("type") == "work"
                     and req.get("status") == "approved"):
-                dates_str = str(req.get("dates", ""))
-                for single_date in dates_str.split(","):
-                    single_date = single_date.strip()
-                    if single_date:
+                rd = req.get("dates", [])
+                dates_list = []
+                if isinstance(rd, list):
+                    dates_list = [str(d).strip() for d in rd if str(d).strip()]
+                else:
+                    dates_list = [str(d).strip() for d in str(rd).split(",") if str(d).strip()]
+                
+                for single_date in dates_list:
                         work_reqs.append({
                             "staff_id": req.get("staff_id"),
                             "date": single_date,

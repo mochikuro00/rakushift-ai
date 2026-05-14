@@ -3954,9 +3954,8 @@ const app = {
                                 }
                             }
                             if (changed) {
-                                const newDatesStr = uDates.join(', ');
                                 await API.update('staff', staff.id, {
-                                    unavailable_dates: newDatesStr
+                                    unavailable_dates: uDates
                                 });
                                 staff.unavailable_dates = uDates;
                             }
