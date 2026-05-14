@@ -1,4 +1,4 @@
-const app = {
+﻿const app = {
     // アプリケーションの状態管理
     state: {
         currentDate: null, // Initialized in init()
@@ -87,6 +87,37 @@ const app = {
         dashboardChartInstance: null,
         // ダッシュボード自動更新用タイマー
         dashboardTimer: null
+    },
+
+    /**
+     * ログインタブの切り替え
+     */
+    switchLoginTab(tabId) {
+        const tabs = ['shop', 'admin', 'hq', 'platform'];
+        tabs.forEach(t => {
+            const btn = document.getElementById(	ab- + t);
+            const form = document.getElementById(orm- + t);
+            if (btn && form) {
+                if (t === tabId) {
+                    btn.classList.add('text-blue-600', 'border-blue-600', 'bg-white');
+                    btn.classList.remove('text-gray-500', 'border-transparent', 'hover:bg-gray-100');
+                    form.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('text-blue-600', 'border-blue-600', 'bg-white');
+                    btn.classList.add('text-gray-500', 'border-transparent', 'hover:bg-gray-100');
+                    form.classList.add('hidden');
+                }
+            }
+        });
+        
+        // 色の調整
+        if (tabId === 'hq') {
+            document.getElementById('tab-hq').classList.replace('text-blue-600', 'text-indigo-600');
+            document.getElementById('tab-hq').classList.replace('border-blue-600', 'border-indigo-600');
+        } else if (tabId === 'platform') {
+            document.getElementById('tab-platform').classList.replace('text-blue-600', 'text-purple-600');
+            document.getElementById('tab-platform').classList.replace('border-blue-600', 'border-purple-600');
+        }
     },
 
     /**
@@ -311,8 +342,9 @@ const app = {
                 this.changeView('dashboard');
             }
         } else {
-            // 管理者ログインモーダルを開く
-            this.openModal('adminLoginModal');
+            // 管理者ログインタブを開く
+            this.switchLoginTab('admin');
+            this.openModal('loginModal');
         }
     },
 
@@ -433,8 +465,9 @@ const app = {
     async adminLogin() {
         const loginId = 'admin'; // 固定値に変更
         const password = document.getElementById('adminLoginPass')?.value.trim() || '';
+        let inputContractId = document.getElementById('adminLoginContractId')?.value.trim() || '';
 
-        console.log(`[AdminLogin] Triggered. Input LoginID: ${loginId}`);
+        console.log('[AdminLogin] Triggered. Input LoginID: ' + loginId);
 
         if (!password) {
             this.showToast('パスワードを入力してください', 'error');
@@ -443,14 +476,16 @@ const app = {
 
         this.showLoading(true);
         try {
-            let currentContractId = null;
-            if (API.session?.user?.contract_id) {
-                currentContractId = API.session.user.contract_id;
-            } else if (this.state.config?.contract_id) {
-                currentContractId = this.state.config.contract_id;
+            let currentContractId = inputContractId;
+            if (!currentContractId) {
+                if (API.session?.user?.contract_id) {
+                    currentContractId = API.session.user.contract_id;
+                } else if (this.state.config?.contract_id) {
+                    currentContractId = this.state.config.contract_id;
+                }
             }
 
-            console.log(`[AdminLogin] ContractID: ${currentContractId}, LoginID: ${loginId}`);
+            console.log([AdminLogin] ContractID: , LoginID: );
 
             if (!currentContractId) {
                 this.showToast('先に店舗ログインしてください', 'error');
@@ -479,7 +514,7 @@ const app = {
                     role: authResult.role
                 });
 
-                this.closeModal('adminLoginModal');
+                this.closeModal('loginModal');
                 this.showToast(`管理者: ${authResult.name} でログインしました`, 'success');
 
                 this.updateAuthUI();
@@ -6077,3 +6112,8 @@ const app = {
 };
 
 document.addEventListener('DOMContentLoaded', () => { app.init(); });
+
+
+
+
+

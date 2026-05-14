@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -202,37 +202,93 @@
             </div>
 
             <!-- Right: Login Forms -->
-            <div id="shopLoginForm" class="md:w-1/2 p-8 bg-gray-50 flex flex-col justify-center">
-                <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">店舗ログイン</h3>
-                <p class="text-xs text-gray-500 text-center mb-6">契約IDとパスワードを入力してください</p>
+            <div id="loginFormsContainer" class="md:w-1/2 bg-gray-50 flex flex-col h-full border-l border-gray-100">
+                <!-- Tab Navigation -->
+                <div class="flex border-b border-gray-200">
+                    <button onclick="app.switchLoginTab('admin')" id="tab-admin" class="flex-1 py-4 text-[10px] sm:text-xs font-bold text-blue-600 border-b-2 border-blue-600 bg-white hover:bg-gray-50 transition-colors">店舗管理者</button>
+                    <button onclick="app.switchLoginTab('shop')" id="tab-shop" class="flex-1 py-4 text-[10px] sm:text-xs font-bold text-gray-500 border-b-2 border-transparent hover:bg-gray-100 transition-colors">店舗用</button>
+                    <button onclick="app.switchLoginTab('hq')" id="tab-hq" class="flex-1 py-4 text-[10px] sm:text-xs font-bold text-gray-500 border-b-2 border-transparent hover:bg-gray-100 transition-colors">本部・統括</button>
+                    <button onclick="app.switchLoginTab('platform')" id="tab-platform" class="flex-1 py-4 text-[10px] sm:text-xs font-bold text-gray-500 border-b-2 border-transparent hover:bg-gray-100 transition-colors">運営管理</button>
+                </div>
 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">契約ID (Contract ID)</label>
-                        <input type="text" id="loginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: demo (または 15桁の契約ID)">
+                <!-- Forms Container -->
+                <div class="p-8 flex-1 overflow-y-auto relative">
+                    <!-- Shop Form -->
+                    <div id="form-shop" class="space-y-4 hidden transition-all duration-300">
+                        <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">店舗ログイン</h3>
+                        <p class="text-xs text-gray-500 text-center mb-6">契約IDとパスワードを入力してください</p>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">契約ID (Contract ID)</label>
+                            <input type="text" id="loginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: demo (または 15桁の契約ID)">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                            <input type="password" id="loginShopPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.login()">
+                        </div>
+
+                        <button onclick="app.login()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-4">店舗ログイン</button>
+
+                        <div class="text-center mt-6 pt-6 border-t border-gray-200">
+                            <p class="text-sm text-gray-600 mb-3">まだアカウントをお持ちでない方</p>
+                            <button onclick="app.openModal('newSubscriptionModal')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg transition">
+                                <i class="fa-solid fa-rocket mr-2"></i>新規お申し込み
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
-                        <input type="password" id="loginShopPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="パスワード"
-                            onkeydown="if(event.key==='Enter') app.login()">
+
+                    <!-- Admin Form -->
+                    <div id="form-admin" class="space-y-4 transition-all duration-300">
+                        <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">店舗管理者ログイン</h3>
+                        <p class="text-xs text-gray-500 text-center mb-6">契約IDと管理者パスワードを入力してください</p>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">契約ID (Contract ID)</label>
+                            <input type="text" id="adminLoginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: demo">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード</label>
+                            <input type="password" id="adminLoginPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.adminLogin()">
+                        </div>
+
+                        <button onclick="app.adminLogin()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-4">管理者として認証</button>
                     </div>
 
-                    <button onclick="app.login()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-4">ログイン</button>
+                    <!-- HQ Form -->
+                    <div id="form-hq" class="space-y-4 hidden transition-all duration-300">
+                        <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">本部ログイン</h3>
+                        <p class="text-xs text-gray-500 text-center mb-6">本部用IDとパスワードを入力してください</p>
 
-                    <div class="text-center mt-6 pt-6 border-t border-gray-200">
-                        <p class="text-sm text-gray-600 mb-3">まだアカウントをお持ちでない方</p>
-                        <button onclick="app.openModal('newSubscriptionModal')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg transition">
-                            <i class="fa-solid fa-rocket mr-2"></i>新規お申し込み
-                        </button>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">本部ID</label>
+                            <input type="text" id="loginHqId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: demo (または 本部ID)">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                            <input type="password" id="loginHqPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.hqLogin()">
+                        </div>
+
+                        <button onclick="app.hqLogin()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition mt-4">本部ログイン</button>
                     </div>
 
-                    <div class="text-center mt-4">
-                        <button onclick="document.getElementById('shopLoginForm').classList.add('hidden'); document.getElementById('hqLoginForm').classList.remove('hidden');" class="text-xs text-gray-400 hover:text-gray-600 underline">
-                            本部・統括管理者の方はこちら
+                    <!-- Platform Form -->
+                    <div id="form-platform" class="space-y-4 hidden transition-all duration-300 flex flex-col justify-center h-full pb-8">
+                        <div class="text-center mb-6 mt-4">
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 bg-purple-100 text-purple-600">
+                                <i class="fa-solid fa-shield-halved text-2xl"></i>
+                            </div>
+                            <h3 class="text-2xl font-bold text-gray-800 mb-2">運営管理ログイン</h3>
+                            <p class="text-xs text-gray-500">システム全体の設定やテナント管理を行う<br>運営者専用のダッシュボードへ移動します。</p>
+                        </div>
+
+                        <button onclick="window.location.href='admin.html'" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg transition mt-4 flex items-center justify-center gap-2">
+                            <span>運営管理画面へ移動</span> <i class="fa-solid fa-arrow-right"></i>
                         </button>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
             <!-- HQ Login Form (Initially Hidden) -->
             <div id="hqLoginForm" class="md:w-1/2 p-8 bg-gray-50 flex flex-col justify-center hidden">
@@ -375,28 +431,7 @@
         </div>
     </div>
 
-    <!-- Admin Login Modal -->
-    <div id="adminLoginModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
-            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                <h3 class="font-bold text-gray-800"><i class="fa-solid fa-user-shield text-blue-600"></i> 管理者認証</h3>
-                <button onclick="app.closeModal('adminLoginModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
-            <div class="p-6 space-y-4">
-                <p class="text-sm text-gray-500 mb-4">管理者のログインIDとパスワードを入力してください。</p>
-                <!-- 管理者ID入力欄を削除（自動でadminとして処理） -->
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
-                    <input type="password" id="adminLoginPass" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="パスワード"
-                        onkeydown="if(event.key==='Enter') app.adminLogin()">
-                </div>
-            </div>
-            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-                <button onclick="app.closeModal('adminLoginModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
-                <button onclick="app.adminLogin()" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">認証する</button>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Edit Shift Modal -->
     <div id="editShiftModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
@@ -886,3 +921,5 @@
     
 </body>
 </html>
+
+
