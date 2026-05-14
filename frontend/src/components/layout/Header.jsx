@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import API from '../../lib/api';
 
 export default function Header() {
-  const { isShopLoggedIn, isAdmin, isHQ, setAuth } = useAppStore();
+  const { isShopLoggedIn, isAdmin, isHQ, setAuth, setView } = useAppStore();
 
   const handleLogout = async () => {
     if (confirm('ログアウトしますか？')) {
@@ -21,21 +21,21 @@ export default function Header() {
         </div>
       )}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('dashboard')}>
           <div className="w-8 h-8 bg-blue-600 text-white rounded flex items-center justify-center font-bold text-xl">R</div>
           <span className="font-bold text-xl tracking-tight text-gray-800">ラクシフトAI</span>
         </div>
         
         {isShopLoggedIn && (
           <div className="flex items-center gap-4">
-            <button className="p-2 text-gray-500 hover:text-blue-600 transition-colors">
+            <button onClick={() => setView('shift')} className="p-2 text-gray-500 hover:text-blue-600 transition-colors" title="シフト管理">
               <Calendar className="w-5 h-5" />
             </button>
-            <button className="p-2 text-gray-500 hover:text-blue-600 transition-colors">
+            <button onClick={() => setView('staff')} className="p-2 text-gray-500 hover:text-blue-600 transition-colors" title="スタッフ管理">
               <Users className="w-5 h-5" />
             </button>
             {isAdmin && (
-              <button className="p-2 text-gray-500 hover:text-blue-600 transition-colors">
+              <button onClick={() => setView('config')} className="p-2 text-gray-500 hover:text-blue-600 transition-colors" title="店舗設定">
                 <Settings className="w-5 h-5" />
               </button>
             )}
