@@ -8,6 +8,7 @@ const app = {
         dashboardMode: 'month', // 'month', '2week-1', '2week-2'
         isShopLoggedIn: false, // 店舗ログイン状態
         isAdmin: false, // 管理者ログイン状態
+        isHQ: false, // 本部ログイン状態
         
         // データ（APIからロード）
         config: {},
@@ -178,6 +179,7 @@ const app = {
     /**
      * イベントリスナー登録
      */
+    bindEvents() {
         const closeSidebar = () => {
             if (window.innerWidth < 768) {
                 document.querySelector('aside')?.classList.add('-translate-x-full');
@@ -497,6 +499,37 @@ const app = {
         alert("新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。");
     },
 
+    async hqLogin() {
+        const loginId = document.getElementById('loginHqId').value.trim();
+        const password = document.getElementById('loginHqPass')?.value.trim() || '';
+        if (!loginId || !password) {
+            this.showToast('本部IDとパスワードを入力してください', 'error');
+            return;
+        }
+
+        this.showLoading(true);
+        try {
+            const result = await API.rpc('hq_login', { p_login_id: loginId, p_password: password });
+            if (result && result.status === 'success') {
+                this.state.isHQ = true;
+                this.state.isAdmin = true; // 管理者権限を付与
+                this.state.isShopLoggedIn = true;
+                this.closeModal('loginModal');
+                this.showToast('本部としてログインしました', 'success');
+                this.changeView('hq_dashboard');
+                this.updateAuthUI();
+                this.updateHeader();
+            } else {
+                this.showToast(result?.message || 'ログインに失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showToast('エラーが発生しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
     async logout() {
         if(!confirm('アプリケーションから完全にログアウトしますか？\n（ログイン画面に戻ります）')) return;
         
@@ -515,7 +548,46 @@ const app = {
         const authBtn = document.getElementById('authBtn');
         const adminLinks = document.querySelectorAll('.admin-link');
         const adminHeader = document.getElementById('adminHeaderControls');
-        
+
+        // --- 本部（閲覧専用）モードの制御 ---
+        if (this.state.isHQ) {
+            if (authBtn) authBtn.classList.add('hidden'); // サイドバーのログインボタンを隠す
+            
+            // 管理者メニューは一部（ダッシュボード、シフト作成、スタッフ等）表示させるが編集不可
+            adminLinks.forEach(link => link.classList.remove('hidden'));
+
+            if (adminHeader) {
+                adminHeader.innerHTML = `
+                    <div class="hidden md:flex items-center gap-2 mr-4 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded text-xs font-bold shadow-sm">
+                        <i class="fa-solid fa-eye"></i> 閲覧専用モード
+                    </div>
+                    <button onclick="app.changeView('hq_dashboard')" class="px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded bg-white transition-all mr-2 shadow-sm">
+                        <i class="fa-solid fa-list mr-1"></i>店舗一覧
+                    </button>
+                    <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all shadow-sm">
+                        <i class="fa-solid fa-power-off mr-1"></i>ログアウト
+                    </button>
+                `;
+            }
+
+            // 各種追加・保存・作成系のボタンを隠すか無効化する
+            setTimeout(() => {
+                const actionKeywords = ['追加', '保存', '作成', '申請', '編集', '設定', '削除', '承認', '却下'];
+                document.querySelectorAll('button').forEach(btn => {
+                    if (!btn.closest('#adminHeaderControls') && !btn.closest('#sidebar') && !btn.closest('#viewContainer')?.querySelector('header')) {
+                        const txt = btn.textContent;
+                        if (actionKeywords.some(kw => txt.includes(kw))) {
+                            btn.classList.add('hidden');
+                        }
+                    }
+                });
+            }, 100);
+
+            this.updateRequestBadge();
+            this.updateAnnouncementBadge();
+            return;
+        }
+
         // サイドバーの「管理者ログイン」ボタンの表示
         if (authBtn) {
             if (this.state.isAdmin) {
@@ -607,6 +679,9 @@ const app = {
         container.innerHTML = '';
 
         switch (this.state.view) {
+            case 'hq_dashboard':
+                this.renderHQDashboard(container);
+                break;
             case 'dashboard':
                 this.renderDashboard(container);
                 break;
@@ -786,6 +861,108 @@ const app = {
     },
 
     // =================================================================
+    // =================================================================
+    // HQ (本部) ダッシュボード
+    // =================================================================
+    async renderHQDashboard(container) {
+        if (!this.state.isHQ) return;
+
+        this.showLoading(true);
+        let shops = [];
+        try {
+            const result = await API.rpc('hq_get_all_shops', {});
+            shops = result || [];
+        } catch (e) {
+            console.error('Failed to load shops', e);
+            this.showToast('店舗一覧の取得に失敗しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+
+        let tableRows = '';
+        if (shops.length === 0) {
+            tableRows = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">登録されている店舗がありません</td></tr>`;
+        } else {
+            tableRows = shops.map(shop => {
+                const date = new Date(shop.created_at);
+                const dateStr = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}`;
+                return `
+                <tr class="hover:bg-indigo-50/50 cursor-pointer transition-colors border-b border-gray-100 group" onclick="app.switchToHQShop('${shop.organization_id}')">
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-store"></i>
+                            </div>
+                            <span class="font-bold">${shop.name || '未設定'}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${shop.contract_id || '-'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            ${shop.plan || 'Free'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">${dateStr}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <span class="text-indigo-600 hover:text-indigo-900 bg-white border border-indigo-200 px-3 py-1 rounded shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">閲覧する <i class="fa-solid fa-arrow-right ml-1"></i></span>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        container.innerHTML = `
+            <div class="max-w-6xl mx-auto space-y-6 pb-20">
+                <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl shadow-lg p-6 md:p-8 text-white flex justify-between items-center relative overflow-hidden">
+                    <div class="relative z-10">
+                        <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・統括ダッシュボード</h2>
+                        <p class="text-indigo-100 text-sm md:text-base">全テナント・店舗の稼働状況を閲覧・確認できます（閲覧専用）。</p>
+                    </div>
+                    <div class="absolute right-0 top-0 opacity-10 text-[120px] leading-none transform translate-x-1/4 -translate-y-1/4 pointer-events-none">
+                        <i class="fa-solid fa-globe"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店舗一覧 (${shops.length}店舗)</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店舗名 / 組織</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">契約ID</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">プラン</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
+                                    <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">アクション</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${tableRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    async switchToHQShop(orgId) {
+        if (!this.state.isHQ) return;
+        this.showLoading(true);
+        try {
+            this.state.organization_id = orgId;
+            await this.loadData();
+            this.showToast('店舗情報を読み込みました（閲覧専用モード）', 'success');
+            this.changeView('dashboard');
+        } catch(e) {
+            console.error('Shop loading error:', e);
+            this.showToast('店舗情報の読み込みに失敗しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
     // 1. ダッシュボード (Dashboard)
     // =================================================================
     renderDashboard(container) {
@@ -1492,7 +1669,7 @@ const app = {
                                 <!-- Bar with text -->
                                 <div class="absolute top-1/2 -translate-y-1/2 h-8 ${period==='week'?'':'h-6'} rounded ${barColor} border shadow-sm flex items-center justify-center overflow-hidden z-10 hover:brightness-95 transition-all px-1"
                                      ${adminDrag}
-                                     ondblclick="app.openEditShift('${shift.id}')">
+                                     ${this.state.isHQ ? '' : `ondblclick="app.openEditShift('${shift.id}')"`}>
                                      ${resizeHandles}
                                      <span class="text-[9px] md:text-[10px] font-bold whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none select-none">
                                         ${shift.start_time} - ${shift.end_time}

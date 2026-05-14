@@ -202,8 +202,8 @@
             </div>
 
             <!-- Right: Login Forms -->
-            <div class="md:w-1/2 p-8 bg-gray-50 flex flex-col justify-center">
-                <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">ログイン</h3>
+            <div id="shopLoginForm" class="md:w-1/2 p-8 bg-gray-50 flex flex-col justify-center">
+                <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">店舗ログイン</h3>
                 <p class="text-xs text-gray-500 text-center mb-6">契約IDとパスワードを入力してください</p>
 
                 <div class="space-y-4">
@@ -225,6 +225,35 @@
                             <i class="fa-solid fa-rocket mr-2"></i>新規お申し込み
                         </button>
                     </div>
+
+                    <div class="text-center mt-4">
+                        <button onclick="document.getElementById('shopLoginForm').classList.add('hidden'); document.getElementById('hqLoginForm').classList.remove('hidden');" class="text-xs text-gray-400 hover:text-gray-600 underline">
+                            本部・統括管理者の方はこちら
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HQ Login Form (Initially Hidden) -->
+            <div id="hqLoginForm" class="md:w-1/2 p-8 bg-gray-50 flex flex-col justify-center hidden">
+                <button onclick="document.getElementById('hqLoginForm').classList.add('hidden'); document.getElementById('shopLoginForm').classList.remove('hidden');" class="text-xs text-gray-500 hover:text-gray-800 mb-6 text-left self-start">
+                    <i class="fa-solid fa-arrow-left mr-1"></i>店舗ログインに戻る
+                </button>
+                <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">本部ログイン</h3>
+                <p class="text-xs text-gray-500 text-center mb-6">本部用IDとパスワードを入力してください</p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">本部ID</label>
+                        <input type="text" id="loginHqId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="HQ ID">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                        <input type="password" id="loginHqPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="パスワード"
+                            onkeydown="if(event.key==='Enter') app.hqLogin()">
+                    </div>
+
+                    <button onclick="app.hqLogin()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition mt-4">本部ログイン</button>
                 </div>
             </div>
         </div>
