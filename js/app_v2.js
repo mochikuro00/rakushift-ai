@@ -158,11 +158,8 @@ const app = {
                 this.renderCurrentView();
                 this.updateHeader();
 
-                // ページ訪問時にお知らせを表示（お知らせ閉じた後にログインモーダルを表示）
-                const hasAnnouncements = await this.showAnnouncementsOnPageLoad();
-                if (!hasAnnouncements) {
-                    this.openModal('loginModal');
-                }
+                // ログインモーダルを表示（お知らせはサイドバーで確認する方式に統一）
+                this.openModal('loginModal');
                 
                 const loadingEl = document.getElementById('viewContainer').querySelector('.loading-spinner')?.parentElement?.parentElement;
                 if(loadingEl) loadingEl.innerHTML = ''; 
@@ -414,8 +411,8 @@ const app = {
                     this.showToast(`契約ID: ${contractId} でログインしました`, 'success');
                 }
 
-                // お知らせポップアップ表示
-                this.showAnnouncementsAfterLogin();
+                // お知らせバッジを更新（サイドバーで確認する方式に統一）
+                this.updateAnnouncementBadge();
             } else {
                 this.showToast(authResult?.message || 'ログインに失敗しました', 'error');
             }
@@ -1561,11 +1558,85 @@ const app = {
             bodyHtml += `</tr>`;
         });
 
+        // === 人員不足アラート行の生成 ===
+        let alertRowHtml = '';
+        if (this.state.isAdmin && this.state.config) {
+            const staffReq = this.state.config.staff_req || this.state.defaultConfig.staff_req;
+            const closedDays = this.state.config.closed_days || [];
+            const specialHolidays = this.state.config.special_holidays || [];
+
+            alertRowHtml += `<tr>`;
+            alertRowHtml += `<td class="p-2 sticky left-0 z-40 bg-white border-b border-r border-gray-100 text-xs font-bold text-gray-500 h-10 whitespace-nowrap">
+                <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i>人員状況
+            </td>`;
+
+            days.forEach(date => {
+                const m = date.getMonth() + 1;
+                const d = date.getDate();
+                const dateStr = `${date.getFullYear()}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const dayOfWeek = date.getDay();
+                const jsDow = dayOfWeek; // 0=日, 6=土
+
+                // 休業日チェック
+                const isSpecialHoliday = specialHolidays.includes(dateStr);
+                const isClosedDay = closedDays.includes(jsDow);
+                if (isSpecialHoliday || isClosedDay) {
+                    alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 bg-gray-50 text-center">
+                        <span class="text-[10px] text-gray-300">-</span>
+                    </td>`;
+                    return;
+                }
+
+                // 祝日チェック
+                const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
+                const isHoliday = jh ? jh.isHoliday(dateStr) : false;
+
+                // 必要人数を取得
+                let required = parseInt(staffReq.min_weekday || 2);
+                if (isHoliday || dayOfWeek === 0) {
+                    required = parseInt(staffReq.min_holiday || 3);
+                } else if (dayOfWeek === 6) {
+                    required = parseInt(staffReq.min_weekend || 3);
+                }
+
+                // 実際の配置人数
+                const assigned = this.state.shifts.filter(s => s.date === dateStr).length;
+                const diff = assigned - required;
+
+                let cellContent = '';
+                let cellBg = 'bg-white';
+                if (diff < 0) {
+                    // 不足: 赤文字アラート
+                    cellBg = 'bg-red-50';
+                    cellContent = `<div class="flex flex-col items-center justify-center h-full">
+                        <span class="text-red-600 font-black text-xs animate-pulse">${Math.abs(diff)}名不足</span>
+                        <span class="text-[9px] text-red-400">${assigned}/${required}</span>
+                    </div>`;
+                } else if (diff === 0) {
+                    // ちょうど
+                    cellContent = `<div class="flex items-center justify-center h-full">
+                        <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
+                    </div>`;
+                } else {
+                    // 余裕あり
+                    cellContent = `<div class="flex items-center justify-center h-full">
+                        <span class="text-blue-400 text-[10px] font-bold">+${diff}</span>
+                    </div>`;
+                }
+
+                alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 ${cellBg} text-center">${cellContent}</td>`;
+            });
+            alertRowHtml += `</tr>`;
+        }
+
         container.innerHTML = `
             <div class="h-full overflow-auto custom-scrollbar">
                 <table class="w-full border-collapse">
                     <thead><tr>${headerHtml}</tr></thead>
-                    <tbody id="shiftTableBody">${bodyHtml}</tbody>
+                    <tbody id="shiftTableBody">
+                        ${alertRowHtml}
+                        ${bodyHtml}
+                    </tbody>
                 </table>
             </div>
         `;
