@@ -66,29 +66,27 @@ export default function HQDashboard() {
               <tr>
                 <th className="p-4 font-bold">店舗名</th>
                 <th className="p-4 font-bold">契約ID</th>
-                <th className="p-4 font-bold">スタッフ数</th>
-                <th className="p-4 font-bold">未承認申請</th>
+                <th className="p-4 font-bold">プラン</th>
+                <th className="p-4 font-bold">登録日</th>
                 <th className="p-4 font-bold text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {organizations.map(org => (
-                <tr key={org.id} className="hover:bg-blue-50/50 transition-colors">
+                <tr key={org.organization_id} className="hover:bg-blue-50/50 transition-colors">
                   <td className="p-4 font-bold text-gray-800">{org.name}</td>
                   <td className="p-4 text-gray-600 font-mono text-xs">{org.contract_id}</td>
-                  <td className="p-4 text-gray-600">{org.staff_count || 0}名</td>
                   <td className="p-4">
-                    {org.pending_requests > 0 ? (
-                      <span className="flex items-center gap-1 text-orange-600 font-bold bg-orange-100 px-2 py-1 rounded w-max">
-                        <AlertTriangle className="w-4 h-4" /> {org.pending_requests}件
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">0件</span>
-                    )}
+                    <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                      {org.plan || 'Free'}
+                    </span>
+                  </td>
+                  <td className="p-4 text-gray-400 text-sm">
+                    {org.created_at ? new Date(org.created_at).toLocaleDateString() : '-'}
                   </td>
                   <td className="p-4 text-center">
                     <button 
-                      onClick={() => handleLoginAsShop(org.id, org.contract_id, org.name)}
+                      onClick={() => handleLoginAsShop(org.organization_id, org.contract_id, org.name)}
                       className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1 mx-auto"
                     >
                       <PlayCircle className="w-4 h-4" /> 管理画面へ
