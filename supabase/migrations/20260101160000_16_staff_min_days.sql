@@ -1,0 +1,3 @@
+-- 16_staff_min_days.sql
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS min_days_week INTEGER DEFAULT 0;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS min_days_month INTEGER DEFAULT 0;

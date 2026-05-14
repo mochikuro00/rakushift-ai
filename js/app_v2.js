@@ -178,21 +178,19 @@ const app = {
     /**
      * イベントリスナー登録
      */
-    bindEvents() {
+        const closeSidebar = () => {
+            if (window.innerWidth < 768) {
+                document.querySelector('aside')?.classList.add('-translate-x-full');
+            }
+        };
+
         document.querySelectorAll('.sidebar-link').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const view = e.currentTarget.dataset.view;
                 this.changeView(view);
+                closeSidebar();
             });
-        });
-
-        document.getElementById('prevPeriod')?.addEventListener('click', () => this.changeMonth(-1));
-        document.getElementById('nextPeriod')?.addEventListener('click', () => this.changeMonth(1));
-        document.getElementById('todayBtn')?.addEventListener('click', () => {
-            this.state.currentDate = new Date();
-            this.renderCurrentView();
-            this.updateHeader();
         });
 
         document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
@@ -246,7 +244,7 @@ const app = {
             console.log(`Loading data for org: ${orgId}`);
 
             // staffはpasswordフィールドを除外して取得 (セキュリティ)
-            const staffSelect = 'id,organization_id,contract_id,name,login_id,role,evaluation,salary_type,hourly_wage,monthly_salary,annual_holidays,max_days_week,max_hours_day,unavailable_dates';
+            const staffSelect = 'id,organization_id,contract_id,name,login_id,role,evaluation,salary_type,hourly_wage,monthly_salary,annual_holidays,max_days_week,max_hours_day,min_days_week,min_days_month,unavailable_dates';
             const [configRes, staffRes, shiftsRes, requestsRes] = await Promise.all([
                 API.list('config_safe', orgFilter),
                 API.list('staff', { ...orgFilter, select: staffSelect }),
@@ -741,6 +739,8 @@ const app = {
                         monthly_salary: tmpl.salary_type === 'monthly' ? 250000 : 0,
                         max_days_week: tmpl.max_days,
                         max_hours_day: tmpl.max_hours,
+                        min_days_week: 0,
+                        min_days_month: 0,
                         organization_id: orgId
                     };
                     if (tmpl.holidays) {
@@ -1438,9 +1438,9 @@ const app = {
                     if (startH < 10) barColor = 'bg-yellow-100 text-yellow-800 border-yellow-500';
                     if (startH >= 17) barColor = 'bg-purple-100 text-purple-700 border-purple-500';
                     
-                    // 過去の場合はグレーアウト
+                    // 過去の場合は少し透明にして元の色を残す
                     if (isPast) {
-                        barColor = 'bg-gray-200 text-gray-500 border-gray-400 opacity-80';
+                        barColor += ' opacity-50 hover:opacity-70';
                     }
 
                     if (isGanttMode) {
@@ -1478,9 +1478,7 @@ const app = {
                             <div class="absolute top-0 bottom-0 left-[50%] w-px bg-gray-400 z-0"></div>
                             <div class="absolute top-0 bottom-0 left-[75%] w-px bg-gray-400 z-0"></div>
                             
-                            <!-- Business Hours Mask (Outside of Open-Close is grayed out) -->
-                            <div class="absolute top-0 bottom-0 left-0 bg-gray-200/50 pointer-events-none z-0" style="width: ${openPct}%;"></div>
-                            <div class="absolute top-0 bottom-0 right-0 bg-gray-200/50 pointer-events-none z-0" style="left: ${closePct}%;"></div>
+                            <!-- Business Hours Mask (削除: ご要望により1週間ビューでのグレーアウト排除) -->
                         `;
                         
                         const adminDrag = this.state.isAdmin ? `data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px; cursor: grab;"` : `style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px;"`;
@@ -3476,6 +3474,8 @@ const app = {
             monthly_salary: Number(document.getElementById('staffMonthlySalary').value),
             max_days_week: Number(document.getElementById('staffMaxDaysPerWeek').value),
             max_hours_day: Number(document.getElementById('staffMaxHoursPerDay').value),
+            min_days_week: Number(document.getElementById('staffMinDaysPerWeek').value) || 0,
+            min_days_month: Number(document.getElementById('staffMinDaysPerMonth').value) || 0,
             contract_id: contractId
         };
         // 新規作成時は組織IDを付与
@@ -3534,6 +3534,8 @@ const app = {
         document.getElementById('staffMonthlySalary').value = s.monthly_salary;
         document.getElementById('staffMaxDaysPerWeek').value = s.max_days_week || 5;
         document.getElementById('staffMaxHoursPerDay').value = s.max_hours_day || 8;
+        document.getElementById('staffMinDaysPerWeek').value = s.min_days_week || 0;
+        document.getElementById('staffMinDaysPerMonth').value = s.min_days_month || 0;
         this.toggleSalaryInputs();
         this.openModal('staffModal');
     },
@@ -4905,7 +4907,9 @@ const app = {
                     name: s.name,
                     role: s.role,
                     max_days_week: s.max_days_week,
-                    max_hours_day: s.max_hours_day
+                    max_hours_day: s.max_hours_day,
+                    min_days_week: s.min_days_week,
+                    min_days_month: s.min_days_month
                 }))
             });
 
@@ -5725,7 +5729,7 @@ const app = {
                     staff_count: this.state.staff.length,
                     shift_count: this.state.shifts.length,
                     shifts: this.state.shifts.map(s => ({ staff_id: s.staff_id, date: s.date, start_time: s.start_time, end_time: s.end_time })),
-                    staff_list: this.state.staff.map(s => ({ id: s.id, name: s.name, role: s.role, max_days_week: s.max_days_week, max_hours_day: s.max_hours_day }))
+                    staff_list: this.state.staff.map(s => ({ id: s.id, name: s.name, role: s.role, max_days_week: s.max_days_week, max_hours_day: s.max_hours_day, min_days_week: s.min_days_week, min_days_month: s.min_days_month }))
                 });
             } catch (diagErr) {
                 console.error('Auto AI Diagnosis error:', diagErr);

@@ -546,6 +546,33 @@ class ShiftScheduler:
                     if wv:
                         prob += pulp.lpSum(wv) <= effective_max_days
 
+                # --- 週の最低出勤日数 (ソフト制約) ---
+                min_days_week = int(s.get("min_days_week") or 0)
+                if not force and min_days_week > 0:
+                    for week in week_groups:
+                        wv = []
+                        for d in week:
+                            for oi in range(len(staff_opts.get((sid, d), []))):
+                                wv.append(x[(sid, d, oi)])
+                        if wv:
+                            slack_var = pulp.LpVariable("slack_min_days_week_{}_{}".format(sid, week[0]), 0, None)
+                            prob += pulp.lpSum(wv) + slack_var >= min_days_week
+                            penalty += slack_var * 100000
+
+                # --- 月(全体期間)の最低出勤日数 (ソフト制約) ---
+                min_days_month = int(s.get("min_days_month") or 0)
+                if not force and min_days_month > 0 and self.dates:
+                    target_min_month = int(round(min_days_month * (len(self.dates) / 30.0)))
+                    if target_min_month > 0:
+                        all_wv = []
+                        for d in self.dates:
+                            for oi in range(len(staff_opts.get((sid, d), []))):
+                                all_wv.append(x[(sid, d, oi)])
+                        if all_wv:
+                            slack_var_month = pulp.LpVariable("slack_min_days_month_{}".format(sid), 0, None)
+                            prob += pulp.lpSum(all_wv) + slack_var_month >= target_min_month
+                            penalty += slack_var_month * 100000
+
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
                     for week in week_groups:
