@@ -547,10 +547,6 @@ const app = {
         if (adminHeader) {
             if (this.state.isAdmin) {
                 adminHeader.innerHTML = `
-                    <button onclick="app.openModal('autoFillModal')" class="hidden md:flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded shadow transition-all">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> AIシフト作成
-                    </button>
-                    <div class="h-8 w-px bg-gray-300 mx-2 hidden md:block"></div>
                     <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all ml-2" title="完全ログアウト">
                         <i class="fa-solid fa-power-off"></i>
                     </button>
@@ -574,6 +570,7 @@ const app = {
         
         // メニューバッジなどの更新
         this.updateRequestBadge();
+        this.updateAnnouncementBadge();
     },
 
     changeView(viewName) {
@@ -635,6 +632,9 @@ const app = {
                 break;
             case 'manual':
                 this.renderManual(container);
+                break;
+            case 'announcements':
+                this.renderAnnouncementsAdmin(container);
                 break;
             default:
                 this.renderDashboard(container);
@@ -1208,6 +1208,11 @@ const app = {
                     </div>
                     
                     <div class="flex items-center gap-2">
+                        ${this.state.isAdmin ? `
+                        <button onclick="app.openModal('autoFillModal')" class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> AIシフト作成
+                        </button>
+                        ` : ''}
                         ${periodControls}
                         <div class="flex bg-gray-100 p-1 rounded-lg">
                             <button onclick="app.switchShiftViewMode('table')" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
@@ -2498,6 +2503,14 @@ const app = {
                         </div>
                         ` : ''}
                     </div>
+                </div>
+
+                <!-- 下部保存ボタン -->
+                <div class="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <p class="text-sm text-gray-500"><i class="fa-solid fa-info-circle text-blue-400 mr-1"></i>上部の変更を含め、すべての設定を一括保存します</p>
+                    <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
+                        <i class="fa-solid fa-save mr-2"></i>設定を保存
+                    </button>
                 </div>
 
                 <!-- データリセット -->
@@ -3850,6 +3863,10 @@ const app = {
                 mode: 'auto'
             };
 
+            // デバッグ: 送信スタッフ数を確認
+            console.log(`[AutoFill] Sending ${payload.staff_list.length} staff, ${dates.length} dates, ${payload.requests.length} requests`);
+            console.log('[AutoFill] Staff IDs:', payload.staff_list.map(s => s.name || s.id).join(', '));
+
             // === STEP 2: 事前チェック ===
 
             const checkResult = await API.checkFeasibility(payload);
@@ -5186,6 +5203,127 @@ const app = {
     closeModal(id) {
         const el = document.getElementById(id);
         if(el) el.classList.remove('active');
+    },
+
+    // =========================================================
+    // お知らせバッジ更新
+    // =========================================================
+    async updateAnnouncementBadge() {
+        const badge = document.getElementById('announcementCountBadge');
+        if (!badge) return;
+        try {
+            const announcements = await API.rpc('list_active_announcements');
+            if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
+                badge.classList.add('hidden');
+                badge.textContent = '0';
+                return;
+            }
+            const count = announcements.length;
+            // 丸付き数字で表示 (①②③...⑨⑩...)
+            const circledNums = ['⓪','①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+            badge.textContent = count <= 10 ? circledNums[count] : count.toString();
+            badge.classList.remove('hidden');
+        } catch (e) {
+            badge.classList.add('hidden');
+        }
+    },
+
+    // =========================================================
+    // お知らせ管理ビュー (管理者用)
+    // =========================================================
+    renderAnnouncementsAdmin(container) {
+        if (!this.state.isAdmin) { this.changeView('dashboard'); return; }
+
+        container.innerHTML = `
+            <div class="max-w-4xl mx-auto space-y-6 pb-20">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">お知らせ管理</h2>
+                        <p class="text-sm text-gray-500 mt-1">運営からのお知らせを確認できます</p>
+                    </div>
+                    <button onclick="app.refreshAnnouncementsAdmin()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg transition flex items-center gap-2">
+                        <i class="fa-solid fa-arrows-rotate"></i> 更新
+                    </button>
+                </div>
+                <div id="announcementsAdminList">
+                    <div class="text-center py-12 text-gray-400">
+                        <div class="loading-spinner mb-4 mx-auto"></div>
+                        <p>読み込み中...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this._loadAnnouncementsAdmin();
+    },
+
+    async _loadAnnouncementsAdmin() {
+        const listEl = document.getElementById('announcementsAdminList');
+        if (!listEl) return;
+        try {
+            const announcements = await API.rpc('list_active_announcements');
+            if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
+                listEl.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                        <i class="fa-solid fa-bell-slash text-4xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500 font-bold">お知らせはありません</p>
+                        <p class="text-xs text-gray-400 mt-2">現在、配信されているお知らせはありません</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const typeIcons = { info: 'fa-circle-info', warning: 'fa-triangle-exclamation', promotion: 'fa-gift', update: 'fa-rocket' };
+            const typeColors = { info: 'text-blue-500 bg-blue-50', warning: 'text-amber-500 bg-amber-50', promotion: 'text-emerald-500 bg-emerald-50', update: 'text-purple-500 bg-purple-50' };
+            const typeLabels = { info: 'お知らせ', warning: '注意', promotion: 'キャンペーン', update: 'アップデート' };
+
+            listEl.innerHTML = `
+                <div class="space-y-4">
+                    ${announcements.map((item, idx) => `
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                            <div class="p-5">
+                                <div class="flex items-start gap-4">
+                                    <div class="w-10 h-10 rounded-xl ${typeColors[item.type] || typeColors.info} flex items-center justify-center shrink-0">
+                                        <i class="fa-solid ${typeIcons[item.type] || typeIcons.info} text-lg"></i>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${typeColors[item.type] || typeColors.info}">
+                                                ${typeLabels[item.type] || 'お知らせ'}
+                                            </span>
+                                            ${item.created_at ? `<span class="text-xs text-gray-400">${new Date(item.created_at).toLocaleDateString('ja-JP')}</span>` : ''}
+                                        </div>
+                                        <h3 class="font-bold text-gray-800 text-lg">${item.title}</h3>
+                                        <p class="text-sm text-gray-600 mt-2 whitespace-pre-line leading-relaxed">${item.content}</p>
+                                        ${item.target_url ? `
+                                            <a href="${item.target_url}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 mt-3 text-sm font-bold text-blue-600 hover:text-blue-700 transition">
+                                                <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                                ${item.button_text || '詳しく見る'}
+                                            </a>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } catch (e) {
+            listEl.innerHTML = `
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                    <i class="fa-solid fa-exclamation-triangle text-4xl text-amber-400 mb-4"></i>
+                    <p class="text-gray-600 font-bold">お知らせの取得に失敗しました</p>
+                    <p class="text-xs text-gray-400 mt-2">${e.message}</p>
+                    <button onclick="app._loadAnnouncementsAdmin()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition">再試行</button>
+                </div>
+            `;
+        }
+    },
+
+    async refreshAnnouncementsAdmin() {
+        this._loadAnnouncementsAdmin();
+        this.updateAnnouncementBadge();
+        this.showToast('お知らせを更新しました', 'success');
     },
 
     // =========================================================
