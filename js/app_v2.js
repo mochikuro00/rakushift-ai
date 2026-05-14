@@ -386,6 +386,7 @@ const app = {
                 API.setSession({
                     contract_id: authResult.contract_id,
                     organization_id: authResult.organization_id,
+                    session_id: authResult.session_id,
                     name: 'Guest (Staff)',
                     role: 'Guest'
                 });
@@ -473,6 +474,7 @@ const app = {
                     id: authResult.staff_id,
                     contract_id: currentContractId,
                     organization_id: authResult.organization_id,
+                    session_id: authResult.session_id,
                     name: authResult.name,
                     role: authResult.role
                 });
@@ -514,6 +516,13 @@ const app = {
                 this.state.isHQ = true;
                 this.state.isAdmin = true; // 管理者権限を付与
                 this.state.isShopLoggedIn = true;
+                
+                API.setSession({
+                    session_id: result.session_id,
+                    name: 'HQ Admin',
+                    role: 'hq_admin'
+                });
+
                 this.closeModal('loginModal');
                 this.showToast('本部としてログインしました', 'success');
                 this.changeView('hq_dashboard');

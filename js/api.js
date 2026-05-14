@@ -130,6 +130,16 @@ const API = {
             ...options.headers
         };
 
+        const savedSession = localStorage.getItem('rakushift_user');
+        if (savedSession) {
+            try {
+                const user = JSON.parse(savedSession);
+                if (user.session_id) {
+                    headers['x-session-id'] = user.session_id;
+                }
+            } catch(e) {}
+        }
+
         try {
             const res = await fetch(url, { ...options, headers });
             if (!res.ok) {
@@ -200,13 +210,25 @@ const API = {
     // --- RPC (サーバーサイド関数) ---
     async rpc(functionName, params = {}) {
         const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+        };
+
+        const savedSession = localStorage.getItem('rakushift_user');
+        if (savedSession) {
+            try {
+                const user = JSON.parse(savedSession);
+                if (user.session_id) {
+                    headers['x-session-id'] = user.session_id;
+                }
+            } catch(e) {}
+        }
+
         const res = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`
-            },
+            headers: headers,
             body: JSON.stringify(params)
         });
         if (!res.ok) {
