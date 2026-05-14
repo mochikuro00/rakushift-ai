@@ -485,7 +485,7 @@
                 }
             }
 
-            console.log([AdminLogin] ContractID: , LoginID: );
+            console.log('[AdminLogin] ContractID:', currentContractId, ', LoginID:', loginId);
 
             if (!currentContractId) {
                 this.showToast('先に店舗ログインしてください', 'error');
@@ -6112,6 +6112,7 @@
 };
 
 document.addEventListener('DOMContentLoaded', () => { app.init(); });
+
 
 
 
