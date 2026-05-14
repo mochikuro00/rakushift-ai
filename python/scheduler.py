@@ -609,6 +609,22 @@ class ShiftScheduler:
                         if sv:
                             prob += pulp.lpSum(sv) <= max_consec
 
+                # --- 勤務間インターバル制約 (前日の退勤から翌日の出勤まで10時間以上) ---
+                if not force:
+                    for i in range(len(sorted_d) - 1):
+                        d1 = sorted_d[i]
+                        d2 = sorted_d[i+1]
+                        opts1 = staff_opts.get((sid, d1), [])
+                        opts2 = staff_opts.get((sid, d2), [])
+                        if not opts1 or not opts2:
+                            continue
+                        for oi1, opt1 in enumerate(opts1):
+                            for oi2, opt2 in enumerate(opts2):
+                                # 退勤から翌日出勤までの休息時間（分）
+                                interval = (opt2["start_min"] + 1440) - opt1["end_min"]
+                                if interval < 600:  # 10時間(600分)未満なら同時にシフトに入れない
+                                    prob += x[(sid, d1, oi1)] + x[(sid, d2, oi2)] <= 1
+
             # ====================================================
             # TIER 2: カバレッジ制約 (ソフト制約)
             # ====================================================
@@ -721,14 +737,26 @@ class ShiftScheduler:
                         prob += power_expr + slack >= 1.5 * min_req
                         penalty += slack * 10000
 
-                # --- 評価ランクによるコスト ---
+                # --- 人件費と評価ランクによる最適化 (コスト最小化) ---
                 for s in self.staff_list:
                     sid = s["id"]
                     rank = self._eval_rank.get(sid, "B")
-                    cost = {"A": 0, "B": 50, "C": 500, "D": 2000}.get(rank, 50)
+                    # ランクペナルティ (Aは優遇、Dは後回し)
+                    rank_penalty = {"A": 0, "B": 20, "C": 100, "D": 500}.get(rank, 50)
+                    
+                    hourly_wage = float(s.get("hourly_wage") or 1000)
+                    is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
+
                     for d in self.dates:
-                        for oi in range(len(staff_opts.get((sid, d), []))):
-                            penalty += x[(sid, d, oi)] * cost
+                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                            hours = opt["hours"]
+                            # 月給制の場合はシフト追加による変動人件費はゼロとみなす
+                            labor_cost = 0.0 if is_monthly else (hourly_wage * hours)
+                            
+                            # 人件費を最小化しつつ、評価の高いスタッフを優先するハイブリッドコスト
+                            # labor_cost(例:8000円) * 0.01 = 80。これにランクペナルティを足す。
+                            total_cost = (labor_cost * 0.01) + rank_penalty
+                            penalty += x[(sid, d, oi)] * total_cost
 
                 # --- 勤務日数の公平性 (スタッフ間のバランス) ---
                 hourly_staff = [s for s in self.staff_list
