@@ -15,11 +15,12 @@ export default function LoginView() {
     setLoading(true);
     try {
       let res;
-      if (mode === 'shop') res = await API.rpc('verify_shop_login', { p_contract: contractId, p_pass: password });
-      else if (mode === 'admin') res = await API.rpc('verify_admin_login', { p_contract: contractId, p_pass: password });
-      else res = await API.rpc('hq_login', { p_pass: password });
+      if (mode === 'shop') res = await API.rpc('verify_shop_login', { p_contract_id: contractId, p_password: password });
+      else if (mode === 'admin') res = await API.rpc('verify_admin_login', { p_contract_id: contractId, p_login_id: 'admin', p_password: password });
+      else res = await API.rpc('hq_login', { p_login_id: contractId, p_password: password });
 
-      if (res && res.success) {
+
+      if (res && res.status === 'success') {
         const authData = {
           isShopLoggedIn: true,
           isAdmin: mode === 'admin' || mode === 'hq',
@@ -58,32 +59,35 @@ export default function LoginView() {
         
         <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
           <button 
+            type="button"
             className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${mode === 'shop' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
             onClick={() => setMode('shop')}
-          >店舗用</button>
+          >スタッフ専用</button>
           <button 
+            type="button"
             className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${mode === 'admin' ? 'bg-white shadow text-purple-600' : 'text-gray-500'}`}
             onClick={() => setMode('admin')}
-          >店舗管理者</button>
+          >管理者専用</button>
           <button 
+            type="button"
             className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${mode === 'hq' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}
             onClick={() => setMode('hq')}
-          >統括本部</button>
+          >本部・統括管理者</button>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
-          {mode !== 'hq' && (
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">契約ID</label>
-              <input 
-                type="text" 
-                className="w-full border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
-                value={contractId}
-                onChange={e => setContractId(e.target.value)}
-                placeholder="例: shop001"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">
+              {mode === 'hq' ? '本部ログインID' : '契約ID'}
+            </label>
+            <input 
+              type="text" 
+              className="w-full border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+              value={contractId}
+              onChange={e => setContractId(e.target.value)}
+              placeholder={mode === 'hq' ? '例: hq_master' : '例: shop001'}
+            />
+          </div>
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">パスワード</label>
             <input 
