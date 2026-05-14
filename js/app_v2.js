@@ -544,8 +544,8 @@ const app = {
         if (adminHeader) {
             if (this.state.isAdmin) {
                 adminHeader.innerHTML = `
-                    <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all ml-2" title="完全ログアウト">
-                        <i class="fa-solid fa-power-off"></i>
+                    <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all ml-2">
+                        <i class="fa-solid fa-power-off mr-1"></i>ログアウト
                     </button>
                 `;
             } else {
@@ -555,8 +555,8 @@ const app = {
                         <div class="hidden md:block px-3 py-1 text-xs font-mono text-gray-400 border border-gray-200 rounded bg-gray-50 mr-2">
                             ID: ${this.state.organization_id}
                         </div>
-                        <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all" title="完全ログアウト">
-                            <i class="fa-solid fa-power-off"></i>
+                        <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all">
+                            <i class="fa-solid fa-power-off mr-1"></i>ログアウト
                         </button>
                      `;
                 } else {
