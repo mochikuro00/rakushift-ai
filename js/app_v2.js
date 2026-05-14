@@ -431,13 +431,13 @@ const app = {
      * 管理者ログイン処理 - RPC経由bcrypt認証
      */
     async adminLogin() {
-        const loginId = document.getElementById('adminLoginId').value.trim();
+        const loginId = 'admin'; // 固定値に変更
         const password = document.getElementById('adminLoginPass')?.value.trim() || '';
 
         console.log(`[AdminLogin] Triggered. Input LoginID: ${loginId}`);
 
-        if (!loginId || !password) {
-            this.showToast('ログインIDとパスワードを入力してください', 'error');
+        if (!password) {
+            this.showToast('パスワードを入力してください', 'error');
             return;
         }
 

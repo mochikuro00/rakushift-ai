@@ -209,7 +209,7 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">契約ID (Contract ID)</label>
-                        <input type="text" id="loginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="15桁の契約ID">
+                        <input type="text" id="loginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="例: demo (または 15桁の契約ID)">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
@@ -245,7 +245,7 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">本部ID</label>
-                        <input type="text" id="loginHqId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="HQ ID">
+                        <input type="text" id="loginHqId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: demo (または 本部ID)">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
@@ -384,10 +384,7 @@
             </div>
             <div class="p-6 space-y-4">
                 <p class="text-sm text-gray-500 mb-4">管理者のログインIDとパスワードを入力してください。</p>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">ログインID</label>
-                    <input type="text" id="adminLoginId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin">
-                </div>
+                <!-- 管理者ID入力欄を削除（自動でadminとして処理） -->
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
                     <input type="password" id="adminLoginPass" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="パスワード"
