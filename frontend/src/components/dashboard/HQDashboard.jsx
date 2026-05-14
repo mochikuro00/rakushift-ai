@@ -11,9 +11,9 @@ export default function HQDashboard() {
   useEffect(() => {
     const fetchOrgs = async () => {
       try {
-        const res = await API.rpc('get_hq_orgs');
-        if (res && res.success) {
-          setOrganizations(res.data || []);
+        const res = await API.rpc('hq_get_all_shops');
+        if (Array.isArray(res)) {
+          setOrganizations(res);
         } else {
           showToast('店舗データの取得に失敗しました', 'error');
         }

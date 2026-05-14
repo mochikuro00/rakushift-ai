@@ -20,7 +20,7 @@ export default function LoginView() {
       else res = await API.rpc('hq_login', { p_login_id: contractId, p_password: password });
 
 
-      if (res && res.status === 'success') {
+      if (res && (res.status === 'success' || res.success === true)) {
         const authData = {
           isShopLoggedIn: true,
           isAdmin: mode === 'admin' || mode === 'hq',
