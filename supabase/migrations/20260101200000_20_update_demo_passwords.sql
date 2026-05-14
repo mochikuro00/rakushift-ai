@@ -14,25 +14,25 @@ BEGIN
     IF v_demo_org_id IS NOT NULL THEN
         UPDATE organizations
         SET 
-            password = crypt('rakushift1234', gen_salt('bf')),
-            admin_password = crypt('rakushift1234', gen_salt('bf'))
+            password = crypt('demo', gen_salt('bf')),
+            admin_password = crypt('demo', gen_salt('bf'))
         WHERE id = v_demo_org_id;
 
         -- configテーブルにパスワードが残っている場合も念のため更新
         UPDATE config
         SET 
-            shop_password = crypt('rakushift1234', gen_salt('bf')),
-            admin_password = crypt('rakushift1234', gen_salt('bf'))
+            shop_password = crypt('demo', gen_salt('bf')),
+            admin_password = crypt('demo', gen_salt('bf'))
         WHERE organization_id = v_demo_org_id;
 
-        RAISE NOTICE 'Demo passwords updated to rakushift1234 for org_id: %', v_demo_org_id;
+        RAISE NOTICE 'Demo passwords updated to demo for org_id: %', v_demo_org_id;
     END IF;
 
-    -- 2. 本部・統括（HQ）アカウントの確認と確実な設定
+    -- 2. 本部・統括（HQ）のデモアカウント追加
     INSERT INTO hq_admins (login_id, password) 
-    VALUES ('hq_master', crypt('rakushift_hq', gen_salt('bf')))
+    VALUES ('demo', crypt('demo', gen_salt('bf')))
     ON CONFLICT (login_id) DO UPDATE 
-    SET password = crypt('rakushift_hq', gen_salt('bf'));
+    SET password = crypt('demo', gen_salt('bf'));
 
-    RAISE NOTICE 'HQ admin password ensured for hq_master.';
+    RAISE NOTICE 'HQ demo account (demo/demo) ensured.';
 END $$;

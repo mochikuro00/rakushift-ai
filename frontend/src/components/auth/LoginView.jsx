@@ -85,7 +85,7 @@ export default function LoginView() {
               className="w-full border-gray-300 rounded-lg p-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
               value={contractId}
               onChange={e => setContractId(e.target.value)}
-              placeholder={mode === 'hq' ? '例: hq_master' : '例: shop001'}
+              placeholder={mode === 'hq' ? '例: demo (または hq_master)' : '例: demo (または shop001)'}
             />
           </div>
           <div>
