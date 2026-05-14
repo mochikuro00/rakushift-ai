@@ -27,7 +27,8 @@ export default function LoginView() {
           isHQ: mode === 'hq',
           organizationId: res.organization_id || null,
           contractId: contractId,
-          userName: mode === 'hq' ? '本部管理者' : res.name || '管理者'
+          userName: mode === 'hq' ? '本部管理者' : res.name || '管理者',
+          session_id: res.session_id || null
         };
         
         localStorage.setItem('rakushift_user', JSON.stringify({

@@ -26,23 +26,21 @@ export default function HQDashboard() {
     fetchOrgs();
   }, [showToast]);
 
-  const handleLoginAsShop = async (contractId) => {
+  const handleLoginAsShop = async (orgId, contractId, name) => {
     try {
-      const res = await API.rpc('hq_login_as_shop', { p_contract: contractId });
-      if (res && res.success) {
-        const authData = {
-          isShopLoggedIn: true,
-          isAdmin: true,
-          isHQ: true,
-          organizationId: res.organization_id,
-          contractId: contractId,
-          userName: '本部管理者（閲覧モード）'
-        };
-        localStorage.setItem('rakushift_user', JSON.stringify({ ...authData, role: 'hq_admin' }));
-        setAuth(authData);
-        showToast(`${res.name} のダッシュボードに移動しました`);
-        window.location.reload(); // Hard reload to trigger loadData in App.jsx and reset state cleanly
-      }
+      const authData = {
+        isShopLoggedIn: true,
+        isAdmin: true,
+        isHQ: true,
+        organizationId: orgId,
+        contractId: contractId,
+        userName: '本部管理者（閲覧モード）',
+        session_id: JSON.parse(localStorage.getItem('rakushift_user') || '{}').session_id
+      };
+      localStorage.setItem('rakushift_user', JSON.stringify({ ...authData, role: 'hq_admin' }));
+      setAuth(authData);
+      showToast(`${name || '店舗'} のダッシュボードに移動しました`);
+      window.location.reload(); // Hard reload to trigger loadData in App.jsx and reset state cleanly
     } catch (e) {
       console.error(e);
       showToast('店舗へのアクセスに失敗しました', 'error');
@@ -90,7 +88,7 @@ export default function HQDashboard() {
                   </td>
                   <td className="p-4 text-center">
                     <button 
-                      onClick={() => handleLoginAsShop(org.contract_id)}
+                      onClick={() => handleLoginAsShop(org.id, org.contract_id, org.name)}
                       className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm flex items-center gap-1 mx-auto"
                     >
                       <PlayCircle className="w-4 h-4" /> 管理画面へ
