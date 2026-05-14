@@ -997,17 +997,17 @@
 
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店舗一覧 (${shops.length}店舗)</h3>
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店舗一覧 (${filteredShops.length}店舗)</h3>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店舗名 / 組織</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店舗名 / 契約ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">契約ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">プラン</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
-                                    <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">アクション</th>
+                                    <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -1042,6 +1042,15 @@
             });
 
             if (authResult && authResult.success) {
+                // Save to localStorage
+                try {
+                    let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
+                    if (!savedOrgIds.includes(authResult.organization_id)) {
+                        savedOrgIds.push(authResult.organization_id);
+                        localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
+                    }
+                } catch(e) {}
+
                 this.state.organization_id = authResult.organization_id;
                 await this.loadData();
                 this.showToast('店舗 (' + contractId + ') の閲覧を開始します', 'success');
@@ -1055,6 +1064,15 @@
                 });
 
                 if (adminResult && adminResult.success) {
+                    // Save to localStorage
+                    try {
+                        let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
+                        if (!savedOrgIds.includes(adminResult.organization_id)) {
+                            savedOrgIds.push(adminResult.organization_id);
+                            localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
+                        }
+                    } catch(e) {}
+
                     this.state.organization_id = adminResult.organization_id;
                     await this.loadData();
                     this.showToast('管理者権限で店舗 (' + contractId + ') の閲覧を開始します', 'success');
@@ -1068,6 +1086,19 @@
             this.showToast('エラーが発生しました', 'error');
         } finally {
             this.showLoading(false);
+        }
+    },
+
+    removeHQShop(orgId) {
+        if (!confirm('この店舗をリストから削除しますか？\n(※データベースのデータは削除されません)')) return;
+        try {
+            let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
+            savedOrgIds = savedOrgIds.filter(id => id !== orgId);
+            localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
+            this.showToast('店舗をリストから削除しました', 'info');
+            this.renderCurrentView();
+        } catch(e) {
+            console.error('Failed to remove shop', e);
         }
     },
 
@@ -6192,6 +6223,8 @@
 };
 
 document.addEventListener('DOMContentLoaded', () => { app.init(); });
+
+
 
 
 
