@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -229,12 +229,6 @@
 
                         <button onclick="app.login()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-4">店舗ログイン</button>
 
-                        <div class="text-center mt-6 pt-6 border-t border-gray-200">
-                            <p class="text-sm text-gray-600 mb-3">まだアカウントをお持ちでない方</p>
-                            <button onclick="app.openModal('newSubscriptionModal')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg transition">
-                                <i class="fa-solid fa-rocket mr-2"></i>新規お申し込み
-                            </button>
-                        </div>
                     </div>
 
                     <!-- Admin Form -->
@@ -283,6 +277,16 @@
 
                         <button onclick="window.location.href='admin.html'" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg transition mt-4 flex items-center justify-center gap-2">
                             <span>運営管理画面へ移動</span> <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Global Action: New Subscription -->
+                <div class="p-8 pt-0 mt-auto border-t border-gray-100 bg-white">
+                    <div class="text-center mt-6">
+                        <p class="text-sm text-gray-600 mb-3">まだアカウントをお持ちでない方</p>
+                        <button onclick="app.openModal('newSubscriptionModal')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg transition">
+                            <i class="fa-solid fa-rocket mr-2"></i>新規お申し込み
                         </button>
                     </div>
                 </div>

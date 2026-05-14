@@ -95,8 +95,8 @@
     switchLoginTab(tabId) {
         const tabs = ['shop', 'admin', 'hq', 'platform'];
         tabs.forEach(t => {
-            const btn = document.getElementById(	ab- + t);
-            const form = document.getElementById(orm- + t);
+            const btn = document.getElementById('tab-' + t);
+            const form = document.getElementById('form-' + t);
             if (btn && form) {
                 if (t === tabId) {
                     btn.classList.add('text-blue-600', 'border-blue-600', 'bg-white');
@@ -6112,6 +6112,7 @@
 };
 
 document.addEventListener('DOMContentLoaded', () => { app.init(); });
+
 
 
 
