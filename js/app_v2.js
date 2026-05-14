@@ -1,4 +1,4 @@
-﻿const app = {
+const app = {
     // セキュリティ: ログイン試行回数制限
     _loginAttempts: {},
     _MAX_LOGIN_ATTEMPTS: 5,
@@ -513,55 +513,75 @@
 
     /**
      * 管理者ログイン処理 - RPC経由bcrypt認証
+     * 契約IDと管理者パスワードで直接ログイン可能
      */
     async adminLogin() {
-        const loginId = 'admin'; // 固定値に変更
+        const loginId = 'admin'; // 固定値
         const password = document.getElementById('adminLoginPass')?.value.trim() || '';
-        let inputContractId = this._sanitize(document.getElementById('adminLoginContractId')?.value.trim() || '');
+        const inputContractId = this._sanitize(document.getElementById('adminLoginContractId')?.value.trim() || '');
 
         console.log('[AdminLogin] Triggered.');
 
+        // 契約IDとパスワードの両方を必須にする
+        if (!inputContractId) {
+            this.showToast('契約IDを入力してください', 'error');
+            return;
+        }
         if (!password) {
-            this.showToast('パスワードを入力してください', 'error');
+            this.showToast('管理者パスワードを入力してください', 'error');
             return;
         }
 
+        // セキュリティ: ブルートフォース対策
+        if (this._checkLoginLock('admin_' + inputContractId)) return;
+
         this.showLoading(true);
         try {
-            let currentContractId = inputContractId;
-            if (!currentContractId) {
-                if (API.session?.user?.contract_id) {
-                    currentContractId = API.session.user.contract_id;
-                } else if (this.state.config?.contract_id) {
-                    currentContractId = this.state.config.contract_id;
+            // 1. ライセンス・サブスクリプション状態チェック
+            try {
+                const subCheck = await API.rpc('check_subscription_status', { p_contract_id: inputContractId });
+                if (subCheck && !subCheck.allowed) {
+                    if (subCheck.status === 'suspended') {
+                        this.showToast('このアカウントのライセンスは停止中です。運営までお問い合わせください。', 'error');
+                        this.showLoading(false);
+                        return;
+                    } else if (subCheck.status === 'not_found') {
+                        this.showToast('契約IDが見つかりません', 'error');
+                        this.showLoading(false);
+                        return;
+                    } else if (subCheck.status === 'canceled' || subCheck.status === 'unpaid') {
+                        this.showToast('サブスクリプションが無効です。プランを再度ご契約ください。', 'error');
+                        this.showLoading(false);
+                        return;
+                    } else if (subCheck.status === 'past_due') {
+                        this._paymentPastDue = true;
+                    }
                 }
+                if (subCheck && subCheck.status === 'free') {
+                    this._pendingPayment = true;
+                } else {
+                    this._pendingPayment = false;
+                }
+            } catch (licenseErr) {
+                console.warn('[AdminLogin] Subscription check skipped:', licenseErr.message);
             }
 
-            // セキュリティ: ブルートフォース対策
-            if (this._checkLoginLock('admin_' + currentContractId)) { this.showLoading(false); return; }
-
-            if (!currentContractId) {
-                this.showToast('先に店舗ログインしてください', 'error');
-                this.showLoading(false);
-                return;
-            }
-
-            // bcrypt認証 (RPC経由)
+            // 2. bcrypt認証 (RPC経由)
             const authResult = await API.rpc('verify_admin_login', {
-                p_contract_id: currentContractId,
+                p_contract_id: inputContractId,
                 p_login_id: loginId,
                 p_password: password
             });
 
-            console.log('[AdminLogin] Auth result: success=', authResult?.success);
-
             if (authResult && authResult.success) {
-                this._recordLoginAttempt('admin_' + currentContractId, true);
+                this._recordLoginAttempt('admin_' + inputContractId, true);
                 this.state.isAdmin = true;
+                this.state.isShopLoggedIn = true;
+                this.state.organization_id = authResult.organization_id;
 
                 API.setSession({
                     id: authResult.staff_id,
-                    contract_id: currentContractId,
+                    contract_id: inputContractId,
                     organization_id: authResult.organization_id,
                     session_id: authResult.session_id,
                     name: authResult.name,
@@ -569,12 +589,18 @@
                 });
 
                 this.closeModal('loginModal');
-                this.showToast(`管理者: ${authResult.name} でログインしました`, 'success');
 
+                // データ読み込み（店舗ログインと同等の初期化）
+                await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
+
+                this.showToast(`管理者: ${this._sanitize(authResult.name)} でログインしました`, 'success');
+
+                // お知らせバッジを更新
+                this.updateAnnouncementBadge();
             } else {
-                this._recordLoginAttempt('admin_' + currentContractId, false);
+                this._recordLoginAttempt('admin_' + inputContractId, false);
                 this.showToast(authResult?.message || '認証に失敗しました', 'error');
             }
 
