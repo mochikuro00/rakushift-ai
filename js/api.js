@@ -33,15 +33,15 @@ const API = {
                     access_token: 'dummy_token_for_static_auth',
                     user: user
                 };
-                console.log("Session restored (Rakushift User)");
+                // セッション復元完了
             } else {
                 // (旧互換) Supabase Auth の復元
                 const savedSbSession = localStorage.getItem('supabase.auth.token');
                 if (savedSbSession) {
                     this.session = JSON.parse(savedSbSession);
-                    console.log("Session restored (Supabase Auth)");
+                    // セッション復元ログは本番では非表示
                 } else {
-                    console.log("No saved session");
+                    // セッションなし
                 }
             }
         } catch(e) {

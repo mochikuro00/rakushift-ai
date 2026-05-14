@@ -222,6 +222,39 @@
         /* === アニメーション === */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         .panel { animation: fadeIn 0.25s ease; }
+
+        /* === モバイル対応 === */
+        @media (max-width: 767px) {
+            /* iOS自動ズーム防止 */
+            .input, .select, .textarea, input, select, textarea {
+                font-size: 16px !important;
+            }
+            /* モーダルの全画面化 */
+            .modal-content {
+                max-height: 95vh !important;
+                margin: 8px;
+                border-radius: 16px !important;
+            }
+            /* タブのスクロール対応 */
+            .tab-btn {
+                padding: 8px 12px;
+                font-size: 12px;
+                white-space: nowrap;
+            }
+            /* カードのパディング調整 */
+            .stat-card { padding: 14px; }
+            /* テーブルのフォント調整 */
+            .table-scroll table { min-width: 800px; }
+            .table-scroll tbody td { padding: 10px 8px; font-size: 12px; }
+            /* ボタンのタッチ最適化 */
+            button { min-height: 38px; }
+            .btn-primary, .btn-secondary, .btn-danger { padding: 10px 14px; }
+        }
+
+        @media (max-width: 375px) {
+            .stat-card { padding: 10px; }
+            .section-title { font-size: 15px; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">

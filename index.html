@@ -61,13 +61,61 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* ============= モバイル対応 (スマホ全般) ============= */
+
+        /* サイドバーオーバーレイ背景 */
+        #sidebarOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 25;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+        #sidebarOverlay.active { display: block; }
+
+        /* モバイルでのモーダル改善 */
+        @media (max-width: 767px) {
+            /* モーダルがフルスクリーンに近い表示に */
+            .modal-content {
+                max-height: 95vh !important;
+                margin: 8px;
+                border-radius: 16px !important;
+            }
+            /* ビューコンテナのパディング縮小 */
+            #viewContainer {
+                padding: 12px !important;
+            }
+            /* テーブルの横スクロール対応 */
+            table { font-size: 12px; }
+            .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+            /* ボタンのタッチ最適化 */
+            button, a[role='button'], [onclick] {
+                min-height: 38px;
+            }
+            /* フォームの入力フィールドをタッチ最適化 */
+            input, select, textarea {
+                font-size: 16px !important; /* iOSのオートズーム防止 */
+            }
+            /* ヘッダーのパディング調整 */
+            header { padding-left: 12px !important; padding-right: 12px !important; }
+            /* トーストの位置をモバイル中央下部に */
+            #toastContainer {
+                left: 12px !important;
+                right: 12px !important;
+                bottom: 16px !important;
+            }
+        }
+
+        /* 小さいスマホ (375px以下) */
+        @media (max-width: 375px) {
+            .modal-content { margin: 4px; }
+            #viewContainer { padding: 8px !important; }
+        }
+
         /* Print Styles - Standard Fallback */
         @media print {
-            /* 通常の印刷アクション（Cmd+Pなど）で呼ばれた場合のフォールバック */
-            /* アプリケーション全体を隠し、アラートを出すか、簡易表示にする */
-            /* 今回はJS制御の印刷ボタンを推奨するため、標準印刷では「印刷ボタンを使用してください」と表示するのが親切かもしれないが、
-               とりあえずシフト表エリアだけ出すように最低限の対応をしておく */
-            
             body * {
                 visibility: hidden;
             }
@@ -86,8 +134,11 @@
 </head>
 <body class="bg-gray-50 text-gray-800 h-screen flex overflow-hidden">
 
+    <!-- モバイル用サイドバーオーバーレイ -->
+    <div id="sidebarOverlay" onclick="document.querySelector('aside').classList.add('-translate-x-full'); this.classList.remove('active');"></div>
+
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-30 transition-transform duration-300 transform -translate-x-full md:translate-x-0 absolute md:relative h-full">
+    <aside class="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-30 transition-transform duration-300 transform -translate-x-full md:translate-x-0 fixed md:relative h-full">
         <div class="h-32 flex items-center justify-center px-4 border-b border-gray-100">
             <div class="flex items-center justify-center w-full cursor-pointer hover:opacity-80 transition-opacity" onclick="app.changeView('dashboard')" title="ホーム（ダッシュボード）へ戻る">
                 <img src="images/rakushift_logo_transparent.png" alt="ラクシフトAI" class="h-24 w-auto object-contain">
@@ -152,7 +203,7 @@
                         <i class="fa-solid fa-chevron-right text-xs"></i>
                     </button>
                 </div>
-                <button id="todayBtn" class="hidden md:block px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors">今日</button>
+                <button id="todayBtn" class="px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors">今日</button>
             </div>
 
             <div class="flex items-center gap-3" id="adminHeaderControls">
@@ -192,14 +243,15 @@
 
     <!-- Login Modal -->
     <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-gray-100 p-4">
-        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-auto md:h-[600px] max-h-[90vh] overflow-y-auto">
+        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-auto md:h-[600px] max-h-[95vh] overflow-y-auto">
             
             <!-- Left: Branding -->
-            <div class="md:w-1/2 bg-blue-600 text-white p-8 flex flex-col justify-center items-center text-center">
-                <img src="images/rakushift_logo_transparent.png" alt="ラクシフトAI" class="w-48 mb-6 brightness-0 invert opacity-90">
-                <h2 class="text-3xl font-bold mb-2">Rakushift AI</h2>
-                <p class="text-blue-100 mb-8">AIが最適なシフトを自動生成。<br>店舗運営を劇的に効率化します。</p>
-                <div class="space-y-4 text-left text-sm text-blue-100 bg-blue-700/30 p-6 rounded-xl">
+            <!-- Left: Branding (モバイルでは縮小表示) -->
+            <div class="md:w-1/2 bg-blue-600 text-white p-4 md:p-8 flex flex-col justify-center items-center text-center">
+                <img src="images/rakushift_logo_transparent.png" alt="ラクシフトAI" class="w-24 md:w-48 mb-3 md:mb-6 brightness-0 invert opacity-90">
+                <h2 class="text-xl md:text-3xl font-bold mb-1 md:mb-2">Rakushift AI</h2>
+                <p class="text-blue-100 text-xs md:text-base mb-3 md:mb-8">AIが最適なシフトを自動生成。<br>店舗運営を劇的に効率化します。</p>
+                <div class="hidden md:block space-y-4 text-left text-sm text-blue-100 bg-blue-700/30 p-6 rounded-xl">
                     <div class="flex items-center gap-3"><i class="fa-solid fa-check-circle"></i> <span>1クリックで自動作成</span></div>
                     <div class="flex items-center gap-3"><i class="fa-solid fa-check-circle"></i> <span>クラウド保存・共有</span></div>
                 </div>
@@ -216,7 +268,7 @@
                 </div>
 
                 <!-- Forms Container -->
-                <div class="p-8 flex-1 overflow-y-auto relative">
+                <div class="p-4 sm:p-8 flex-1 overflow-y-auto relative">
                     <!-- Shop Form -->
                     <div id="form-shop" class="space-y-4 hidden transition-all duration-300">
                         <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">店舗ログイン</h3>
@@ -286,7 +338,7 @@
                 </div>
 
                 <!-- Global Action: New Subscription -->
-                <div class="p-8 pt-0 mt-auto border-t border-gray-100 bg-white">
+                <div class="p-4 sm:p-8 pt-0 mt-auto border-t border-gray-100 bg-white">
                     <div class="text-center mt-6">
                         <p class="text-sm text-gray-600 mb-3">まだアカウントをお持ちでない方</p>
                         <button onclick="app.openModal('newSubscriptionModal')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg transition">
@@ -825,7 +877,7 @@
 
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed bottom-6 right-6 z-[90] flex flex-col gap-3 pointer-events-none"></div>
+    <div id="toastContainer" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-[90] flex flex-col gap-3 pointer-events-none"></div>
 
     <!-- Scripts -->
     <script>

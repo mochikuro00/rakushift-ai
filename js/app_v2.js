@@ -253,6 +253,7 @@
         const closeSidebar = () => {
             if (window.innerWidth < 768) {
                 document.querySelector('aside')?.classList.add('-translate-x-full');
+                document.getElementById('sidebarOverlay')?.classList.remove('active');
             }
         };
 
@@ -266,7 +267,14 @@
         });
 
         document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
-            document.querySelector('aside').classList.toggle('-translate-x-full');
+            const aside = document.querySelector('aside');
+            const overlay = document.getElementById('sidebarOverlay');
+            aside.classList.toggle('-translate-x-full');
+            if (aside.classList.contains('-translate-x-full')) {
+                overlay?.classList.remove('active');
+            } else {
+                overlay?.classList.add('active');
+            }
         });
         
         // Dynamic buttons (autoFill, aiAdvice) are bound in updateAuthUI()
@@ -2040,18 +2048,18 @@
         const lastDay = new Date(year, month + 1, 0);
         
         let html = `
-            <div class="h-full overflow-y-auto custom-scrollbar">
+            <div class="h-full overflow-y-auto overflow-x-auto custom-scrollbar">
                 <div class="bg-white rounded-t-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="grid grid-cols-7 border-b border-gray-200 bg-gray-50 sticky top-0 z-10 shadow-sm">
                         ${['日', '月', '火', '水', '木', '金', '土'].map((day, i) => 
-                            `<div class="py-3 text-center text-sm font-bold ${i===0 ? 'text-red-500' : i===6 ? 'text-blue-500' : 'text-gray-600'}">${day}</div>`
+                            `<div class="py-3 text-center text-[10px] sm:text-sm font-bold ${i===0 ? 'text-red-500' : i===6 ? 'text-blue-500' : 'text-gray-600'}">${day}</div>`
                         ).join('')}
                     </div>
                     <div class="grid grid-cols-7 auto-rows-fr bg-gray-200 gap-px border-b border-gray-200">
         `;
 
         for (let i = 0; i < firstDay.getDay(); i++) {
-            html += `<div class="bg-gray-50 min-h-[120px]"></div>`;
+            html += `<div class="bg-gray-50 min-h-[60px] sm:min-h-[120px]"></div>`;
         }
 
         for (let day = 1; day <= lastDay.getDate(); day++) {
@@ -2850,7 +2858,7 @@
                     </div>
                     <div class="p-6">
                         <label class="block text-xs font-bold text-gray-500 mb-2">お店のルール・連絡事項</label>
-                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提出期限や注意事項などを入力してください...">${shopRulesText}</textarea>
+                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[60px] sm:min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提出期限や注意事項などを入力してください...">${shopRulesText}</textarea>
                         <p class="text-xs text-gray-400 mt-2">※ ここに入力した内容は、スタッフ画面の「お店のルール」に表示されます。</p>
                     </div>
                 </div>
@@ -3250,7 +3258,7 @@
                             p_config_id: configId,
                             p_data: { admin_password: newConfig.admin_password }
                         });
-                        console.log('[Settings] Admin password updated in staff and config');
+                        // パスワード更新完了（ログ省略）
                     } catch (pwErr) {
                         console.error('[Settings] Password update failed:', pwErr);
                         this.showToast('パスワード更新に失敗しました', 'error');

@@ -600,7 +600,7 @@ async def send_welcome_email(to_email: str, org_name: str, contract_id: str,
 
     if not smtp_host or not smtp_user or not smtp_pass:
         print("[Email] SMTP not configured. Skipping email to {}".format(to_email))
-        print("[Email] Contract ID: {} Password: {}".format(contract_id, password))
+        print("[Email] Contract ID: {} (SMTP not configured, credentials not logged)".format(contract_id))
         return
 
     plan_name = {"standard": "Standard", "pro": "Pro", "premium": "Premium"}.get(plan, plan)
