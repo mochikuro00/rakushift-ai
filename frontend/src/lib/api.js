@@ -157,7 +157,7 @@ const API = {
             return await res.json();
         } catch (e) {
             console.error("Fetch failed:", e);
-            throw new Error("サーバー通信に失敗しました。ネットワークを確認してください。");
+            throw new Error("サーバー通信に失敗しました。ネットワークを確認してください。", { cause: e });
         }
     },
 
