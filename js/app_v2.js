@@ -1,4 +1,43 @@
 ﻿const app = {
+    // セキュリティ: ログイン試行回数制限
+    _loginAttempts: {},
+    _MAX_LOGIN_ATTEMPTS: 5,
+    _LOCKOUT_DURATION_MS: 5 * 60 * 1000, // 5分間ロックアウト
+
+    // セキュリティ: 入力サニタイゼーション
+    _sanitize(str) {
+        if (typeof str !== 'string') return '';
+        return str.replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
+    },
+
+    // セキュリティ: ログイン試行チェック
+    _checkLoginLock(key) {
+        const record = this._loginAttempts[key];
+        if (!record) return false;
+        if (record.count >= this._MAX_LOGIN_ATTEMPTS) {
+            const elapsed = Date.now() - record.lastAttempt;
+            if (elapsed < this._LOCKOUT_DURATION_MS) {
+                const remainSec = Math.ceil((this._LOCKOUT_DURATION_MS - elapsed) / 1000);
+                this.showToast('ログイン試行回数の上限に達しました。' + remainSec + '秒後に再試行してください。', 'error');
+                return true;
+            }
+            // ロックアウト期間が過ぎたのでリセット
+            delete this._loginAttempts[key];
+        }
+        return false;
+    },
+    _recordLoginAttempt(key, success) {
+        if (success) {
+            delete this._loginAttempts[key];
+            return;
+        }
+        if (!this._loginAttempts[key]) {
+            this._loginAttempts[key] = { count: 0, lastAttempt: 0 };
+        }
+        this._loginAttempts[key].count++;
+        this._loginAttempts[key].lastAttempt = Date.now();
+    },
+
     // アプリケーションの状態管理
     state: {
         currentDate: null, // Initialized in init()
@@ -362,13 +401,16 @@
             return;
         }
 
-        const contractId = contractIdEl.value.trim();
+        const contractId = this._sanitize(contractIdEl.value.trim());
         const password = passwordEl ? passwordEl.value.trim() : '';
 
         if (!contractId || !password) {
             this.showToast('契約IDとパスワードを入力してください', 'error');
             return;
         }
+
+        // セキュリティ: ブルートフォース対策
+        if (this._checkLoginLock('shop_' + contractId)) return;
 
         this.showLoading(true);
         try {
@@ -408,9 +450,10 @@
                 p_password: password
             });
 
-            console.log('[ShopLogin] Auth result:', authResult);
+            console.log('[ShopLogin] Auth result: success=', authResult?.success);
 
             if (authResult && authResult.success) {
+                this._recordLoginAttempt('shop_' + contractId, true);
                 this.state.isShopLoggedIn = true;
                 this.state.isAdmin = false;
                 this.state.organization_id = authResult.organization_id;
@@ -447,6 +490,7 @@
                 // お知らせバッジを更新（サイドバーで確認する方式に統一）
                 this.updateAnnouncementBadge();
             } else {
+                this._recordLoginAttempt('shop_' + contractId, false);
                 this.showToast(authResult?.message || 'ログインに失敗しました', 'error');
             }
 
@@ -465,9 +509,9 @@
     async adminLogin() {
         const loginId = 'admin'; // 固定値に変更
         const password = document.getElementById('adminLoginPass')?.value.trim() || '';
-        let inputContractId = document.getElementById('adminLoginContractId')?.value.trim() || '';
+        let inputContractId = this._sanitize(document.getElementById('adminLoginContractId')?.value.trim() || '');
 
-        console.log('[AdminLogin] Triggered. Input LoginID: ' + loginId);
+        console.log('[AdminLogin] Triggered.');
 
         if (!password) {
             this.showToast('パスワードを入力してください', 'error');
@@ -485,7 +529,8 @@
                 }
             }
 
-            console.log('[AdminLogin] ContractID:', currentContractId, ', LoginID:', loginId);
+            // セキュリティ: ブルートフォース対策
+            if (this._checkLoginLock('admin_' + currentContractId)) { this.showLoading(false); return; }
 
             if (!currentContractId) {
                 this.showToast('先に店舗ログインしてください', 'error');
@@ -500,9 +545,10 @@
                 p_password: password
             });
 
-            console.log('[AdminLogin] Auth result:', authResult);
+            console.log('[AdminLogin] Auth result: success=', authResult?.success);
 
             if (authResult && authResult.success) {
+                this._recordLoginAttempt('admin_' + currentContractId, true);
                 this.state.isAdmin = true;
 
                 API.setSession({
@@ -520,6 +566,7 @@
                 this.updateAuthUI();
                 this.updateHeader();
             } else {
+                this._recordLoginAttempt('admin_' + currentContractId, false);
                 this.showToast(authResult?.message || '認証に失敗しました', 'error');
             }
 
@@ -537,17 +584,21 @@
     },
 
     async hqLogin() {
-        const loginId = document.getElementById('loginHqId').value.trim();
+        const loginId = this._sanitize(document.getElementById('loginHqId').value.trim());
         const password = document.getElementById('loginHqPass')?.value.trim() || '';
         if (!loginId || !password) {
             this.showToast('本部IDとパスワードを入力してください', 'error');
             return;
         }
 
+        // セキュリティ: ブルートフォース対策
+        if (this._checkLoginLock('hq_' + loginId)) return;
+
         this.showLoading(true);
         try {
             const result = await API.rpc('hq_login', { p_login_id: loginId, p_password: password });
             if (result && result.status === 'success') {
+                this._recordLoginAttempt('hq_' + loginId, true);
                 this.state.isHQ = true;
                 this.state.isAdmin = true; // 管理者権限を付与
                 this.state.isShopLoggedIn = true;
@@ -564,6 +615,7 @@
                 this.updateAuthUI();
                 this.updateHeader();
             } else {
+                this._recordLoginAttempt('hq_' + loginId, false);
                 this.showToast(result?.message || 'ログインに失敗しました', 'error');
             }
         } catch (e) {
@@ -578,10 +630,19 @@
         if(!confirm('アプリケーションから完全にログアウトしますか？\n（ログイン画面に戻ります）')) return;
         
         await API.logout();
+        // セキュリティ: 全ての認証状態を完全にクリア
         this.state.isAdmin = false;
         this.state.isShopLoggedIn = false;
+        this.state.isHQ = false;
+        this.state.organization_id = null;
+        this.state.config = {};
         this.state.staff = [];
         this.state.shifts = [];
+        this.state.requests = [];
+        // セキュリティ: セッション関連のlocalStorageを全消去
+        localStorage.removeItem('rakushift_user');
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('rakushift_org_id');
         this.showToast('ログアウトしました', 'info');
         this.updateAuthUI();
         this.changeView('dashboard'); 
@@ -6223,6 +6284,7 @@
 };
 
 document.addEventListener('DOMContentLoaded', () => { app.init(); });
+
 
 
 

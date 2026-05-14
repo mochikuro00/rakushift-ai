@@ -33,7 +33,7 @@ const API = {
                     access_token: 'dummy_token_for_static_auth',
                     user: user
                 };
-                console.log("Session restored (Rakushift User):", user.name);
+                console.log("Session restored (Rakushift User)");
             } else {
                 // (旧互換) Supabase Auth の復元
                 const savedSbSession = localStorage.getItem('supabase.auth.token');
@@ -104,7 +104,26 @@ const API = {
             user: user
         };
         // ローカルストレージにも独自キーで保存（Supabase標準とは別管理）
+        // セキュリティ: タイムスタンプを付与してセッション有効期限を管理
+        user._session_created = Date.now();
         localStorage.setItem('rakushift_user', JSON.stringify(user));
+    },
+
+    // セキュリティ: セッション有効期限チェック（フロントエンド側の補助制御）
+    isSessionValid() {
+        const saved = localStorage.getItem('rakushift_user');
+        if (!saved) return false;
+        try {
+            const user = JSON.parse(saved);
+            const created = user._session_created || 0;
+            const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000; // 7日間
+            if (Date.now() - created > MAX_SESSION_MS) {
+                console.log('[Security] Session expired. Auto logout.');
+                this.logout();
+                return false;
+            }
+            return true;
+        } catch(e) { return false; }
     },
 
     async logout() {
