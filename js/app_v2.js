@@ -592,7 +592,7 @@
     },
 
     async hqLogin() {
-        const loginId = this._sanitize(document.getElementById('loginHqId').value.trim());
+        const loginId = this._sanitize((document.getElementById('loginHqId')?.value || '').trim());
         const password = document.getElementById('loginHqPass')?.value.trim() || '';
         if (!loginId || !password) {
             this.showToast('本部IDとパスワードを入力してください', 'error');
@@ -1759,7 +1759,7 @@
         let bodyHtml = '';
         this.state.staff.forEach(staff => {
             bodyHtml += `<tr data-staff-id="${staff.id}">`;
-            bodyHtml += `<td class="p-3 sticky left-0 z-40 bg-white border-b border-r border-gray-100 font-bold text-sm text-gray-800 truncate h-14">${staff.name}</td>`;
+            bodyHtml += `<td class="p-3 sticky left-0 z-40 bg-white border-b border-r border-gray-100 font-bold text-sm text-gray-800 truncate h-14">${this._sanitize(staff.name)}</td>`;
             
             days.forEach(date => {
                 const y = date.getFullYear();
@@ -2140,8 +2140,8 @@
                             const shiftClickAction = this.state.isAdmin ? `onclick="event.stopPropagation(); app.openEditShift('${shift.id}')"` : '';
                             return `
                                 <div class="text-xs px-2 py-1.5 rounded-md border-l-4 shadow-sm transition-all bg-blue-50 border-blue-500 text-blue-900 ${shiftCursorClass}"
-                                     ${shiftClickAction} title="${staff.name} ${shift.start_time}-${shift.end_time}">
-                                    <div class="font-bold truncate">${staff.name}</div>
+                                     ${shiftClickAction} title="${this._sanitize(staff.name)} ${shift.start_time}-${shift.end_time}">
+                                    <div class="font-bold truncate">${this._sanitize(staff.name)}</div>
                                     <div class="font-mono text-[10px] opacity-90">${shift.start_time} - ${shift.end_time}</div>
                                 </div>
                             `;
@@ -2167,8 +2167,8 @@
     },
 
     async saveCalendarNote() {
-        const date = document.getElementById('noteDate').value;
-        const text = document.getElementById('noteText').value.trim();
+        const date = (document.getElementById('noteDate')?.value || '');
+        const text = (document.getElementById('noteText')?.value || '').trim();
         
         if (!this.state.config.calendar_notes) this.state.config.calendar_notes = {};
         
@@ -2201,7 +2201,7 @@
 
     async deleteCalendarNote() {
         if (!confirm('このメモを削除しますか？')) return;
-        const date = document.getElementById('noteDate').value;
+        const date = (document.getElementById('noteDate')?.value || '');
         
         if (this.state.config.calendar_notes && this.state.config.calendar_notes[date]) {
             delete this.state.config.calendar_notes[date];
@@ -2293,7 +2293,7 @@
 
                                 return `
                                 <tr class="${rowClass}">
-                                    <td class="p-4 font-bold text-gray-700">${s.name}</td>
+                                    <td class="p-4 font-bold text-gray-700">${this._sanitize(s.name)}</td>
                                     <td class="p-4 text-right">${s.days}日</td>
                                     <td class="p-4 text-right">${s.hours.toFixed(1)}h</td>
                                     <td class="p-4 text-right ${textClass}">${icon}${diffText}</td>
@@ -2428,7 +2428,7 @@
                                                 ${s.name.charAt(0)}
                                             </div>
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm">${s.name}</div>
+                                                <div class="font-bold text-gray-800 text-sm">${this._sanitize(s.name)}</div>
                                                 <div class="text-[10px] text-gray-400 font-mono">ID: ${s.id ? s.id.substr(0, 6) : '---'}</div>
                                             </div>
                                         </div>
@@ -3060,10 +3060,10 @@
     },
 
     addSpecialDay() {
-        const date = document.getElementById('newSpecialDayDate').value;
-        const start = document.getElementById('newSpecialDayStart').value;
-        const end = document.getElementById('newSpecialDayEnd').value;
-        const note = document.getElementById('newSpecialDayNote').value;
+        const date = (document.getElementById('newSpecialDayDate')?.value || '');
+        const start = (document.getElementById('newSpecialDayStart')?.value || '');
+        const end = (document.getElementById('newSpecialDayEnd')?.value || '');
+        const note = (document.getElementById('newSpecialDayNote')?.value || '');
 
         if(!date || !start || !end) return;
 
@@ -3420,7 +3420,7 @@
                 return `
                     <tr style="page-break-inside: avoid;">
                         <td style="padding: 4px 8px; font-weight: bold; background-color: #f3f4f6; text-align: left; width: 140px; border: 1px solid #666; font-size: 11px;">
-                            ${staff.name}
+                            ${this._sanitize(staff.name)}
                         </td>
                         ${cols}
                     </tr>
@@ -3567,7 +3567,7 @@
         document.getElementById('editShiftDateDisplay').textContent = dateStr;
         document.getElementById('deleteShiftBtn').classList.add('hidden');
         
-        const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタッフを選択</option>${this.state.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select>`;
+        const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタッフを選択</option>${this.state.staff.map(s => `<option value="${s.id}">${this._sanitize(s.name)}</option>`).join('')}</select>`;
         document.getElementById('editShiftStaffName').innerHTML = staffSelectHtml;
         
         // Selectボックスの初期化
@@ -3667,12 +3667,12 @@
     },
 
     async saveShift() {
-        const id = document.getElementById('editShiftId').value;
-        const date = document.getElementById('editShiftDate').value;
-        const start = document.getElementById('editShiftStart').value;
-        const end = document.getElementById('editShiftEnd').value;
-        const breakMins = Number(document.getElementById('editShiftBreak').value);
-        let staffId = document.getElementById('editShiftStaffId').value;
+        const id = (document.getElementById('editShiftId')?.value || '');
+        const date = (document.getElementById('editShiftDate')?.value || '');
+        const start = (document.getElementById('editShiftStart')?.value || '');
+        const end = (document.getElementById('editShiftEnd')?.value || '');
+        const breakMins = Number((document.getElementById('editShiftBreak')?.value || ''));
+        let staffId = (document.getElementById('editShiftStaffId')?.value || '');
         const selectEl = document.getElementById('editShiftStaffSelect');
         if (selectEl) staffId = selectEl.value;
 
@@ -3770,7 +3770,7 @@
         if(!select) return;
         
         const roles = this.state.config.roles || this.state.defaultConfig.roles;
-        select.innerHTML = roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+        select.innerHTML = roles.map(r => `<option value="${r.id}">${this._sanitize(r.name)}</option>`).join('');
     },
 
     // プラン別スタッフ上限
@@ -3845,7 +3845,7 @@
     },
 
     async saveStaff() {
-        const id = document.getElementById('staffId').value;
+        const id = (document.getElementById('staffId')?.value || '');
 
         // テナント情報を確実に取得
         const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
@@ -3867,16 +3867,16 @@
         }
 
         const data = {
-            name: document.getElementById('staffName').value,
-            role: document.getElementById('staffRole').value,
-            evaluation: document.getElementById('staffEvaluation').value,
-            salary_type: document.getElementById('staffSalaryType').value,
-            hourly_wage: Number(document.getElementById('staffHourlyWage').value),
-            monthly_salary: Number(document.getElementById('staffMonthlySalary').value),
-            max_days_week: Number(document.getElementById('staffMaxDaysPerWeek').value),
-            max_hours_day: Number(document.getElementById('staffMaxHoursPerDay').value),
-            min_days_week: Number(document.getElementById('staffMinDaysPerWeek').value) || 0,
-            min_days_month: Number(document.getElementById('staffMinDaysPerMonth').value) || 0,
+            name: (document.getElementById('staffName')?.value || ''),
+            role: (document.getElementById('staffRole')?.value || ''),
+            evaluation: (document.getElementById('staffEvaluation')?.value || ''),
+            salary_type: (document.getElementById('staffSalaryType')?.value || ''),
+            hourly_wage: Number((document.getElementById('staffHourlyWage')?.value || '')),
+            monthly_salary: Number((document.getElementById('staffMonthlySalary')?.value || '')),
+            max_days_week: Number((document.getElementById('staffMaxDaysPerWeek')?.value || '')),
+            max_hours_day: Number((document.getElementById('staffMaxHoursPerDay')?.value || '')),
+            min_days_week: Number((document.getElementById('staffMinDaysPerWeek')?.value || '')) || 0,
+            min_days_month: Number((document.getElementById('staffMinDaysPerMonth')?.value || '')) || 0,
             contract_id: contractId
         };
         // 新規作成時は組織IDを付与
@@ -3966,7 +3966,7 @@
         }
     },
     toggleSalaryInputs() {
-        const type = document.getElementById('staffSalaryType').value;
+        const type = (document.getElementById('staffSalaryType')?.value || '');
         if(type === 'hourly') {
             document.getElementById('hourlyInputGroup').classList.remove('hidden');
             document.getElementById('monthlyInputGroup').classList.add('hidden');
@@ -3983,7 +3983,7 @@
     initRequestModal() {
         const select = document.getElementById('requestStaffId');
         if (!select) return;
-        select.innerHTML = this.state.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        select.innerHTML = this.state.staff.map(s => `<option value="${s.id}">${this._sanitize(s.name)}</option>`).join('');
 
         this._selectedRequestDates = [];
         this._requestCalendarMonth = new Date();
@@ -4072,10 +4072,10 @@
     },
 
     async submitRequest() {
-        const staffId = document.getElementById('requestStaffId').value;
+        const staffId = (document.getElementById('requestStaffId')?.value || '');
         const type = document.querySelector('input[name="requestType"]:checked').value;
         const dates = [...this._selectedRequestDates].sort();
-        const reason = document.getElementById('requestReason').value;
+        const reason = (document.getElementById('requestReason')?.value || '');
 
         if (!staffId || dates.length === 0) {
             alert('スタッフと日付を選択してください');
@@ -4103,8 +4103,8 @@
                 };
 
                 if (type === 'work') {
-                    data.start_time = document.getElementById('requestStartTime').value;
-                    data.end_time = document.getElementById('requestEndTime').value;
+                    data.start_time = (document.getElementById('requestStartTime')?.value || '');
+                    data.end_time = (document.getElementById('requestEndTime')?.value || '');
                     if (!data.start_time || !data.end_time) { alert('時間を入力してください'); return; }
                 }
 
@@ -4244,7 +4244,7 @@
             return;
         }
 
-        const targetType = document.getElementById('autoFillTarget').value;
+        const targetType = (document.getElementById('autoFillTarget')?.value || '');
         this.closeModal('autoFillModal');
 
         const loadingEl = document.getElementById('globalLoading');

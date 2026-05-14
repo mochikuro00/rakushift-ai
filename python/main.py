@@ -1190,8 +1190,8 @@ async def get_subscription_status(contract_id: str):
                         method="PATCH",
                         body={"subscription_status": sub.status}
                     )
-            except stripe.error.StripeError:
-                pass
+            except stripe.error.StripeError as e:
+                print(f"[Warning] Stripe API Error: {e}")
 
         return result
 
