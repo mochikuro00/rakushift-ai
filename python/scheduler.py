@@ -783,6 +783,87 @@ class ShiftScheduler:
                         prob += avg_approx - tv <= slack_under
                         penalty += (slack_over + slack_under) * 100
 
+                # --- ピーク時スキルミックス制約 ---
+                # ピーク時間帯（ランチ帯等）に最低1名のA/B評価スタッフを確保する
+                peak_rules = self.config.get("peak_skill_rules", [])
+                if not peak_rules:
+                    # デフォルト: 11:00-14:00にB以上を1名確保
+                    peak_rules = [
+                        {"start": "11:00", "end": "14:00", "min_rank": "B", "count": 1},
+                    ]
+                
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    for rule in peak_rules:
+                        rs = self._to_minutes(rule.get("start", "11:00"))
+                        re_peak = self._to_minutes(rule.get("end", "14:00"))
+                        min_rank = rule.get("min_rank", "B")
+                        min_rank_score = self.POWER_SCORE.get(min_rank, 2.0)
+                        req_count = int(rule.get("count", 1))
+                        
+                        # ピーク全スロットをカバーできるスタッフの変数を集める
+                        qualified = []
+                        for s in self.staff_list:
+                            sid_q = s["id"]
+                            rank = self._eval_rank.get(sid_q, "B")
+                            if self.POWER_SCORE.get(rank, 0) >= min_rank_score:
+                                for oi, opt in enumerate(staff_opts.get((sid_q, d), [])):
+                                    # ピーク帯の開始をカバーしていればOK
+                                    if opt["start_min"] <= rs and opt["end_min"] >= re_peak:
+                                        qualified.append(x[(sid_q, d, oi)])
+                                    elif opt["start_min"] <= rs and opt["end_min"] > rs:
+                                        # 部分カバーでも加点
+                                        qualified.append(x[(sid_q, d, oi)])
+                        
+                        if qualified:
+                            slack = pulp.LpVariable(
+                                "peak_{}_{}".format(d, rs), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(qualified) + slack >= req_count
+                            penalty += slack * 50000
+
+                print("[Tier3] Peak skill mix constraints applied ({} rules)".format(len(peak_rules)))
+
+                # --- 希望シフト充足率の最大化 (従業員満足度スコア) ---
+                # 未承認（pending）の出勤希望に対してボーナス（負のペナルティ）を付与し、
+                # AIが可能な限り従業員の希望を叶えるように誘導する
+                preference_count = 0
+                for req in self.requests:
+                    if req.get("type") == "work" and req.get("status") == "pending":
+                        rsid = req.get("staff_id")
+                        rd_list = req.get("dates", [])
+                        if isinstance(rd_list, str):
+                            rd_list = [d.strip() for d in rd_list.split(",") if d.strip()]
+                        for rd in rd_list:
+                            rd = str(rd).strip()
+                            if rd not in self.dates:
+                                continue
+                            opts_r = staff_opts.get((rsid, rd), [])
+                            if not opts_r:
+                                continue
+                            
+                            # 希望時間帯に最も近いパターンを優遇
+                            req_start = req.get("start_time")
+                            req_end = req.get("end_time")
+                            
+                            for oi, opt in enumerate(opts_r):
+                                bonus = -500  # 基本ボーナス（希望通りにすると報酬）
+                                
+                                # 希望時間帯との一致度でボーナス増額
+                                if req_start and req_end:
+                                    rs_m = self._to_minutes(req_start)
+                                    re_m = self._to_minutes(req_end)
+                                    diff = abs(opt["start_min"] - rs_m) + abs(opt["end_min"] - re_m)
+                                    if diff == 0:
+                                        bonus = -1000  # 完全一致で2倍ボーナス
+                                    elif diff <= 60:
+                                        bonus = -700   # ±1時間以内で1.4倍
+                                
+                                penalty += x[(rsid, rd, oi)] * bonus
+                                preference_count += 1
+
+                print("[Tier3] Preference fulfillment: {} shift preferences processed".format(preference_count))
+
             # ====================================================
             # 目的関数: コスト最小化
             # ====================================================
