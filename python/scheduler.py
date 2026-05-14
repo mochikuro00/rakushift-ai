@@ -292,6 +292,8 @@ class ShiftScheduler:
             hrs = (pe - ps) / 60.0
             if hrs < 1:
                 continue
+            brk_mins = self._get_break_minutes(hrs)
+            work_hrs = hrs - (brk_mins / 60.0)
             key = (ps, pe)
             if key in seen:
                 continue
@@ -299,7 +301,7 @@ class ShiftScheduler:
             options.append({
                 "start": self._from_minutes(ps),
                 "end": self._from_minutes(pe),
-                "start_min": ps, "end_min": pe, "hours": hrs,
+                "start_min": ps, "end_min": pe, "hours": hrs, "work_hours": work_hrs,
             })
         return options
 
@@ -535,7 +537,7 @@ class ShiftScheduler:
                     max_hours = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
                     if not force:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            if opt["hours"] > max_hours:
+                            if opt["work_hours"] > max_hours:
                                 prob += x[(sid, d, oi)] == 0
 
                 # --- 週の最大勤務日数 ---
@@ -590,7 +592,7 @@ class ShiftScheduler:
                         has_vars = False
                         for d in week:
                             for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                                hours_expr += x[(sid, d, oi)] * opt["hours"]
+                                hours_expr += x[(sid, d, oi)] * opt["work_hours"]
                                 has_vars = True
                         if has_vars:
                             prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
@@ -749,9 +751,9 @@ class ShiftScheduler:
 
                     for d in self.dates:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            hours = opt["hours"]
+                            work_hours = opt["work_hours"]
                             # 月給制の場合はシフト追加による変動人件費はゼロとみなす
-                            labor_cost = 0.0 if is_monthly else (hourly_wage * hours)
+                            labor_cost = 0.0 if is_monthly else (hourly_wage * work_hours)
                             
                             # 人件費を最小化しつつ、評価の高いスタッフを優先するハイブリッドコスト
                             # labor_cost(例:8000円) * 0.01 = 80。これにランクペナルティを足す。
@@ -813,8 +815,8 @@ class ShiftScheduler:
                     sid = s["id"]
                     for d in self.dates:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            if opt["hours"] > mh:
-                                penalty += x[(sid, d, oi)] * (opt["hours"] - mh) * 50000
+                            if opt["work_hours"] > mh:
+                                penalty += x[(sid, d, oi)] * (opt["work_hours"] - mh) * 50000
 
             prob += penalty
             solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=120)
@@ -847,9 +849,9 @@ class ShiftScheduler:
                                 "end_time": opt["end"],
                                 "break_minutes": brk,
                             }
-                            if hrs > mh:
+                            if opt["work_hours"] > mh:
                                 warnings.append("{} {}: {:.1f}h over".format(
-                                    s.get("name", ""), d, hrs - mh))
+                                    s.get("name", ""), d, opt["work_hours"] - mh))
                             shifts.append(entry)
 
             self._validate(shifts)
@@ -913,7 +915,9 @@ class ShiftScheduler:
                         if sh["staff_id"] == sid and sh["date"] == d:
                             sm = self._to_minutes(sh["start_time"])
                             em = self._normalize_end_time(sm, self._to_minutes(sh["end_time"]))
-                            total_hours += (em - sm) / 60.0
+                            raw_hrs = (em - sm) / 60.0
+                            brk = self._get_break_minutes(raw_hrs) / 60.0
+                            total_hours += (raw_hrs - brk)
                 if total_hours > self.LEGAL_MAX_HOURS_WEEK:
                     print("  VIOLATION: {} week {} hours={:.1f} > {}".format(
                         s.get("name", sid), week[0], total_hours,
