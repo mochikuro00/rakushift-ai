@@ -958,11 +958,40 @@
             <div class="max-w-6xl mx-auto space-y-6 pb-20">
                 <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl shadow-lg p-6 md:p-8 text-white flex justify-between items-center relative overflow-hidden">
                     <div class="relative z-10">
-                        <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・統括ダッシュボード</h2>
-                        <p class="text-indigo-100 text-sm md:text-base">全テナント・店舗の稼働状況を閲覧・確認できます（閲覧専用）。</p>
+                        <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダッシュボード</h2>
+                        <p class="text-indigo-100 text-sm md:text-base">全テナント・店舗の稼働状況を把握・確認できます（本部用）。</p>
+                    </div>
+                    <div class="relative z-10 flex gap-3">
+                        <button onclick="app.logout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+                            <i class="fa-solid fa-right-from-bracket"></i> ログアウト
+                        </button>
                     </div>
                     <div class="absolute right-0 top-0 opacity-10 text-[120px] leading-none transform translate-x-1/4 -translate-y-1/4 pointer-events-none">
                         <i class="fa-solid fa-globe"></i>
+                    </div>
+                </div>
+
+                <!-- Manual Shop Login Card -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-key text-blue-500 mr-2"></i>指定の店舗を閲覧 (IDとパスワードでアクセス)</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex flex-col md:flex-row gap-4 items-end">
+                            <div class="flex-1">
+                                <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
+                                <input type="text" id="hqManualContractId" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: 123456789012345">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                                <input type="password" id="hqManualPassword" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="店舗用または管理者パスワード" onkeydown="if(event.key==='Enter') app.hqManualShopLogin()">
+                            </div>
+                            <div>
+                                <button onclick="app.hqManualShopLogin()" class="w-full md:w-auto px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition whitespace-nowrap">
+                                    <i class="fa-solid fa-eye mr-2"></i>閲覧する
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -989,6 +1018,57 @@
                 </div>
             </div>
         `;
+    },
+
+    async hqManualShopLogin() {
+        if (!this.state.isHQ) return;
+        
+        const contractId = document.getElementById('hqManualContractId')?.value.trim();
+        const password = document.getElementById('hqManualPassword')?.value.trim();
+
+        if (!contractId || !password) {
+            this.showToast('契約IDとパスワードを入力してください', 'warning');
+            return;
+        }
+
+        this.showLoading(true);
+        try {
+            // 店舗のパスワード（スタッフまたは管理者）を検証
+            // 管理者パスワードでも通るように、まず shop login、ダメなら admin login を試すか、shop login で一元化
+            // 今回は店舗用ログインを試す
+            const authResult = await API.rpc('verify_shop_login', {
+                p_contract_id: contractId,
+                p_password: password
+            });
+
+            if (authResult && authResult.success) {
+                this.state.organization_id = authResult.organization_id;
+                await this.loadData();
+                this.showToast('店舗 (' + contractId + ') の閲覧を開始します', 'success');
+                this.changeView('dashboard');
+            } else {
+                // 管理者として試す
+                const adminResult = await API.rpc('verify_admin_login', {
+                    p_contract_id: contractId,
+                    p_login_id: 'admin',
+                    p_password: password
+                });
+
+                if (adminResult && adminResult.success) {
+                    this.state.organization_id = adminResult.organization_id;
+                    await this.loadData();
+                    this.showToast('管理者権限で店舗 (' + contractId + ') の閲覧を開始します', 'success');
+                    this.changeView('dashboard');
+                } else {
+                    this.showToast('IDまたはパスワードが正しくありません', 'error');
+                }
+            }
+        } catch(e) {
+            console.error('HQ Manual Shop Login error:', e);
+            this.showToast('エラーが発生しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
     },
 
     async switchToHQShop(orgId) {
@@ -6112,6 +6192,10 @@
 };
 
 document.addEventListener('DOMContentLoaded', () => { app.init(); });
+
+
+
+
 
 
 
