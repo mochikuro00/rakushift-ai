@@ -3763,7 +3763,10 @@ const app = {
     },
 
     async deleteShift(id) {
-        if (!confirm('削除しますか？')) return;
+        // シフト削除の安全確認
+        const shift = this.state.shifts.find(s => s.id === id);
+        const staffName = shift ? (this.state.staff.find(st => st.id === shift.staff_id)?.name || '不明') : '不明';
+        if (!confirm(`【シフト削除確認】\n\nスタッフ: ${staffName}\n日付: ${shift?.date || '不明'}\n\nこのシフトを削除しますか？\n※この操作は元に戻せません`)) return;
         this.showLoading(true);
         try {
             await API.delete('shifts', id);
@@ -3984,26 +3987,43 @@ const app = {
         this.openModal('staffModal');
     },
     async deleteStaff(id) {
-        const staff = this.state.staff.find(s => s.id === id);
-        if (staff && staff.login_id === 'admin') {
-            this.showToast('初期管理者アカウント（admin）は削除できません。', 'error');
+        // 管理者権限チェック
+        if (!this.state.isAdmin) {
+            this.showToast('スタッフの削除には管理者権限が必要です', 'error');
             return;
         }
-        if(!confirm('本当に削除しますか？\n※関連するシフトや申請データも削除されます')) return;
+
+        const staff = this.state.staff.find(s => s.id === id);
+        if (!staff) {
+            this.showToast('スタッフが見つかりません', 'error');
+            return;
+        }
+
+        // 管理者アカウントは絶対に削除不可
+        if (staff.login_id === 'admin' || staff.role === 'manager' || staff.role === 'admin') {
+            this.showToast('管理者・店長アカウントは削除できません。', 'error');
+            return;
+        }
+
+        // 二重確認: 1回目
+        if (!confirm(`【スタッフ削除 - 最終確認】\n\n「${staff.name}」を本当に削除しますか？\n\n⚠️ この操作は元に戻せません\n⚠️ 関連するシフト・申請データも全て削除されます`)) return;
+
+        // 二重確認: 2回目（名前入力）
+        const inputName = prompt(`最終確認: 削除するスタッフ名「${staff.name}」を入力してください:`);
+        if (inputName !== staff.name) {
+            this.showToast('名前が一致しません。削除をキャンセルしました。', 'info');
+            return;
+        }
+
         this.showLoading(true);
         try {
             await API.delete('staff', id);
-            
-            // ローカルのStateから削除（再読み込みしない）
             this.state.staff = this.state.staff.filter(s => s.id !== id);
-            
-            // await this.loadData(); // ←削除
-            
             this.renderStaffList(document.getElementById('viewContainer'));
-            this.showToast('削除しました', 'success');
+            this.showToast(`${staff.name} を削除しました`, 'success');
         } catch (e) {
             console.error(e);
-            this.showToast('失敗しました', 'error');
+            this.showToast('削除に失敗しました', 'error');
         } finally {
             this.showLoading(false);
         }

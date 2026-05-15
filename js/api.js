@@ -209,6 +209,13 @@ const API = {
     },
 
     async delete(table, id) {
+        // テナント保護: 重要テーブルの直接削除を禁止
+        const protectedTables = ['organizations', 'config', 'hq_admins'];
+        if (protectedTables.includes(table)) {
+            console.error(`[BLOCKED] テーブル "${table}" の削除はシステムにより禁止されています`);
+            throw new Error(`${table} の削除は許可されていません`);
+        }
+        console.warn(`[DELETE] ${table} id=${id} - 実行`);
         await this._request(`${table}?id=eq.${id}`, {
             method: 'DELETE'
         });
