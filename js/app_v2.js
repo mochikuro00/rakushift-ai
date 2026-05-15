@@ -5746,18 +5746,40 @@ const app = {
     // =========================================================
     // お知らせバッジ更新
     // =========================================================
+    // お知らせ既読管理
+    _getReadAnnouncementIds() {
+        try {
+            return JSON.parse(localStorage.getItem('rakushift_read_announcements') || '[]');
+        } catch { return []; }
+    },
+    _markAnnouncementRead(id) {
+        const readIds = this._getReadAnnouncementIds();
+        if (!readIds.includes(id)) {
+            readIds.push(id);
+            localStorage.setItem('rakushift_read_announcements', JSON.stringify(readIds));
+        }
+    },
+    _markAllAnnouncementsRead() {
+        const allIds = (this._announcements || []).map(a => a.id).filter(Boolean);
+        localStorage.setItem('rakushift_read_announcements', JSON.stringify(allIds));
+    },
+    _filterUnreadAnnouncements(announcements) {
+        const readIds = this._getReadAnnouncementIds();
+        return (announcements || []).filter(a => !readIds.includes(a.id));
+    },
+
     async updateAnnouncementBadge() {
         const badge = document.getElementById('announcementCountBadge');
         if (!badge) return;
         try {
             const announcements = await API.rpc('list_active_announcements');
-            if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
+            const unread = this._filterUnreadAnnouncements(announcements);
+            if (!unread || unread.length === 0) {
                 badge.classList.add('hidden');
                 badge.textContent = '0';
                 return;
             }
-            const count = announcements.length;
-            // 丸付き数字で表示 (①②③...⑨⑩...)
+            const count = unread.length;
             const circledNums = ['⓪','①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
             badge.textContent = count <= 10 ? circledNums[count] : count.toString();
             badge.classList.remove('hidden');
@@ -5799,7 +5821,10 @@ const app = {
         const listEl = document.getElementById('announcementsAdminList');
         if (!listEl) return;
         try {
-            const announcements = await API.rpc('list_active_announcements');
+            const allAnnouncements = await API.rpc('list_active_announcements');
+            const readIds = this._getReadAnnouncementIds();
+            const announcements = (allAnnouncements || []);
+
             if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
                 listEl.innerHTML = `
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
@@ -5815,10 +5840,21 @@ const app = {
             const typeColors = { info: 'text-blue-500 bg-blue-50', warning: 'text-amber-500 bg-amber-50', promotion: 'text-emerald-500 bg-emerald-50', update: 'text-purple-500 bg-purple-50' };
             const typeLabels = { info: 'お知らせ', warning: '注意', promotion: 'キャンペーン', update: 'アップデート' };
 
+            const unreadCount = announcements.filter(a => !readIds.includes(a.id)).length;
+
             listEl.innerHTML = `
+                ${unreadCount > 0 ? `
+                <div class="flex justify-end mb-3">
+                    <button onclick="app.markAllAnnouncementsRead()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-check-double"></i> 全て既読にする
+                    </button>
+                </div>` : ''}
                 <div class="space-y-4">
-                    ${announcements.map((item, idx) => `
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                    ${announcements.map((item, idx) => {
+                        const isRead = readIds.includes(item.id);
+                        return `
+                        <div class="bg-white rounded-xl shadow-sm border ${isRead ? 'border-gray-100 opacity-60' : 'border-gray-200'} overflow-hidden hover:shadow-md transition-shadow ${isRead ? 'relative' : ''}">
+                            ${isRead ? '<div class="absolute top-3 right-3"><span class="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">既読</span></div>' : ''}
                             <div class="p-5">
                                 <div class="flex items-start gap-4">
                                     <div class="w-10 h-10 rounded-xl ${typeColors[item.type] || typeColors.info} flex items-center justify-center shrink-0">
@@ -5831,19 +5867,26 @@ const app = {
                                             </span>
                                             ${item.created_at ? `<span class="text-xs text-gray-400">${new Date(item.created_at).toLocaleDateString('ja-JP')}</span>` : ''}
                                         </div>
-                                        <h3 class="font-bold text-gray-800 text-lg">${item.title}</h3>
-                                        <p class="text-sm text-gray-600 mt-2 whitespace-pre-line leading-relaxed">${item.content}</p>
-                                        ${item.target_url ? `
-                                            <a href="${item.target_url}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 mt-3 text-sm font-bold text-blue-600 hover:text-blue-700 transition">
-                                                <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
-                                                ${item.button_text || '詳しく見る'}
-                                            </a>
-                                        ` : ''}
+                                        <h3 class="font-bold text-gray-800 text-lg">${this._sanitize(item.title)}</h3>
+                                        <p class="text-sm text-gray-600 mt-2 whitespace-pre-line leading-relaxed">${this._sanitize(item.content)}</p>
+                                        <div class="flex items-center gap-3 mt-3">
+                                            ${item.target_url ? `
+                                                <a href="${item.target_url}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 transition">
+                                                    <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                                    ${this._sanitize(item.button_text || '詳しく見る')}
+                                                </a>
+                                            ` : ''}
+                                            ${!isRead ? `
+                                                <button onclick="app.dismissAnnouncement('${item.id}')" class="inline-flex items-center gap-1 text-sm font-bold text-gray-500 hover:text-gray-700 transition">
+                                                    <i class="fa-solid fa-eye-slash text-xs"></i> 既読にする
+                                                </button>
+                                            ` : ''}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             `;
         } catch (e) {
@@ -5862,6 +5905,22 @@ const app = {
         this._loadAnnouncementsAdmin();
         this.updateAnnouncementBadge();
         this.showToast('お知らせを更新しました', 'success');
+    },
+
+    // 個別のお知らせを既読にする
+    dismissAnnouncement(id) {
+        this._markAnnouncementRead(id);
+        this._loadAnnouncementsAdmin();
+        this.updateAnnouncementBadge();
+        this.showToast('既読にしました', 'info');
+    },
+
+    // 全てのお知らせを既読にする
+    markAllAnnouncementsRead() {
+        this._markAllAnnouncementsRead();
+        this._loadAnnouncementsAdmin();
+        this.updateAnnouncementBadge();
+        this.showToast('全てのお知らせを既読にしました', 'success');
     },
 
     // =========================================================
@@ -5965,6 +6024,13 @@ const app = {
     },
 
     closeAnnouncementModal() {
+        // 表示したお知らせを全て既読にする
+        if (this._announcements && this._announcements.length > 0) {
+            for (const item of this._announcements) {
+                if (item.id) this._markAnnouncementRead(item.id);
+            }
+            this.updateAnnouncementBadge();
+        }
         this.closeModal('announcementModal');
         // ページ訪問時のお知らせの場合、閉じた後にログインモーダルを表示
         if (this._showLoginAfterAnnouncement) {
