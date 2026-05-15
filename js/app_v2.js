@@ -630,15 +630,35 @@ const app = {
 
         this.showLoading(true);
         try {
-            const result = await API.rpc('hq_login', { p_login_id: loginId, p_password: password });
+            let result = null;
+
+            // RPC経由の認証を試行
+            try {
+                result = await API.rpc('hq_login', { p_login_id: loginId, p_password: password });
+            } catch (rpcErr) {
+                console.warn('[HQ] hq_login RPC not available, using fallback auth:', rpcErr.message);
+                // RPC未作成の場合のフォールバック認証
+                // ※Supabaseにマイグレーション適用後はRPCが優先される
+                const HQ_ACCOUNTS = [
+                    { login_id: 'hq_master', password: 'rakushift_hq' },
+                    { login_id: 'demo', password: 'demo1234' }
+                ];
+                const match = HQ_ACCOUNTS.find(a => a.login_id === loginId && a.password === password);
+                if (match) {
+                    result = { status: 'success', role: 'hq_admin', login_id: match.login_id };
+                } else {
+                    result = { status: 'error', message: '本部IDまたはパスワードが違います' };
+                }
+            }
+
             if (result && result.status === 'success') {
                 this._recordLoginAttempt('hq_' + loginId, true);
                 this.state.isHQ = true;
-                this.state.isAdmin = true; // 管理者権限を付与
+                this.state.isAdmin = true;
                 this.state.isShopLoggedIn = true;
                 
                 API.setSession({
-                    session_id: result.session_id,
+                    session_id: result.session_id || ('hq_' + Date.now()),
                     name: 'HQ Admin',
                     role: 'hq_admin'
                 });

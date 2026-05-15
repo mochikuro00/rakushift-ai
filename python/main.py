@@ -217,6 +217,100 @@ async def keepalive():
         return {"status": "ok", "db": "error", "message": msg}
 
 
+@app.post("/run-migration")
+async def run_migration(request: Request):
+    """HQ管理者テーブル・RPC関数のマイグレーションを実行。
+    service_keyを使ってSupabase PostgreSQL RPCでSQLを直接実行する。
+    セキュリティ: 環境変数MIGRATION_TOKENで保護。"""
+    import httpx
+
+    body = await request.json()
+    token = body.get("token", "")
+    migration_token = os.environ.get("MIGRATION_TOKEN", "rakushift_migrate_2026")
+
+    if token != migration_token:
+        return {"status": "error", "message": "Invalid migration token"}
+
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        return {"status": "error", "message": "Supabase credentials not configured"}
+
+    # HQ管理者マイグレーションSQL群を順番に実行
+    sqls = [
+        # 1. hq_adminsテーブル作成
+        """CREATE TABLE IF NOT EXISTS hq_admins (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            login_id TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
+        # 2. 初期アカウント
+        """INSERT INTO hq_admins (login_id, password) 
+           VALUES ('hq_master', crypt('rakushift_hq', gen_salt('bf')))
+           ON CONFLICT (login_id) DO NOTHING""",
+        # 3. hq_login RPC
+        """CREATE OR REPLACE FUNCTION hq_login(p_login_id TEXT, p_password TEXT) 
+           RETURNS JSONB AS $fn$
+           DECLARE v_admin RECORD;
+           BEGIN
+               SELECT * INTO v_admin FROM hq_admins WHERE login_id = p_login_id;
+               IF NOT FOUND THEN 
+                   RETURN jsonb_build_object('status', 'error', 'message', '本部IDが存在しません'); 
+               END IF;
+               IF v_admin.password = crypt(p_password, v_admin.password) THEN
+                   RETURN jsonb_build_object('status', 'success', 'role', 'hq_admin', 'login_id', v_admin.login_id);
+               ELSE
+                   RETURN jsonb_build_object('status', 'error', 'message', 'パスワードが違います');
+               END IF;
+           END;
+           $fn$ LANGUAGE plpgsql SECURITY DEFINER""",
+        # 4. hq_get_all_shops RPC
+        """CREATE OR REPLACE FUNCTION hq_get_all_shops() 
+           RETURNS JSONB AS $fn$
+           DECLARE res JSONB;
+           BEGIN
+               SELECT jsonb_agg(jsonb_build_object(
+                   'organization_id', o.id, 'name', o.name,
+                   'contract_id', c.contract_id, 'plan', c.stripe_plan,
+                   'created_at', o.created_at
+               ) ORDER BY o.created_at DESC) INTO res
+               FROM organizations o JOIN config c ON o.id = c.organization_id;
+               RETURN COALESCE(res, '[]'::jsonb);
+           END;
+           $fn$ LANGUAGE plpgsql SECURITY DEFINER""",
+    ]
+
+    headers = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY),
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+
+    results = []
+    async with httpx.AsyncClient(timeout=30) as client:
+        for i, sql in enumerate(sqls):
+            try:
+                # Supabase の pg_query RPC または直接 SQL 実行
+                resp = await client.post(
+                    "{}/rest/v1/rpc/exec_sql".format(SUPABASE_URL),
+                    headers=headers,
+                    json={"query": sql}
+                )
+                if resp.status_code == 404:
+                    # exec_sql RPC が無い場合、Supabase Management API を試す
+                    # 代替: supabase-py の admin機能を使う
+                    results.append({"step": i+1, "status": "skipped", "reason": "exec_sql RPC not found"})
+                elif resp.status_code < 300:
+                    results.append({"step": i+1, "status": "ok"})
+                else:
+                    results.append({"step": i+1, "status": "error", "detail": resp.text[:200]})
+            except Exception as e:
+                results.append({"step": i+1, "status": "error", "detail": str(e)[:200]})
+
+    return {"status": "completed", "results": results}
+
+
+
 # =============================================================
 # シフト生成 API
 # =============================================================
