@@ -636,61 +636,89 @@ const app = {
     // =========================================================
     async submitMultiStoreInquiry() {
         const company = document.getElementById('inquiryCompany')?.value.trim() || '';
-        const name = document.getElementById('inquiryName')?.value.trim() || '';
+        const address = document.getElementById('inquiryAddress')?.value.trim() || '';
         const phone = document.getElementById('inquiryPhone')?.value.trim() || '';
-        const email = document.getElementById('inquiryEmail')?.value.trim() || '';
-        const storeCount = document.getElementById('inquiryStoreCount')?.value || '';
-        const industry = document.getElementById('inquiryIndustry')?.value || '';
+        const name = document.getElementById('inquiryName')?.value.trim() || '';
+        const lightCount = document.getElementById('inquiryLightCount')?.value || '0';
+        const standardCount = document.getElementById('inquiryStandardCount')?.value || '0';
+        const premiumCount = document.getElementById('inquiryPremiumCount')?.value || '0';
         const message = document.getElementById('inquiryMessage')?.value.trim() || '';
-        const privacy = document.getElementById('inquiryPrivacy')?.checked || false;
+
+        // 曜日チェックボックス取得
+        const dayCheckboxes = document.querySelectorAll('.inquiry-day-btn input[type="checkbox"]:checked');
+        const selectedDays = Array.from(dayCheckboxes).map(cb => cb.value);
+
+        // 時間帯ラジオ取得
+        const timeSlot = document.querySelector('input[name="inquiryTimeSlot"]:checked')?.value || '';
 
         // バリデーション
         if (!company) { this.showToast('会社名を入力してください', 'error'); return; }
+        if (!address) { this.showToast('会社住所を入力してください', 'error'); return; }
+        if (!phone) { this.showToast('会社連絡先を入力してください', 'error'); return; }
         if (!name) { this.showToast('ご担当者名を入力してください', 'error'); return; }
-        if (!phone) { this.showToast('電話番号を入力してください', 'error'); return; }
-        if (!email) { this.showToast('メールアドレスを入力してください', 'error'); return; }
-        if (!email.includes('@')) { this.showToast('正しいメールアドレスを入力してください', 'error'); return; }
-        if (!storeCount) { this.showToast('導入予定店舗数を選択してください', 'error'); return; }
-        if (!privacy) { this.showToast('プライバシーポリシーに同意してください', 'error'); return; }
+
+        // プラン件数チェック（合計1件以上）
+        const totalPlans = (parseInt(lightCount) || 0) + (parseInt(standardCount) || 0) + (parseInt(premiumCount) || 0);
+        if (totalPlans === 0 && lightCount === '0' && standardCount === '0' && premiumCount === '0') {
+            this.showToast('契約予定プランを1件以上選択してください', 'error'); return;
+        }
 
         this.showLoading(true);
         try {
+            // プランサマリー文字列を構築
+            const planParts = [];
+            if (lightCount !== '0') planParts.push(`ライトプラン ${lightCount}件`);
+            if (standardCount !== '0') planParts.push(`スタンダードプラン ${standardCount}件`);
+            if (premiumCount !== '0') planParts.push(`プレミアムプラン ${premiumCount}件`);
+            const planSummary = planParts.join('、');
+
+            // 連絡希望日程サマリー
+            const scheduleSummary = [
+                selectedDays.length > 0 ? `曜日: ${selectedDays.join('・')}` : '',
+                timeSlot ? `時間帯: ${timeSlot}` : ''
+            ].filter(Boolean).join(' / ');
+
             const inquiryData = {
                 company_name: this._sanitize(company),
-                contact_name: this._sanitize(name),
+                company_address: this._sanitize(address),
                 phone: this._sanitize(phone),
-                email: this._sanitize(email),
-                store_count: storeCount,
-                industry: industry,
+                contact_name: this._sanitize(name),
+                plan_summary: planSummary,
+                light_plan_count: lightCount,
+                standard_plan_count: standardCount,
+                premium_plan_count: premiumCount,
+                preferred_days: selectedDays.join(','),
+                preferred_time: timeSlot,
+                schedule_summary: scheduleSummary,
                 message: this._sanitize(message),
                 status: 'new',
                 created_at: new Date().toISOString()
             };
 
-            // Supabaseに保存を試行
-            let saved = false;
+            // localStorageに保存（DBテーブル有無に関わらず確実に保存）
+            const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
+            pending.push(inquiryData);
+            localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
+
+            // Supabaseにも保存を試行
             try {
                 await API.upsert('inquiries', [inquiryData]);
-                saved = true;
             } catch (dbErr) {
-                console.warn('[Inquiry] DB save failed, using localStorage:', dbErr.message);
-                // DBに保存できない場合はlocalStorageにバックアップ
-                const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
-                pending.push(inquiryData);
-                localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
+                console.warn('[Inquiry] DB save skipped:', dbErr.message);
             }
 
-            // フォームをリセット
-            ['inquiryCompany', 'inquiryName', 'inquiryPhone', 'inquiryEmail', 'inquiryMessage'].forEach(id => {
+            // フォームリセット
+            ['inquiryCompany', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
-            ['inquiryStoreCount', 'inquiryIndustry'].forEach(id => {
+            ['inquiryLightCount', 'inquiryStandardCount', 'inquiryPremiumCount'].forEach(id => {
                 const el = document.getElementById(id);
-                if (el) el.value = '';
+                if (el) el.value = '0';
             });
-            const privacyEl = document.getElementById('inquiryPrivacy');
-            if (privacyEl) privacyEl.checked = false;
+            document.querySelectorAll('.inquiry-day-btn input[type="checkbox"]').forEach(cb => cb.checked = false);
+            const checkedRadio = document.querySelector('input[name="inquiryTimeSlot"]:checked');
+            if (checkedRadio) checkedRadio.checked = false;
 
             this.closeModal('multiStoreInquiryModal');
             this.showToast('お問い合わせを受け付けました。担当者より1営業日以内にご連絡いたします。', 'success');

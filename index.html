@@ -400,12 +400,37 @@
                     </div>
                 </div>
 
+                <!-- セクション: 会社情報 -->
+                <div class="border-b border-gray-200 pb-1">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-building-columns text-blue-400"></i> 会社情報
+                    </p>
+                </div>
+
                 <!-- 会社名 -->
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">
-                        会社名・法人名 <span class="text-red-500">*</span>
+                        会社名 <span class="text-red-500">*</span>
                     </label>
                     <input id="inquiryCompany" type="text" placeholder="例: 株式会社ラクシフト" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+
+                <!-- 会社住所 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        会社住所 <span class="text-red-500">*</span>
+                    </label>
+                    <input id="inquiryAddress" type="text" placeholder="例: 東京都渋谷区神宮前1-2-3 ○○ビル5F"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+
+                <!-- 会社連絡先（電話番号） -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        会社連絡先（電話番号） <span class="text-red-500">*</span>
+                    </label>
+                    <input id="inquiryPhone" type="tel" placeholder="例: 03-1234-5678"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
 
@@ -418,73 +443,134 @@
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
 
-                <!-- 電話番号 -->
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">
-                        電話番号 <span class="text-red-500">*</span>
-                    </label>
-                    <input id="inquiryPhone" type="tel" placeholder="例: 03-1234-5678"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                <!-- セクション: 契約予定プラン -->
+                <div class="border-b border-gray-200 pb-1 pt-2">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-contract text-indigo-400"></i> 契約予定プラン
+                    </p>
                 </div>
 
-                <!-- メールアドレス -->
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">
-                        メールアドレス <span class="text-red-500">*</span>
-                    </label>
-                    <input id="inquiryEmail" type="email" placeholder="例: info@example.co.jp"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                <div class="bg-gray-50 rounded-xl p-4 space-y-3">
+                    <!-- ライトプラン -->
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-700">ライトプラン</label>
+                            <p class="text-[10px] text-gray-400">小規模店舗向け</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="inquiryLightCount" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 w-20 text-center">
+                                <option value="0">0件</option>
+                                <option value="1">1件</option>
+                                <option value="2">2件</option>
+                                <option value="3">3件</option>
+                                <option value="4">4件</option>
+                                <option value="5">5件</option>
+                                <option value="6-10">6-10件</option>
+                                <option value="11+">11件〜</option>
+                            </select>
+                        </div>
+                    </div>
+                    <!-- スタンダードプラン -->
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-700">スタンダードプラン</label>
+                            <p class="text-[10px] text-gray-400">中〜大規模店舗向け</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="inquiryStandardCount" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 w-20 text-center">
+                                <option value="0">0件</option>
+                                <option value="1">1件</option>
+                                <option value="2">2件</option>
+                                <option value="3">3件</option>
+                                <option value="4">4件</option>
+                                <option value="5">5件</option>
+                                <option value="6-10">6-10件</option>
+                                <option value="11+">11件〜</option>
+                            </select>
+                        </div>
+                    </div>
+                    <!-- プレミアムプラン -->
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-700">プレミアムプラン</label>
+                            <p class="text-[10px] text-gray-400">大規模・24時間営業向け</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="inquiryPremiumCount" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 w-20 text-center">
+                                <option value="0">0件</option>
+                                <option value="1">1件</option>
+                                <option value="2">2件</option>
+                                <option value="3">3件</option>
+                                <option value="4">4件</option>
+                                <option value="5">5件</option>
+                                <option value="6-10">6-10件</option>
+                                <option value="11+">11件〜</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- 店舗数 -->
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">
-                        導入予定店舗数 <span class="text-red-500">*</span>
-                    </label>
-                    <select id="inquiryStoreCount"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white">
-                        <option value="">選択してください</option>
-                        <option value="3-5">3〜5店舗</option>
-                        <option value="6-10">6〜10店舗</option>
-                        <option value="11-20">11〜20店舗</option>
-                        <option value="21-50">21〜50店舗</option>
-                        <option value="51+">51店舗以上</option>
-                    </select>
+                <!-- セクション: 連絡希望日程 -->
+                <div class="border-b border-gray-200 pb-1 pt-2">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-calendar-check text-green-400"></i> ご連絡希望日程
+                    </p>
                 </div>
 
-                <!-- 業種 -->
+                <!-- 連絡希望曜日 -->
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">
-                        業種
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        ご希望の曜日 <span class="text-xs text-gray-400 font-normal">（複数選択可）</span>
                     </label>
-                    <select id="inquiryIndustry"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white">
-                        <option value="">選択してください</option>
-                        <option value="飲食">飲食</option>
-                        <option value="小売">小売</option>
-                        <option value="サービス">サービス</option>
-                        <option value="医療・介護">医療・介護</option>
-                        <option value="宿泊・観光">宿泊・観光</option>
-                        <option value="物流">物流</option>
-                        <option value="その他">その他</option>
-                    </select>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="inquiry-day-btn"><input type="checkbox" value="月" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block">月</span></label>
+                        <label class="inquiry-day-btn"><input type="checkbox" value="火" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block">火</span></label>
+                        <label class="inquiry-day-btn"><input type="checkbox" value="水" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block">水</span></label>
+                        <label class="inquiry-day-btn"><input type="checkbox" value="木" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block">木</span></label>
+                        <label class="inquiry-day-btn"><input type="checkbox" value="金" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block">金</span></label>
+                        <label class="inquiry-day-btn"><input type="checkbox" value="土" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block text-blue-600">土</span></label>
+                        <label class="inquiry-day-btn"><input type="checkbox" value="日" class="hidden peer"><span class="px-4 py-2 rounded-lg border border-gray-300 text-sm font-bold cursor-pointer transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50 inline-block text-red-500">日</span></label>
+                    </div>
                 </div>
 
-                <!-- ご相談内容 -->
+                <!-- 連絡希望時間帯 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">ご希望の時間帯</label>
+                    <div class="flex gap-3">
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="inquiryTimeSlot" value="午前（10:00〜12:00）" class="hidden peer">
+                            <div class="p-3 border border-gray-300 rounded-xl text-center transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50">
+                                <i class="fa-solid fa-sun text-amber-400 peer-checked:text-white mb-1"></i>
+                                <p class="text-sm font-bold">午前</p>
+                                <p class="text-[10px] text-gray-400 peer-checked:text-blue-100">10:00〜12:00</p>
+                            </div>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="inquiryTimeSlot" value="午後（13:00〜17:00）" class="hidden peer">
+                            <div class="p-3 border border-gray-300 rounded-xl text-center transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50">
+                                <i class="fa-solid fa-cloud-sun text-orange-400 peer-checked:text-white mb-1"></i>
+                                <p class="text-sm font-bold">午後</p>
+                                <p class="text-[10px] text-gray-400 peer-checked:text-blue-100">13:00〜17:00</p>
+                            </div>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="inquiryTimeSlot" value="どちらでも可" class="hidden peer">
+                            <div class="p-3 border border-gray-300 rounded-xl text-center transition peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 hover:bg-gray-50">
+                                <i class="fa-solid fa-clock text-blue-400 peer-checked:text-white mb-1"></i>
+                                <p class="text-sm font-bold">どちらでも</p>
+                                <p class="text-[10px] text-gray-400 peer-checked:text-blue-100">終日OK</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- その他備考 -->
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">
-                        ご相談内容・ご質問
+                        その他ご要望・備考
                     </label>
-                    <textarea id="inquiryMessage" rows="3" placeholder="導入時期やご要望などがあればご記入ください"
+                    <textarea id="inquiryMessage" rows="2" placeholder="ご質問やご要望があればご自由にご記入ください"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"></textarea>
-                </div>
-
-                <!-- プライバシー同意 -->
-                <div class="flex items-start gap-2">
-                    <input id="inquiryPrivacy" type="checkbox" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                    <label for="inquiryPrivacy" class="text-xs text-gray-600">
-                        <span class="underline cursor-pointer text-blue-600">プライバシーポリシー</span>に同意の上、送信します
-                    </label>
                 </div>
             </div>
             <!-- フッター -->
