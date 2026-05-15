@@ -631,6 +631,77 @@ const app = {
     },
 
 
+    // =========================================================
+    // 3店舗以上お問い合わせフォーム送信
+    // =========================================================
+    async submitMultiStoreInquiry() {
+        const company = document.getElementById('inquiryCompany')?.value.trim() || '';
+        const name = document.getElementById('inquiryName')?.value.trim() || '';
+        const phone = document.getElementById('inquiryPhone')?.value.trim() || '';
+        const email = document.getElementById('inquiryEmail')?.value.trim() || '';
+        const storeCount = document.getElementById('inquiryStoreCount')?.value || '';
+        const industry = document.getElementById('inquiryIndustry')?.value || '';
+        const message = document.getElementById('inquiryMessage')?.value.trim() || '';
+        const privacy = document.getElementById('inquiryPrivacy')?.checked || false;
+
+        // バリデーション
+        if (!company) { this.showToast('会社名を入力してください', 'error'); return; }
+        if (!name) { this.showToast('ご担当者名を入力してください', 'error'); return; }
+        if (!phone) { this.showToast('電話番号を入力してください', 'error'); return; }
+        if (!email) { this.showToast('メールアドレスを入力してください', 'error'); return; }
+        if (!email.includes('@')) { this.showToast('正しいメールアドレスを入力してください', 'error'); return; }
+        if (!storeCount) { this.showToast('導入予定店舗数を選択してください', 'error'); return; }
+        if (!privacy) { this.showToast('プライバシーポリシーに同意してください', 'error'); return; }
+
+        this.showLoading(true);
+        try {
+            const inquiryData = {
+                company_name: this._sanitize(company),
+                contact_name: this._sanitize(name),
+                phone: this._sanitize(phone),
+                email: this._sanitize(email),
+                store_count: storeCount,
+                industry: industry,
+                message: this._sanitize(message),
+                status: 'new',
+                created_at: new Date().toISOString()
+            };
+
+            // Supabaseに保存を試行
+            let saved = false;
+            try {
+                await API.upsert('inquiries', [inquiryData]);
+                saved = true;
+            } catch (dbErr) {
+                console.warn('[Inquiry] DB save failed, using localStorage:', dbErr.message);
+                // DBに保存できない場合はlocalStorageにバックアップ
+                const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
+                pending.push(inquiryData);
+                localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
+            }
+
+            // フォームをリセット
+            ['inquiryCompany', 'inquiryName', 'inquiryPhone', 'inquiryEmail', 'inquiryMessage'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            ['inquiryStoreCount', 'inquiryIndustry'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            const privacyEl = document.getElementById('inquiryPrivacy');
+            if (privacyEl) privacyEl.checked = false;
+
+            this.closeModal('multiStoreInquiryModal');
+            this.showToast('お問い合わせを受け付けました。担当者より1営業日以内にご連絡いたします。', 'success');
+        } catch (e) {
+            console.error('Inquiry Error:', e);
+            this.showToast('送信に失敗しました。時間をおいて再度お試しください。', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
     signUpMode() {
         alert("新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。");
     },

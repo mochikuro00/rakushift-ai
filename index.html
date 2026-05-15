@@ -339,7 +339,15 @@
 
                 <!-- Global Action: New Subscription -->
                 <div class="p-4 sm:p-8 pt-0 mt-auto border-t border-gray-100 bg-white">
-                    <div class="text-center mt-6">
+                    <!-- 3店舗以上のお問い合わせリンク -->
+                    <div class="text-center mt-4 mb-4">
+                        <button onclick="app.openModal('multiStoreInquiryModal')" class="inline-flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-800 transition group">
+                            <i class="fa-solid fa-building text-blue-500 group-hover:text-blue-700 transition"></i>
+                            <span class="underline underline-offset-2 decoration-blue-300 group-hover:decoration-blue-600">3店舗以上をご検討の方はこちら</span>
+                            <i class="fa-solid fa-chevron-right text-xs text-blue-400 group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+                    </div>
+                    <div class="text-center">
                         <p class="text-sm text-gray-600 mb-3">まだアカウントをお持ちでない方</p>
                         <button onclick="app.openModal('newSubscriptionModal')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg transition">
                             <i class="fa-solid fa-rocket mr-2"></i>新規お申し込み
@@ -351,6 +359,145 @@
     </div>
 
 
+        </div>
+    </div>
+
+    <!-- 3店舗以上お問い合わせモーダル -->
+    <div id="multiStoreInquiryModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-2 sm:p-4">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden mx-auto flex flex-col" style="max-height: 95vh;">
+            <!-- ヘッダー -->
+            <div class="flex-shrink-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 text-white p-5">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-building text-blue-200"></i>
+                            <h3 class="text-lg font-bold">法人・複数店舗のお問い合わせ</h3>
+                        </div>
+                        <p class="text-xs text-blue-200">3店舗以上のご導入で特別プランをご案内いたします</p>
+                    </div>
+                    <button onclick="app.closeModal('multiStoreInquiryModal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- フォーム -->
+            <div class="flex-1 overflow-y-auto p-5 space-y-4">
+                <!-- 特典バナー -->
+                <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-crown text-amber-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-amber-800 text-sm">法人プラン特典</p>
+                            <ul class="text-xs text-amber-700 mt-1 space-y-0.5">
+                                <li>✓ 3店舗以上で <span class="font-bold">ボリュームディスカウント</span></li>
+                                <li>✓ 専任サポート担当者がつきます</li>
+                                <li>✓ 本部統括ダッシュボード利用可能</li>
+                                <li>✓ カスタム導入支援・研修対応</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 会社名 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        会社名・法人名 <span class="text-red-500">*</span>
+                    </label>
+                    <input id="inquiryCompany" type="text" placeholder="例: 株式会社ラクシフト" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+
+                <!-- 担当者名 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        ご担当者名 <span class="text-red-500">*</span>
+                    </label>
+                    <input id="inquiryName" type="text" placeholder="例: 山田 太郎"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+
+                <!-- 電話番号 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        電話番号 <span class="text-red-500">*</span>
+                    </label>
+                    <input id="inquiryPhone" type="tel" placeholder="例: 03-1234-5678"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+
+                <!-- メールアドレス -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        メールアドレス <span class="text-red-500">*</span>
+                    </label>
+                    <input id="inquiryEmail" type="email" placeholder="例: info@example.co.jp"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                </div>
+
+                <!-- 店舗数 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        導入予定店舗数 <span class="text-red-500">*</span>
+                    </label>
+                    <select id="inquiryStoreCount"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white">
+                        <option value="">選択してください</option>
+                        <option value="3-5">3〜5店舗</option>
+                        <option value="6-10">6〜10店舗</option>
+                        <option value="11-20">11〜20店舗</option>
+                        <option value="21-50">21〜50店舗</option>
+                        <option value="51+">51店舗以上</option>
+                    </select>
+                </div>
+
+                <!-- 業種 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        業種
+                    </label>
+                    <select id="inquiryIndustry"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white">
+                        <option value="">選択してください</option>
+                        <option value="飲食">飲食</option>
+                        <option value="小売">小売</option>
+                        <option value="サービス">サービス</option>
+                        <option value="医療・介護">医療・介護</option>
+                        <option value="宿泊・観光">宿泊・観光</option>
+                        <option value="物流">物流</option>
+                        <option value="その他">その他</option>
+                    </select>
+                </div>
+
+                <!-- ご相談内容 -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">
+                        ご相談内容・ご質問
+                    </label>
+                    <textarea id="inquiryMessage" rows="3" placeholder="導入時期やご要望などがあればご記入ください"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"></textarea>
+                </div>
+
+                <!-- プライバシー同意 -->
+                <div class="flex items-start gap-2">
+                    <input id="inquiryPrivacy" type="checkbox" class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="inquiryPrivacy" class="text-xs text-gray-600">
+                        <span class="underline cursor-pointer text-blue-600">プライバシーポリシー</span>に同意の上、送信します
+                    </label>
+                </div>
+            </div>
+            <!-- フッター -->
+            <div class="flex-shrink-0 p-5 border-t border-gray-100 bg-gray-50">
+                <button onclick="app.submitMultiStoreInquiry()" 
+                    class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    お問い合わせを送信
+                </button>
+                <p class="text-center text-xs text-gray-400 mt-3">
+                    通常1営業日以内にご連絡いたします
+                </p>
+            </div>
         </div>
     </div>
 
