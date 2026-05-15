@@ -113,6 +113,22 @@ class DiagnoseRequest(BaseModel):
     staff_list: List[Dict[str, Any]] = []
 
 
+class InquiryRequest(BaseModel):
+    """法人お問い合わせフォーム"""
+    company_name: str
+    company_address: str = ""
+    phone: str
+    contact_name: str
+    plan_summary: str = ""
+    light_plan_count: str = "0"
+    standard_plan_count: str = "0"
+    premium_plan_count: str = "0"
+    preferred_days: str = ""
+    preferred_time: str = ""
+    schedule_summary: str = ""
+    message: str = ""
+
+
 class CheckoutRequest(BaseModel):
     contract_id: str
     plan: str = "standard"  # "standard", "pro", or "premium"
@@ -1293,4 +1309,99 @@ async def get_subscription_status(contract_id: str):
         print("Status Error: {}".format(e))
         return {"status": "error", "message": str(e)}
 
-# deploy: 20260511-2132
+
+# =========================================================
+# お問い合わせフォーム → メール送信
+# =========================================================
+@app.post("/api/inquiry")
+@limiter.limit("5/minute")
+async def submit_inquiry(req: InquiryRequest, request: Request):
+    """法人お問い合わせを受信してメール送信"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from datetime import datetime
+
+    # メール送信先（環境変数で設定）
+    to_email = os.environ.get("INQUIRY_EMAIL_TO", "")
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+
+    # メール本文を構築
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    body = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ラクシフト AI - 法人お問い合わせ
+  受信日時: {now}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 会社情報
+  会社名:     {req.company_name}
+  会社住所:   {req.company_address}
+  連絡先:     {req.phone}
+  担当者名:   {req.contact_name}
+
+■ 契約予定プラン
+  {req.plan_summary or '未選択'}
+  ├ ライトプラン:       {req.light_plan_count}件
+  ├ スタンダードプラン:  {req.standard_plan_count}件
+  └ プレミアムプラン:    {req.premium_plan_count}件
+
+■ ご連絡希望日程
+  希望曜日:   {req.preferred_days or '指定なし'}
+  希望時間帯: {req.preferred_time or '指定なし'}
+
+■ その他ご要望
+  {req.message or 'なし'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+    print(f"[Inquiry] Received from {req.company_name} ({req.contact_name})")
+    print(body)
+
+    # Supabaseにも保存を試行
+    try:
+        inquiry_data = {
+            "company_name": req.company_name,
+            "company_address": req.company_address,
+            "phone": req.phone,
+            "contact_name": req.contact_name,
+            "plan_summary": req.plan_summary,
+            "preferred_days": req.preferred_days,
+            "preferred_time": req.preferred_time,
+            "message": req.message,
+            "status": "new"
+        }
+        await supabase_query("inquiries", method="POST", body=inquiry_data)
+        print("[Inquiry] Saved to DB")
+    except Exception as db_err:
+        print(f"[Inquiry] DB save skipped: {db_err}")
+
+    # メール送信
+    if to_email and smtp_user and smtp_pass:
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = smtp_user
+            msg["To"] = to_email
+            msg["Subject"] = f"【ラクシフト】法人お問い合わせ - {req.company_name}"
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+
+            print(f"[Inquiry] Email sent to {to_email}")
+            return {"success": True, "message": "お問い合わせを受け付けました。メール送信完了。"}
+        except Exception as mail_err:
+            print(f"[Inquiry] Email failed: {mail_err}")
+            return {"success": True, "message": "お問い合わせを受け付けました。（メール送信に一時的な問題が発生しましたが、データは保存済みです）"}
+    else:
+        print("[Inquiry] Email not configured. Set INQUIRY_EMAIL_TO, SMTP_USER, SMTP_PASS env vars.")
+        return {"success": True, "message": "お問い合わせを受け付けました。"}
+
+
+# deploy: 20260516-0508

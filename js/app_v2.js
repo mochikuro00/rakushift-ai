@@ -695,16 +695,23 @@ const app = {
                 created_at: new Date().toISOString()
             };
 
-            // localStorageに保存（DBテーブル有無に関わらず確実に保存）
+            // localStorageにバックアップ保存
             const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
             pending.push(inquiryData);
             localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
 
-            // Supabaseにも保存を試行
+            // Railwayサーバー経由でメール送信
             try {
-                await API.upsert('inquiries', [inquiryData]);
-            } catch (dbErr) {
-                console.warn('[Inquiry] DB save skipped:', dbErr.message);
+                const serverUrl = RAKUSHIFT_CONFIG.CALC_SERVER_URL || '';
+                const res = await fetch(`${serverUrl}/api/inquiry`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(inquiryData)
+                });
+                const result = await res.json();
+                console.log('[Inquiry] Server response:', result);
+            } catch (serverErr) {
+                console.warn('[Inquiry] Server send failed:', serverErr.message);
             }
 
             // フォームリセット
