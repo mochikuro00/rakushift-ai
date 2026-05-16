@@ -4087,6 +4087,12 @@ const app = {
             min_days_month: Number((document.getElementById('staffMinDaysPerMonth')?.value || '')) || 0,
             contract_id: contractId
         };
+
+        if (data.min_days_week > data.max_days_week) {
+            this.showToast('最低出勤日数は、最大出勤日数以下に設定してください', 'error');
+            return;
+        }
+
         // 新規作成時は組織IDを付与
         if (!id) {
             data.organization_id = orgId;
