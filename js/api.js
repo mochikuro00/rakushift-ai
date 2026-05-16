@@ -127,6 +127,12 @@ const API = {
     },
 
     async logout() {
+        try {
+            // サーバー側のセッションも確実に破棄する（完璧なセキュリティ担保）
+            await this.rpc('destroy_session', {});
+        } catch(e) {
+            console.warn("Session destroy failed on server, proceeding with local logout");
+        }
         this.session = null;
         localStorage.removeItem('supabase.auth.token');
         localStorage.removeItem('rakushift_user');
