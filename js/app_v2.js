@@ -4091,19 +4091,15 @@ const app = {
         try {
             let result;
             if (id) {
-                // 更新: 先に画面のStateを更新してしまう（表示速度と確実性のため）
+                // 更新: 先にAPIに送信し、成功後にStateを更新
+                await API.update('staff', id, data);
                 const index = this.state.staff.findIndex(s => s.id === id);
                 if (index !== -1) {
-                    // フォームの内容(data)でStateを即時上書き
                     this.state.staff[index] = { ...this.state.staff[index], ...data };
                 }
-                
-                // その後でAPI送信
-                await API.update('staff', id, data);
             } else {
                 // 新規作成
                 result = await API.create('staff', data);
-                // IDがない場合のフォールバック
                 if (!result) {
                     data.id = 'temp_' + Date.now();
                     this.state.staff.push(data);
@@ -4116,11 +4112,11 @@ const app = {
             this.closeModal('staffModal');
             this.showToast('保存しました', 'success');
         } catch (e) { 
-            console.error(e);
-            this.showToast('保存には成功しましたが、同期に時間がかかっています: ' + e.message, 'info'); 
-            // エラーでも画面上の変更は維持する
+            console.error('[SaveStaff] 保存失敗:', e);
+            // 保存失敗時はDBから最新データを再取得してStateを復元
+            try { await this.loadData(); } catch(reloadErr) { console.error(reloadErr); }
             this.renderStaffList(document.getElementById('viewContainer'));
-            this.closeModal('staffModal');
+            this.showToast('保存に失敗しました: ' + e.message, 'error');
         } finally { 
             this.showLoading(false); 
         }

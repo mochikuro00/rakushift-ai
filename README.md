@@ -48,7 +48,7 @@ Rakushift AI（ラクシフトAI）は、飲食店や小売店向けのシフト
 ## 技術スタック
 - **Frontend**: HTML5, CSS3 (Tailwind CSS via CDN), JavaScript (Vanilla ES6+)
 - **Backend**: Python (FastAPI) + PuLP (数理最適化)
-- **Hosting**: Cloudflare Pages (Frontend) + Google Cloud Run (Backend)
+- **Hosting**: Cloudflare Pages (Frontend) + Railway (Backend / Docker)
 - **Database**: Supabase (PostgreSQL + RLS)
 - **決済**: Stripe (サブスクリプション)
 - **AI**: Google Gemini API (シフト監査)
@@ -73,10 +73,9 @@ Cloudflare Pages（GitHub自動デプロイ）
 ├── js/                 ... フロントエンドロジック
 └── images/             ... 静的アセット
 
-Google Cloud Run（Python / FastAPI）
+Railway（Python / FastAPI / Docker）
 ├── main.py             ... APIサーバー
 ├── scheduler.py        ... PuLP数理最適化エンジン
-├── ai_scheduler.py     ... Gemini API連携
 ├── Dockerfile          ... コンテナ定義
 └── requirements.txt    ... Python依存関係
 
@@ -86,11 +85,11 @@ Supabase（PostgreSQL + RLS）
 └── RLS                  ... 組織間データ分離
 
 Stripe（サブスクリプション決済）
-└── Webhook → Cloud Run → Supabase 自動同期
+└── Webhook → Railway → Supabase 自動同期
 ```
 
 1.  **フロントエンド (Cloudflare Pages)**: GitHubリポジトリから自動デプロイ。CDN経由で高速配信。
-2.  **バックエンド (Cloud Run)**: シフト最適化・Stripe決済・Gemini AI連携をDockerコンテナで実行。
+2.  **バックエンド (Railway)**: シフト最適化・Stripe決済・Gemini AI連携をDockerコンテナで実行。
 3.  **データ永続化 (Supabase)**: `staff`, `shifts`, `config` などの全データをRLSで組織分離。
 4.  **AI監査 (Gemini API)**: 計算結果をLLMがダブルチェックし、人間的な制約を調整。
 
@@ -137,18 +136,14 @@ Stripe（サブスクリプション決済）
 
 ## デプロイ手順
 
-### 1. Cloud Run（バックエンド）
+### 1. Railway（バックエンド）
 ```bash
-# GCPプロジェクトの設定
-gcloud config set project YOUR_PROJECT_ID
-
-# Dockerイメージのビルド & デプロイ
-cd python/
-gcloud run deploy rakushift-engine \
-  --source . \
-  --region asia-northeast1 \
-  --allow-unauthenticated \
-  --set-env-vars "SUPABASE_URL=https://xxx.supabase.co,SUPABASE_SERVICE_KEY=eyJ..."
+# GitHubリポジトリと連携し、pushで自動デプロイ
+# Railway設定:
+#   - Root Directory: / (ルート)
+#   - Builder: Dockerfile (python/Dockerfile)
+#   - railway.toml で設定済み
+git push origin main
 ```
 
 ### 2. Cloudflare Pages（フロントエンド）
@@ -158,18 +153,16 @@ gcloud run deploy rakushift-engine \
    - **フレームワーク**: なし
    - **ビルドコマンド**: (空欄)
    - **出力ディレクトリ**: `/` (ルート)
-4. `js/config.js` を作成（`config.example.js` を参考に、Cloud RunのURLを設定）
+4. `js/config.js` を作成（`config.example.js` を参考に、Railway URLを設定）
 
 ### 3. 環境変数
 | サービス | 変数名 | 値 |
 |---------|--------|----|
-| Cloud Run | `SUPABASE_URL` | Supabase Project URL |
-| Cloud Run | `SUPABASE_SERVICE_KEY` | Supabase Service Role Key |
-| GitHub Secrets | `GCP_PROJECT_ID` | GCPプロジェクトID |
-| GitHub Secrets | `GCP_SA_KEY` | GCPサービスアカウントキー(JSON) |
+| Railway | `SUPABASE_URL` | Supabase Project URL |
+| Railway | `SUPABASE_SERVICE_KEY` | Supabase Service Role Key |
 
 ### 4. Stripe Webhook
-- エンドポイント: `https://YOUR_CLOUD_RUN_URL/stripe/webhook`
+- エンドポイント: `https://YOUR_RAILWAY_URL/stripe/webhook`
 - イベント: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
 
 ## 今後の予定

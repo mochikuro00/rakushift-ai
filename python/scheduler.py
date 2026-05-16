@@ -558,32 +558,54 @@ class ShiftScheduler:
                     if wv:
                         prob += pulp.lpSum(wv) <= effective_max_days
 
-                # --- 週の最低出勤日数 (ソフト制約) ---
+                # --- 週の最低出勤日数 (ハード制約 + ソフト制約の二重構造) ---
                 min_days_week = int(s.get("min_days_week") or 0)
                 if not force and min_days_week > 0:
+                    print("[MinDays] Staff {} min_days_week={}".format(
+                        s.get("name", sid), min_days_week))
                     for week in week_groups:
                         wv = []
+                        available_days_in_week = 0
+                        ng_set = self._get_staff_ng_dates(s)
                         for d in week:
+                            if d not in ng_set and self._get_day_type(d) != "closed":
+                                available_days_in_week += 1
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 wv.append(x[(sid, d, oi)])
                         if wv:
-                            slack_var = pulp.LpVariable("slack_min_days_week_{}_{}".format(sid, week[0]), 0, None)
-                            prob += pulp.lpSum(wv) + slack_var >= min_days_week
-                            penalty += slack_var * 100000
+                            effective_min = min(min_days_week, available_days_in_week)
+                            if effective_min > 0:
+                                if len(week) >= 5:
+                                    # 5日以上の週はハード制約（絶対遵守）
+                                    prob += pulp.lpSum(wv) >= effective_min
+                                else:
+                                    # 短い週はソフト制約（ペナルティ2M）
+                                    slack_var = pulp.LpVariable(
+                                        "slack_min_days_week_{}_{}".format(sid, week[0]), 0, None)
+                                    prob += pulp.lpSum(wv) + slack_var >= effective_min
+                                    penalty += slack_var * 2000000
 
-                # --- 月(全体期間)の最低出勤日数 (ソフト制約) ---
+                # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
                 if not force and min_days_month > 0 and self.dates:
-                    target_min_month = int(round(min_days_month * (len(self.dates) / 30.0)))
+                    work_dates_count = len([d for d in self.dates
+                                           if self._get_day_type(d) != "closed"])
+                    target_min_month = max(1, int(round(
+                        min_days_month * (work_dates_count / 22.0)
+                    )))
+                    ng_set = self._get_staff_ng_dates(s)
+                    available_total = len([d for d in self.dates
+                                          if d not in ng_set and self._get_day_type(d) != "closed"])
+                    target_min_month = min(target_min_month, available_total)
                     if target_min_month > 0:
                         all_wv = []
                         for d in self.dates:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
-                            slack_var_month = pulp.LpVariable("slack_min_days_month_{}".format(sid), 0, None)
-                            prob += pulp.lpSum(all_wv) + slack_var_month >= target_min_month
-                            penalty += slack_var_month * 100000
+                            print("[MinDays] Staff {} min_days_month={} -> target={}".format(
+                                s.get("name", sid), min_days_month, target_min_month))
+                            prob += pulp.lpSum(all_wv) >= target_min_month
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
@@ -781,7 +803,7 @@ class ShiftScheduler:
                         slack_under = pulp.LpVariable("fair_under_{}".format(sid), 0, None)
                         prob += tv - avg_approx <= slack_over
                         prob += avg_approx - tv <= slack_under
-                        penalty += (slack_over + slack_under) * 100
+                        penalty += (slack_over + slack_under) * 50000
 
                 # --- ピーク時スキルミックス制約 ---
                 # ピーク時間帯（ランチ帯等）に最低1名のA/B評価スタッフを確保する

@@ -6,6 +6,9 @@ __pycache__/
 fix_scheduler_midnight.py
 python/scheduler_backup.py
 python/ai_scheduler.py
+apply_deep_debug_fixes.py
+apply_safe_fixes.py
+deep_debug_full.py
 
 # 機密設定ファイル
 # 注意: js/config.js はSupabase Anonキー（パブリック）のみ含むため、

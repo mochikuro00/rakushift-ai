@@ -6,7 +6,7 @@
 //
 // インフラ構成:
 //   フロントエンド: Cloudflare Pages (GitHub自動デプロイ)
-//   バックエンド:   Google Cloud Run (Python / FastAPI)
+//   バックエンド:   Railway (Python / FastAPI / Docker)
 //   データベース:   Supabase (PostgreSQL + RLS)
 //   決済:           Stripe (サブスクリプション)
 // =================================================================
@@ -16,7 +16,7 @@ const RAKUSHIFT_CONFIG = {
     SUPABASE_URL: "https://your-project.supabase.co",
     SUPABASE_ANON_KEY: "eyJ...",
 
-    // Python計算サーバー (Google Cloud Run URL)
-    // 例: "https://rakushift-engine-xxxxxxxxxx-an.a.run.app"
-    CALC_SERVER_URL: "https://YOUR_CLOUD_RUN_URL.a.run.app",
+    // Python計算サーバー (Railway URL)
+    // 例: "https://rakushift-ai-production.up.railway.app"
+    CALC_SERVER_URL: "https://YOUR_RAILWAY_URL.up.railway.app",
 };

@@ -1,6 +1,6 @@
 // =================================================================
 // API Client for Rakushift (Supabase Version)
-// Backend: Supabase (Data) + Cloud Run (Calculation)
+// Backend: Supabase (Data) + Railway (Calculation)
 // 設定値は js/config.js から読み込み
 // =================================================================
 
