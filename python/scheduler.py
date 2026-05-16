@@ -289,11 +289,28 @@ class ShiftScheduler:
             pe = min(raw_pe, close_min)
             if ps >= pe:
                 continue
+
+            # --- 回避策: スタッフの最大労働時間に合わせて終了時間を自動短縮 ---
             hrs = (pe - ps) / 60.0
-            if hrs < 1:
-                continue
             brk_mins = self._get_break_minutes(hrs)
             work_hrs = hrs - (brk_mins / 60.0)
+
+            if work_hrs > max_hours and not force:
+                # 必要な労働時間がmax_hoursの場合の休憩時間を取得
+                needed_break = self._get_break_minutes(max_hours)
+                allowed_total_hours = max_hours + (needed_break / 60.0)
+                new_pe = ps + int(allowed_total_hours * 60)
+                if new_pe < pe:
+                    pe = new_pe
+                    # 短縮されたので再計算
+                    hrs = (pe - ps) / 60.0
+                    brk_mins = self._get_break_minutes(hrs)
+                    work_hrs = hrs - (brk_mins / 60.0)
+
+            if hrs < 1:
+                continue
+            # -------------------------------------------------------------------
+
             key = (ps, pe)
             if key in seen:
                 continue
