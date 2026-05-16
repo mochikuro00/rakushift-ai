@@ -922,7 +922,9 @@ class ShiftScheduler:
                                 penalty += x[(sid, d, oi)] * (opt["work_hours"] - mh) * 50000
 
             prob += penalty
-            solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=120)
+            # Tierごとにタイムリミットを段階化（合計最大110秒でRailway制限内に収める）
+            tier_time_limits = {3: 60, 2: 30, 1: 20}
+            solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=tier_time_limits.get(tier, 60))
             prob.solve(solver)
 
             status = pulp.LpStatus[prob.status]

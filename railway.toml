@@ -4,6 +4,6 @@ dockerfilePath = "python/Dockerfile"
 watchPatterns = ["python/**", "railway.toml"]
 
 [deploy]
-healthcheckPath = "/keepalive"
+healthcheckPath = "/"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3

@@ -14,6 +14,9 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from scheduler import ShiftScheduler
 
+# 本番環境フラグ（ログの個人情報マスク等に使用）
+IS_PRODUCTION = os.environ.get("RAILWAY_ENVIRONMENT", "") == "production" or os.environ.get("IS_PRODUCTION", "") == "1"
+
 # レート制限設定
 limiter = Limiter(key_func=get_remote_address)
 
@@ -49,6 +52,26 @@ _platform_settings = {}
 _settings_loaded_at = 0
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "")
+
+# グローバルhttpxクライアント（接続プール再利用でレイテンシ削減）
+_http_client = None
+
+
+def _get_http_client():
+    """httpxクライアントのシングルトン取得"""
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=30)
+    return _http_client
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """アプリ終了時にhttpxクライアントをクローズ"""
+    global _http_client
+    if _http_client:
+        await _http_client.aclose()
+        _http_client = None
 
 
 def _get_setting(key: str, env_fallback: str = "") -> str:
@@ -169,15 +192,15 @@ async def supabase_rpc(function_name: str, params: dict) -> dict:
     if not SUPABASE_SERVICE_KEY:
         return {"status": "error", "message": "SUPABASE_SERVICE_KEY not configured"}
     url = "{}/rest/v1/rpc/{}".format(SUPABASE_URL, function_name)
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(url, json=params, headers={
-            "apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY),
-            "Content-Type": "application/json",
-        }, timeout=30)
-        if resp.status_code != 200:
-            return {"status": "error", "message": resp.text}
-        return resp.json()
+    client = _get_http_client()
+    resp = await client.post(url, json=params, headers={
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY),
+        "Content-Type": "application/json",
+    }, timeout=30)
+    if resp.status_code != 200:
+        return {"status": "error", "message": resp.text}
+    return resp.json()
 
 
 async def supabase_query(table: str, params: str = "", method: str = "GET",
@@ -192,13 +215,13 @@ async def supabase_query(table: str, params: str = "", method: str = "GET",
         "Content-Type": "application/json",
         "Prefer": "return=representation",
     }
-    async with httpx.AsyncClient() as client:
-        if method == "GET":
-            resp = await client.get(url, headers=headers, timeout=30)
-        elif method == "PATCH":
-            resp = await client.patch(url, headers=headers, json=body, timeout=30)
-        elif method == "POST":
-            resp = await client.post(url, headers=headers, json=body, timeout=30)
+    client = _get_http_client()
+    if method == "GET":
+        resp = await client.get(url, headers=headers, timeout=30)
+    elif method == "PATCH":
+        resp = await client.patch(url, headers=headers, json=body, timeout=30)
+    elif method == "POST":
+        resp = await client.post(url, headers=headers, json=body, timeout=30)
         else:
             return None
         if resp.status_code >= 400:
@@ -242,7 +265,10 @@ async def run_migration(request: Request):
 
     body = await request.json()
     token = body.get("token", "")
-    migration_token = os.environ.get("MIGRATION_TOKEN", "rakushift_migrate_2026")
+    migration_token = os.environ.get("MIGRATION_TOKEN", "")
+
+    if not migration_token:
+        return {"status": "error", "message": "MIGRATION_TOKEN not configured. Set it as an environment variable."}
 
     if token != migration_token:
         return {"status": "error", "message": "Invalid migration token"}
@@ -1232,8 +1258,14 @@ class SendWelcomeEmailRequest(BaseModel):
 
 
 @app.post("/admin/send-welcome-email")
-async def admin_send_welcome_email(req: SendWelcomeEmailRequest):
-    """管理画面から手動で案内メールを送信"""
+async def admin_send_welcome_email(request: Request, req: SendWelcomeEmailRequest):
+    """管理画面から手動で案内メールを送信（管理者認証必須）"""
+    # セキュリティ: 管理者トークンで認証
+    admin_token = os.environ.get("ADMIN_API_TOKEN", "")
+    request_token = request.headers.get("x-admin-token", "")
+    if not admin_token or request_token != admin_token:
+        return JSONResponse(status_code=403, content={"error": "管理者認証が必要です"})
+
     _load_platform_settings()
 
     # configからcustomer_emailも更新

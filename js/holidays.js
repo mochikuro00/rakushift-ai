@@ -1,99 +1,157 @@
 /**
- * 日本の祝日データ (2024-2026)
- * キー: YYYY-MM-DD
- * 値: 祝日名
+ * 日本の祝日を動的に算出するモジュール
+ * 2024年以降の全ての祝日を計算式で生成
+ * ハードコードの年数制限なし
  */
 const JapaneseHolidays = {
-    // 2024
-    "2024-01-01": "元日",
-    "2024-01-08": "成人の日",
-    "2024-02-11": "建国記念の日",
-    "2024-02-12": "振替休日",
-    "2024-02-23": "天皇誕生日",
-    "2024-03-20": "春分の日",
-    "2024-04-29": "昭和の日",
-    "2024-05-03": "憲法記念日",
-    "2024-05-04": "みどりの日",
-    "2024-05-05": "こどもの日",
-    "2024-05-06": "振替休日",
-    "2024-07-15": "海の日",
-    "2024-08-11": "山の日",
-    "2024-08-12": "振替休日",
-    "2024-09-16": "敬老の日",
-    "2024-09-22": "秋分の日",
-    "2024-09-23": "振替休日",
-    "2024-10-14": "スポーツの日",
-    "2024-11-03": "文化の日",
-    "2024-11-04": "振替休日",
-    "2024-11-23": "勤労感謝の日",
+    // 春分の日・秋分の日は天文計算が必要なため、
+    // 近似式を使用（2099年まで有効）
+    _getVernalEquinox(year) {
+        // 春分の日の近似計算（国立天文台の簡易式）
+        if (year <= 2099) {
+            return Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+        }
+        return 20; // フォールバック
+    },
 
-    // 2025
-    "2025-01-01": "元日",
-    "2025-01-13": "成人の日",
-    "2025-02-11": "建国記念の日",
-    "2025-02-23": "天皇誕生日",
-    "2025-02-24": "振替休日",
-    "2025-03-20": "春分の日",
-    "2025-04-29": "昭和の日",
-    "2025-05-03": "憲法記念日",
-    "2025-05-04": "みどりの日",
-    "2025-05-05": "こどもの日",
-    "2025-05-06": "振替休日",
-    "2025-07-21": "海の日",
-    "2025-08-11": "山の日",
-    "2025-09-15": "敬老の日",
-    "2025-09-23": "秋分の日",
-    "2025-10-13": "スポーツの日",
-    "2025-11-03": "文化の日",
-    "2025-11-23": "勤労感謝の日",
-    "2025-11-24": "振替休日",
+    _getAutumnalEquinox(year) {
+        // 秋分の日の近似計算
+        if (year <= 2099) {
+            return Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+        }
+        return 23; // フォールバック
+    },
 
-    // 2026
-    "2026-01-01": "元日",
-    "2026-01-12": "成人の日",
-    "2026-02-11": "建国記念の日",
-    "2026-02-23": "天皇誕生日",
-    "2026-03-20": "春分の日",
-    "2026-04-29": "昭和の日",
-    "2026-05-03": "憲法記念日",
-    "2026-05-04": "みどりの日",
-    "2026-05-05": "こどもの日",
-    "2026-05-06": "振替休日",
-    "2026-07-20": "海の日",
-    "2026-08-11": "山の日",
-    "2026-09-21": "敬老の日",
-    "2026-09-22": "国民の休日",
-    "2026-09-23": "秋分の日",
-    "2026-10-12": "スポーツの日",
-    "2026-11-03": "文化の日",
-    "2026-11-23": "勤労感謝の日",
+    // 第N月曜日を取得するユーティリティ
+    _getNthMonday(year, month, n) {
+        const d = new Date(year, month - 1, 1);
+        const dayOfWeek = d.getDay(); // 0=日曜
+        // 最初の月曜日の日付
+        const firstMonday = dayOfWeek <= 1 ? (2 - dayOfWeek) : (9 - dayOfWeek);
+        const targetDay = firstMonday + (n - 1) * 7;
+        return targetDay;
+    },
 
-    // 2027
-    "2027-01-01": "元日",
-    "2027-01-11": "成人の日",
-    "2027-02-11": "建国記念の日",
-    "2027-02-23": "天皇誕生日",
-    "2027-03-21": "春分の日",
-    "2027-03-22": "振替休日",
-    "2027-04-29": "昭和の日",
-    "2027-05-03": "憲法記念日",
-    "2027-05-04": "みどりの日",
-    "2027-05-05": "こどもの日",
-    "2027-07-19": "海の日",
-    "2027-08-11": "山の日",
-    "2027-09-20": "敬老の日",
-    "2027-09-23": "秋分の日",
-    "2027-10-11": "スポーツの日",
-    "2027-11-03": "文化の日",
-    "2027-11-23": "勤労感謝の日",
+    // 振替休日の判定（祝日が日曜の場合、翌月曜が振替休日）
+    _getSubstituteHolidays(holidays) {
+        const result = {};
+        for (const [date, name] of Object.entries(holidays)) {
+            result[date] = name;
+            const d = new Date(date + "T00:00:00");
+            if (d.getDay() === 0) { // 日曜日
+                // 翌日以降で最初の平日（祝日でない日）を探す
+                let sub = new Date(d);
+                do {
+                    sub.setDate(sub.getDate() + 1);
+                    const subStr = sub.getFullYear() + '-' +
+                        String(sub.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(sub.getDate()).padStart(2, '0');
+                    if (!holidays[subStr]) {
+                        result[subStr] = "振替休日";
+                        break;
+                    }
+                } while (true);
+            }
+        }
+        return result;
+    },
+
+    // 国民の休日の判定（祝日と祝日に挟まれた日）
+    _getSandwichedHolidays(holidays) {
+        const result = {};
+        const dates = Object.keys(holidays).sort();
+        for (let i = 0; i < dates.length - 1; i++) {
+            const d1 = new Date(dates[i] + "T00:00:00");
+            const d2 = new Date(dates[i + 1] + "T00:00:00");
+            const diffDays = (d2 - d1) / (1000 * 60 * 60 * 24);
+            if (diffDays === 2) {
+                const mid = new Date(d1);
+                mid.setDate(mid.getDate() + 1);
+                const midStr = mid.getFullYear() + '-' +
+                    String(mid.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(mid.getDate()).padStart(2, '0');
+                if (!holidays[midStr] && mid.getDay() !== 0) {
+                    result[midStr] = "国民の休日";
+                }
+            }
+        }
+        return result;
+    },
+
+    // 指定年の祝日マップを生成
+    _generateYear(year) {
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+
+        // 固定祝日 + ハッピーマンデー
+        const baseHolidays = {};
+
+        // 1月: 元日(1日), 成人の日(第2月曜)
+        baseHolidays[fmt(year, 1, 1)] = "元日";
+        baseHolidays[fmt(year, 1, this._getNthMonday(year, 1, 2))] = "成人の日";
+
+        // 2月: 建国記念の日(11日), 天皇誕生日(23日)
+        baseHolidays[fmt(year, 2, 11)] = "建国記念の日";
+        baseHolidays[fmt(year, 2, 23)] = "天皇誕生日";
+
+        // 3月: 春分の日
+        baseHolidays[fmt(year, 3, this._getVernalEquinox(year))] = "春分の日";
+
+        // 4月: 昭和の日(29日)
+        baseHolidays[fmt(year, 4, 29)] = "昭和の日";
+
+        // 5月: 憲法記念日(3日), みどりの日(4日), こどもの日(5日)
+        baseHolidays[fmt(year, 5, 3)] = "憲法記念日";
+        baseHolidays[fmt(year, 5, 4)] = "みどりの日";
+        baseHolidays[fmt(year, 5, 5)] = "こどもの日";
+
+        // 7月: 海の日(第3月曜)
+        baseHolidays[fmt(year, 7, this._getNthMonday(year, 7, 3))] = "海の日";
+
+        // 8月: 山の日(11日)
+        baseHolidays[fmt(year, 8, 11)] = "山の日";
+
+        // 9月: 敬老の日(第3月曜), 秋分の日
+        baseHolidays[fmt(year, 9, this._getNthMonday(year, 9, 3))] = "敬老の日";
+        baseHolidays[fmt(year, 9, this._getAutumnalEquinox(year))] = "秋分の日";
+
+        // 10月: スポーツの日(第2月曜)
+        baseHolidays[fmt(year, 10, this._getNthMonday(year, 10, 2))] = "スポーツの日";
+
+        // 11月: 文化の日(3日), 勤労感謝の日(23日)
+        baseHolidays[fmt(year, 11, 3)] = "文化の日";
+        baseHolidays[fmt(year, 11, 23)] = "勤労感謝の日";
+
+        // 国民の休日（祝日に挟まれた日）
+        const sandwiched = this._getSandwichedHolidays(baseHolidays);
+        Object.assign(baseHolidays, sandwiched);
+
+        // 振替休日
+        return this._getSubstituteHolidays(baseHolidays);
+    },
+
+    // 年ごとのキャッシュ
+    _cache: {},
+
+    // 指定年のキャッシュ取得（なければ生成）
+    _getYearData(year) {
+        if (!this._cache[year]) {
+            this._cache[year] = this._generateYear(year);
+        }
+        return this._cache[year];
+    },
 
     /**
      * 指定日が祝日かどうか判定
      * @param {string} dateStr YYYY-MM-DD
      * @returns {string|null} 祝日名またはnull
      */
-    getHolidayName: function(dateStr) {
-        return this[dateStr] || null;
+    getHolidayName(dateStr) {
+        if (!dateStr || dateStr.length < 10) return null;
+        const year = parseInt(dateStr.substring(0, 4), 10);
+        if (isNaN(year)) return null;
+        const yearData = this._getYearData(year);
+        return yearData[dateStr] || null;
     },
 
     /**
@@ -101,8 +159,8 @@ const JapaneseHolidays = {
      * @param {string} dateStr YYYY-MM-DD
      * @returns {boolean}
      */
-    isHoliday: function(dateStr) {
-        return !!this[dateStr];
+    isHoliday(dateStr) {
+        return !!this.getHolidayName(dateStr);
     }
 };
 

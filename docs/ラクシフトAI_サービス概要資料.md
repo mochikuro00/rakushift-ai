@@ -1,6 +1,6 @@
 # ラクシフトAI サービス概要資料
 
-> 最終更新: 2026年5月11日
+> 最終更新: 2026年5月17日
 
 ---
 
@@ -90,7 +90,7 @@
 
 | レイヤー | 技術 |
 |---------|------|
-| フロントエンド | HTML/JS + Tailwind CSS（Cloudflare Pages） |
+| フロントエンド | HTML/JS + CSS（Cloudflare Pages） |
 | バックエンド | Python FastAPI + PuLP + Gemini API（Railway/Docker） |
 | データベース | Supabase（PostgreSQL + RLS） |
 | 決済 | Stripe（Webhook連携） |

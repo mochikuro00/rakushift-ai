@@ -1,7 +1,7 @@
 # ラクシフトAI サービス仕様書
 
-> 最終更新: 2026年5月11日  
-> バージョン: 3.0
+> 最終更新: 2026年5月17日  
+> バージョン: 3.1
 
 ---
 
@@ -99,7 +99,7 @@
 
 ### 3.1 アルゴリズム
 - **MILP (Mixed Integer Linear Programming)** — PuLPライブラリ使用
-- ソルバー: CBC（デフォルト）、タイムアウト60秒
+- ソルバー: CBC（デフォルト）、Tierごとにタイムアウト段階化（Tier3: 60秒, Tier2: 30秒, Tier1: 20秒）
 
 ### 3.2 制約階層
 
@@ -186,6 +186,9 @@ verify_admin_login(contract_id, login_id, password)
 | API認証 | Supabase Anon Key (RLS付き) |
 | Webhook | Stripe署名検証 |
 | セキュリティビュー | config_safe, staff_safe |
+| 管理API保護 | `ADMIN_API_TOKEN`環境変数による認証 |
+| マイグレーション保護 | `MIGRATION_TOKEN`環境変数必須 |
+| httpx接続プール | グローバルクライアントで接続再利用 |
 
 ---
 

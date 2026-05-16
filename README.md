@@ -46,7 +46,7 @@ Rakushift AI（ラクシフトAI）は、飲食店や小売店向けのシフト
 - 承認すると自動的にシフト表や除外日リストに反映
 
 ## 技術スタック
-- **Frontend**: HTML5, CSS3 (Tailwind CSS via CDN), JavaScript (Vanilla ES6+)
+- **Frontend**: HTML5, CSS3, JavaScript (Vanilla ES6+)
 - **Backend**: Python (FastAPI) + PuLP (数理最適化)
 - **Hosting**: Cloudflare Pages (Frontend) + Railway (Backend / Docker)
 - **Database**: Supabase (PostgreSQL + RLS)
@@ -107,14 +107,14 @@ Stripe（サブスクリプション決済）
 #### 1. 店舗ログイン（全員共通）
 | 項目 | 値 |
 | :--- | :--- |
-| **契約ID (Contract ID)** | `demo` |
-| **店舗パスワード** | `demo` |
+| **契約ID (Contract ID)** | `254995332101138` |
+| **店舗パスワード** | `rakushift1234` |
 
 #### 2. 管理者ログイン（機能編集用）
 | 項目 | 値 |
 | :--- | :--- |
 | **管理者ID** | `admin` |
-| **パスワード** | `password` |
+| **パスワード** | `rakushift1234` |
 
 ## 最新のアップデート (2025-12-19)
 
@@ -160,6 +160,9 @@ git push origin main
 |---------|--------|----|
 | Railway | `SUPABASE_URL` | Supabase Project URL |
 | Railway | `SUPABASE_SERVICE_KEY` | Supabase Service Role Key |
+| Railway | `FRONTEND_URL` | `https://rakushift-ai.pages.dev` |
+| Railway | `ADMIN_API_TOKEN` | 管理APIの認証トークン（任意の文字列） |
+| Railway | `MIGRATION_TOKEN` | マイグレーション用トークン（使用時のみ） |
 
 ### 4. Stripe Webhook
 - エンドポイント: `https://YOUR_RAILWAY_URL/stripe/webhook`
