@@ -742,6 +742,27 @@ const app = {
         }
     },
 
+    // =========================================================
+    // ログインタブ切り替え
+    // =========================================================
+    switchLoginTab(tab) {
+        const tabs = ['admin', 'shop', 'hq', 'platform'];
+        tabs.forEach(t => {
+            const form = document.getElementById(`form-${t}`);
+            const btn = document.getElementById(`tab-${t}`);
+            if (form) form.classList.toggle('hidden', t !== tab);
+            if (btn) {
+                if (t === tab) {
+                    btn.classList.add('text-blue-600', 'border-blue-600', 'bg-white');
+                    btn.classList.remove('text-gray-500', 'border-transparent');
+                } else {
+                    btn.classList.remove('text-blue-600', 'border-blue-600', 'bg-white');
+                    btn.classList.add('text-gray-500', 'border-transparent');
+                }
+            }
+        });
+    },
+
     signUpMode() {
         alert("新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。");
     },
