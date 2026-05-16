@@ -217,7 +217,7 @@ def read_root():
 @app.get("/keepalive")
 async def keepalive():
     """Supabase無料プランの自動停止を防ぐためのヘルスチェック。
-    Cloud Schedulerから3日ごとに呼び出し、Supabaseへクエリを発行して
+    Railwayのヘルスチェックと兼用。Supabaseへクエリを発行して
     プロジェクトをアクティブに保つ。"""
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         return {"status": "ok", "db": "skipped", "reason": "no credentials"}

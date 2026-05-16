@@ -283,7 +283,7 @@ const API = {
     },
 
 
-    // --- 計算エンジン連携 (Python Cloud Run) ---
+    // --- 計算エンジン連携 (Python Railway) ---
     // Gemini監査はサーバーサイドで実行 (APIキーをフロントに露出しない)
     async generateShifts(payload) {
         console.log("Starting shift generation process...");
