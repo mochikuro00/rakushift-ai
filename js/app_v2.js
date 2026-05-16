@@ -323,8 +323,8 @@ const app = {
 
             console.log(`Loading data for org: ${orgId}`);
 
-            // staffはpasswordフィールドを除外して取得 (セキュリティ)
-            const staffSelect = 'id,organization_id,contract_id,name,login_id,role,evaluation,salary_type,hourly_wage,monthly_salary,annual_holidays,max_days_week,max_hours_day,min_days_week,min_days_month,unavailable_dates';
+            // staffは全カラム取得（存在しないカラム指定エラーを防ぐ）
+            const staffSelect = '*';
             const [configRes, staffRes, shiftsRes, requestsRes] = await Promise.all([
                 API.list('config_safe', orgFilter),
                 API.list('staff', { ...orgFilter, select: staffSelect }),
