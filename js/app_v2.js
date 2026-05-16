@@ -3974,11 +3974,15 @@ const app = {
 
     // プラン別スタッフ上限
     getStaffLimit() {
+        // demoテナントは無制限
+        const contractId = this.state.config.contract_id || '';
+        if (contractId === 'demo') return 9999;
+
         const plan = this.state.config.stripe_plan || '';
         if (plan === 'premium') return 9999;
         if (plan === 'pro') return 50;
         if (plan === 'standard') return 10;
-        return 10; // デフォルト
+        return 30; // プラン未設定時のデフォルト
     },
 
     // スタッフ数がプラン上限を超えているかチェック
