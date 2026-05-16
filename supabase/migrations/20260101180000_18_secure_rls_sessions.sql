@@ -54,24 +54,24 @@ $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION verify_shop_login(p_contract_id TEXT, p_password TEXT) 
 RETURNS JSONB AS $$
 DECLARE
-    v_org RECORD;
+    v_config RECORD;
     v_session_id UUID;
 BEGIN
-    SELECT * INTO v_org FROM organizations WHERE contract_id = p_contract_id;
+    SELECT * INTO v_config FROM config WHERE contract_id = p_contract_id;
     IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'status', 'error', 'message', '契約IDが存在しません'); END IF;
 
-    IF v_org.password = crypt(p_password, v_org.password) THEN
+    IF v_config.shop_password = crypt(p_password, v_config.shop_password) THEN
         -- セッションの発行 (7日間有効)
         INSERT INTO auth_sessions (organization_id, role, expires_at)
-        VALUES (v_org.id, 'shop', now() + interval '7 days')
+        VALUES (v_config.organization_id, 'shop', now() + interval '7 days')
         RETURNING id INTO v_session_id;
 
         RETURN jsonb_build_object(
             'success', true,
             'status', 'success', 
-            'org_id', v_org.id, 
-            'organization_id', v_org.id,
-            'contract_id', v_org.contract_id,
+            'org_id', v_config.organization_id, 
+            'organization_id', v_config.organization_id,
+            'contract_id', v_config.contract_id,
             'role', 'shop',
             'session_id', v_session_id
         );
@@ -85,28 +85,28 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION verify_admin_login(p_contract_id TEXT, p_login_id TEXT, p_password TEXT) 
 RETURNS JSONB AS $$
 DECLARE
-    v_org RECORD;
+    v_config RECORD;
     v_session_id UUID;
 BEGIN
-    SELECT * INTO v_org FROM organizations WHERE contract_id = p_contract_id;
+    SELECT * INTO v_config FROM config WHERE contract_id = p_contract_id;
     IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'status', 'error', 'message', '契約IDが存在しません'); END IF;
 
-    IF v_org.admin_password IS NULL THEN
+    IF v_config.admin_password IS NULL THEN
         RETURN jsonb_build_object('success', false, 'status', 'error', 'message', '管理者パスワードが設定されていません');
     END IF;
 
-    IF v_org.admin_password = crypt(p_password, v_org.admin_password) THEN
+    IF v_config.admin_password = crypt(p_password, v_config.admin_password) THEN
         -- セッションの発行 (7日間有効)
         INSERT INTO auth_sessions (organization_id, role, expires_at)
-        VALUES (v_org.id, 'admin', now() + interval '7 days')
+        VALUES (v_config.organization_id, 'admin', now() + interval '7 days')
         RETURNING id INTO v_session_id;
 
         RETURN jsonb_build_object(
             'success', true,
             'status', 'success', 
-            'org_id', v_org.id, 
-            'organization_id', v_org.id,
-            'contract_id', v_org.contract_id,
+            'org_id', v_config.organization_id, 
+            'organization_id', v_config.organization_id,
+            'contract_id', v_config.contract_id,
             'role', 'admin',
             'session_id', v_session_id,
             'staff_id', 'admin'
