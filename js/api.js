@@ -159,23 +159,43 @@ const API = {
             } catch(e) {}
         }
 
-        try {
-            const res = await fetch(url, { ...options, headers });
-            if (!res.ok) {
-                const errText = await res.text();
-                let errMsg = res.statusText;
-                try {
-                    const json = JSON.parse(errText);
-                    errMsg = json.message || json.error || res.statusText;
-                } catch(e) {}
+        const MAX_RETRIES = 2;
+        let attempt = 0;
+
+        while (attempt <= MAX_RETRIES) {
+            try {
+                const res = await fetch(url, { ...options, headers });
+                if (!res.ok) {
+                    // 500系エラーまたはToo Many Requests (429) の場合はリトライ対象
+                    if ((res.status >= 500 && res.status < 600) || res.status === 429) {
+                        throw new Error(`Server Error ${res.status}`);
+                    }
+                    // 400系エラーなどはリトライせずに即時エラーにする
+                    const errText = await res.text();
+                    let errMsg = res.statusText;
+                    try {
+                        const json = JSON.parse(errText);
+                        errMsg = json.message || json.error || res.statusText;
+                    } catch(e) {}
+                    
+                    console.error(`API Error [${res.status}] ${url}`, errMsg);
+                    throw new Error(`データ取得エラー (${res.status}): ${errMsg}`);
+                }
+                return await res.json();
+            } catch (e) {
+                // クライアント起因のエラー（400系）の場合はそのままスロー
+                if (e.message.includes("データ取得エラー")) {
+                    throw e;
+                }
                 
-                console.error(`API Error [${res.status}] ${url}`, errMsg);
-                throw new Error(`データ取得エラー (${res.status}): ${errMsg}`);
+                attempt++;
+                if (attempt > MAX_RETRIES) {
+                    console.error("Fetch failed after retries:", e);
+                    throw new Error("サーバー通信に失敗しました。ネットワークを確認してください。");
+                }
+                // 指数バックオフ (1回目: 500ms, 2回目: 1000ms)
+                await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
             }
-            return await res.json();
-        } catch (e) {
-            console.error("Fetch failed:", e);
-            throw new Error("サーバー通信に失敗しました。ネットワークを確認してください。");
         }
     },
 
