@@ -644,9 +644,10 @@ const app = {
         const premiumCount = document.getElementById('inquiryPremiumCount')?.value || '0';
         const message = document.getElementById('inquiryMessage')?.value.trim() || '';
 
-        // 曜日チェックボックス取得
-        const dayCheckboxes = document.querySelectorAll('.inquiry-day-btn input[type="checkbox"]:checked');
-        const selectedDays = Array.from(dayCheckboxes).map(cb => cb.value);
+        // 希望日取得
+        const date1 = document.getElementById('inquiryDate1')?.value || '';
+        const date2 = document.getElementById('inquiryDate2')?.value || '';
+        const date3 = document.getElementById('inquiryDate3')?.value || '';
 
         // 時間帯ラジオ取得
         const timeSlot = document.querySelector('input[name="inquiryTimeSlot"]:checked')?.value || '';
@@ -663,6 +664,8 @@ const app = {
             this.showToast('契約予定プランを1件以上選択してください', 'error'); return;
         }
 
+        if (!date1) { this.showToast('第1希望日を選択してください', 'error'); return; }
+
         this.showLoading(true);
         try {
             // プランサマリー文字列を構築
@@ -673,8 +676,11 @@ const app = {
             const planSummary = planParts.join('、');
 
             // 連絡希望日程サマリー
+            const dateParts = [date1];
+            if (date2) dateParts.push(date2);
+            if (date3) dateParts.push(date3);
             const scheduleSummary = [
-                selectedDays.length > 0 ? `曜日: ${selectedDays.join('・')}` : '',
+                `希望日: ${dateParts.join(', ')}`,
                 timeSlot ? `時間帯: ${timeSlot}` : ''
             ].filter(Boolean).join(' / ');
 
@@ -687,7 +693,7 @@ const app = {
                 light_plan_count: lightCount,
                 standard_plan_count: standardCount,
                 premium_plan_count: premiumCount,
-                preferred_days: selectedDays.join(','),
+                preferred_days: dateParts.join(','),
                 preferred_time: timeSlot,
                 schedule_summary: scheduleSummary,
                 message: this._sanitize(message),
@@ -715,7 +721,7 @@ const app = {
             }
 
             // フォームリセット
-            ['inquiryCompany', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage'].forEach(id => {
+            ['inquiryCompany', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage', 'inquiryDate1', 'inquiryDate2', 'inquiryDate3'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
@@ -723,7 +729,6 @@ const app = {
                 const el = document.getElementById(id);
                 if (el) el.value = '0';
             });
-            document.querySelectorAll('.inquiry-day-btn input[type="checkbox"]').forEach(cb => cb.checked = false);
             const checkedRadio = document.querySelector('input[name="inquiryTimeSlot"]:checked');
             if (checkedRadio) checkedRadio.checked = false;
 
