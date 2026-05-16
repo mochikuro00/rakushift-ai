@@ -2695,7 +2695,7 @@ const app = {
                 <div class="flex items-center justify-between border-b border-gray-200 pb-4">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-800">店舗設定</h2>
-                        <p class="text-sm text-gray-500 mt-1">店舗の基本ルール、シフトパターン、人員配置要件を一括管理します。</p>
+                        <p class="text-sm text-gray-500 mt-1">AIシフト生成に使われるルールです。ここを正しく設定するとAIが最適なシフトを作れます。</p>
                     </div>
                     <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
                         <i class="fa-solid fa-save mr-2"></i>設定を保存
@@ -2706,6 +2706,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-id-badge text-indigo-500"></i> 役職・ロール設定</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">スタッフの肩書きを設定します。AIは「Manager」を管理者、「Rookie」を新人として自動判定します。</p>
                         <button onclick="app.addRole()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
                             <i class="fa-solid fa-plus mr-1"></i>役職追加
                         </button>
@@ -2758,6 +2759,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-regular fa-clock text-blue-500"></i> 営業時間 & 定休日</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">AIはこの時間帯の中でだけシフトを生成します。定休日にはシフトを入れません。</p>
                     </div>
                     <div class="p-6 space-y-8">
                         <!-- 営業時間 -->
@@ -2850,6 +2852,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> シフトパターン (早番/遅番など)</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">AIが組み合わせるシフトの「型」です。例：早番9-14時、遅番17-22時など。</p>
                         <button onclick="app.addShiftPattern()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-200 transition">
                             <i class="fa-solid fa-plus mr-1"></i>追加
                         </button>
@@ -2888,7 +2891,7 @@ const app = {
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-xs text-gray-400 mt-3">※ ここで設定したパターンは、シフト作成時に参照されます。</p>
+                        <p class="text-xs text-gray-400 mt-3">💡 ここで登録したパターンの中からAIが最適な組み合わせを選びます。パターンが多いほどAIの選択肢が広がります。</p>
                         <div class="mt-4 pt-4 border-t border-gray-100">
                             <p class="text-xs font-bold text-gray-500 mb-2"><i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-1"></i>プリセットから一括追加</p>
                             <div class="flex flex-wrap gap-2">
@@ -2913,6 +2916,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-users text-green-500"></i> 人員配置要件</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">「最低何人いればお店が回るか」を設定します。AIはこの人数を必ず確保しようとします。</p>
                     </div>
                     <div class="p-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
@@ -2921,7 +2925,7 @@ const app = {
                                 <div>
                                     <label class="block text-xs font-bold text-gray-500 mb-1">最低管理者数 (店長/リーダー)</label>
                                     <input type="number" id="req_min_manager" class="w-full border-gray-300 rounded-lg px-3 py-2" value="${reqs.min_manager || 1}">
-                                    <p class="text-xs text-gray-400 mt-1">※各シフトに最低1名は必要</p>
+                                    <p class="text-xs text-gray-400 mt-1">営業中に常に最低1名の管理者(店長/リーダー)がいるように制御します</p>
                                 </div>
                             </div>
                             <div>
@@ -3000,6 +3004,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-gears text-gray-500"></i> システム設定</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">時給の初期値、管理者パスワード、休憩ルールなどの基本設定です。</p>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -6478,7 +6483,9 @@ const app = {
                 p_password: currentPass
             });
 
-            if (!verifyResult || verifyResult.length === 0 || !verifyResult[0]?.organization_id) {
+            // verify_shop_loginはJSONBを返すため、直接オブジェクトとして扱う
+            // （ログイン時と同じ形式）
+            if (!verifyResult || !verifyResult.success) {
                 this.showToast('現在のパスワードが正しくありません', 'error');
                 return;
             }
