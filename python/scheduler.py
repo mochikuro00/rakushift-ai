@@ -874,16 +874,16 @@ class ShiftScheduler:
                     for s in hourly_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
-                        # 期間中に1つでも希望シフトを提出しているか確認
-                        has_request = any(staff_opts.get((sid, d)) for d in self.dates)
-                        if has_request:
-                            slack_zero = pulp.LpVariable("zero_prevent_{}".format(sid), 0, None)
+                        # 期間中に提出された希望シフトの日数をカウント
+                        submitted_days = len([d for d in self.dates if staff_opts.get((sid, d))])
+                        if submitted_days > 0:
                             # 最低保証シフト数：1週間あたり1日（最低でも期間中1日は入れる）
-                            guarantee_shifts = max(1, int(weeks_in_period * 1.0))
-                            prob += tv + slack_zero >= guarantee_shifts
-                            # 過剰配置(50万)や優先度(5万)よりも圧倒的に重いペナルティ(1000万)を設定し、
-                            # 何が何でもシフトゼロを回避させる。
-                            penalty += slack_zero * 10000000
+                            target_guarantee = max(1, int(weeks_in_period * 1.0))
+                            # 提出日数が保証シフト数より少ない場合は、提出日数すべてを保証する
+                            guarantee_shifts = min(submitted_days, target_guarantee)
+                            # 数学的エラー（Infeasible）や計算タイムアウトを防ぐため、
+                            # 巨大なペナルティ変数ではなく、ソルバーに直接絶対ルール（ハード制約）として命令する。
+                            prob += tv >= guarantee_shifts
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---
                 # min_days_weekのハード制約で確保済みなので、ボーナスは補助的に軽めに
                 for s in self.staff_list:
