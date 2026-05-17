@@ -840,13 +840,11 @@ class ShiftScheduler:
                             total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus
                             penalty += x[(sid, d, oi)] * total_cost
 
-                # --- 勤務日数の公平性 (スタッフ個別のmax_days_weekに応じた公平配分) ---
-                hourly_staff = [s for s in self.staff_list
-                                if str(s.get("salary_type", "hourly")).lower() == "hourly"
-                                and int(s.get("max_days_week") or 5) > 0]
-                if len(hourly_staff) >= 2:
+                # --- 勤務日数の公平性と離職防止 (スタッフ個別のmax_days_weekに応じた公平配分) ---
+                active_staff = [s for s in self.staff_list if int(s.get("max_days_week") or 5) > 0]
+                if len(active_staff) >= 2:
                     total_vars = {}
-                    for s in hourly_staff:
+                    for s in active_staff:
                         sid = s["id"]
                         total_vars[sid] = pulp.lpSum(
                             x[(sid, d, oi)]
@@ -856,7 +854,7 @@ class ShiftScheduler:
                     work_days_count = len([d for d in self.dates
                                           if self._get_day_type(d) != "closed"])
                     weeks_in_period = max(work_days_count / 7.0, 1.0)
-                    for s in hourly_staff:
+                    for s in active_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
                         # 各スタッフのmax_days_weekに応じた個別目標値を計算
@@ -871,7 +869,7 @@ class ShiftScheduler:
                     # === 店舗運営者視点：離職防止アルゴリズム（ゼロシフト絶対回避） ===
                     # 1日でも希望を出しているスタッフが「シフト0」になることは、退職の直接的な原因になります。
                     # 過剰配置ペナルティを支払ってでも、全員に最低限のシフト（週1回程度）を保証します。
-                    for s in hourly_staff:
+                    for s in active_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
                         # 期間中に提出された希望シフトの日数をカウント
