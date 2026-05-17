@@ -222,12 +222,12 @@ async def supabase_query(table: str, params: str = "", method: str = "GET",
         resp = await client.patch(url, headers=headers, json=body, timeout=30)
     elif method == "POST":
         resp = await client.post(url, headers=headers, json=body, timeout=30)
-        else:
-            return None
-        if resp.status_code >= 400:
-            print("Supabase {} error: {}".format(method, resp.text))
-            return None
-        return resp.json()
+    else:
+        return None
+    if resp.status_code >= 400:
+        print("Supabase {} error: {}".format(method, resp.text))
+        return None
+    return resp.json()
 
 
 # === ヘルスチェック ===
