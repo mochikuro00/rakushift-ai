@@ -420,19 +420,21 @@ def generate_shifts(request: Request, req: ShiftRequest):
             print("Running Gemini audit (server-side)...")
             audited = run_gemini_audit(gemini_key, gemini_model, req, result)
             if audited:
-                # 監査結果の品質チェック: シフト数やスタッフカバレッジが大幅に減少していないか
+                # 監査結果の品質チェック: シフト数やスタッフカバレッジが減少していないか
                 original_staff_ids = set(s["staff_id"] for s in result)
                 audited_staff_ids = set(s["staff_id"] for s in audited)
                 original_count = len(result)
                 audited_count = len(audited)
+                missing_staff = original_staff_ids - audited_staff_ids
 
-                # シフト数が50%以下に減少、またはスタッフカバレッジが50%以下に減少した場合は監査結果を破棄
+                # シフト数が50%以下に減少した場合は破棄
                 if audited_count < original_count * 0.5:
                     print("[Gemini Audit] REJECTED: shift count dropped too much ({} -> {})".format(
                         original_count, audited_count))
-                elif len(audited_staff_ids) < len(original_staff_ids) * 0.5:
-                    print("[Gemini Audit] REJECTED: staff coverage dropped too much ({} -> {} staff)".format(
-                        len(original_staff_ids), len(audited_staff_ids)))
+                # スタッフが1人でも消えた場合は破棄（全スタッフのシフトを保護）
+                elif len(missing_staff) > 0:
+                    print("[Gemini Audit] REJECTED: {} staff lost shifts: {}".format(
+                        len(missing_staff), missing_staff))
                 else:
                     result = audited
                     return {
