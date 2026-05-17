@@ -42,7 +42,7 @@ class ShiftScheduler:
         self.dates = sorted(dates or [])
         self.requests = requests or []
 
-        # シフトパターン構築
+        # シフトパターン構築（ミッドシフト自動生成付き）
         raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
         for p in raw_patterns:
@@ -55,6 +55,31 @@ class ShiftScheduler:
             op = self.config.get("opening_time", "09:00")
             cl = self.config.get("closing_time", "22:00")
             self.shift_patterns = [{"start": op, "end": cl, "name": "full"}]
+
+        # ミッドシフト自動生成：早番と遅番の間を埋めるパターンを自動追加
+        if len(self.shift_patterns) >= 2:
+            starts = sorted(set(p["start"] for p in self.shift_patterns))
+            ends = sorted(set(p["end"] for p in self.shift_patterns))
+            op_time = self.config.get("opening_time", "09:00")
+            cl_time = self.config.get("closing_time", "22:00")
+            existing_keys = set((p["start"], p["end"]) for p in self.shift_patterns)
+            # 2時間ずらしのミッドシフト候補を生成
+            for offset_h in [2, 3]:
+                for pat in list(self.shift_patterns):
+                    ps = self._to_minutes(pat["start"])
+                    pe = self._to_minutes(pat["end"])
+                    mid_s = ps + offset_h * 60
+                    mid_e = pe + offset_h * 60
+                    # 営業時間内に収まるか確認
+                    op_m = self._to_minutes(op_time)
+                    cl_m = self._to_minutes(cl_time)
+                    if mid_s >= op_m and mid_e <= cl_m:
+                        ms_str = self._from_minutes(mid_s)
+                        me_str = self._from_minutes(mid_e)
+                        if (ms_str, me_str) not in existing_keys:
+                            self.shift_patterns.append(
+                                {"start": ms_str, "end": me_str, "name": "mid"})
+                            existing_keys.add((ms_str, me_str))
 
         # 営業時間
         self.op_limit = self.config.get("opening_time", "09:00")
@@ -1000,6 +1025,71 @@ class ShiftScheduler:
                                 preference_count += 1
 
                 print("[Tier3] Preference fulfillment: {} shift preferences processed".format(preference_count))
+
+                # --- 時間帯分散制約（朝番/遅番の偏り防止） ---
+                # 各スタッフが常に同じ時間帯に配置されないよう、早番/遅番のバランスを取る
+                for s in self.staff_list:
+                    sid = s["id"]
+                    max_days = int(s.get("max_days_week") or 5)
+                    if max_days <= 1:
+                        continue  # 週1日のスタッフは分散不要
+                    early_vars = []  # 14時以前に開始するシフト
+                    late_vars = []   # 14時以降に開始するシフト
+                    for d in self.dates:
+                        if self._get_day_type(d) == "closed":
+                            continue
+                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                            if opt["start_min"] < 14 * 60:
+                                early_vars.append(x[(sid, d, oi)])
+                            else:
+                                late_vars.append(x[(sid, d, oi)])
+                    # 早番と遅番の差が大きすぎるとペナルティ
+                    if early_vars and late_vars:
+                        early_sum = pulp.lpSum(early_vars)
+                        late_sum = pulp.lpSum(late_vars)
+                        # 差分のスラック変数
+                        imbalance = pulp.LpVariable("imbal_{}".format(sid), 0, None)
+                        prob += early_sum - late_sum <= imbalance
+                        prob += late_sum - early_sum <= imbalance
+                        # 偏りが大きいほどペナルティ
+                        penalty += imbalance * 20000
+
+                # --- 土日ローテーション公平性制約 ---
+                # 全スタッフが公平に土日シフトを担当するよう制約
+                weekend_dates = [d for d in self.dates
+                                 if self._get_day_type(d) in ("weekend", "holiday")]
+                if weekend_dates and len(self.staff_list) >= 2:
+                    weekend_vars = {}
+                    for s in self.staff_list:
+                        sid = s["id"]
+                        max_days = int(s.get("max_days_week") or 5)
+                        if max_days <= 0:
+                            continue
+                        wvars = []
+                        for d in weekend_dates:
+                            for oi in range(len(staff_opts.get((sid, d), []))):
+                                wvars.append(x[(sid, d, oi)])
+                        if wvars:
+                            weekend_vars[sid] = pulp.lpSum(wvars)
+
+                    if len(weekend_vars) >= 2:
+                        # 土日出勤回数の平均を計算し、各スタッフの乖離にペナルティ
+                        avg_weekends = len(weekend_dates) * self._get_required_staff(
+                            weekend_dates[0]) / max(len(weekend_vars), 1)
+                        for sid, wsum in weekend_vars.items():
+                            s = self._staff_map.get(sid, {})
+                            max_days = int(s.get("max_days_week") or 5)
+                            # スタッフの能力に応じた土日目標
+                            target = min(avg_weekends, len(weekend_dates) * max_days / 7.0)
+                            target = max(target, 1.0)  # 最低1回は土日出勤
+                            wk_slack = pulp.LpVariable("wkend_{}".format(sid), 0, None)
+                            prob += wsum - target <= wk_slack
+                            prob += target - wsum <= wk_slack
+                            # 月給スタッフは土日出勤を強く促進
+                            weight = 30000 if sid in self._monthly_ids else 15000
+                            penalty += wk_slack * weight
+
+                print("[Tier3] Time slot diversity + weekend rotation applied")
 
             # ====================================================
             # 目的関数: コスト最小化
