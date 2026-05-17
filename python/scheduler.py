@@ -818,6 +818,21 @@ class ShiftScheduler:
                     hourly_wage = float(s.get("hourly_wage") or 1000)
                     is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
 
+                    # 新機能：シフト優先度と契約区分による強力なスコア調整
+                    shift_priority = str(s.get("shift_priority", "medium")).lower()
+                    contract_type = str(s.get("contract_type", "general")).lower()
+                    
+                    priority_bonus = 0
+                    if shift_priority == "high":
+                        priority_bonus -= 50000  # 最優先でシフトに入れる
+                    elif shift_priority == "low":
+                        priority_bonus += 20000  # 穴埋めとしてのみ利用
+                        
+                    if contract_type == "regular":
+                        priority_bonus -= 10000  # レギュラーは優先
+                    elif contract_type == "spot":
+                        priority_bonus += 5000   # スポットは後回し
+
                     for d in self.dates:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                             work_hours = opt["work_hours"]
@@ -825,8 +840,7 @@ class ShiftScheduler:
                             labor_cost = 0.0 if is_monthly else (hourly_wage * work_hours)
                             
                             # 人件費を最小化しつつ、評価の高いスタッフを優先するハイブリッドコスト
-                            # labor_cost(例:8000円) * 0.01 = 80。これにランクペナルティを足す。
-                            total_cost = (labor_cost * 0.01) + rank_penalty
+                            total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus
                             penalty += x[(sid, d, oi)] * total_cost
 
                 # --- 勤務日数の公平性 (スタッフ個別のmax_days_weekに応じた公平配分) ---

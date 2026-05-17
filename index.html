@@ -786,6 +786,25 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">契約区分</label>
+                        <select id="staffContractType" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="regular">レギュラー</option>
+                            <option value="general" selected>一般</option>
+                            <option value="spot">スポット・ヘルプ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">シフト優先度</label>
+                        <select id="staffShiftPriority" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="high">高 (最優先)</option>
+                            <option value="medium" selected>中 (通常)</option>
+                            <option value="low">低 (穴埋めのみ)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">給与形態</label>
                         <select id="staffSalaryType" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white" onchange="app.toggleSalaryInputs()">
                             <option value="hourly">時給</option>

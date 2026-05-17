@@ -4076,6 +4076,8 @@ const app = {
             name: (document.getElementById('staffName')?.value || ''),
             role: (document.getElementById('staffRole')?.value || ''),
             evaluation: (document.getElementById('staffEvaluation')?.value || ''),
+            contract_type: (document.getElementById('staffContractType')?.value || 'general'),
+            shift_priority: (document.getElementById('staffShiftPriority')?.value || 'medium'),
             salary_type: (document.getElementById('staffSalaryType')?.value || ''),
             hourly_wage: Number((document.getElementById('staffHourlyWage')?.value || '')),
             monthly_salary: Number((document.getElementById('staffMonthlySalary')?.value || '')),
@@ -4138,6 +4140,8 @@ const app = {
         document.getElementById('staffName').value = s.name;
         document.getElementById('staffRole').value = s.role;
         document.getElementById('staffEvaluation').value = s.evaluation || 'B';
+        if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = s.contract_type || 'general';
+        if (document.getElementById('staffShiftPriority')) document.getElementById('staffShiftPriority').value = s.shift_priority || 'medium';
         document.getElementById('staffSalaryType').value = s.salary_type;
         document.getElementById('staffHourlyWage').value = s.hourly_wage;
         document.getElementById('staffMonthlySalary').value = s.monthly_salary;
