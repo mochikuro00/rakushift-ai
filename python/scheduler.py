@@ -671,7 +671,7 @@ class ShiftScheduler:
             # ====================================================
 
             if tier >= 2:
-                # --- 各時間スロットの最低人員 ---
+                # --- 各時間スロットの最低人員 + 過剰配置ペナルティ ---
                 for d in self.dates:
                     slot_reqs = self._build_slot_requirements(d)
                     for slot_min, req in slot_reqs.items():
@@ -682,11 +682,18 @@ class ShiftScheduler:
                                 if opt["start_min"] <= slot_min < opt["end_min"]:
                                     workers.append(x[(sid, d, oi)])
                         if workers:
-                            slack = pulp.LpVariable(
+                            # 下限制約: 最低人数を確保
+                            slack_under = pulp.LpVariable(
                                 "cov_{}_{}".format(d, slot_min),
                                 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(workers) + slack >= req
-                            penalty += slack * 1000000
+                            prob += pulp.lpSum(workers) + slack_under >= req
+                            penalty += slack_under * 1000000
+                            # 上限制約: 必要人数+1までに抑制（超過にペナルティ）
+                            slack_over = pulp.LpVariable(
+                                "over_{}_{}".format(d, slot_min),
+                                0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(workers) - slack_over <= req + 1
+                            penalty += slack_over * 200000
 
                 # --- 管理者常駐制約 ---
                 for d in self.dates:
@@ -828,15 +835,15 @@ class ShiftScheduler:
                         penalty += (slack_over + slack_under) * 50000
 
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---
-                # これらのスタッフがシフトに入ることを「報酬」として強くインセンティブ付与
+                # min_days_weekのハード制約で確保済みなので、ボーナスは補助的に軽めに
                 for s in self.staff_list:
                     sid = s["id"]
                     min_dw = int(s.get("min_days_week") or 0)
                     if min_dw > 0:
                         for d in self.dates:
                             for oi in range(len(staff_opts.get((sid, d), []))):
-                                # シフトに入れるほどペナルティが下がる（= ボーナス）
-                                penalty -= x[(sid, d, oi)] * 100000
+                                # 軽いボーナスで配置を促進（過剰配置ペナルティとバランス）
+                                penalty -= x[(sid, d, oi)] * 5000
 
                 # --- ピーク時スキルミックス制約 ---
                 # ピーク時間帯（ランチ帯等）に最低1名のA/B評価スタッフを確保する
