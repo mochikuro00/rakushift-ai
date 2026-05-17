@@ -2195,8 +2195,24 @@ const app = {
                 // 実際の配置人数（同時出勤人数のカバー率から算出）
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
                 const toMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-                const opMin = toMin(this.state.config.opening_time || "09:00");
-                const rawCl = toMin(this.state.config.closing_time || "22:00");
+                
+                let dayType = 'weekday';
+                if (isHoliday || dayOfWeek === 0) dayType = 'holiday';
+                else if (dayOfWeek === 6) dayType = 'weekend';
+
+                const openingTimes = this.state.config.opening_times || {};
+                let opTimeStr = this.state.config.opening_time || "09:00";
+                let clTimeStr = this.state.config.closing_time || "22:00";
+
+                if (openingTimes[dayType] && openingTimes[dayType].start) {
+                    opTimeStr = openingTimes[dayType].start;
+                }
+                if (openingTimes[dayType] && openingTimes[dayType].end) {
+                    clTimeStr = openingTimes[dayType].end;
+                }
+
+                const opMin = toMin(opTimeStr);
+                const rawCl = toMin(clTimeStr);
                 const clMin = rawCl <= opMin ? rawCl + 1440 : rawCl;
                 
                 let minCov = 999;
