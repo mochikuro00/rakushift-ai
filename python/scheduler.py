@@ -662,14 +662,11 @@ class ShiftScheduler:
                     available_total = len([d for d in self.dates
                                           if d not in ng_set and self._get_day_type(d) != "closed"])
                     target_min_month = min(target_min_month, available_total)
-                    
-                    # max_days_weekの制約と矛盾してInfeasibleになるのを防ぐ
                     max_possible = 0
                     mdw = int(s.get("max_days_week") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
                     for week in week_groups:
                         max_possible += min(mdw, len(week))
                     target_min_month = min(target_min_month, max_possible)
-                    
                     if target_min_month > 0:
                         all_wv = []
                         for d in self.dates:
@@ -696,7 +693,6 @@ class ShiftScheduler:
                 if len(sorted_d) > max_consec:
                     for i in range(len(sorted_d) - max_consec):
                         span = sorted_d[i:i + max_consec + 1]
-                        # span内の全日に出勤することを禁止
                         sv = []
                         for d in span:
                             for oi in range(len(staff_opts.get((sid, d), []))):
@@ -704,7 +700,7 @@ class ShiftScheduler:
                         if sv:
                             prob += pulp.lpSum(sv) <= max_consec
 
-                # --- 勤務間インターバル制約 (前日の退勤から翌日の出勤まで10時間以上) ---
+                # --- 勤務間インターバル制約 (前日退勤→翌日出勤まで10時間以上) ---
                 if not force:
                     for i in range(len(sorted_d) - 1):
                         d1 = sorted_d[i]
@@ -715,9 +711,8 @@ class ShiftScheduler:
                             continue
                         for oi1, opt1 in enumerate(opts1):
                             for oi2, opt2 in enumerate(opts2):
-                                # 退勤から翌日出勤までの休息時間（分）
                                 interval = (opt2["start_min"] + 1440) - opt1["end_min"]
-                                if interval < 600:  # 10時間(600分)未満なら同時にシフトに入れない
+                                if interval < 600:
                                     prob += x[(sid, d1, oi1)] + x[(sid, d2, oi2)] <= 1
 
             # ====================================================
@@ -725,27 +720,26 @@ class ShiftScheduler:
             # ====================================================
 
             if tier >= 2:
-                # --- 1日の合計出勤人数の上限制約（フロントエンドの+0を強制） ---
+                # --- 1日の出勤人数: 必要人数以上を確保 ---
                 for d in self.dates:
-                    if self._get_day_type(d) == "holiday":
-                        req_daily = int(self.config.get("staff_req", {}).get("min_holiday", 3))
-                    elif self._get_day_type(d) == "weekend":
-                        req_daily = int(self.config.get("staff_req", {}).get("min_weekend", 3))
-                    else:
-                        req_daily = int(self.config.get("staff_req", {}).get("min_weekday", 2))
-
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    req_daily = self._get_required_staff(d)
+                    if req_daily <= 0:
+                        continue
                     day_workers = []
                     for s in self.staff_list:
                         sid = s["id"]
                         opts = staff_opts.get((sid, d), [])
                         if opts:
-                            # スタッフdに出勤するかを示す変数 (1日に最大1シフトしか入れないためsumでOK)
                             day_workers.append(pulp.lpSum([x[(sid, d, oi)] for oi in range(len(opts))]))
+                    if day_workers:
+                        daily_slack = pulp.LpVariable(
+                            "daily_under_{}".format(d), 0, None, pulp.LpInteger)
+                        prob += pulp.lpSum(day_workers) + daily_slack >= req_daily
+                        penalty += daily_slack * 5000000
 
-                    # 以前は1日の総出勤人数（ヘッドカウント）に上限を設けていましたが、
-                    # 短時間バイトをつなぎ合わせてカバーすることを許可するため、
-                    # 1日全体の人数制限は削除し、時間帯ごと（スロット）の過剰配置ペナルティに任せます。
-                # --- 各時間スロットの最低人員 + 過剰配置ペナルティ ---
+                # --- 各時間スロットの最低人員 ---
                 for d in self.dates:
                     slot_reqs = self._build_slot_requirements(d)
                     for slot_min, req in slot_reqs.items():
@@ -756,18 +750,22 @@ class ShiftScheduler:
                                 if opt["start_min"] <= slot_min < opt["end_min"]:
                                     workers.append(x[(sid, d, oi)])
                         if workers:
-                            # 下限制約: 最低人数を確保
+                            # 全営業スロットで最低1名は必ず確保
+                            if not force:
+                                min1_slack = pulp.LpVariable(
+                                    "min1_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(workers) + min1_slack >= 1
+                                penalty += min1_slack * 10000000
+                            # 必要人数を確保（不足にペナルティ）
                             slack_under = pulp.LpVariable(
-                                "cov_{}_{}".format(d, slot_min),
-                                0, None, pulp.LpInteger)
+                                "cov_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(workers) + slack_under >= req
-                            penalty += slack_under * 1000000
-                            # 上限制約: 必要人数ぴったりを目標（超過にペナルティ）
+                            penalty += slack_under * 2000000
+                            # 過剰は軽めのペナルティ（短時間バイト活用を許可）
                             slack_over = pulp.LpVariable(
-                                "over_{}_{}".format(d, slot_min),
-                                0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(workers) - slack_over <= req
-                            penalty += slack_over * 500000
+                                "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(workers) - slack_over <= req + 2
+                            penalty += slack_over * 10000
 
                 # --- 管理者常駐制約 ---
                 for d in self.dates:
