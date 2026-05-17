@@ -1764,7 +1764,7 @@ const app = {
         let periodControls = '';
         if (isTable) {
             periodControls = `
-                <div class="flex items-center bg-gray-100 p-1 rounded-lg ml-4">
+                <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg ml-4">
                     <button onclick="app.switchShiftTablePeriod('month')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='month')}">月間</button>
                     <button onclick="app.switchShiftTablePeriod('2weeks')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='2weeks')}">2週間</button>
                     <button onclick="app.switchShiftTablePeriod('week')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='week')}">1週間</button>
@@ -1808,7 +1808,7 @@ const app = {
                         </button>
                         ` : ''}
                         ${periodControls}
-                        <div class="flex bg-gray-100 p-1 rounded-lg">
+                        <div class="flex bg-white border border-gray-200 p-1 rounded-lg">
                             <button onclick="app.switchShiftViewMode('table')" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
                                 <i class="fa-solid fa-table-list mr-1"></i>表
                             </button>
@@ -1978,7 +1978,7 @@ const app = {
                 let bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines' : 'bg-white';
                 
                 if (isPast) {
-                    bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines opacity-75' : 'bg-gray-100';
+                    bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines opacity-75' : 'bg-gray-50/30';
                 } else if (!shift && !isSpecialHoliday) {
                     bgClass = 'hover:bg-gray-50';
                 }
@@ -2141,9 +2141,7 @@ const app = {
                         <div class="absolute top-0 bottom-0 left-[50%] w-px bg-gray-400"></div>
                         <div class="absolute top-0 bottom-0 left-[75%] w-px bg-gray-400"></div>
                         
-                        <!-- Business Hours Mask -->
-                        <div class="absolute top-0 bottom-0 left-0 bg-gray-200/50 pointer-events-none" style="width: ${openPct}%;"></div>
-                        <div class="absolute top-0 bottom-0 right-0 bg-gray-200/50 pointer-events-none" style="left: ${closePct}%;"></div>
+                        <!-- Business Hours Mask (透明化) -->
                     `;
                     content = `<div class="w-full h-full relative group overflow-hidden bg-white">${guides}</div>`;
                 }

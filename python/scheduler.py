@@ -783,7 +783,7 @@ class ShiftScheduler:
                     sid = s["id"]
                     rank = self._eval_rank.get(sid, "B")
                     # ランクペナルティ (Aは優遇、Dは後回し)
-                    rank_penalty = {"A": 0, "B": 20, "C": 100, "D": 500}.get(rank, 50)
+                    rank_penalty = {"A": 0, "B": 5, "C": 15, "D": 30}.get(rank, 10)
                     
                     hourly_wage = float(s.get("hourly_wage") or 1000)
                     is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
@@ -799,7 +799,7 @@ class ShiftScheduler:
                             total_cost = (labor_cost * 0.01) + rank_penalty
                             penalty += x[(sid, d, oi)] * total_cost
 
-                # --- 勤務日数の公平性 (スタッフ間のバランス) ---
+                # --- 勤務日数の公平性 (スタッフ個別のmax_days_weekに応じた公平配分) ---
                 hourly_staff = [s for s in self.staff_list
                                 if str(s.get("salary_type", "hourly")).lower() == "hourly"
                                 and int(s.get("max_days_week") or 5) > 0]
@@ -812,15 +812,31 @@ class ShiftScheduler:
                             for d in self.dates
                             for oi in range(len(staff_opts.get((sid, d), [])))
                         )
-                    # 各スタッフの勤務日数が大きく偏らないように
-                    avg_approx = len([d for d in self.dates
-                                      if self._get_day_type(d) != "closed"]) / max(len(hourly_staff), 1)
-                    for sid, tv in total_vars.items():
+                    work_days_count = len([d for d in self.dates
+                                          if self._get_day_type(d) != "closed"])
+                    weeks_in_period = max(work_days_count / 7.0, 1.0)
+                    for s in hourly_staff:
+                        sid = s["id"]
+                        tv = total_vars[sid]
+                        # 各スタッフのmax_days_weekに応じた個別目標値を計算
+                        staff_max_days = int(s.get("max_days_week") or 5)
+                        staff_target = staff_max_days * weeks_in_period * 0.7  # max_daysの70%を目標
                         slack_over = pulp.LpVariable("fair_over_{}".format(sid), 0, None)
                         slack_under = pulp.LpVariable("fair_under_{}".format(sid), 0, None)
-                        prob += tv - avg_approx <= slack_over
-                        prob += avg_approx - tv <= slack_under
+                        prob += tv - staff_target <= slack_over
+                        prob += staff_target - tv <= slack_under
                         penalty += (slack_over + slack_under) * 50000
+
+                # --- min_days_week > 0 のスタッフへの配置ボーナス ---
+                # これらのスタッフがシフトに入ることを「報酬」として強くインセンティブ付与
+                for s in self.staff_list:
+                    sid = s["id"]
+                    min_dw = int(s.get("min_days_week") or 0)
+                    if min_dw > 0:
+                        for d in self.dates:
+                            for oi in range(len(staff_opts.get((sid, d), []))):
+                                # シフトに入れるほどペナルティが下がる（= ボーナス）
+                                penalty -= x[(sid, d, oi)] * 100000
 
                 # --- ピーク時スキルミックス制約 ---
                 # ピーク時間帯（ランチ帯等）に最低1名のA/B評価スタッフを確保する
