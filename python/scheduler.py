@@ -112,6 +112,17 @@ class ShiftScheduler:
                 self._monthly_ids.add(sid)
             self._eval_rank[sid] = evaluation if evaluation in self.POWER_SCORE else "B"
 
+            # Parse prefStart and prefEnd
+            ud = s.get("unavailable_dates")
+            if ud:
+                if isinstance(ud, str):
+                    ud = [d.strip() for d in ud.split(",") if d.strip()]
+                for d in ud:
+                    if d.startswith("prefStart:"):
+                        s["pref_start"] = d.replace("prefStart:", "")
+                    if d.startswith("prefEnd:"):
+                        s["pref_end"] = d.replace("prefEnd:", "")
+                        
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
         for s in self.staff_list:
@@ -282,7 +293,12 @@ class ShiftScheduler:
 
         options = []
         seen = set()
-        for pat in self.shift_patterns:
+        
+        patterns_to_use = self.shift_patterns
+        if staff.get("pref_start") and staff.get("pref_end"):
+            patterns_to_use = [{"start": staff["pref_start"], "end": staff["pref_end"], "name": "pref"}]
+            
+        for pat in patterns_to_use:
             raw_ps = self._to_minutes(pat["start"])
             raw_pe = self._normalize_end_time(raw_ps, self._to_minutes(pat["end"]))
             ps = max(raw_ps, open_min)
