@@ -872,15 +872,13 @@ class ShiftScheduler:
                     for s in active_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
-                        # 期間中に提出された希望シフトの日数をカウント
+                        # 期間中に提出された希望シフトの日数をカウント（出勤可能な日数）
                         submitted_days = len([d for d in self.dates if staff_opts.get((sid, d))])
                         if submitted_days > 0:
-                            # 最低保証シフト数：1週間あたり1日（最低でも期間中1日は入れる）
-                            target_guarantee = max(1, int(weeks_in_period * 1.0))
-                            # 提出日数が保証シフト数より少ない場合は、提出日数すべてを保証する
-                            guarantee_shifts = min(submitted_days, target_guarantee)
-                            # 数学的エラー（Infeasible）や計算タイムアウトを防ぐため、
-                            # 巨大なペナルティ変数ではなく、ソルバーに直接絶対ルール（ハード制約）として命令する。
+                            # 最低保証シフト数：月間に最低1日（ゼロシフトによる離職を絶対阻止）
+                            # ※週1回などの高いハード制約は、スタッフのNG申請や週上限日数と矛盾して計算不可能(Infeasible)になるため、
+                            # 絶対安全な「1」をハード制約とし、残りは公平性アルゴリズム（5万ボーナス）に委ねる。
+                            guarantee_shifts = min(submitted_days, 1)
                             prob += tv >= guarantee_shifts
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---
                 # min_days_weekのハード制約で確保済みなので、ボーナスは補助的に軽めに
