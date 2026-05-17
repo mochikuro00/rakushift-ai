@@ -4107,8 +4107,6 @@ const app = {
             name: (document.getElementById('staffName')?.value || ''),
             role: (document.getElementById('staffRole')?.value || ''),
             evaluation: (document.getElementById('staffEvaluation')?.value || ''),
-            contract_type: (document.getElementById('staffContractType')?.value || 'general'),
-            shift_priority: (document.getElementById('staffShiftPriority')?.value || 'medium'),
             salary_type: (document.getElementById('staffSalaryType')?.value || ''),
             hourly_wage: Number((document.getElementById('staffHourlyWage')?.value || '')),
             monthly_salary: Number((document.getElementById('staffMonthlySalary')?.value || '')),
@@ -4124,10 +4122,27 @@ const app = {
             return;
         }
 
-        // 新規作成時は組織IDを付与
         if (!id) {
             data.organization_id = orgId;
         }
+
+        // DBマイグレーション不要で保存するためのハック：unavailable_datesにメタデータを埋め込む
+        const existingStaff = this.state.staff.find(st => st.id === id);
+        let uDates = [];
+        if (existingStaff && existingStaff.unavailable_dates) {
+            uDates = Array.isArray(existingStaff.unavailable_dates) 
+                ? [...existingStaff.unavailable_dates] 
+                : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
+        }
+        // 既存のタグを削除
+        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:'));
+        
+        const contractType = document.getElementById('staffContractType')?.value || 'general';
+        const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
+        uDates.push(`priority:${shiftPriority}`);
+        uDates.push(`contract:${contractType}`);
+        
+        data.unavailable_dates = uDates.join(',');
 
         this.showLoading(true);
         try {
@@ -4171,8 +4186,21 @@ const app = {
         document.getElementById('staffName').value = s.name;
         document.getElementById('staffRole').value = s.role;
         document.getElementById('staffEvaluation').value = s.evaluation || 'B';
-        if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = s.contract_type || 'general';
-        if (document.getElementById('staffShiftPriority')) document.getElementById('staffShiftPriority').value = s.shift_priority || 'medium';
+        
+        // unavailable_datesからメタデータを抽出
+        let shiftPriority = 'medium';
+        let contractType = 'general';
+        if (s.unavailable_dates) {
+            const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
+            uDates.forEach(d => {
+                const txt = d.trim();
+                if (txt.startsWith('priority:')) shiftPriority = txt.replace('priority:', '');
+                if (txt.startsWith('contract:')) contractType = txt.replace('contract:', '');
+            });
+        }
+        if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = contractType;
+        if (document.getElementById('staffShiftPriority')) document.getElementById('staffShiftPriority').value = shiftPriority;
+        
         document.getElementById('staffSalaryType').value = s.salary_type;
         document.getElementById('staffHourlyWage').value = s.hourly_wage;
         document.getElementById('staffMonthlySalary').value = s.monthly_salary;

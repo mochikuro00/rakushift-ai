@@ -868,6 +868,22 @@ class ShiftScheduler:
                         prob += staff_target - tv <= slack_under
                         penalty += (slack_over + slack_under) * 50000
 
+                    # === 店舗運営者視点：離職防止アルゴリズム（ゼロシフト絶対回避） ===
+                    # 1日でも希望を出しているスタッフが「シフト0」になることは、退職の直接的な原因になります。
+                    # 過剰配置ペナルティを支払ってでも、全員に最低限のシフト（週1回程度）を保証します。
+                    for s in hourly_staff:
+                        sid = s["id"]
+                        tv = total_vars[sid]
+                        # 期間中に1つでも希望シフトを提出しているか確認
+                        has_request = any(staff_opts.get((sid, d)) for d in self.dates)
+                        if has_request:
+                            slack_zero = pulp.LpVariable("zero_prevent_{}".format(sid), 0, None)
+                            # 最低保証シフト数：1週間あたり1日（最低でも期間中1日は入れる）
+                            guarantee_shifts = max(1, int(weeks_in_period * 1.0))
+                            prob += tv + slack_zero >= guarantee_shifts
+                            # 過剰配置(50万)や優先度(5万)よりも圧倒的に重いペナルティ(1000万)を設定し、
+                            # 何が何でもシフトゼロを回避させる。
+                            penalty += slack_zero * 10000000
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---
                 # min_days_weekのハード制約で確保済みなので、ボーナスは補助的に軽めに
                 for s in self.staff_list:
