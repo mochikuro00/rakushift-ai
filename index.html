@@ -805,6 +805,17 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">基本出勤時間 (任意)</label>
+                        <input type="time" id="staffPrefStart" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">基本退勤時間 (任意)</label>
+                        <input type="time" id="staffPrefEnd" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">給与形態</label>
                         <select id="staffSalaryType" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white" onchange="app.toggleSalaryInputs()">
                             <option value="hourly">時給</option>

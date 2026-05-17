@@ -4135,12 +4135,17 @@ const app = {
                 : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
         }
         // 既存のタグを削除
-        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:'));
+        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart:') && !d.startsWith('prefEnd:'));
         
         const contractType = document.getElementById('staffContractType')?.value || 'general';
         const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
+        const prefStart = document.getElementById('staffPrefStart')?.value || '';
+        const prefEnd = document.getElementById('staffPrefEnd')?.value || '';
+        
         uDates.push(`priority:${shiftPriority}`);
         uDates.push(`contract:${contractType}`);
+        if (prefStart) uDates.push(`prefStart:${prefStart}`);
+        if (prefEnd) uDates.push(`prefEnd:${prefEnd}`);
         
         data.unavailable_dates = uDates.join(',');
 
@@ -4190,17 +4195,22 @@ const app = {
         // unavailable_datesからメタデータを抽出
         let shiftPriority = 'medium';
         let contractType = 'general';
+        let prefStart = '';
+        let prefEnd = '';
         if (s.unavailable_dates) {
             const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
             uDates.forEach(d => {
                 const txt = d.trim();
                 if (txt.startsWith('priority:')) shiftPriority = txt.replace('priority:', '');
                 if (txt.startsWith('contract:')) contractType = txt.replace('contract:', '');
+                if (txt.startsWith('prefStart:')) prefStart = txt.replace('prefStart:', '');
+                if (txt.startsWith('prefEnd:')) prefEnd = txt.replace('prefEnd:', '');
             });
         }
         if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = contractType;
         if (document.getElementById('staffShiftPriority')) document.getElementById('staffShiftPriority').value = shiftPriority;
-        
+        if (document.getElementById('staffPrefStart')) document.getElementById('staffPrefStart').value = prefStart;
+        if (document.getElementById('staffPrefEnd')) document.getElementById('staffPrefEnd').value = prefEnd;
         document.getElementById('staffSalaryType').value = s.salary_type;
         document.getElementById('staffHourlyWage').value = s.hourly_wage;
         document.getElementById('staffMonthlySalary').value = s.monthly_salary;
