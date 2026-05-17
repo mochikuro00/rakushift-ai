@@ -2192,9 +2192,40 @@ const app = {
                     required = parseInt(staffReq.min_weekend || 3);
                 }
 
-                // 実際の配置人数
-                const assigned = this.state.shifts.filter(s => s.date === dateStr).length;
-                const diff = assigned - required;
+                // 実際の配置人数（同時出勤人数のカバー率から算出）
+                const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
+                const toMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+                const opMin = toMin(this.state.config.opening_time || "09:00");
+                const rawCl = toMin(this.state.config.closing_time || "22:00");
+                const clMin = rawCl <= opMin ? rawCl + 1440 : rawCl;
+                
+                let minCov = 999;
+                let maxCov = 0;
+                for (let m = opMin; m < clMin; m += 15) {
+                    let cov = 0;
+                    shiftsForDay.forEach(s => {
+                        const sM = toMin(s.start_time);
+                        const rawE = toMin(s.end_time);
+                        const eM = rawE <= sM ? rawE + 1440 : rawE;
+                        if (m >= sM && m < eM) cov++;
+                    });
+                    if (cov < minCov) minCov = cov;
+                    if (cov > maxCov) maxCov = cov;
+                }
+                if (minCov === 999) minCov = 0;
+
+                let diff = 0;
+                let assigned = 0;
+                if (minCov < required) {
+                    diff = minCov - required; // 不足
+                    assigned = minCov;
+                } else if (maxCov > required) {
+                    diff = maxCov - required; // 過剰
+                    assigned = maxCov;
+                } else {
+                    diff = 0;
+                    assigned = required;
+                }
 
                 let cellContent = '';
                 let cellBg = 'bg-white';

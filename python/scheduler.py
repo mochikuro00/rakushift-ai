@@ -688,12 +688,9 @@ class ShiftScheduler:
                             # スタッフdに出勤するかを示す変数 (1日に最大1シフトしか入れないためsumでOK)
                             day_workers.append(pulp.lpSum([x[(sid, d, oi)] for oi in range(len(opts))]))
 
-                    if day_workers:
-                        slack_daily_over = pulp.LpVariable("daily_over_{}".format(d), 0, None, pulp.LpInteger)
-                        prob += pulp.lpSum(day_workers) - slack_daily_over <= req_daily
-                        # スロットごとの不足ペナルティ(100万×最大32スロット=3200万)より確実に重い1億を設定し、超過を絶対に防ぐ
-                        penalty += slack_daily_over * 100000000
-
+                    # 以前は1日の総出勤人数（ヘッドカウント）に上限を設けていましたが、
+                    # 短時間バイトをつなぎ合わせてカバーすることを許可するため、
+                    # 1日全体の人数制限は削除し、時間帯ごと（スロット）の過剰配置ペナルティに任せます。
                 # --- 各時間スロットの最低人員 + 過剰配置ペナルティ ---
                 for d in self.dates:
                     slot_reqs = self._build_slot_requirements(d)
