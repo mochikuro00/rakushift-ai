@@ -3996,6 +3996,10 @@ const app = {
         this.openModal('staffModal');
         document.getElementById('staffForm').reset();
         document.getElementById('staffId').value='';
+        for(let i=0; i<=6; i++) {
+            const cb = document.getElementById('prefDay'+i);
+            if(cb) cb.checked = true;
+        }
     },
     
     updateStaffRoleSelect() {
@@ -4135,7 +4139,7 @@ const app = {
                 : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
         }
         // 既存のタグを削除
-        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart:') && !d.startsWith('prefEnd:'));
+        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart:') && !d.startsWith('prefEnd:') && !d.startsWith('ngDay:'));
         
         const contractType = document.getElementById('staffContractType')?.value || 'general';
         const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
@@ -4146,6 +4150,10 @@ const app = {
         uDates.push(`contract:${contractType}`);
         if (prefStart) uDates.push(`prefStart:${prefStart}`);
         if (prefEnd) uDates.push(`prefEnd:${prefEnd}`);
+        for(let i=0; i<=6; i++) {
+            const cb = document.getElementById('prefDay'+i);
+            if(cb && !cb.checked) uDates.push(`ngDay:${i}`);
+        }
         
         data.unavailable_dates = uDates.join(',');
 
@@ -4197,6 +4205,7 @@ const app = {
         let contractType = 'general';
         let prefStart = '';
         let prefEnd = '';
+        let ngDays = [];
         if (s.unavailable_dates) {
             const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
             uDates.forEach(d => {
@@ -4205,12 +4214,17 @@ const app = {
                 if (txt.startsWith('contract:')) contractType = txt.replace('contract:', '');
                 if (txt.startsWith('prefStart:')) prefStart = txt.replace('prefStart:', '');
                 if (txt.startsWith('prefEnd:')) prefEnd = txt.replace('prefEnd:', '');
+                if (txt.startsWith('ngDay:')) ngDays.push(txt.replace('ngDay:', ''));
             });
         }
         if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = contractType;
         if (document.getElementById('staffShiftPriority')) document.getElementById('staffShiftPriority').value = shiftPriority;
         if (document.getElementById('staffPrefStart')) document.getElementById('staffPrefStart').value = prefStart;
         if (document.getElementById('staffPrefEnd')) document.getElementById('staffPrefEnd').value = prefEnd;
+        for(let i=0; i<=6; i++) {
+            const cb = document.getElementById('prefDay'+i);
+            if(cb) cb.checked = !ngDays.includes(String(i));
+        }
         document.getElementById('staffSalaryType').value = s.salary_type;
         document.getElementById('staffHourlyWage').value = s.hourly_wage;
         document.getElementById('staffMonthlySalary').value = s.monthly_salary;
@@ -6388,9 +6402,18 @@ const app = {
 
                 for (const shift of dayShifts) {
                     const staff = staffMap[shift.staff_id] || { name: shift.staff_id, role: '' };
-                    const roleBadge = staff.role === 'manager' ? '<span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-bold">管理者</span>' :
-                                     staff.role === 'leader' ? '<span class="inline-block bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-bold">リーダー</span>' :
-                                     '<span class="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">スタッフ</span>';
+                    const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
+                    const roleObj = roleList.find(r => r.id === staff.role) || { name: 'スタッフ', color: 'gray' };
+                    const colorMap = {
+                        purple: 'bg-purple-100 text-purple-700',
+                        blue: 'bg-blue-100 text-blue-700',
+                        green: 'bg-green-100 text-green-700',
+                        yellow: 'bg-yellow-100 text-yellow-700',
+                        red: 'bg-red-100 text-red-700',
+                        gray: 'bg-gray-100 text-gray-700'
+                    };
+                    const badgeClass = colorMap[roleObj.color] || colorMap['gray'];
+                    const roleBadge = `<span class="inline-block ${badgeClass} text-xs px-2 py-0.5 rounded-full font-bold">${this._sanitize(roleObj.name)}</span>`;
                     const breakMin = shift.break_minutes || 0;
                     const startParts = shift.start_time.split(':');
                     const endParts = shift.end_time.split(':');
