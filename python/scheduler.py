@@ -621,23 +621,25 @@ class ShiftScheduler:
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
                 if not force and min_days_month > 0 and self.dates:
-                    work_dates_count = len([d for d in self.dates
-                                           if self._get_day_type(d) != "closed"])
-                    target_min_month = max(1, int(round(
-                        min_days_month * (work_dates_count / 22.0)
-                    )))
+                    target_min_month = min_days_month
                     ng_set = self._get_staff_ng_dates(s)
                     available_total = len([d for d in self.dates
                                           if d not in ng_set and self._get_day_type(d) != "closed"])
                     target_min_month = min(target_min_month, available_total)
+                    
+                    # max_days_weekの制約と矛盾してInfeasibleになるのを防ぐ
+                    max_possible = 0
+                    mdw = int(s.get("max_days_week") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+                    for week in week_groups:
+                        max_possible += min(mdw, len(week))
+                    target_min_month = min(target_min_month, max_possible)
+                    
                     if target_min_month > 0:
                         all_wv = []
                         for d in self.dates:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
-                            print("[MinDays] Staff {} min_days_month={} -> target={}".format(
-                                s.get("name", sid), min_days_month, target_min_month))
                             prob += pulp.lpSum(all_wv) >= target_min_month
 
                 # --- 週40時間上限 (労基法32条) ---
@@ -1045,7 +1047,7 @@ class ShiftScheduler:
                 sid = s["id"]
                 for d in self.dates:
                     for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                        if (sid, d, oi) in x and pulp.value(x[(sid, d, oi)]) == 1:
+                        if (sid, d, oi) in x and pulp.value(x[(sid, d, oi)]) and pulp.value(x[(sid, d, oi)]) > 0.5:
                             hrs = opt["hours"]
                             brk = self._get_break_minutes(hrs)
                             mh = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
