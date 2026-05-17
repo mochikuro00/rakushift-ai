@@ -297,7 +297,26 @@ class ShiftScheduler:
         patterns_to_use = self.shift_patterns
         if staff.get("pref_start") and staff.get("pref_end"):
             patterns_to_use = [{"start": staff["pref_start"], "end": staff["pref_end"], "name": "pref"}]
-            
+
+        def _add_option(ps, pe):
+            """オプションを追加するヘルパー（重複チェック含む）"""
+            if ps >= pe:
+                return
+            hrs = (pe - ps) / 60.0
+            if hrs < 1:
+                return
+            brk_mins = self._get_break_minutes(hrs)
+            work_hrs = hrs - (brk_mins / 60.0)
+            key = (ps, pe)
+            if key in seen:
+                return
+            seen.add(key)
+            options.append({
+                "start": self._from_minutes(ps),
+                "end": self._from_minutes(pe),
+                "start_min": ps, "end_min": pe, "hours": hrs, "work_hours": work_hrs,
+            })
+
         for pat in patterns_to_use:
             raw_ps = self._to_minutes(pat["start"])
             raw_pe = self._normalize_end_time(raw_ps, self._to_minutes(pat["end"]))
@@ -312,30 +331,22 @@ class ShiftScheduler:
             work_hrs = hrs - (brk_mins / 60.0)
 
             if work_hrs > max_hours and not force:
-                # 必要な労働時間がmax_hoursの場合の休憩時間を取得
+                # パターンA: 開始固定で終了を短縮（従来通り）
                 needed_break = self._get_break_minutes(max_hours)
                 allowed_total_hours = max_hours + (needed_break / 60.0)
                 new_pe = ps + int(allowed_total_hours * 60)
                 if new_pe < pe:
-                    pe = new_pe
-                    # 短縮されたので再計算
-                    hrs = (pe - ps) / 60.0
-                    brk_mins = self._get_break_minutes(hrs)
-                    work_hrs = hrs - (brk_mins / 60.0)
+                    _add_option(ps, new_pe)
 
-            if hrs < 1:
-                continue
+                # パターンB: 終了固定で開始を遅くする（閉店時間カバー用）
+                new_ps = pe - int(allowed_total_hours * 60)
+                if new_ps > ps:
+                    new_ps = max(new_ps, open_min)
+                    _add_option(new_ps, pe)
+            else:
+                _add_option(ps, pe)
             # -------------------------------------------------------------------
 
-            key = (ps, pe)
-            if key in seen:
-                continue
-            seen.add(key)
-            options.append({
-                "start": self._from_minutes(ps),
-                "end": self._from_minutes(pe),
-                "start_min": ps, "end_min": pe, "hours": hrs, "work_hours": work_hrs,
-            })
         return options
 
     def _build_slot_requirements(self, date_str):

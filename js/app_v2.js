@@ -2192,56 +2192,11 @@ const app = {
                     required = parseInt(staffReq.min_weekend || 3);
                 }
 
-                // 実際の配置人数（同時出勤人数のカバー率から算出）
+                // 実際の配置人数（その日のシフト投入人数で判定）
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
-                const toMin = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-                
-                let dayType = 'weekday';
-                if (isHoliday || dayOfWeek === 0) dayType = 'holiday';
-                else if (dayOfWeek === 6) dayType = 'weekend';
+                const assigned = shiftsForDay.length;
 
-                const openingTimes = this.state.config.opening_times || {};
-                let opTimeStr = this.state.config.opening_time || "09:00";
-                let clTimeStr = this.state.config.closing_time || "22:00";
-
-                if (openingTimes[dayType] && openingTimes[dayType].start) {
-                    opTimeStr = openingTimes[dayType].start;
-                }
-                if (openingTimes[dayType] && openingTimes[dayType].end) {
-                    clTimeStr = openingTimes[dayType].end;
-                }
-
-                const opMin = toMin(opTimeStr);
-                const rawCl = toMin(clTimeStr);
-                const clMin = rawCl <= opMin ? rawCl + 1440 : rawCl;
-                
-                let minCov = 999;
-                let maxCov = 0;
-                for (let m = opMin; m < clMin; m += 15) {
-                    let cov = 0;
-                    shiftsForDay.forEach(s => {
-                        const sM = toMin(s.start_time);
-                        const rawE = toMin(s.end_time);
-                        const eM = rawE <= sM ? rawE + 1440 : rawE;
-                        if (m >= sM && m < eM) cov++;
-                    });
-                    if (cov < minCov) minCov = cov;
-                    if (cov > maxCov) maxCov = cov;
-                }
-                if (minCov === 999) minCov = 0;
-
-                let diff = 0;
-                let assigned = 0;
-                if (minCov < required) {
-                    diff = minCov - required; // 不足
-                    assigned = minCov;
-                } else if (maxCov > required) {
-                    diff = maxCov - required; // 過剰
-                    assigned = maxCov;
-                } else {
-                    diff = 0;
-                    assigned = required;
-                }
+                const diff = assigned - required;
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
@@ -2254,13 +2209,15 @@ const app = {
                     </div>`;
                 } else if (diff === 0) {
                     // ちょうど
-                    cellContent = `<div class="flex items-center justify-center h-full">
+                    cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
+                        <span class="text-[9px] text-green-400">${assigned}/${required}</span>
                     </div>`;
                 } else {
                     // 余裕あり
-                    cellContent = `<div class="flex items-center justify-center h-full">
+                    cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-blue-400 text-[10px] font-bold">+${diff}</span>
+                        <span class="text-[9px] text-blue-300">${assigned}/${required}</span>
                     </div>`;
                 }
 
