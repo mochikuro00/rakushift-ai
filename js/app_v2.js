@@ -5341,6 +5341,7 @@ const app = {
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="font-bold text-gray-800 mb-3">目次</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
                     <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
                     <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタッフ評価 (A〜D)</a>
                     <a href="#m-shift" class="text-indigo-600 hover:underline">3. AIシフト作成</a>
@@ -5352,6 +5353,57 @@ const app = {
                     <a href="#m-auth" class="text-indigo-600 hover:underline">9. 権限 (管理者/スタッフ)</a>
                     <a href="#m-analytics" class="text-indigo-600 hover:underline">10. 分析・レポート</a>
                     <a href="#m-other" class="text-indigo-600 hover:underline">11. その他機能</a>
+                </div>
+            </div>
+
+            <!-- 設定の重要性 -->
+            <div id="m-important" class="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl shadow-sm border-2 border-red-300 p-6">
+                <h3 class="text-lg font-bold text-red-700 mb-3"><i class="fa-solid fa-triangle-exclamation mr-2"></i>設定の重要性 ― AIシフト精度を最大化するために</h3>
+                <div class="bg-white/80 rounded-lg p-4 mb-4">
+                    <p class="text-sm text-gray-800 font-bold mb-2">ラクシフトAIのシフト精度は「設定の正確さ」に直結します。</p>
+                    <p class="text-sm text-gray-600">AIは設定された情報だけを元に最適なシフトを組みます。設定が不十分だと、偏った配置や穴抜けの原因になります。以下の設定を必ず確認してください。</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="bg-white rounded-lg p-4 border border-orange-200">
+                        <h4 class="font-bold text-orange-700 mb-2"><i class="fa-solid fa-user-gear mr-1"></i>スタッフ設定（最重要）</h4>
+                        <table class="w-full text-sm border-collapse">
+                            <thead><tr class="bg-orange-50"><th class="p-2 text-left border">設定項目</th><th class="p-2 text-left border">説明</th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">週最大出勤日数</td><td class="p-2 border">1週間に最大何日働けるか</td><td class="p-2 border text-red-600">デフォルト5日になり、バイトに過剰配置される</td></tr>
+                                <tr><td class="p-2 border font-bold">週最低出勤日数</td><td class="p-2 border">1週間に最低何日は入りたいか</td><td class="p-2 border text-red-600">0日扱いでシフトに入らない場合がある</td></tr>
+                                <tr><td class="p-2 border font-bold">1日の最大労働時間</td><td class="p-2 border">1日に最大何時間働けるか</td><td class="p-2 border text-red-600">8時間扱いで短時間バイトが長時間シフトに入る</td></tr>
+                                <tr><td class="p-2 border font-bold">役職</td><td class="p-2 border">店長/リーダー/スタッフ/新人</td><td class="p-2 border text-red-600">OJT制約やメンター配置が機能しない</td></tr>
+                                <tr><td class="p-2 border font-bold">評価 (A〜D)</td><td class="p-2 border">スキルレベル</td><td class="p-2 border text-red-600">チーム戦力バランスが偏る</td></tr>
+                                <tr><td class="p-2 border font-bold">給与形態</td><td class="p-2 border">月給制 or 時給制</td><td class="p-2 border text-red-600">月給スタッフが優先配置されず人件費が増大</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="bg-white rounded-lg p-4 border border-blue-200">
+                        <h4 class="font-bold text-blue-700 mb-2"><i class="fa-solid fa-store mr-1"></i>店舗設定（重要）</h4>
+                        <table class="w-full text-sm border-collapse">
+                            <thead><tr class="bg-blue-50"><th class="p-2 text-left border">設定項目</th><th class="p-2 text-left border">説明</th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">営業時間（曜日別）</td><td class="p-2 border">平日/土日/祝日の開店・閉店時間</td><td class="p-2 border text-red-600">閉店後の時間帯にも人員配置される</td></tr>
+                                <tr><td class="p-2 border font-bold">必要人員（曜日別）</td><td class="p-2 border">平日/土日/祝日の最低配置人数</td><td class="p-2 border text-red-600">人手不足・過剰配置が発生する</td></tr>
+                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遅番等の時間テンプレート</td><td class="p-2 border text-red-600">全員が同じ時間帯に集中する</td></tr>
+                                <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベースの休業日</td><td class="p-2 border text-red-600">休業日にシフトが配置される</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-300">
+                        <h4 class="font-bold text-green-700 mb-2"><i class="fa-solid fa-lightbulb mr-1"></i>AI精度を最大化するコツ</h4>
+                        <ul class="text-sm text-gray-700 space-y-1">
+                            <li>✅ <strong>全スタッフの勤務制約を正確に入力</strong>する（週最大/最低日数、1日最大時間）</li>
+                            <li>✅ <strong>月給制/時給制を正しく設定</strong>する → 月給スタッフが優先配置され人件費が最適化される</li>
+                            <li>✅ <strong>営業時間を曜日別に設定</strong>する → 土日の短縮営業等が正確に反映される</li>
+                            <li>✅ <strong>シフトパターンを2つ以上登録</strong>する → AIが自動的に中番も生成</li>
+                            <li>✅ <strong>必要人員を曜日別に設定</strong>する → 平日と土日の配置バランスが最適化される</li>
+                            <li>✅ <strong>役職と評価を正しく設定</strong>する → チーム編成の質が向上する</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -5450,13 +5502,28 @@ const app = {
             <!-- 7. 店舗設定 -->
             <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>店舗設定</h3>
-                <div class="space-y-2 text-sm text-gray-700">
-                    <p><strong>営業時間:</strong> 平日・土日・祝日ごとに設定。特別営業日は個別上書き可。</p>
-                    <p><strong>定休日:</strong> 曜日ベース（毎週水曜など）。臨時休業は日付指定。</p>
-                    <p><strong>シフトパターン:</strong> 早番・遅番などのテンプレートを登録。</p>
-                    <p><strong>最低人員:</strong> 平日/土日/祝日ごと、時間帯ごとの最低配置人数。</p>
-                    <p><strong>役職設定:</strong> 役職名のカスタマイズ。</p>
-                    <p><strong>運用ルール:</strong> スタッフ向けに表示されるお店のルールテキスト。</p>
+                <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
+                    <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
+                </div>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <div class="border-l-4 border-red-400 pl-3">
+                        <p><strong>営業時間（曜日別）:</strong> 平日・土日・祝日ごとに開店/閉店時間を設定。未設定だと全日同一営業時間で計算されます。</p>
+                    </div>
+                    <div class="border-l-4 border-red-400 pl-3">
+                        <p><strong>必要人員（曜日別）:</strong> 平日/土日/祝日ごとの最低配置人数。これがシフト表の「人員状況」アラートの基準値になります。</p>
+                    </div>
+                    <div class="border-l-4 border-orange-400 pl-3">
+                        <p><strong>シフトパターン:</strong> 早番・遅番などの時間テンプレート。<strong>2つ以上登録するとAIが自動的に中番パターンも生成</strong>し、時間帯の穴抜けを防ぎます。</p>
+                    </div>
+                    <div class="border-l-4 border-blue-400 pl-3">
+                        <p><strong>定休日:</strong> 曜日ベース（毎週水曜など）。臨時休業は日付指定。</p>
+                    </div>
+                    <div class="border-l-4 border-gray-400 pl-3">
+                        <p><strong>役職設定:</strong> 役職名のカスタマイズ。</p>
+                    </div>
+                    <div class="border-l-4 border-gray-400 pl-3">
+                        <p><strong>運用ルール:</strong> スタッフ向けに表示されるお店のルールテキスト。</p>
+                    </div>
                 </div>
             </div>
 
