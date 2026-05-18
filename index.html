@@ -781,13 +781,21 @@
                     <label class="block text-xs font-bold text-gray-500 mb-1">名前</label>
                     <input type="text" id="staffName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="山田 太郎">
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-bold text-gray-500 mb-1">役割</label>
                         <select id="staffRole" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
                             <option value="staff">スタッフ</option>
                             <option value="leader">リーダー</option>
                             <option value="manager">店長</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">担当ポジション</label>
+                        <select id="staffPosition" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="any">指定なし (全般)</option>
+                            <option value="hall">ホール専用</option>
+                            <option value="kitchen">キッチン専用</option>
                         </select>
                     </div>
                     <div>

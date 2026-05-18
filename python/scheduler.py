@@ -152,6 +152,7 @@ class ShiftScheduler:
                     if d.startswith("prefEndWe:"): s["pref_end_we"] = d.replace("prefEndWe:", "")
                     if d.startswith("ngPair:"): s["ng_pairs"] = d.replace("ngPair:", "")
                     if d.startswith("reqPair:"): s["req_pairs"] = d.replace("reqPair:", "")
+                    if d.startswith("position:"): s["position"] = d.replace("position:", "")
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
         
@@ -445,12 +446,52 @@ class ShiftScheduler:
         cl = self._normalize_end_time(op, self._to_minutes(day_close))
         slots = {}
         for t in range(op, cl, 15):
-            slots[t] = req_num
+            slots[t] = {"base": req_num, "hall": 0, "kitchen": 0, "any": 0}
 
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
         for rule in self.time_staff_req:
-            # days配列の要素型を統一（DB経由で文字列になる場合の安全策）
+            rule_days = [int(d) for d in rule.get("days", [])]
+            if js_dow not in rule_days:
+                continue
+            rs = self._to_minutes(rule.get("start", "00:00"))
+            re_min = self._normalize_end_time(rs, self._to_minutes(rule.get("end", "24:00")))
+            rc = int(rule.get("count", 0))
+            pos = rule.get("position", "any")
+            
+            for t in range(op, cl, 15):
+                in_range = (rs <= t < re_min) if rs <= re_min else (t >= rs or t < re_min)
+                if in_range and t in slots:
+                    if pos == "hall":
+                        slots[t]["hall"] = max(slots[t]["hall"], rc)
+                    elif pos == "kitchen":
+                        slots[t]["kitchen"] = max(slots[t]["kitchen"], rc)
+                    else:
+                        slots[t]["any"] = max(slots[t]["any"], rc)
+                        
+        final_slots = {}
+        for t, counts in slots.items():
+            final_slots[t] = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
+        return final_slots
+
+    def _build_pos_requirements(self, date_str):
+        """ポジション別の必要人数マップを構築"""
+        req_num = self._get_required_staff(date_str)
+        if req_num <= 0:
+            return {}
+        day_open, day_close = self._get_opening_hours(date_str)
+        op = self._to_minutes(day_open)
+        cl = self._normalize_end_time(op, self._to_minutes(day_close))
+        pos_reqs = {}
+        for t in range(op, cl, 15):
+            pos_reqs[t] = {"hall": 0, "kitchen": 0}
+
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        js_dow = (dt.weekday() + 1) % 7
+        for rule in self.time_staff_req:
+            pos = rule.get("position", "any")
+            if pos not in ("hall", "kitchen"):
+                continue
             rule_days = [int(d) for d in rule.get("days", [])]
             if js_dow not in rule_days:
                 continue
@@ -459,9 +500,9 @@ class ShiftScheduler:
             rc = int(rule.get("count", 0))
             for t in range(op, cl, 15):
                 in_range = (rs <= t < re_min) if rs <= re_min else (t >= rs or t < re_min)
-                if in_range and t in slots:
-                    slots[t] = max(slots[t], rc)
-        return slots
+                if in_range and t in pos_reqs:
+                    pos_reqs[t][pos] = max(pos_reqs[t][pos], rc)
+        return pos_reqs
 
     # ===========================================================
     # 事前チェック
@@ -1286,6 +1327,29 @@ class ShiftScheduler:
                         shortage = pulp.LpVariable(f"REQ_shortage_{sid1}_{sid2}_{d}_{t}", lowBound=0)
                         prob += (shortage >= sid1_w - sid2_w)
                         penalty += shortage * 100000
+
+            # ポジション別の必要人数確保（ソフト制約）
+            for d in self.dates:
+                pos_reqs = self._build_pos_requirements(d)
+                for t, reqs in pos_reqs.items():
+                    for pos, req_num in reqs.items():
+                        if req_num > 0:
+                            pos_staff = []
+                            for s in self.staff_list:
+                                if s["id"] not in [sid2[0] for sid2 in staff_opts.keys() if sid2[1] == d]:
+                                    continue
+                                sp = s.get("position", "any")
+                                if sp in ("any", pos):
+                                    pos_staff.append(s["id"])
+                            working_pos = pulp.lpSum(
+                                x[(sid, d, oi)]
+                                for sid in pos_staff
+                                for oi, opt in enumerate(staff_opts.get((sid, d), []))
+                                if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"]
+                            )
+                            shortage = pulp.LpVariable(f"POS_short_{pos}_{d}_{t}", lowBound=0)
+                            prob += (shortage >= req_num - working_pos)
+                            penalty += shortage * 200000
 
             prob += penalty
             # Tierごとにタイムリミットを段階化（合計最大110秒でRailway制限内に収める）

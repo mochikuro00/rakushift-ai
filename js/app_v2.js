@@ -3051,6 +3051,7 @@ const app = {
                                             <th class="p-2">開始</th>
                                             <th class="p-2">終了</th>
                                             <th class="p-2">人数</th>
+                                            <th class="p-2 w-1/4">ポジション</th>
                                             <th class="p-2 text-right"></th>
                                         </tr>
                                     </thead>
@@ -3076,6 +3077,13 @@ const app = {
                                                     ${this.get15MinTimeSelect(rule.end, '', 'setting-time-req-end border-gray-300 rounded px-2 py-1 text-xs w-full')}
                                                 </td>
                                                 <td class="p-2"><input type="number" class="setting-time-req-count border-gray-300 rounded px-2 py-1 text-xs w-12 text-center font-bold" value="${rule.count}"></td>
+                                                <td class="p-2">
+                                                    <select class="setting-time-req-position border-gray-300 rounded px-2 py-1 text-xs w-full font-bold">
+                                                        <option value="any" ${rule.position === 'any' || !rule.position ? 'selected' : ''}>全般 (区別なし)</option>
+                                                        <option value="hall" ${rule.position === 'hall' ? 'selected' : ''}>ホールのみ</option>
+                                                        <option value="kitchen" ${rule.position === 'kitchen' ? 'selected' : ''}>キッチンのみ</option>
+                                                    </select>
+                                                </td>
                                                 <td class="p-2 text-right"><button onclick="app.removeTimeStaffReq(${idx})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button></td>
                                             </tr>
                                             `;
@@ -3487,12 +3495,13 @@ const app = {
             const start = row.querySelector('.setting-time-req-start')?.value;
             const end = row.querySelector('.setting-time-req-end')?.value;
             const count = Number(row.querySelector('.setting-time-req-count')?.value || 0);
+            const position = row.querySelector('.setting-time-req-position')?.value || 'any';
 
             const daysChecks = document.querySelectorAll(`.setting-time-req-day-${idx}:checked`);
             const days = Array.from(daysChecks).map(c => Number(c.value));
 
             if (days.length > 0 && start && end && count > 0) {
-                config.time_staff_req.push({ days, start, end, count });
+                config.time_staff_req.push({ days, start, end, count, position });
             }
         });
 
@@ -4198,7 +4207,7 @@ const app = {
                 : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
         }
         // 既存のタグを削除
-        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart') && !d.startsWith('prefEnd') && !d.startsWith('ngDay:') && !d.startsWith('ngPair:') && !d.startsWith('reqPair:'));
+        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart') && !d.startsWith('prefEnd') && !d.startsWith('ngDay:') && !d.startsWith('ngPair:') && !d.startsWith('reqPair:') && !d.startsWith('position:'));
         
         const contractType = document.getElementById('staffContractType')?.value || 'general';
         const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
@@ -4208,6 +4217,7 @@ const app = {
         const prefEndWe = document.getElementById('staffPrefEndWeekend')?.value || '';
         const ngPairs = document.getElementById('staffNgPairs')?.value || '';
         const reqPairs = document.getElementById('staffReqPairs')?.value || '';
+        const position = document.getElementById('staffPosition')?.value || 'any';
         
         uDates.push(`priority:${shiftPriority}`);
         uDates.push(`contract:${contractType}`);
@@ -4217,6 +4227,7 @@ const app = {
         if (prefEndWe) uDates.push(`prefEndWe:${prefEndWe}`);
         if (ngPairs) uDates.push(`ngPair:${ngPairs}`);
         if (reqPairs) uDates.push(`reqPair:${reqPairs}`);
+        if (position !== 'any') uDates.push(`position:${position}`);
         for(let i=0; i<=6; i++) {
             const cb = document.getElementById('prefDay'+i);
             if(cb && !cb.checked) uDates.push(`ngDay:${i}`);
@@ -4276,6 +4287,7 @@ const app = {
         let prefEndWe = '';
         let ngPairs = '';
         let reqPairs = '';
+        let position = 'any';
         let ngDays = [];
         if (s.unavailable_dates) {
             const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
@@ -4289,6 +4301,7 @@ const app = {
                 if (txt.startsWith('prefEndWe:')) prefEndWe = txt.replace('prefEndWe:', '');
                 if (txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
                 if (txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
+                if (txt.startsWith('position:')) position = txt.replace('position:', '');
                 // 互換性のため古いタグもサポート
                 if (txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); }
                 if (txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); }
@@ -4303,6 +4316,7 @@ const app = {
         if (document.getElementById('staffPrefEndWeekend')) document.getElementById('staffPrefEndWeekend').value = prefEndWe;
         if (document.getElementById('staffNgPairs')) document.getElementById('staffNgPairs').value = ngPairs;
         if (document.getElementById('staffReqPairs')) document.getElementById('staffReqPairs').value = reqPairs;
+        if (document.getElementById('staffPosition')) document.getElementById('staffPosition').value = position;
         for(let i=0; i<=6; i++) {
             const cb = document.getElementById('prefDay'+i);
             if(cb) cb.checked = !ngDays.includes(String(i));
