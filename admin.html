@@ -719,8 +719,8 @@
                 <div class="bg-purple-50/50 border border-purple-100 rounded-xl p-3">
                     <h4 class="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2"><i class="fas fa-tags mr-1"></i>プラン選択</h4>
                     <select id="newTenantPlan" onchange="onTenantPlanChange()" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
-                        <option value="standard">Standard - 2,980円/月 (10名まで)</option>
-                        <option value="pro" selected>Pro - 4,480円/月 (50名まで)</option>
+                        <option value="standard">Standard - 3,380円/月 (10名まで)</option>
+                        <option value="pro" selected>Pro - 4,880円/月 (50名まで)</option>
                         <option value="premium">Premium - 9,980円/月 (無制限)</option>
                         <option value="oem">OEM代理店 - 4,000円/月 (手動管理・Stripe非連動)</option>
                     </select>
@@ -1700,8 +1700,8 @@
     const SETTING_LABELS = {
         stripe_secret_key: { label: 'Stripe Secret Key', placeholder: 'sk_live_xxxx', type: 'password' },
         stripe_webhook_secret: { label: 'Stripe Webhookシークレット', placeholder: 'whsec_xxxx', type: 'password' },
-        stripe_price_standard: { label: 'Standard価格ID (2,980円/月)', placeholder: 'price_xxxx', type: 'text' },
-        stripe_price_pro: { label: 'Pro価格ID (4,480円/月)', placeholder: 'price_xxxx', type: 'text' },
+        stripe_price_standard: { label: 'Standard価格ID (3,380円/月)', placeholder: 'price_xxxx', type: 'text' },
+        stripe_price_pro: { label: 'Pro価格ID (4,880円/月)', placeholder: 'price_xxxx', type: 'text' },
         stripe_price_premium: { label: 'Premium価格ID (9,980円/月)', placeholder: 'price_xxxx', type: 'text' },
         gemini_api_key: { label: 'Gemini APIキー', placeholder: 'AIza...', type: 'password' },
         gemini_model: { label: 'Geminiモデル', placeholder: 'gemini-2.0-flash', type: 'text' },

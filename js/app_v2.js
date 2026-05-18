@@ -3213,7 +3213,7 @@ const app = {
                                 <div>
                                     <p class="text-white/70 text-xs font-medium">現在ご利用中のプラン</p>
                                     <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium'}[config.stripe_plan] || 'Standard'}</p>
-                                    <p class="text-white/80 text-sm mt-1">${{standard:'2,980円/月 - スタッフ10名まで', pro:'4,480円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限'}[config.stripe_plan] || '2,980円/月 - スタッフ10名まで'}</p>
+                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380円/月 - スタッフ10名まで', pro:'4,880円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限'}[config.stripe_plan] || '3,380円/月 - スタッフ10名まで'}</p>
                                 </div>
                                 <div class="text-right">
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-sm font-bold backdrop-blur-sm">
@@ -3228,8 +3228,8 @@ const app = {
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">プラン変更</h4>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                                 ${[
-                                    { key: 'standard', name: 'Standard', price: '2,980', staffs: '10名', color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
-                                    { key: 'pro', name: 'Pro', price: '4,480', staffs: '50名', color: 'green', badge: '人気', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
+                                    { key: 'standard', name: 'Standard', price: '3,380', staffs: '10名', color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
+                                    { key: 'pro', name: 'Pro', price: '4,880', staffs: '50名', color: 'green', badge: '人気', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
                                     { key: 'premium', name: 'Premium', price: '9,980', staffs: '無制限', color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応', '専属サポート'] },
                                 ].map(p => {
                                     const currentPlanKey = (config.stripe_plan && config.stripe_plan !== 'free') ? config.stripe_plan : 'standard';
@@ -5735,8 +5735,8 @@ const app = {
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月額</th><th class="p-2 text-left border">スタッフ上限</th><th class="p-2 text-left border">機能</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">2,980円</td><td class="p-2 border">10名</td><td class="p-2 border">全AI機能・シフト管理全機能</td></tr>
-                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,480円</td><td class="p-2 border">50名</td><td class="p-2 border">+ 優先サポート・分析レポート</td></tr>
+                        <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">3,380円</td><td class="p-2 border">10名</td><td class="p-2 border">全AI機能・シフト管理全機能</td></tr>
+                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880円</td><td class="p-2 border">50名</td><td class="p-2 border">+ 優先サポート・分析レポート</td></tr>
                         <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">+ 複数店舗対応・専属サポート</td></tr>
                     </tbody>
                 </table>
@@ -6179,8 +6179,8 @@ const app = {
         if (!plansEl) return;
 
         const plans = [
-            { key: 'standard', name: 'Standard', price: '2,980', limit: 10, color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
-            { key: 'pro', name: 'Pro', price: '4,480', limit: 50, badge: '人気', color: 'green', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
+            { key: 'standard', name: 'Standard', price: '3,380', limit: 10, color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
+            { key: 'pro', name: 'Pro', price: '4,880', limit: 50, badge: '人気', color: 'green', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
             { key: 'premium', name: 'Premium', price: '9,980', limit: 9999, color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応', '専属サポート'] },
         ];
 
