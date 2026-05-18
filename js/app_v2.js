@@ -2042,8 +2042,9 @@ const app = {
                         barColor = 'bg-red-50 text-red-700 border-red-500 border-2 pattern-diagonal-lines ring-2 ring-red-400 ring-inset';
                     }
                     
-                    // 労働基準法除外の社員シフト枠組みの色を変更
-                    if (staff && staff.salary_type === 'monthly') {
+                    // 社員（月給制・店長・副店長・社員）のシフト枠組みの色を変更して強調
+                    const isEmployeeRole = staff && (staff.salary_type === 'monthly' || ['manager', 'sub_manager', 'employee'].includes(staff.role));
+                    if (isEmployeeRole) {
                         barColor += ' border-4 border-emerald-500 shadow-md';
                     }
                     
