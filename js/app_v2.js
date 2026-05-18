@@ -215,7 +215,7 @@ const app = {
                         this.state.organization_id = user.contract_id;
                     }
                     // 管理者かどうかの復元
-                    if (user.role === 'Manager' || user.role === 'manager') {
+                    if (user.role === 'admin' || user.role === 'Manager' || user.role === 'manager') {
                         this.state.isAdmin = true;
                     }
                 }
