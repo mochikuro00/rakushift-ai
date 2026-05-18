@@ -4196,7 +4196,7 @@ const app = {
             if(cb && !cb.checked) uDates.push(`ngDay:${i}`);
         }
         
-        data.unavailable_dates = uDates.join(',');
+        data.unavailable_dates = uDates;
 
         this.showLoading(true);
         try {
