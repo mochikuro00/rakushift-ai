@@ -1,4 +1,4 @@
-﻿import pulp
+import pulp
 from datetime import datetime, timedelta
 import random
 
@@ -144,11 +144,12 @@ class ShiftScheduler:
                 if isinstance(ud, str):
                     ud = [d.strip() for d in ud.split(",") if d.strip()]
                 for d in ud:
-                    if d.startswith("prefStart:"):
-                        s["pref_start"] = d.replace("prefStart:", "")
-                    if d.startswith("prefEnd:"):
-                        s["pref_end"] = d.replace("prefEnd:", "")
-                        
+                    if d.startswith("prefStart:"): s["pref_start"] = d.replace("prefStart:", "")
+                    if d.startswith("prefEnd:"): s["pref_end"] = d.replace("prefEnd:", "")
+                    if d.startswith("prefStartWd:"): s["pref_start_wd"] = d.replace("prefStartWd:", "")
+                    if d.startswith("prefEndWd:"): s["pref_end_wd"] = d.replace("prefEndWd:", "")
+                    if d.startswith("prefStartWe:"): s["pref_start_we"] = d.replace("prefStartWe:", "")
+                    if d.startswith("prefEndWe:"): s["pref_end_we"] = d.replace("prefEndWe:", "")
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
         for s in self.staff_list:
@@ -259,12 +260,6 @@ class ShiftScheduler:
                             ng.add(single_date)
         return ng
 
-    def _is_staff_exempt(self, staff):
-        ud = staff.get('unavailable_dates', [])
-        if isinstance(ud, str):
-            ud = [x.strip() for x in ud.split(',')]
-        return any(d == 'isExempt:true' for d in ud)
-
     def _get_staff_ng_dates(self, staff):
         """キャッシュからNG日を取得"""
         return self._ng_cache.get(staff["id"], set())
@@ -327,10 +322,19 @@ class ShiftScheduler:
         seen = set()
         
         patterns_to_use = self.shift_patterns
-        is_regular = any(d == "contract:regular" for d in (staff.get("unavailable_dates", []) if isinstance(staff.get("unavailable_dates", []), list) else [x.strip() for x in str(staff.get("unavailable_dates", "")).split(",")]))
-        if staff.get("pref_start") and staff.get("pref_end") and not is_regular:
-            patterns_to_use = [{"start": staff["pref_start"], "end": staff["pref_end"], "name": "pref"}]
-
+        
+        # 社員（月給制）の場合は、本人の希望に関係なく店舗の全営業時間に対してフレキシブルに割り当てる
+        is_monthly = staff.get("salary_type") == "monthly"
+        if not is_monthly:
+            day_type = self._get_day_type(date_str)
+            pref_start = staff.get("pref_start_we") if day_type in ("weekend", "holiday") else staff.get("pref_start_wd")
+            pref_end = staff.get("pref_end_we") if day_type in ("weekend", "holiday") else staff.get("pref_end_wd")
+            # フォールバック (古いprefStart用)
+            pref_start = pref_start or staff.get("pref_start")
+            pref_end = pref_end or staff.get("pref_end")
+            
+            if pref_start and pref_end:
+                patterns_to_use = [{"start": pref_start, "end": pref_end, "name": "pref"}]
         def _add_option(ps, pe):
             """オプションを追加するヘルパー（重複チェック含む）"""
             if ps >= pe:
@@ -617,7 +621,6 @@ class ShiftScheduler:
 
                     # --- 1日の最大労働時間 (労基法32条) ---
                     max_hours = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
-                    if self._is_staff_exempt(s): max_hours = 24.0
                     if not force:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                             if opt["work_hours"] > max_hours:
@@ -693,13 +696,11 @@ class ShiftScheduler:
                                 hours_expr += x[(sid, d, oi)] * opt["work_hours"]
                                 has_vars = True
                         if has_vars:
-                            if not self._is_staff_exempt(s):
-                                prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
+                            prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
 
                 # --- 連続勤務6日上限 (労基法35条: 週1日の休日) ---
                 sorted_d = sorted(self.dates)
                 max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS if not force else 7
-                if self._is_staff_exempt(s): max_consec = 31
                 if len(sorted_d) > max_consec:
                     for i in range(len(sorted_d) - max_consec):
                         span = sorted_d[i:i + max_consec + 1]
@@ -806,34 +807,29 @@ class ShiftScheduler:
                         slot_reqs = self._build_slot_requirements(d)
                     if not slot_reqs:
                         continue
-                    # 管理者が不在のスロットを検出するため、
-                    # 全営業スロットで管理者が最低1名必要
+                    # 開け作業・締め作業を含む、全スロットでの社員（月給制・店長）常駐制約
+                    employee_ids = self._monthly_ids.union(self._manager_ids)
                     first_slot = min(slot_reqs.keys())
                     last_slot = max(slot_reqs.keys())
-                    mgr_day_vars = []
-                    for mid in self._manager_ids:
-                        for oi in range(len(staff_opts.get((mid, d), []))):
-                            mgr_day_vars.append(x[(mid, d, oi)])
-                    if mgr_day_vars:
-                        slack = pulp.LpVariable(
-                            "mgr_day_{}".format(d),
-                            0, None, pulp.LpInteger)
-                        prob += pulp.lpSum(mgr_day_vars) + slack >= self.min_manager
-                        penalty += slack * 500000
-
-                    # 全スロットでの管理者カバレッジ
+                    
                     for slot_min in slot_reqs:
-                        mgr_vars = []
-                        for mid in self._manager_ids:
-                            for oi, opt in enumerate(staff_opts.get((mid, d), [])):
+                        emp_vars = []
+                        for eid in employee_ids:
+                            for oi, opt in enumerate(staff_opts.get((eid, d), [])):
                                 if opt["start_min"] <= slot_min < opt["end_min"]:
-                                    mgr_vars.append(x[(mid, d, oi)])
-                        if mgr_vars:
-                            slack = pulp.LpVariable(
-                                "mgr_{}_{}".format(d, slot_min),
-                                0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(mgr_vars) + slack >= self.min_manager
-                            penalty += slack * 500000
+                                    emp_vars.append(x[(eid, d, oi)])
+                        
+                        if emp_vars:
+                            if slot_min == first_slot or slot_min == last_slot:
+                                # 開け作業と締め作業は必ず社員（月給制・店長）が1名以上必要
+                                slack = pulp.LpVariable("emp_openclose_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(emp_vars) + slack >= 1
+                                penalty += slack * 5000000  # バイトだけでの開け締めを強烈に回避
+                            else:
+                                # その他の時間は設定された管理者数（min_manager）を目指す
+                                slack = pulp.LpVariable("emp_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(emp_vars) + slack >= self.min_manager
+                                penalty += slack * 500000
 
             # ====================================================
             # TIER 3: 品質最適化 (ソフト制約)
@@ -1575,11 +1571,11 @@ class ShiftScheduler:
 
         cur_hours = weekly_hours.get(sid, {}).get(wk, 0)
         max_hours = float(staff.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
-        if not self._is_staff_exempt(staff) and (cur_hours + max_hours > self.LEGAL_MAX_HOURS_WEEK):
+        if cur_hours + max_hours > self.LEGAL_MAX_HOURS_WEEK:
             return True  # 週40時間超過の可能性
 
         cur_consec = consecutive.get(sid, 0)
-        if not self._is_staff_exempt(staff) and (cur_consec >= self.LEGAL_MAX_CONSECUTIVE_DAYS):
+        if cur_consec >= self.LEGAL_MAX_CONSECUTIVE_DAYS:
             return True  # 連続勤務超過
 
         return False
