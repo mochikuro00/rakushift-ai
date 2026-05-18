@@ -2177,7 +2177,7 @@ const app = {
 
                 // 休業日チェック
                 const isSpecialHoliday = specialHolidays.includes(dateStr);
-                const isClosedDay = closedDays.includes(jsDow);
+                const isClosedDay = closedDays.map(Number).includes(jsDow);
                 if (isSpecialHoliday || isClosedDay) {
                     alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 bg-gray-50 text-center">
                         <span class="text-[10px] text-gray-300">-</span>
@@ -2219,8 +2219,8 @@ const app = {
                 let closeM = toMins(dayClose);
                 if (closeM <= openM) closeM += 24 * 60; // 日またぎ対応
 
-                // 時間帯別の必要人数ルール適用
-                const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).includes(jsDow));
+                // 時間帯別の必要人数ルール適用（days配列の型を数値に統一して安全にフィルタ）
+                const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(jsDow));
 
                 // 15分スロットごとに「同時在籍人数」vs「そのスロットの要件」を比較
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
@@ -2866,7 +2866,7 @@ const app = {
                             <div class="flex flex-wrap gap-4 mb-4">
                                 ${['日', '月', '火', '水', '木', '金', '土'].map((day, i) => `
                                     <label class="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition">
-                                        <input type="checkbox" name="setting_closed_days" value="${i}" class="w-5 h-5 text-red-500 rounded focus:ring-red-500 border-gray-300" ${closedDays.includes(i) ? 'checked' : ''}>
+                                        <input type="checkbox" name="setting_closed_days" value="${i}" class="w-5 h-5 text-red-500 rounded focus:ring-red-500 border-gray-300" ${closedDays.map(Number).includes(i) ? 'checked' : ''}>
                                         <span class="font-bold ${i===0?'text-red-500':i===6?'text-blue-500':'text-gray-700'}">${day}曜日</span>
                                     </label>
                                 `).join('')}
@@ -4979,8 +4979,8 @@ const app = {
             timeReqManager.set(t, Number(reqManager));
         }
 
-        // 時間帯別ルールの適用 (time_staff_req)
-        const timeRules = (config.time_staff_req || []).filter(r => r.days.includes(dayOfWeek));
+        // 時間帯別ルールの適用 (time_staff_req)（days配列の型を数値に統一）
+        const timeRules = (config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(dayOfWeek));
         timeRules.forEach(rule => {
             const rStart = toMins(rule.start);
             let rEnd = toMins(rule.end);

@@ -189,7 +189,7 @@ class ShiftScheduler:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         # JavaScript互換: 0=日, 1=月, ..., 6=土
         js_dow = (dt.weekday() + 1) % 7
-        if js_dow in self.closed_days:
+        if js_dow in [int(d) for d in self.closed_days]:
             return "closed"
         if dt.weekday() == 6:  # 日曜
             return "holiday"
@@ -389,7 +389,9 @@ class ShiftScheduler:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
         for rule in self.time_staff_req:
-            if js_dow not in rule.get("days", []):
+            # days配列の要素型を統一（DB経由で文字列になる場合の安全策）
+            rule_days = [int(d) for d in rule.get("days", [])]
+            if js_dow not in rule_days:
                 continue
             rs = self._to_minutes(rule.get("start", "00:00"))
             re_min = self._normalize_end_time(rs, self._to_minutes(rule.get("end", "24:00")))
