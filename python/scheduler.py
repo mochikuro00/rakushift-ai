@@ -749,7 +749,7 @@ class ShiftScheduler:
                             self._slot_reqs_cache = {}
                         self._slot_reqs_cache[d] = slot_reqs_for_day
                         max_slot_req = max(slot_reqs_for_day.values()) if slot_reqs_for_day else req_daily
-                        daily_upper = max(req_daily, max_slot_req) + 1
+                        daily_upper = max(req_daily, max_slot_req)  # ±0を目指す（旧: +1）
                         daily_slack_over = pulp.LpVariable(
                             "daily_over_{}".format(d), 0, None, pulp.LpInteger)
                         prob += daily_sum - daily_slack_over <= daily_upper
@@ -781,10 +781,9 @@ class ShiftScheduler:
                                 "cov_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += workers_sum + slack_under >= req
                             penalty += slack_under * 500000  # 不足ペナルティ（強化）
-                            # 過剰は+1以内に厳格制御（±1制御の核心）
                             slack_over = pulp.LpVariable(
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                            prob += workers_sum - slack_over <= req + 1  # +1まで許容（旧: +2）
+                            prob += workers_sum - slack_over <= req  # +0を目指す（旧: req + 1）
                             penalty += slack_over * 200000  # 過剰ペナルティ（旧: 10000 → 20倍強化）
 
                 # --- 管理者常駐制約 ---
