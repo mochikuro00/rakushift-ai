@@ -1467,7 +1467,7 @@ const app = {
                          <h3 class="font-bold text-gray-800 mb-3 text-sm">クイックメニュー</h3>
                          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             ${this.state.isAdmin ? `
-                            <button onclick="app.openModal('staffModal'); document.getElementById('staffForm').reset(); document.getElementById('staffId').value='';" 
+                            <button onclick="app.openModal('staffModal'); document.getElementById('staffForm').reset(); document.getElementById('staffId').value=''; app.toggleSalaryInputs(); app.togglePrefHoursInputs();" 
                                 class="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-lg text-sm font-bold text-gray-600 hover:text-blue-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-blue-200">
                                 <i class="fa-solid fa-user-plus text-blue-500 text-lg"></i> スタッフ追加
                             </button>
@@ -4246,10 +4246,11 @@ const app = {
         
         const contractType = document.getElementById('staffContractType')?.value || 'general';
         const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
-        const prefStartWd = document.getElementById('staffPrefStartWeekday')?.value || '';
-        const prefEndWd = document.getElementById('staffPrefEndWeekday')?.value || '';
-        const prefStartWe = document.getElementById('staffPrefStartWeekend')?.value || '';
-        const prefEndWe = document.getElementById('staffPrefEndWeekend')?.value || '';
+        const usePref = document.getElementById('staffUsePrefHours')?.checked;
+        const prefStartWd = usePref ? (document.getElementById('staffPrefStartWeekday')?.value || '') : '';
+        const prefEndWd = usePref ? (document.getElementById('staffPrefEndWeekday')?.value || '') : '';
+        const prefStartWe = usePref ? (document.getElementById('staffPrefStartWeekend')?.value || '') : '';
+        const prefEndWe = usePref ? (document.getElementById('staffPrefEndWeekend')?.value || '') : '';
         const ngPairs = document.getElementById('staffNgPairs')?.value || '';
         const reqPairs = document.getElementById('staffReqPairs')?.value || '';
         const position = document.getElementById('staffPosition')?.value || 'any';
@@ -4325,27 +4326,34 @@ const app = {
         let reqPairs = '';
         let position = 'any';
         let ngDays = [];
+        let hasPref = false;
         if (s.unavailable_dates) {
             const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
             uDates.forEach(d => {
                 const txt = d.trim();
                 if (txt.startsWith('priority:')) shiftPriority = txt.replace('priority:', '');
                 if (txt.startsWith('contract:')) contractType = txt.replace('contract:', '');
-                if (txt.startsWith('prefStartWd:')) prefStartWd = txt.replace('prefStartWd:', '');
-                if (txt.startsWith('prefEndWd:')) prefEndWd = txt.replace('prefEndWd:', '');
-                if (txt.startsWith('prefStartWe:')) prefStartWe = txt.replace('prefStartWe:', '');
-                if (txt.startsWith('prefEndWe:')) prefEndWe = txt.replace('prefEndWe:', '');
+                if (txt.startsWith('prefStartWd:')) { prefStartWd = txt.replace('prefStartWd:', ''); hasPref = true; }
+                if (txt.startsWith('prefEndWd:')) { prefEndWd = txt.replace('prefEndWd:', ''); hasPref = true; }
+                if (txt.startsWith('prefStartWe:')) { prefStartWe = txt.replace('prefStartWe:', ''); hasPref = true; }
+                if (txt.startsWith('prefEndWe:')) { prefEndWe = txt.replace('prefEndWe:', ''); hasPref = true; }
                 if (txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
                 if (txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
                 if (txt.startsWith('position:')) position = txt.replace('position:', '');
                 // 互換性のため古いタグもサポート
-                if (txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); }
-                if (txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); }
+                if (txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); hasPref = true; }
+                if (txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); hasPref = true; }
                 if (txt.startsWith('ngDay:')) ngDays.push(txt.replace('ngDay:', ''));
             });
         }
         if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = contractType;
         if (document.getElementById('staffShiftPriority')) document.getElementById('staffShiftPriority').value = shiftPriority;
+        
+        const usePrefCb = document.getElementById('staffUsePrefHours');
+        if (usePrefCb) {
+            usePrefCb.checked = hasPref;
+        }
+        
         if (document.getElementById('staffPrefStartWeekday')) document.getElementById('staffPrefStartWeekday').value = prefStartWd;
         if (document.getElementById('staffPrefEndWeekday')) document.getElementById('staffPrefEndWeekday').value = prefEndWd;
         if (document.getElementById('staffPrefStartWeekend')) document.getElementById('staffPrefStartWeekend').value = prefStartWe;
@@ -4365,6 +4373,7 @@ const app = {
         document.getElementById('staffMinDaysPerWeek').value = s.min_days_week || 0;
         document.getElementById('staffMinDaysPerMonth').value = s.min_days_month || 0;
         this.toggleSalaryInputs();
+        this.togglePrefHoursInputs();
         this.openModal('staffModal');
     },
     async deleteStaff(id) {

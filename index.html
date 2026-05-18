@@ -831,27 +831,36 @@
                 </div>
 
                 <div class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div class="text-sm font-bold text-gray-800 mb-2">シフト希望時間（カテゴリ別）</div>
-                    
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">平日 基本出勤時間 (任意)</label>
-                            <input type="time" id="staffPrefStartWeekday" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">平日 基本退勤時間 (任意)</label>
-                            <input type="time" id="staffPrefEndWeekday" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-bold text-gray-800">シフト希望時間</div>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="staffUsePrefHours" class="sr-only peer" onchange="app.togglePrefHoursInputs()">
+                            <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 relative"></div>
+                            <span class="ml-2 text-xs font-bold text-gray-600">希望時間を指定する</span>
+                        </label>
                     </div>
                     
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">土日祝 基本出勤時間 (任意)</label>
-                            <input type="time" id="staffPrefStartWeekend" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <div id="prefHoursInputGroup" class="hidden mt-3 pt-3 border-t border-gray-200">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">平日 基本出勤時間</label>
+                                <input type="time" id="staffPrefStartWeekday" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">平日 基本退勤時間</label>
+                                <input type="time" id="staffPrefEndWeekday" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">土日祝 基本退勤時間 (任意)</label>
-                            <input type="time" id="staffPrefEndWeekend" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">土日祝 基本出勤時間</label>
+                                <input type="time" id="staffPrefStartWeekend" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">土日祝 基本退勤時間</label>
+                                <input type="time" id="staffPrefEndWeekend" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
                         </div>
                     </div>
                 </div>
