@@ -2222,11 +2222,11 @@ const app = {
                 // 時間帯別の必要人数ルール適用
                 const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).includes(jsDow));
 
-                // 15分スロットごとに「同時在籍人数」を計算し、最少値を取得
+                // 15分スロットごとに「同時在籍人数」vs「そのスロットの要件」を比較
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
-                let minConcurrent = Infinity;
                 let totalSlots = 0;
                 let shortageSlots = 0;
+                let worstDeficit = 0; // 最悪の不足数（正値=不足あり）
 
                 for (let t = openM; t < closeM; t += 15) {
                     // このスロットでの必要人数（ベース or 時間帯別ルールの大きい方）
@@ -2249,41 +2249,35 @@ const app = {
                     }).length;
 
                     totalSlots++;
-                    if (concurrent < slotReq) shortageSlots++;
-                    if (concurrent < minConcurrent) minConcurrent = concurrent;
+                    const slotDeficit = slotReq - concurrent;
+                    if (slotDeficit > 0) shortageSlots++;
+                    if (slotDeficit > worstDeficit) worstDeficit = slotDeficit;
                 }
 
-                if (minConcurrent === Infinity) minConcurrent = 0;
-
-                // 最も厳しいスロットの差分で判定
-                // required は最大要件（時間帯別ルールを考慮）
-                let maxRequired = required;
-                timeRules.forEach(rule => {
-                    maxRequired = Math.max(maxRequired, parseInt(rule.count || 0));
-                });
-                const diff = minConcurrent - maxRequired;
+                // 表示用: その日の配置人数とベース要件で比較
+                const assigned = shiftsForDay.length;
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
                 if (shortageSlots > 0) {
-                    // 不足スロットがある: 赤文字アラート
+                    // 不足スロットがある
                     cellBg = 'bg-red-50';
-                    const shortageRatio = Math.round((shortageSlots / totalSlots) * 100);
+                    const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-red-600 font-black text-xs animate-pulse">${shortageSlots > totalSlots / 2 ? Math.abs(diff) + '名不足' : '一部不足'}</span>
-                        <span class="text-[9px] text-red-400">${minConcurrent}/${maxRequired}</span>
+                        <span class="text-red-600 font-black text-xs animate-pulse">${label}</span>
+                        <span class="text-[9px] text-red-400">${assigned}名/${required}名</span>
                     </div>`;
-                } else if (diff === 0) {
-                    // ちょうど
+                } else if (assigned <= required) {
+                    // ちょうど足りている
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
-                        <span class="text-[9px] text-green-400">${minConcurrent}/${maxRequired}</span>
+                        <span class="text-[9px] text-green-400">${assigned}名/${required}名</span>
                     </div>`;
                 } else {
-                    // 余裕あり（でも過剰すぎない範囲で表示）
+                    // 余裕あり
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-blue-400 text-[10px] font-bold">+${diff}</span>
-                        <span class="text-[9px] text-blue-300">${minConcurrent}/${maxRequired}</span>
+                        <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
+                        <span class="text-[9px] text-green-400">${assigned}名/${required}名</span>
                     </div>`;
                 }
 
