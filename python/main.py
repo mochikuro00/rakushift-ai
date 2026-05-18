@@ -475,12 +475,15 @@ def diagnose_shifts(request: Request, req: DiagnoseRequest):
             {"min_hours": 8, "break_minutes": 60}
         ])
 
+        time_staff_req = config.get("time_staff_req", [])
+        
         prompt = """あなたはプロの店舗マネージャーであり、日本の労働基準法に精通しています。
 以下のシフトデータを分析し、改善点やリスクを指摘してください。
 
 【店舗ルール】
 - 営業時間: {} - {}
-- 最低人数: 平日{}名, 土日{}名, 祝日{}名
+- 最低人数（常に必要なベース人数）: 平日{}名, 土日{}名, 祝日{}名
+- 時間帯別の必要人数要件: {}
 - 最低管理者数: {}名
 - 休憩ルール: {}
 
@@ -500,7 +503,7 @@ def diagnose_shifts(request: Request, req: DiagnoseRequest):
 
 【分析してほしいこと】
 1. 労基法違反リスク（上記4項目）
-2. 人員不足のリスク（特に土日やピークタイム）
+2. 人員不足のリスクと時間帯（「12:00-15:00の中番で1名不足」のように、早番・中番・遅番など具体的にどの時間帯で人が足りないかを特定し、誰の出勤を追加するか・誰のシフトを延長するか等の「具体的な改善策」を必ず提示すること）
 3. 特定スタッフへの負荷偏り（連勤、長時間労働）
 4. 管理者不在の時間帯
 5. 新人が一人で入っている時間帯
@@ -512,12 +515,13 @@ def diagnose_shifts(request: Request, req: DiagnoseRequest):
   {{"type": "info", "title": "...", "desc": "...", "action": "..."}}
 ]
 
-typeは重要度順: danger(労基法違反) > warning(リスク) > info(改善提案)""".format(
+typeは重要度順: danger(労基法違反) > warning(人員不足など重大リスク) > info(改善提案)""".format(
             config.get("opening_time", "09:00"),
             config.get("closing_time", "22:00"),
             staff_req.get("min_weekday", 2),
             staff_req.get("min_weekend", 3),
             staff_req.get("min_holiday", 3),
+            json.dumps(time_staff_req, ensure_ascii=False) if time_staff_req else "特になし",
             staff_req.get("min_manager", 1),
             json.dumps(break_rules, ensure_ascii=False),
             json.dumps([{
@@ -625,6 +629,7 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
 === 推奨ルール (可能な限り遵守) ===
 - 管理者(manager/leader)が各シフトに最低{}名
 - 平日最低{}名、土日最低{}名、祝日最低{}名
+- 時間帯別の必要人数要件: {}
 - 月給スタッフは週5日程度配置
 - 新人(evaluation=D)がいる場合はメンター(manager/leader)も配置
 
@@ -652,6 +657,7 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
             staff_req.get("min_weekday", 2),
             staff_req.get("min_weekend", 3),
             staff_req.get("min_holiday", 3),
+            json.dumps(config.get("time_staff_req", []), ensure_ascii=False) if config.get("time_staff_req") else "特になし",
             json.dumps(staff_info, ensure_ascii=False),
             json.dumps(req.dates),
             json.dumps(shift_summary, ensure_ascii=False),
