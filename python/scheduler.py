@@ -739,6 +739,10 @@ class ShiftScheduler:
                         # ただしスロットレベルの要件が日次ベースより大きい場合は、
                         # スロット要件の最大値を基準にして矛盾を防ぐ
                         slot_reqs_for_day = self._build_slot_requirements(d)
+                        # キャッシュしてスロットループでの再計算を防ぐ
+                        if not hasattr(self, '_slot_reqs_cache'):
+                            self._slot_reqs_cache = {}
+                        self._slot_reqs_cache[d] = slot_reqs_for_day
                         max_slot_req = max(slot_reqs_for_day.values()) if slot_reqs_for_day else req_daily
                         daily_upper = max(req_daily, max_slot_req) + 1
                         daily_slack_over = pulp.LpVariable(
@@ -747,8 +751,11 @@ class ShiftScheduler:
                         penalty += daily_slack_over * 400000  # 過剰ペナルティ（不足に次ぐ重さ）
 
                 # --- 各時間スロットの人員: 必要人数±1に収束させる ---
+                # ※_slot_reqs_cacheを利用して_build_slot_requirementsの二重呼び出しを回避
                 for d in self.dates:
-                    slot_reqs = self._build_slot_requirements(d)
+                    slot_reqs = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
+                    if slot_reqs is None:
+                        slot_reqs = self._build_slot_requirements(d)
                     for slot_min, req in slot_reqs.items():
                         workers = []
                         for s in self.staff_list:
@@ -1254,17 +1261,20 @@ class ShiftScheduler:
 
             req_daily = self._get_required_staff(d)
             daily_assigned = len(day_s)
-            if req_daily > 0:
+            # スロット要件の最大値も考慮（MILP制約と同じ基準）
+            max_slot_req = max(reqs.values()) if reqs else req_daily
+            daily_effective_req = max(req_daily, max_slot_req)
+            if daily_effective_req > 0:
                 daily_checked += 1
-                daily_diff = daily_assigned - req_daily
+                daily_diff = daily_assigned - daily_effective_req
                 if -1 <= daily_diff <= 1:
                     daily_within_pm1 += 1
                 elif daily_diff < -1:
                     print("  BALANCE: {} daily: need={} got={} ({}名不足)".format(
-                        d, req_daily, daily_assigned, abs(daily_diff)))
+                        d, daily_effective_req, daily_assigned, abs(daily_diff)))
                 elif daily_diff > 1:
                     print("  BALANCE: {} daily: need={} got={} (+{}名過剰)".format(
-                        d, req_daily, daily_assigned, daily_diff))
+                        d, daily_effective_req, daily_assigned, daily_diff))
 
             for slot_min, req in reqs.items():
                 cov = sum(1 for s in day_s
