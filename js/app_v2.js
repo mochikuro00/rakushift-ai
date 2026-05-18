@@ -2189,7 +2189,7 @@ const app = {
                 const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
                 const isHoliday = jh ? jh.isHoliday(dateStr) : false;
 
-                // 必要人数を取得
+                // 必要人数を取得（ベース値）
                 let required = parseInt(staffReq.min_weekday || 2);
                 if (isHoliday || dayOfWeek === 0) {
                     required = parseInt(staffReq.min_holiday || 3);
@@ -2197,32 +2197,93 @@ const app = {
                     required = parseInt(staffReq.min_weekend || 3);
                 }
 
-                // 実際の配置人数（その日のシフト投入人数で判定）
-                const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
-                const assigned = shiftsForDay.length;
+                // 営業時間の取得
+                const times = this.state.config.opening_times || this.state.defaultConfig.opening_times;
+                const defTimes = this.state.defaultConfig.opening_times;
+                const getT = (key) => ((times || {})[key] || defTimes[key]);
+                let dayOpen, dayClose;
+                const specialDay = (this.state.config.special_days || {})[dateStr];
+                if (specialDay && specialDay.start && specialDay.end) {
+                    dayOpen = specialDay.start;
+                    dayClose = specialDay.end;
+                } else if (isHoliday) {
+                    dayOpen = getT('holiday').start; dayClose = getT('holiday').end;
+                } else if (dayOfWeek === 0 || dayOfWeek === 6) {
+                    dayOpen = getT('weekend').start; dayClose = getT('weekend').end;
+                } else {
+                    dayOpen = getT('weekday').start; dayClose = getT('weekday').end;
+                }
 
-                const diff = assigned - required;
+                const toMins = (t) => { const [h, m] = (t || '09:00').split(':').map(Number); return h * 60 + m; };
+                const openM = toMins(dayOpen);
+                let closeM = toMins(dayClose);
+                if (closeM <= openM) closeM += 24 * 60; // 日またぎ対応
+
+                // 時間帯別の必要人数ルール適用
+                const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).includes(jsDow));
+
+                // 15分スロットごとに「同時在籍人数」を計算し、最少値を取得
+                const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
+                let minConcurrent = Infinity;
+                let totalSlots = 0;
+                let shortageSlots = 0;
+
+                for (let t = openM; t < closeM; t += 15) {
+                    // このスロットでの必要人数（ベース or 時間帯別ルールの大きい方）
+                    let slotReq = required;
+                    timeRules.forEach(rule => {
+                        const rs = toMins(rule.start);
+                        let re = toMins(rule.end);
+                        if (re <= rs) re += 24 * 60;
+                        if (t >= rs && t < re) {
+                            slotReq = Math.max(slotReq, parseInt(rule.count || 0));
+                        }
+                    });
+
+                    // このスロットの同時在籍人数
+                    const concurrent = shiftsForDay.filter(s => {
+                        const sStart = toMins(s.start_time);
+                        let sEnd = toMins(s.end_time);
+                        if (sEnd <= sStart) sEnd += 24 * 60;
+                        return sStart <= t && t < sEnd;
+                    }).length;
+
+                    totalSlots++;
+                    if (concurrent < slotReq) shortageSlots++;
+                    if (concurrent < minConcurrent) minConcurrent = concurrent;
+                }
+
+                if (minConcurrent === Infinity) minConcurrent = 0;
+
+                // 最も厳しいスロットの差分で判定
+                // required は最大要件（時間帯別ルールを考慮）
+                let maxRequired = required;
+                timeRules.forEach(rule => {
+                    maxRequired = Math.max(maxRequired, parseInt(rule.count || 0));
+                });
+                const diff = minConcurrent - maxRequired;
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
-                if (diff < 0) {
-                    // 不足: 赤文字アラート
+                if (shortageSlots > 0) {
+                    // 不足スロットがある: 赤文字アラート
                     cellBg = 'bg-red-50';
+                    const shortageRatio = Math.round((shortageSlots / totalSlots) * 100);
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-red-600 font-black text-xs animate-pulse">${Math.abs(diff)}名不足</span>
-                        <span class="text-[9px] text-red-400">${assigned}/${required}</span>
+                        <span class="text-red-600 font-black text-xs animate-pulse">${shortageSlots > totalSlots / 2 ? Math.abs(diff) + '名不足' : '一部不足'}</span>
+                        <span class="text-[9px] text-red-400">${minConcurrent}/${maxRequired}</span>
                     </div>`;
                 } else if (diff === 0) {
                     // ちょうど
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
-                        <span class="text-[9px] text-green-400">${assigned}/${required}</span>
+                        <span class="text-[9px] text-green-400">${minConcurrent}/${maxRequired}</span>
                     </div>`;
                 } else {
-                    // 余裕あり
+                    // 余裕あり（でも過剰すぎない範囲で表示）
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-blue-400 text-[10px] font-bold">+${diff}</span>
-                        <span class="text-[9px] text-blue-300">${assigned}/${required}</span>
+                        <span class="text-[9px] text-blue-300">${minConcurrent}/${maxRequired}</span>
                     </div>`;
                 }
 
