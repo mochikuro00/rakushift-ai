@@ -2773,11 +2773,21 @@ const app = {
                 <div class="flex items-center justify-between border-b border-gray-200 pb-4">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-800">店舗設定</h2>
-                        <p class="text-sm text-gray-500 mt-1">AIシフト生成に使われるルールです。ここを正しく設定するとAIが最適なシフトを作れます。</p>
+                        <p class="text-sm text-gray-500 mt-1">AIシフト生成に使われるルールです。</p>
                     </div>
                     <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
                         <i class="fa-solid fa-save mr-2"></i>設定を保存
                     </button>
+                </div>
+
+                <div class="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-lg text-sm text-purple-900 leading-relaxed shadow-sm">
+                    <strong><i class="fa-solid fa-triangle-exclamation text-purple-600 mr-2"></i> 【重要】店舗設定の正確さがAIの精度を決めます</strong><br>
+                    <div class="mt-2 space-y-2">
+                        <p>ラクシフトAIは、ここに入力された条件を「店舗の絶対的なルール」として学習しシフトを組みます。</p>
+                        <p>・<span class="font-bold text-purple-700">正確に設定した場合</span>：時間帯ごとの最適な人員配置、管理者の確実なカバー、休憩の自動付与など「店長が頭を抱えていたパズル」を完璧に解いたシフトを生成します。</p>
+                        <p>・<span class="font-bold text-red-500">設定が甘い場合</span>（例: 必要な人数を全て0にする、管理者を設定しない等）：AIは「何人でも良い」「誰でも良い」と判断するため、人が足りない時間帯ができたり、法律上は問題なくても実用的でないシフトが出来上がってしまいます。</p>
+                        <p class="font-bold mt-2">※特に「営業時間内の管理者カバー」と「時間帯別の必要人数」は、店舗の実態に合わせて正確に入力してください。</p>
+                    </div>
                 </div>
 
                 <!-- 1. 役職・ロール設定 -->
@@ -4188,7 +4198,7 @@ const app = {
                 : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
         }
         // 既存のタグを削除
-        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart') && !d.startsWith('prefEnd') && !d.startsWith('ngDay:'));
+        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart') && !d.startsWith('prefEnd') && !d.startsWith('ngDay:') && !d.startsWith('ngPair:') && !d.startsWith('reqPair:'));
         
         const contractType = document.getElementById('staffContractType')?.value || 'general';
         const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
@@ -4196,6 +4206,8 @@ const app = {
         const prefEndWd = document.getElementById('staffPrefEndWeekday')?.value || '';
         const prefStartWe = document.getElementById('staffPrefStartWeekend')?.value || '';
         const prefEndWe = document.getElementById('staffPrefEndWeekend')?.value || '';
+        const ngPairs = document.getElementById('staffNgPairs')?.value || '';
+        const reqPairs = document.getElementById('staffReqPairs')?.value || '';
         
         uDates.push(`priority:${shiftPriority}`);
         uDates.push(`contract:${contractType}`);
@@ -4203,6 +4215,8 @@ const app = {
         if (prefEndWd) uDates.push(`prefEndWd:${prefEndWd}`);
         if (prefStartWe) uDates.push(`prefStartWe:${prefStartWe}`);
         if (prefEndWe) uDates.push(`prefEndWe:${prefEndWe}`);
+        if (ngPairs) uDates.push(`ngPair:${ngPairs}`);
+        if (reqPairs) uDates.push(`reqPair:${reqPairs}`);
         for(let i=0; i<=6; i++) {
             const cb = document.getElementById('prefDay'+i);
             if(cb && !cb.checked) uDates.push(`ngDay:${i}`);
@@ -4260,6 +4274,8 @@ const app = {
         let prefEndWd = '';
         let prefStartWe = '';
         let prefEndWe = '';
+        let ngPairs = '';
+        let reqPairs = '';
         let ngDays = [];
         if (s.unavailable_dates) {
             const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
@@ -4271,6 +4287,8 @@ const app = {
                 if (txt.startsWith('prefEndWd:')) prefEndWd = txt.replace('prefEndWd:', '');
                 if (txt.startsWith('prefStartWe:')) prefStartWe = txt.replace('prefStartWe:', '');
                 if (txt.startsWith('prefEndWe:')) prefEndWe = txt.replace('prefEndWe:', '');
+                if (txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
+                if (txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
                 // 互換性のため古いタグもサポート
                 if (txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); }
                 if (txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); }
@@ -4283,6 +4301,8 @@ const app = {
         if (document.getElementById('staffPrefEndWeekday')) document.getElementById('staffPrefEndWeekday').value = prefEndWd;
         if (document.getElementById('staffPrefStartWeekend')) document.getElementById('staffPrefStartWeekend').value = prefStartWe;
         if (document.getElementById('staffPrefEndWeekend')) document.getElementById('staffPrefEndWeekend').value = prefEndWe;
+        if (document.getElementById('staffNgPairs')) document.getElementById('staffNgPairs').value = ngPairs;
+        if (document.getElementById('staffReqPairs')) document.getElementById('staffReqPairs').value = reqPairs;
         for(let i=0; i<=6; i++) {
             const cb = document.getElementById('prefDay'+i);
             if(cb) cb.checked = !ngDays.includes(String(i));
