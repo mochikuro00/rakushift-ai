@@ -431,6 +431,10 @@ def generate_shifts(request: Request, req: ShiftRequest):
                 if audited_count < original_count * 0.5:
                     print("[Gemini Audit] REJECTED: shift count dropped too much ({} -> {})".format(
                         original_count, audited_count))
+                # シフト数が30%以上増加した場合も破棄（過剰配置防止）
+                elif audited_count > original_count * 1.3:
+                    print("[Gemini Audit] REJECTED: shift count increased too much ({} -> {})".format(
+                        original_count, audited_count))
                 # スタッフが1人でも消えた場合は破棄（全スタッフのシフトを保護）
                 elif len(missing_staff) > 0:
                     print("[Gemini Audit] REJECTED: {} staff lost shifts: {}".format(

@@ -538,6 +538,9 @@ class ShiftScheduler:
 
     def _solve_milp(self, force=False, tier=3):
         try:
+            # スロット要件キャッシュをクリア（Tier間フォールバック時のリーク防止）
+            self._slot_reqs_cache = {}
+
             prob = pulp.LpProblem("RakuShift_v3", pulp.LpMinimize)
             penalty = pulp.LpAffineExpression()
 
@@ -1464,16 +1467,23 @@ class ShiftScheduler:
                                                    opt["hours"])
                         break
 
-            # 不足スロットを埋める
+            # 不足スロットを埋める（ただし過剰配置は防止）
             for _ in range(30):
                 deficit = {}
+                total_day_cov = 0
+                max_slot_req_day = 0
                 for slot_min, req in slot_reqs.items():
                     cov = sum(1 for s in day_shifts
                               if self._to_minutes(s["start_time"]) <= slot_min
                               < self._to_minutes(s["end_time"]))
                     if cov < req:
                         deficit[slot_min] = req - cov
+                    if req > max_slot_req_day:
+                        max_slot_req_day = req
                 if not deficit:
+                    break
+                # 過剰配置防止: 日次の総配置人数がスロット最大要件+2を超えたら停止
+                if len(day_shifts) > max_slot_req_day + 2 + len(assigned_days.get(d, set())):
                     break
 
                 worst = max(deficit, key=deficit.get)
