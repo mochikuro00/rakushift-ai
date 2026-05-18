@@ -2279,21 +2279,21 @@ const app = {
                     cellBg = 'bg-red-50';
                     const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-red-600 font-black text-sm md:text-base animate-pulse">${label}</span>
-                        <span class="text-xs text-red-500 font-bold">${assigned}名配置(要${maxSlotReq}名)</span>
+                        <span class="text-red-600 font-black text-xs md:text-sm animate-pulse">${label}</span>
+                        <span class="text-[10px] text-red-500 font-bold leading-tight">${assigned}名(要${maxSlotReq})</span>
                     </div>`;
                 } else if (surplusSlots > totalSlots / 3) {
                     // 過剰スロットが多い（±1超え）
                     cellBg = 'bg-amber-50';
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-amber-500 text-sm font-bold"><i class="fa-solid fa-arrow-up"></i>過剰</span>
-                        <span class="text-xs text-amber-500 font-bold">${assigned}名配置(要${maxSlotReq}名)</span>
+                        <span class="text-amber-500 text-xs md:text-sm font-bold"><i class="fa-solid fa-arrow-up"></i>過剰</span>
+                        <span class="text-[10px] text-amber-500 font-bold leading-tight">${assigned}名(要${maxSlotReq})</span>
                     </div>`;
                 } else {
                     // ±1以内で適正
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-green-600 text-sm font-bold"><i class="fa-solid fa-check"></i> ぴったり</span>
-                        <span class="text-xs text-green-600 font-bold">${assigned}名配置(要${maxSlotReq}名)</span>
+                        <span class="text-green-600 text-xs md:text-sm font-bold"><i class="fa-solid fa-check"></i> ぴったり</span>
+                        <span class="text-[10px] text-green-600 font-bold leading-tight">${assigned}名(要${maxSlotReq})</span>
                     </div>`;
                 }
 
