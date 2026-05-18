@@ -627,7 +627,7 @@ class ShiftScheduler:
                     if wv:
                         prob += pulp.lpSum(wv) <= effective_max_days
 
-                # --- 週の最低出勤日数 (ハード制約 + ソフト制約の二重構造) ---
+                # --- 週の最低出勤日数 (全週ハード制約: 絶対遵守) ---
                 min_days_week = int(s.get("min_days_week") or 0)
                 if not force and min_days_week > 0:
                     print("[MinDays] Staff {} min_days_week={}".format(
@@ -642,17 +642,11 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 wv.append(x[(sid, d, oi)])
                         if wv:
-                            effective_min = min(min_days_week, available_days_in_week)
+                            # max_days_weekとの矛盾を防ぐ
+                            effective_min = min(min_days_week, available_days_in_week, max_days)
                             if effective_min > 0:
-                                if len(week) >= 5:
-                                    # 5日以上の週はハード制約（絶対遵守）
-                                    prob += pulp.lpSum(wv) >= effective_min
-                                else:
-                                    # 短い週はソフト制約（ペナルティ2M）
-                                    slack_var = pulp.LpVariable(
-                                        "slack_min_days_week_{}_{}".format(sid, week[0]), 0, None)
-                                    prob += pulp.lpSum(wv) + slack_var >= effective_min
-                                    penalty += slack_var * 2000000
+                                # 全週ハード制約（短い週も含めて絶対遵守）
+                                prob += pulp.lpSum(wv) >= effective_min
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
@@ -720,7 +714,8 @@ class ShiftScheduler:
             # ====================================================
 
             if tier >= 2:
-                # --- 1日の出勤人数: 必要人数以上を確保 ---
+                # --- 1日の出勤人数: 必要人数以上を確保（ソフト制約） ---
+                # ※不足は許容する（スタッフのルール遵守が最優先）
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
@@ -737,7 +732,7 @@ class ShiftScheduler:
                         daily_slack = pulp.LpVariable(
                             "daily_under_{}".format(d), 0, None, pulp.LpInteger)
                         prob += pulp.lpSum(day_workers) + daily_slack >= req_daily
-                        penalty += daily_slack * 5000000
+                        penalty += daily_slack * 500000  # スタッフ制約より低い重み
 
                 # --- 各時間スロットの最低人員 ---
                 for d in self.dates:
@@ -755,12 +750,12 @@ class ShiftScheduler:
                                 min1_slack = pulp.LpVariable(
                                     "min1_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(workers) + min1_slack >= 1
-                                penalty += min1_slack * 10000000
-                            # 必要人数を確保（不足にペナルティ）
+                                penalty += min1_slack * 800000  # 0名回避（スタッフ制約より低い重み）
+                            # 必要人数を確保（不足は許容するがペナルティ）
                             slack_under = pulp.LpVariable(
                                 "cov_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(workers) + slack_under >= req
-                            penalty += slack_under * 2000000
+                            penalty += slack_under * 300000  # 不足は仕方ないがベストエフォート
                             # 過剰は軽めのペナルティ（短時間バイト活用を許可）
                             slack_over = pulp.LpVariable(
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
