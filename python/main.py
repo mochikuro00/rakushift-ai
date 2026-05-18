@@ -261,7 +261,6 @@ async def run_migration(request: Request):
     """HQ管理者テーブル・RPC関数のマイグレーションを実行。
     service_keyを使ってSupabase PostgreSQL RPCでSQLを直接実行する。
     セキュリティ: 環境変数MIGRATION_TOKENで保護。"""
-    import httpx
 
     body = await request.json()
     token = body.get("token", "")
@@ -382,7 +381,6 @@ def generate_shifts(request: Request, req: ShiftRequest):
         org_id = req.config.get("organization_id")
         if org_id and SUPABASE_SERVICE_KEY:
             try:
-                import httpx
                 url = "{}/rest/v1/config_safe?organization_id=eq.{}&select=stripe_plan&limit=1".format(SUPABASE_URL, org_id)
                 headers = {"apikey": SUPABASE_SERVICE_KEY, "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY)}
                 resp = httpx.get(url, headers=headers, timeout=5)
@@ -589,6 +587,7 @@ def run_gemini_audit(api_key: str, model: str, req: ShiftRequest, shifts: list) 
         closed_days_names = []
         day_names = ["日", "月", "火", "水", "木", "金", "土"]
         for cd in config.get("closed_days", []):
+            cd = int(cd)  # DB経由で文字列になる場合の安全策
             if 0 <= cd < 7:
                 closed_days_names.append(day_names[cd])
 
