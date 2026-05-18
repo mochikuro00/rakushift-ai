@@ -4428,6 +4428,17 @@ const app = {
             document.getElementById('monthlyInputGroup').classList.remove('hidden');
         }
     },
+    togglePrefHoursInputs() {
+        const usePref = document.getElementById('staffUsePrefHours')?.checked;
+        const group = document.getElementById('prefHoursInputGroup');
+        if (group) {
+            if (usePref) {
+                group.classList.remove('hidden');
+            } else {
+                group.classList.add('hidden');
+            }
+        }
+    },
 
     // --- 申請 ---
     _selectedRequestDates: [],
