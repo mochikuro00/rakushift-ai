@@ -321,21 +321,26 @@ class ShiftScheduler:
         options = []
         seen = set()
         
-        patterns_to_use = self.shift_patterns
+        patterns_to_use = self.shift_patterns.copy()
         
-        # 社員（月給制・店長・副店長・社員）の場合は、本人の希望に関係なく店舗の全営業時間に対してフレキシブルに割り当てる
         is_employee = staff.get("salary_type") == "monthly" or staff.get("role") in ["manager", "sub_manager", "employee"]
-        if not is_employee:
-            day_type = self._get_day_type(date_str)
-            pref_start = staff.get("pref_start_we") if day_type in ("weekend", "holiday") else staff.get("pref_start_wd")
-            pref_end = staff.get("pref_end_we") if day_type in ("weekend", "holiday") else staff.get("pref_end_wd")
-            # フォールバック (古いprefStart用)
-            pref_start = pref_start or staff.get("pref_start")
-            pref_end = pref_end or staff.get("pref_end")
-            
-            if pref_start and pref_end:
-                patterns_to_use = [{"start": pref_start, "end": pref_end, "name": "pref"}]
-        def _add_option(ps, pe):
+        day_type = self._get_day_type(date_str)
+        pref_start = staff.get("pref_start_we") if day_type in ("weekend", "holiday") else staff.get("pref_start_wd")
+        pref_end = staff.get("pref_end_we") if day_type in ("weekend", "holiday") else staff.get("pref_end_wd")
+        # フォールバック (古いprefStart用)
+        pref_start = pref_start or staff.get("pref_start")
+        pref_end = pref_end or staff.get("pref_end")
+        
+        if pref_start and pref_end:
+            pref_pat = {"start": pref_start, "end": pref_end, "name": "pref"}
+            if is_employee:
+                # 社員はフルタイム候補に加えて、希望時間帯の候補も追加（ソフト制約として評価）
+                patterns_to_use.append(pref_pat)
+            else:
+                # バイトは希望時間帯のみ
+                patterns_to_use = [pref_pat]
+
+        def _add_option(ps, pe, is_pref=False):
             """オプションを追加するヘルパー（重複チェック含む）"""
             if ps >= pe:
                 return
@@ -346,12 +351,18 @@ class ShiftScheduler:
             work_hrs = hrs - (brk_mins / 60.0)
             key = (ps, pe)
             if key in seen:
+                # 既に存在するオプションだが、もしこれがprefならフラグを立て直す
+                if is_pref:
+                    for opt in options:
+                        if opt["start_min"] == ps and opt["end_min"] == pe:
+                            opt["is_pref"] = True
                 return
             seen.add(key)
             options.append({
                 "start": self._from_minutes(ps),
                 "end": self._from_minutes(pe),
                 "start_min": ps, "end_min": pe, "hours": hrs, "work_hours": work_hrs,
+                "is_pref": is_pref
             })
 
         for pat in patterns_to_use:
@@ -367,21 +378,22 @@ class ShiftScheduler:
             brk_mins = self._get_break_minutes(hrs)
             work_hrs = hrs - (brk_mins / 60.0)
 
+            is_pref = pat.get("name") == "pref"
             if work_hrs > max_hours and not force:
                 # パターンA: 開始固定で終了を短縮（従来通り）
                 needed_break = self._get_break_minutes(max_hours)
                 allowed_total_hours = max_hours + (needed_break / 60.0)
                 new_pe = ps + int(allowed_total_hours * 60)
                 if new_pe < pe:
-                    _add_option(ps, new_pe)
+                    _add_option(ps, new_pe, is_pref)
 
                 # パターンB: 終了固定で開始を遅くする（閉店時間カバー用）
                 new_ps = pe - int(allowed_total_hours * 60)
                 if new_ps > ps:
                     new_ps = max(new_ps, open_min)
-                    _add_option(new_ps, pe)
+                    _add_option(new_ps, pe, is_pref)
             else:
-                _add_option(ps, pe)
+                _add_option(ps, pe, is_pref)
             # -------------------------------------------------------------------
 
         return options
@@ -1204,6 +1216,19 @@ class ShiftScheduler:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                             if opt["work_hours"] > mh:
                                 penalty += x[(sid, d, oi)] * (opt["work_hours"] - mh) * 50000
+
+            # 社員（店長・副店長・社員など）のシフト希望ソフト制約
+            # 人員不足時は無視されるが、人が足りている時は本人の希望時間帯を優先する
+            employee_ids = self._monthly_ids.union(self._manager_ids)
+            for eid in employee_ids:
+                for d in self.dates:
+                    opts = staff_opts.get((eid, d), [])
+                    has_pref = any(opt.get("is_pref") for opt in opts)
+                    if has_pref:
+                        for oi, opt in enumerate(opts):
+                            if not opt.get("is_pref"):
+                                # 10000のペナルティ。不足ペナルティ(500000)よりはるかに小さいが、通常パターンのコストより高い
+                                penalty += x[(eid, d, oi)] * 10000
 
             prob += penalty
             # Tierごとにタイムリミットを段階化（合計最大110秒でRailway制限内に収める）
