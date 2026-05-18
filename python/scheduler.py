@@ -786,7 +786,9 @@ class ShiftScheduler:
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
-                    slot_reqs = self._build_slot_requirements(d)
+                    slot_reqs = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
+                    if slot_reqs is None:
+                        slot_reqs = self._build_slot_requirements(d)
                     if not slot_reqs:
                         continue
                     # 管理者が不在のスロットを検出するため、
@@ -828,7 +830,9 @@ class ShiftScheduler:
                     for d in self.dates:
                         if self._get_day_type(d) == "closed":
                             continue
-                        slot_reqs = self._build_slot_requirements(d)
+                        slot_reqs = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
+                        if slot_reqs is None:
+                            slot_reqs = self._build_slot_requirements(d)
                         if not slot_reqs:
                             continue
                         for slot_min in slot_reqs:
@@ -856,7 +860,9 @@ class ShiftScheduler:
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
-                    slot_reqs = self._build_slot_requirements(d)
+                    slot_reqs = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
+                    if slot_reqs is None:
+                        slot_reqs = self._build_slot_requirements(d)
                     if not slot_reqs:
                         continue
                     power_expr = pulp.LpAffineExpression()

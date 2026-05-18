@@ -2227,6 +2227,9 @@ const app = {
                 let totalSlots = 0;
                 let shortageSlots = 0;
                 let worstDeficit = 0; // 最悪の不足数（正値=不足あり）
+                let maxConcurrent = 0;
+                let maxSlotReq = required;
+                let surplusSlots = 0;
 
                 for (let t = openM; t < closeM; t += 15) {
                     // このスロットでの必要人数（ベース or 時間帯別ルールの大きい方）
@@ -2252,34 +2255,13 @@ const app = {
                     const slotDeficit = slotReq - concurrent;
                     if (slotDeficit > 0) shortageSlots++;
                     if (slotDeficit > worstDeficit) worstDeficit = slotDeficit;
-                }
-
-                // 表示用: スロットごとの同時在籍数の最大値と要件を比較（±1の実態表示）
-                const assigned = shiftsForDay.length;
-                // 全スロットの同時在籍の最大値を算出
-                let maxConcurrent = 0;
-                let maxSlotReq = required;
-                let surplusSlots = 0;
-                for (let t = openM; t < closeM; t += 15) {
-                    let slotReq = required;
-                    timeRules.forEach(rule => {
-                        const rs = toMins(rule.start);
-                        let re = toMins(rule.end);
-                        if (re <= rs) re += 24 * 60;
-                        if (t >= rs && t < re) {
-                            slotReq = Math.max(slotReq, parseInt(rule.count || 0));
-                        }
-                    });
                     if (slotReq > maxSlotReq) maxSlotReq = slotReq;
-                    const concurrent = shiftsForDay.filter(s => {
-                        const sStart = toMins(s.start_time);
-                        let sEnd = toMins(s.end_time);
-                        if (sEnd <= sStart) sEnd += 24 * 60;
-                        return sStart <= t && t < sEnd;
-                    }).length;
                     if (concurrent > maxConcurrent) maxConcurrent = concurrent;
                     if (concurrent > slotReq + 1) surplusSlots++;
                 }
+
+                // 表示用: スロットごとの分析結果から判定（±1の実態表示）
+                const assigned = shiftsForDay.length;
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
