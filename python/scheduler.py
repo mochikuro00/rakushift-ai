@@ -150,10 +150,47 @@ class ShiftScheduler:
                     if d.startswith("prefEndWd:"): s["pref_end_wd"] = d.replace("prefEndWd:", "")
                     if d.startswith("prefStartWe:"): s["pref_start_we"] = d.replace("prefStartWe:", "")
                     if d.startswith("prefEndWe:"): s["pref_end_we"] = d.replace("prefEndWe:", "")
+                    if d.startswith("ngPair:"): s["ng_pairs"] = d.replace("ngPair:", "")
+                    if d.startswith("reqPair:"): s["req_pairs"] = d.replace("reqPair:", "")
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
+        
+        # 名前からIDへのマッピング作成（相性制約用）
+        name_to_id = {}
+        for s in self.staff_list:
+            name = s.get("name", "").strip()
+            sid = s.get("id")
+            if name:
+                name_to_id[name] = sid
+                if " " in name:
+                    name_to_id[name.split(" ")[0]] = sid
+                elif "　" in name:
+                    name_to_id[name.split("　")[0]] = sid
+
+        self._ng_pair_constraints = []
+        self._req_pair_constraints = []
+
         for s in self.staff_list:
             self._ng_cache[s["id"]] = self._compute_staff_ng_dates(s)
+            
+            sid1 = s["id"]
+            for target_name in [n.strip() for n in s.get("ng_pairs", "").split(",") if n.strip()]:
+                sid2 = name_to_id.get(target_name)
+                if not sid2:
+                    for n, _sid in name_to_id.items():
+                        if target_name in n or n in target_name:
+                            sid2 = _sid; break
+                if sid2 and sid1 != sid2:
+                    self._ng_pair_constraints.append((sid1, sid2))
+            
+            for target_name in [n.strip() for n in s.get("req_pairs", "").split(",") if n.strip()]:
+                sid2 = name_to_id.get(target_name)
+                if not sid2:
+                    for n, _sid in name_to_id.items():
+                        if target_name in n or n in target_name:
+                            sid2 = _sid; break
+                if sid2 and sid1 != sid2:
+                    self._req_pair_constraints.append((sid1, sid2))
 
         print("[Init] Staff:{} Dates:{} Patterns:{}".format(
             len(self.staff_list), len(self.dates), len(self.shift_patterns)))
@@ -1229,6 +1266,26 @@ class ShiftScheduler:
                             if not opt.get("is_pref"):
                                 # 10000のペナルティ。不足ペナルティ(500000)よりはるかに小さいが、通常パターンのコストより高い
                                 penalty += x[(eid, d, oi)] * 10000
+
+            # 人間関係（相性）制約: NGペア
+            for (sid1, sid2) in getattr(self, '_ng_pair_constraints', []):
+                for d in self.dates:
+                    for t in range(self.time_len):
+                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
+                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
+                        overlap = pulp.LpVariable(f"NG_overlap_{sid1}_{sid2}_{d}_{t}", lowBound=0)
+                        prob += (overlap >= sid1_w + sid2_w - 1)
+                        penalty += overlap * 100000
+
+            # 人間関係（相性）制約: 必須ペア
+            for (sid1, sid2) in getattr(self, '_req_pair_constraints', []):
+                for d in self.dates:
+                    for t in range(self.time_len):
+                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
+                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
+                        shortage = pulp.LpVariable(f"REQ_shortage_{sid1}_{sid2}_{d}_{t}", lowBound=0)
+                        prob += (shortage >= sid1_w - sid2_w)
+                        penalty += shortage * 100000
 
             prob += penalty
             # Tierごとにタイムリミットを段階化（合計最大110秒でRailway制限内に収める）
