@@ -2045,7 +2045,7 @@ const app = {
                     // 社員（月給制・店長・副店長・社員）のシフト枠組みの色を変更して強調
                     const isEmployeeRole = staff && (staff.salary_type === 'monthly' || ['manager', 'sub_manager', 'employee'].includes(staff.role));
                     if (isEmployeeRole) {
-                        barColor += ' border-4 border-emerald-500 shadow-md';
+                        barColor += ' border-emerald-500 shadow-md';
                     }
                     
                     // 過去の場合は少し透明にして元の色を残す
@@ -2278,22 +2278,22 @@ const app = {
                     // 不足スロットがある
                     cellBg = 'bg-red-50';
                     const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
-                    cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-red-600 font-black text-xs md:text-sm animate-pulse">${label}</span>
-                        <span class="text-[10px] text-red-500 font-bold leading-tight">${assigned}名(要${maxSlotReq})</span>
+                    cellContent = `<div class="flex flex-row flex-wrap items-center justify-center h-full px-1 gap-x-1">
+                        <span class="text-red-600 font-black text-xs animate-pulse">${label}</span>
+                        <span class="text-[10px] text-red-500 font-bold">${assigned}名(要${maxSlotReq})</span>
                     </div>`;
                 } else if (surplusSlots > totalSlots / 3) {
                     // 過剰スロットが多い（±1超え）
                     cellBg = 'bg-amber-50';
-                    cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-amber-500 text-xs md:text-sm font-bold"><i class="fa-solid fa-arrow-up"></i>過剰</span>
-                        <span class="text-[10px] text-amber-500 font-bold leading-tight">${assigned}名(要${maxSlotReq})</span>
+                    cellContent = `<div class="flex flex-row flex-wrap items-center justify-center h-full px-1 gap-x-1">
+                        <span class="text-amber-500 text-xs font-bold"><i class="fa-solid fa-arrow-up"></i>過剰</span>
+                        <span class="text-[10px] text-amber-500 font-bold">${assigned}名(要${maxSlotReq})</span>
                     </div>`;
                 } else {
                     // ±1以内で適正
-                    cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-green-600 text-xs md:text-sm font-bold"><i class="fa-solid fa-check"></i> ぴったり</span>
-                        <span class="text-[10px] text-green-600 font-bold leading-tight">${assigned}名(要${maxSlotReq})</span>
+                    cellContent = `<div class="flex flex-row flex-wrap items-center justify-center h-full px-1 gap-x-1">
+                        <span class="text-green-600 text-xs font-bold"><i class="fa-solid fa-check"></i> ぴったり</span>
+                        <span class="text-[10px] text-green-600 font-bold">${assigned}名(要${maxSlotReq})</span>
                     </div>`;
                 }
 
