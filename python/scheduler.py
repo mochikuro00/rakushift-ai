@@ -132,7 +132,7 @@ class ShiftScheduler:
                 self._mentor_ids.add(sid)
             if role in self.ROOKIE_ROLES or evaluation == "D":
                 self._rookie_ids.add(sid)
-            if role == "manager":
+            if role in ["manager", "sub_manager", "employee"]:
                 self._manager_ids.add(sid)
             if salary == "monthly":
                 self._monthly_ids.add(sid)
@@ -323,9 +323,9 @@ class ShiftScheduler:
         
         patterns_to_use = self.shift_patterns
         
-        # 社員（月給制）の場合は、本人の希望に関係なく店舗の全営業時間に対してフレキシブルに割り当てる
-        is_monthly = staff.get("salary_type") == "monthly"
-        if not is_monthly:
+        # 社員（月給制・店長・副店長・社員）の場合は、本人の希望に関係なく店舗の全営業時間に対してフレキシブルに割り当てる
+        is_employee = staff.get("salary_type") == "monthly" or staff.get("role") in ["manager", "sub_manager", "employee"]
+        if not is_employee:
             day_type = self._get_day_type(date_str)
             pref_start = staff.get("pref_start_we") if day_type in ("weekend", "holiday") else staff.get("pref_start_wd")
             pref_end = staff.get("pref_end_we") if day_type in ("weekend", "holiday") else staff.get("pref_end_wd")

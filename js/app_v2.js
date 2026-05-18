@@ -83,9 +83,11 @@ const app = {
             
             // 役職設定 (ID, 名前, 色, レベル:高いほど権限強)
             roles: [
-                { id: 'manager', name: '店長', color: 'purple', level: 3 },
+                { id: 'manager', name: '店長', color: 'purple', level: 5 },
+                { id: 'sub_manager', name: '副店長', color: 'red', level: 4 },
+                { id: 'employee', name: '社員', color: 'green', level: 3 },
                 { id: 'leader', name: 'リーダー', color: 'blue', level: 2 },
-                { id: 'staff', name: 'スタッフ', color: 'gray', level: 1 }
+                { id: 'staff', name: 'アルバイト', color: 'gray', level: 1 }
             ],
 
             // 臨時休業日 (YYYY-MM-DD)
