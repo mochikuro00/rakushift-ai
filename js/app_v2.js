@@ -5575,10 +5575,12 @@ const app = {
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border">毎営業日に最低1名配置必須</td></tr>
-                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border">店長と同様メンター枠にカウント</td></tr>
-                        <tr><td class="p-2 border font-bold">スタッフ (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長/リーダー）と同日配置</td></tr>
+                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名配置必須（AIが最優先で配置）</td></tr>
+                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代理として配置可能（店長と同等の権限）</td></tr>
+                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置（月給制の場合はコスト計算上有利に働きます）</td></tr>
+                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任者、メンター役</td><td class="p-2 border">新人スタッフの指導役として重宝されます</td></tr>
+                        <tr><td class="p-2 border font-bold">アルバイト (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長〜リーダー）と同日配置</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5667,24 +5669,45 @@ const app = {
                 <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
                     <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
                 </div>
-                <div class="space-y-3 text-sm text-gray-700">
-                    <div class="border-l-4 border-red-400 pl-3">
-                        <p><strong>営業時間（曜日別）:</strong> 平日・土日・祝日ごとに開店/閉店時間を設定。未設定だと全日同一営業時間で計算されます。</p>
+                <div class="space-y-4 text-sm text-gray-700">
+                    
+                    <div class="border-l-4 border-indigo-400 pl-4 py-1">
+                        <h4 class="font-bold text-indigo-700 text-base mb-1">1. 役職・ロール設定</h4>
+                        <p>スタッフの肩書き（店長・副店長・社員など）を自由にカスタマイズし、バッジの色を設定できます。また、各役職がシステムの裏側でどの「識別ID（Manager/Sub-Manager/Staffなど）」として扱われるかを決定します。</p>
+                        <p class="text-xs text-gray-500 mt-1">※AIは「Manager」や「Sub-Manager」を管理者として扱い、店舗を空にしないよう必ず配置します。</p>
                     </div>
-                    <div class="border-l-4 border-red-400 pl-3">
-                        <p><strong>必要人員（曜日別）:</strong> 平日/土日/祝日ごとの最低配置人数。これがシフト表の「人員状況」アラートの基準値になります。</p>
+
+                    <div class="border-l-4 border-teal-400 pl-4 py-1">
+                        <h4 class="font-bold text-teal-700 text-base mb-1">1.5. ポジション設定（重要）</h4>
+                        <p>店舗内の役割（ホール・キッチン・デリバリーなど）をカンマ区切りで自由に設定できます。</p>
+                        <p class="text-xs text-red-600 font-bold mt-1">※注意: 稼働中にポジション名を変更・削除すると、過去そのポジションだったスタッフは「指定なし (全般)」扱いになるため、なるべく初期設定で確定させてください。</p>
                     </div>
-                    <div class="border-l-4 border-orange-400 pl-3">
-                        <p><strong>シフトパターン:</strong> 早番・遅番などの時間テンプレート。<strong>2つ以上登録するとAIが自動的に中番パターンも生成</strong>し、時間帯の穴抜けを防ぎます。</p>
+                    
+                    <div class="border-l-4 border-blue-400 pl-4 py-1">
+                        <h4 class="font-bold text-blue-700 text-base mb-1">2. 営業時間 ＆ 定休日</h4>
+                        <p>平日・土日・祝日ごとに開店/閉店時間を設定します。未設定だと全日同一営業時間で計算されます。<br>定休日（毎週水曜など）を設定すると、AIはその曜日には一切シフトを入れません。</p>
                     </div>
-                    <div class="border-l-4 border-blue-400 pl-3">
-                        <p><strong>定休日:</strong> 曜日ベース（毎週水曜など）。臨時休業は日付指定。</p>
+
+                    <div class="border-l-4 border-orange-400 pl-4 py-1">
+                        <h4 class="font-bold text-orange-700 text-base mb-1">3. ベースの人員設定（1日あたり）</h4>
+                        <p><strong>管理者の必須人数:</strong> 「店長・副店長」といった管理者が、1日に最低何人必要かを設定します。<br>
+                        <strong>全体の最低人数:</strong> 平日・土日・祝日ごとの最低配置人数。これがシフト表の「人員状況」アラートの基準値になります。</p>
                     </div>
-                    <div class="border-l-4 border-gray-400 pl-3">
-                        <p><strong>役職設定:</strong> 役職名のカスタマイズ。</p>
+
+                    <div class="border-l-4 border-red-500 pl-4 py-1">
+                        <h4 class="font-bold text-red-700 text-base mb-1">4. 時間帯別・曜日別 人員増強（ピンポイント指定）</h4>
+                        <p>「毎週金曜日の17:00〜22:00は、ホールを＋2名増やしたい」といったピンポイントなルールの追加が可能です。<br>
+                        設定されたルールはAIの計算エンジンに最優先で組み込まれ、ポジションごとの過不足を完璧に防ぎます。</p>
                     </div>
-                    <div class="border-l-4 border-gray-400 pl-3">
-                        <p><strong>運用ルール:</strong> スタッフ向けに表示されるお店のルールテキスト。</p>
+                    
+                    <div class="border-l-4 border-purple-400 pl-4 py-1">
+                        <h4 class="font-bold text-purple-700 text-base mb-1">5. シフトパターンの設定</h4>
+                        <p>「早番（09:00〜18:00）」「遅番（13:00〜22:00）」などの時間テンプレートです。<strong>2つ以上登録するとAIが自動的に間を埋める中番パターンも生成</strong>し、時間帯の穴抜けを柔軟に防ぎます。</p>
+                    </div>
+
+                    <div class="border-l-4 border-green-400 pl-4 py-1">
+                        <h4 class="font-bold text-green-700 text-base mb-1">6. 休憩ルールの設定</h4>
+                        <p>「〇〇時間以上の勤務なら〇〇分の休憩を与える」というルールです。労働基準法に則り、6時間超で45分、8時間超で60分がデフォルトで設定されています。</p>
                     </div>
                 </div>
             </div>
