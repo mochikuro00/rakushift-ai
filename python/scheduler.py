@@ -1,4 +1,4 @@
-import pulp
+﻿import pulp
 from datetime import datetime, timedelta
 import random
 
@@ -259,6 +259,12 @@ class ShiftScheduler:
                             ng.add(single_date)
         return ng
 
+    def _is_staff_exempt(self, staff):
+        ud = staff.get('unavailable_dates', [])
+        if isinstance(ud, str):
+            ud = [x.strip() for x in ud.split(',')]
+        return any(d == 'isExempt:true' for d in ud)
+
     def _get_staff_ng_dates(self, staff):
         """キャッシュからNG日を取得"""
         return self._ng_cache.get(staff["id"], set())
@@ -321,7 +327,8 @@ class ShiftScheduler:
         seen = set()
         
         patterns_to_use = self.shift_patterns
-        if staff.get("pref_start") and staff.get("pref_end"):
+        is_regular = any(d == "contract:regular" for d in (staff.get("unavailable_dates", []) if isinstance(staff.get("unavailable_dates", []), list) else [x.strip() for x in str(staff.get("unavailable_dates", "")).split(",")]))
+        if staff.get("pref_start") and staff.get("pref_end") and not is_regular:
             patterns_to_use = [{"start": staff["pref_start"], "end": staff["pref_end"], "name": "pref"}]
 
         def _add_option(ps, pe):
@@ -610,6 +617,7 @@ class ShiftScheduler:
 
                     # --- 1日の最大労働時間 (労基法32条) ---
                     max_hours = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
+                    if self._is_staff_exempt(s): max_hours = 24.0
                     if not force:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                             if opt["work_hours"] > max_hours:
@@ -685,11 +693,13 @@ class ShiftScheduler:
                                 hours_expr += x[(sid, d, oi)] * opt["work_hours"]
                                 has_vars = True
                         if has_vars:
-                            prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
+                            if not self._is_staff_exempt(s):
+                                prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
 
                 # --- 連続勤務6日上限 (労基法35条: 週1日の休日) ---
                 sorted_d = sorted(self.dates)
                 max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS if not force else 7
+                if self._is_staff_exempt(s): max_consec = 31
                 if len(sorted_d) > max_consec:
                     for i in range(len(sorted_d) - max_consec):
                         span = sorted_d[i:i + max_consec + 1]
@@ -1565,11 +1575,11 @@ class ShiftScheduler:
 
         cur_hours = weekly_hours.get(sid, {}).get(wk, 0)
         max_hours = float(staff.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
-        if cur_hours + max_hours > self.LEGAL_MAX_HOURS_WEEK:
+        if not self._is_staff_exempt(staff) and (cur_hours + max_hours > self.LEGAL_MAX_HOURS_WEEK):
             return True  # 週40時間超過の可能性
 
         cur_consec = consecutive.get(sid, 0)
-        if cur_consec >= self.LEGAL_MAX_CONSECUTIVE_DAYS:
+        if not self._is_staff_exempt(staff) and (cur_consec >= self.LEGAL_MAX_CONSECUTIVE_DAYS):
             return True  # 連続勤務超過
 
         return False
