@@ -2035,6 +2035,11 @@ const app = {
                     if (startH < 10) barColor = 'bg-yellow-100 text-yellow-800 border-yellow-500';
                     if (startH >= 17) barColor = 'bg-purple-100 text-purple-700 border-purple-500';
                     
+                    // イレギュラーアサイン（社員の強制アサイン等）の強調
+                    if (shift.is_irregular) {
+                        barColor = 'bg-red-50 text-red-700 border-red-500 pattern-diagonal-lines shadow-[inset_0_0_0_2px_rgba(239,68,68,0.5)]';
+                    }
+                    
                     // 過去の場合は少し透明にして元の色を残す
                     if (isPast) {
                         barColor += ' opacity-50 hover:opacity-70';
