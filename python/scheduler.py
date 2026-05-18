@@ -736,9 +736,14 @@ class ShiftScheduler:
                         prob += daily_sum + daily_slack_under >= req_daily
                         penalty += daily_slack_under * 500000  # 不足ペナルティ（重い）
                         # 上限: 必要人数+1以内に抑える（±1制御の核心）
+                        # ただしスロットレベルの要件が日次ベースより大きい場合は、
+                        # スロット要件の最大値を基準にして矛盾を防ぐ
+                        slot_reqs_for_day = self._build_slot_requirements(d)
+                        max_slot_req = max(slot_reqs_for_day.values()) if slot_reqs_for_day else req_daily
+                        daily_upper = max(req_daily, max_slot_req) + 1
                         daily_slack_over = pulp.LpVariable(
                             "daily_over_{}".format(d), 0, None, pulp.LpInteger)
-                        prob += daily_sum - daily_slack_over <= req_daily + 1
+                        prob += daily_sum - daily_slack_over <= daily_upper
                         penalty += daily_slack_over * 400000  # 過剰ペナルティ（不足に次ぐ重さ）
 
                 # --- 各時間スロットの人員: 必要人数±1に収束させる ---
@@ -917,10 +922,11 @@ class ShiftScheduler:
                         for d in self.dates
                         if self._get_day_type(d) != "closed"
                     )
-                    # 全スタッフのmax_days_week合計（按分の分母）
+                    # 全スタッフのmax_days_week合計を月間ベースに換算（按分の分母）
                     total_capacity_per_week = sum(
                         int(s.get("max_days_week") or 5) for s in active_staff
                     )
+                    total_capacity_monthly = total_capacity_per_week * weeks_in_period
 
                     for s in active_staff:
                         sid = s["id"]
@@ -931,9 +937,10 @@ class ShiftScheduler:
                                         or self._get_day_type(d) == "closed"])
                         available_days = len(self.dates) - ng_count
 
-                        # 需要ベース目標: 全体需要 × (個人max_days / 全体max_days合計)
-                        if total_capacity_per_week > 0:
-                            demand_ratio = staff_max_days / total_capacity_per_week
+                        # 需要ベース目標: 全体需要 × (個人月間キャパ / 全体月間キャパ)
+                        staff_monthly_capacity = staff_max_days * weeks_in_period
+                        if total_capacity_monthly > 0:
+                            demand_ratio = staff_monthly_capacity / total_capacity_monthly
                             staff_target = total_demand_days * demand_ratio
                         else:
                             staff_target = staff_max_days * weeks_in_period * 0.7
@@ -961,15 +968,23 @@ class ShiftScheduler:
                         # 期間中に出勤可能な日数をカウント
                         submitted_days = len([d for d in self.dates if staff_opts.get((sid, d))])
                         if submitted_days > 0:
-                            # 最低保証シフト数: 週あたり1日（ただしmax_days_weekとsubmitted_daysで安全に制限）
+                            # 最低保証シフト数: 安全な範囲で週1日程度を保証
                             staff_max_days = int(s.get("max_days_week") or 5)
-                            # 週1日 × 週数、ただし出勤可能日数とmax_daysの範囲内
+                            min_dw = int(s.get("min_days_week") or 0)
+                            # 週1日 × 週数を候補に、出勤可能日数・max_days上限・min_days_weekとの整合を確保
                             weekly_guarantee = min(1, staff_max_days)
+                            candidate = int(weekly_guarantee * weeks_in_period)
+                            # Infeasible防止: submitted_days, max_days上限, min_days_weekのいずれかで安全に抑える
                             guarantee_shifts = min(
-                                int(weekly_guarantee * weeks_in_period),
+                                candidate,
                                 submitted_days,
                                 int(staff_max_days * weeks_in_period)
                             )
+                            # min_days_weekが設定されている場合はそちらのハード制約と矛盾しないよう調整
+                            if min_dw > 0:
+                                # min_days_weekのハード制約が既にあるので、保証はその範囲内に
+                                min_dw_total = min(int(min_dw * weeks_in_period), submitted_days)
+                                guarantee_shifts = min(guarantee_shifts, min_dw_total)
                             guarantee_shifts = max(guarantee_shifts, 1)  # 絶対最低1日
                             prob += tv >= guarantee_shifts
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---

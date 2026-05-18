@@ -2254,8 +2254,32 @@ const app = {
                     if (slotDeficit > worstDeficit) worstDeficit = slotDeficit;
                 }
 
-                // 表示用: その日の配置人数とベース要件で比較
+                // 表示用: スロットごとの同時在籍数の最大値と要件を比較（±1の実態表示）
                 const assigned = shiftsForDay.length;
+                // 全スロットの同時在籍の最大値を算出
+                let maxConcurrent = 0;
+                let maxSlotReq = required;
+                let surplusSlots = 0;
+                for (let t = openM; t < closeM; t += 15) {
+                    let slotReq = required;
+                    timeRules.forEach(rule => {
+                        const rs = toMins(rule.start);
+                        let re = toMins(rule.end);
+                        if (re <= rs) re += 24 * 60;
+                        if (t >= rs && t < re) {
+                            slotReq = Math.max(slotReq, parseInt(rule.count || 0));
+                        }
+                    });
+                    if (slotReq > maxSlotReq) maxSlotReq = slotReq;
+                    const concurrent = shiftsForDay.filter(s => {
+                        const sStart = toMins(s.start_time);
+                        let sEnd = toMins(s.end_time);
+                        if (sEnd <= sStart) sEnd += 24 * 60;
+                        return sStart <= t && t < sEnd;
+                    }).length;
+                    if (concurrent > maxConcurrent) maxConcurrent = concurrent;
+                    if (concurrent > slotReq + 1) surplusSlots++;
+                }
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
@@ -2265,19 +2289,20 @@ const app = {
                     const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-red-600 font-black text-xs animate-pulse">${label}</span>
-                        <span class="text-[9px] text-red-400">${assigned}名/${required}名</span>
+                        <span class="text-[9px] text-red-400">${assigned}名配置(要${maxSlotReq}名)</span>
                     </div>`;
-                } else if (assigned <= required) {
-                    // ちょうど足りている
+                } else if (surplusSlots > totalSlots / 3) {
+                    // 過剰スロットが多い（±1超え）
+                    cellBg = 'bg-amber-50';
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
-                        <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
-                        <span class="text-[9px] text-green-400">${assigned}名/${required}名</span>
+                        <span class="text-amber-500 text-[10px] font-bold"><i class="fa-solid fa-arrow-up"></i>過剰</span>
+                        <span class="text-[9px] text-amber-400">${assigned}名配置(要${maxSlotReq}名)</span>
                     </div>`;
                 } else {
-                    // 余裕あり
+                    // ±1以内で適正
                     cellContent = `<div class="flex flex-col items-center justify-center h-full">
                         <span class="text-green-500 text-[10px] font-bold"><i class="fa-solid fa-check"></i></span>
-                        <span class="text-[9px] text-green-400">${assigned}名/${required}名</span>
+                        <span class="text-[9px] text-green-400">${assigned}名配置(要${maxSlotReq}名)</span>
                     </div>`;
                 }
 
