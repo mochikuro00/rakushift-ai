@@ -2767,6 +2767,7 @@ const app = {
         const specialHolidays = config.special_holidays || [];
         const specialDays = config.special_days || {};
         const timeStaffReq = config.time_staff_req || [];
+        const positions = config.positions || ['ホール', 'キッチン'];
 
         container.innerHTML = `
             <div class="max-w-4xl mx-auto space-y-8 pb-24">
@@ -2840,6 +2841,23 @@ const app = {
                             </table>
                         </div>
                         <p class="text-xs text-gray-400 mt-3">※ IDはシステム内部で使用するため変更できません。新規追加時のみ自動生成されます。</p>
+                    </div>
+                </div>
+
+                <!-- 1.5. ポジション設定 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-map-pin text-teal-500"></i> ポジション設定</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">店舗内の役割（ホール、キッチンなど）を自由に設定できます。</p>
+                    </div>
+                    <div class="p-6">
+                        <label class="block text-xs font-bold text-gray-500 mb-2">ポジション一覧（カンマ区切り）</label>
+                        <input type="text" id="settingPositions" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm font-bold bg-white" value="${positions.join(', ')}" placeholder="例: ホール, キッチン, デリバリー">
+                        <p class="text-xs text-gray-400 mt-3">※ ここで設定したポジションは、スタッフ管理の「担当ポジション」や、時間帯別ルールの「ポジション指定」の選択肢になります。</p>
+                        <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 leading-relaxed">
+                            <i class="fa-solid fa-circle-exclamation mr-1 text-yellow-600"></i> <strong>【重要】ポジション変更時のご注意</strong><br>
+                            稼働中にポジション名を変更・削除すると、過去にそのポジションに設定されていたスタッフは「指定なし (全般)」として扱われます。なるべく初期設定の段階でポジションを確定させてください。
+                        </div>
                     </div>
                 </div>
 
@@ -3080,8 +3098,7 @@ const app = {
                                                 <td class="p-2">
                                                     <select class="setting-time-req-position border-gray-300 rounded px-2 py-1 text-xs w-full font-bold">
                                                         <option value="any" ${rule.position === 'any' || !rule.position ? 'selected' : ''}>全般 (区別なし)</option>
-                                                        <option value="hall" ${rule.position === 'hall' ? 'selected' : ''}>ホールのみ</option>
-                                                        <option value="kitchen" ${rule.position === 'kitchen' ? 'selected' : ''}>キッチンのみ</option>
+                                                        ${positions.map(p => `<option value="${this._sanitize(p)}" ${rule.position === p ? 'selected' : ''}>${this._sanitize(p)}のみ</option>`).join('')}
                                                     </select>
                                                 </td>
                                                 <td class="p-2 text-right"><button onclick="app.removeTimeStaffReq(${idx})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button></td>
@@ -3433,6 +3450,11 @@ const app = {
         // 定休日
         config.closed_days = Array.from(document.querySelectorAll('input[name="setting_closed_days"]:checked')).map(el => parseInt(el.value));
 
+        // ポジション設定
+        const posInput = document.getElementById('settingPositions')?.value || '';
+        config.positions = posInput.split(',').map(p => p.trim()).filter(p => p !== '');
+        if (config.positions.length === 0) config.positions = ['ホール', 'キッチン'];
+
         // 役職・ロール設定
         const roleNames = document.querySelectorAll('.setting-role-name');
         const roleIds = document.querySelectorAll('.setting-role-id');
@@ -3526,6 +3548,7 @@ const app = {
                 hourly_wage_default: newConfig.hourly_wage_default,
                 opening_times: newConfig.opening_times,
                 closed_days: newConfig.closed_days,
+                positions: newConfig.positions,
                 staff_req: newConfig.staff_req,
                 roles: newConfig.roles,
                 special_holidays: newConfig.special_holidays,
@@ -4061,6 +4084,7 @@ const app = {
     // --- スタッフ管理 ---
     prepareStaffModal() {
         this.updateStaffRoleSelect();
+        this.updateStaffPositionSelect();
         this.openModal('staffModal');
         document.getElementById('staffForm').reset();
         document.getElementById('staffId').value='';
@@ -4076,6 +4100,17 @@ const app = {
         
         const roles = this.state.config.roles || this.state.defaultConfig.roles;
         select.innerHTML = roles.map(r => `<option value="${r.id}">${this._sanitize(r.name)}</option>`).join('');
+    },
+    
+    updateStaffPositionSelect() {
+        const select = document.getElementById('staffPosition');
+        if(!select) return;
+        const positions = this.state.config.positions || ['ホール', 'キッチン'];
+        let html = '<option value="any">指定なし (全般)</option>';
+        positions.forEach(p => {
+            html += `<option value="${this._sanitize(p)}">${this._sanitize(p)}専用</option>`;
+        });
+        select.innerHTML = html;
     },
 
     // プラン別スタッフ上限
@@ -4273,6 +4308,7 @@ const app = {
         const s = this.getStaff(id);
         if(!s) return;
         this.updateStaffRoleSelect(); // Selectを最新化
+        this.updateStaffPositionSelect(); // ポジション一覧を最新化
         document.getElementById('staffId').value = s.id;
         document.getElementById('staffName').value = s.name;
         document.getElementById('staffRole').value = s.role;
