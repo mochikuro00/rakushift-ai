@@ -2052,7 +2052,8 @@ const app = {
                             return ((h + m/60) / 24) * 100;
                         };
                         const startPct = timeToPct(shift.start_time);
-                        const endPct = timeToPct(shift.end_time);
+                        let endPct = timeToPct(shift.end_time);
+                        if (endPct <= startPct) endPct += 100;
                         const widthPct = endPct - startPct;
                         
                         // 営業時間外マスク (Open前、Close後)
