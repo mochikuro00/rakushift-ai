@@ -149,6 +149,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- 3.4 ログアウト用RPC (セッション破棄)
+CREATE OR REPLACE FUNCTION destroy_session() 
+RETURNS VOID AS $$
+DECLARE
+    v_session_id UUID;
+BEGIN
+    v_session_id := get_session_id();
+    IF v_session_id IS NOT NULL THEN
+        DELETE FROM auth_sessions WHERE id = v_session_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 
 -- 4. RLS ポリシーの厳格化
 -- (既存の USING(true) 等のポリシーを削除して、セッションベースのポリシーに置き換え)
