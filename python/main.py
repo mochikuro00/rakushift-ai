@@ -234,7 +234,7 @@ async def supabase_query(table: str, params: str = "", method: str = "GET",
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Rakushift Engine v3.2 Ready", "build": "2026.05.17.3"}
+    return {"status": "ok", "message": "Rakushift Engine v3.2 Ready", "build": "2026.05.19.1"}
 
 
 @app.get("/keepalive")
