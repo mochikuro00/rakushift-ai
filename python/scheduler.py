@@ -714,8 +714,8 @@ class ShiftScheduler:
             # ====================================================
 
             if tier >= 2:
-                # --- 1日の出勤人数: 必要人数以上を確保（ソフト制約） ---
-                # ※不足は許容する（スタッフのルール遵守が最優先）
+                # --- 1日の出勤人数: 必要人数±1に収束させる（ソフト制約） ---
+                # 不足も過剰も許容するが、±1の範囲に強力に誘導する
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
@@ -729,12 +729,19 @@ class ShiftScheduler:
                         if opts:
                             day_workers.append(pulp.lpSum([x[(sid, d, oi)] for oi in range(len(opts))]))
                     if day_workers:
-                        daily_slack = pulp.LpVariable(
+                        daily_sum = pulp.lpSum(day_workers)
+                        # 下限: 必要人数以上を確保
+                        daily_slack_under = pulp.LpVariable(
                             "daily_under_{}".format(d), 0, None, pulp.LpInteger)
-                        prob += pulp.lpSum(day_workers) + daily_slack >= req_daily
-                        penalty += daily_slack * 500000  # スタッフ制約より低い重み
+                        prob += daily_sum + daily_slack_under >= req_daily
+                        penalty += daily_slack_under * 500000  # 不足ペナルティ（重い）
+                        # 上限: 必要人数+1以内に抑える（±1制御の核心）
+                        daily_slack_over = pulp.LpVariable(
+                            "daily_over_{}".format(d), 0, None, pulp.LpInteger)
+                        prob += daily_sum - daily_slack_over <= req_daily + 1
+                        penalty += daily_slack_over * 400000  # 過剰ペナルティ（不足に次ぐ重さ）
 
-                # --- 各時間スロットの最低人員 ---
+                # --- 各時間スロットの人員: 必要人数±1に収束させる ---
                 for d in self.dates:
                     slot_reqs = self._build_slot_requirements(d)
                     for slot_min, req in slot_reqs.items():
@@ -745,22 +752,23 @@ class ShiftScheduler:
                                 if opt["start_min"] <= slot_min < opt["end_min"]:
                                     workers.append(x[(sid, d, oi)])
                         if workers:
+                            workers_sum = pulp.lpSum(workers)
                             # 全営業スロットで最低1名は必ず確保
                             if not force:
                                 min1_slack = pulp.LpVariable(
                                     "min1_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                                prob += pulp.lpSum(workers) + min1_slack >= 1
-                                penalty += min1_slack * 800000  # 0名回避（スタッフ制約より低い重み）
+                                prob += workers_sum + min1_slack >= 1
+                                penalty += min1_slack * 1000000  # 0名回避（最重要）
                             # 必要人数を確保（不足は許容するがペナルティ）
                             slack_under = pulp.LpVariable(
                                 "cov_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(workers) + slack_under >= req
-                            penalty += slack_under * 300000  # 不足は仕方ないがベストエフォート
-                            # 過剰は軽めのペナルティ（短時間バイト活用を許可）
+                            prob += workers_sum + slack_under >= req
+                            penalty += slack_under * 500000  # 不足ペナルティ（強化）
+                            # 過剰は+1以内に厳格制御（±1制御の核心）
                             slack_over = pulp.LpVariable(
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(workers) - slack_over <= req + 2
-                            penalty += slack_over * 10000
+                            prob += workers_sum - slack_over <= req + 1  # +1まで許容（旧: +2）
+                            penalty += slack_over * 200000  # 過剰ペナルティ（旧: 10000 → 20倍強化）
 
                 # --- 管理者常駐制約 ---
                 for d in self.dates:
@@ -887,7 +895,8 @@ class ShiftScheduler:
                             total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus
                             penalty += x[(sid, d, oi)] * total_cost
 
-                # --- 勤務日数の公平性と離職防止 (スタッフ個別のmax_days_weekに応じた公平配分) ---
+                # --- 勤務日数の公平性と離職防止 (需要ベースの按分方式) ---
+                # 店舗全体の需要人日数からスタッフごとの配分比率を計算し、±1で収束させる
                 active_staff = [s for s in self.staff_list if int(s.get("max_days_week") or 5) > 0]
                 if len(active_staff) >= 2:
                     total_vars = {}
@@ -901,31 +910,67 @@ class ShiftScheduler:
                     work_days_count = len([d for d in self.dates
                                           if self._get_day_type(d) != "closed"])
                     weeks_in_period = max(work_days_count / 7.0, 1.0)
+
+                    # 需要ベースの目標計算: 全体の必要人日数を算出
+                    total_demand_days = sum(
+                        self._get_required_staff(d)
+                        for d in self.dates
+                        if self._get_day_type(d) != "closed"
+                    )
+                    # 全スタッフのmax_days_week合計（按分の分母）
+                    total_capacity_per_week = sum(
+                        int(s.get("max_days_week") or 5) for s in active_staff
+                    )
+
                     for s in active_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
-                        # 各スタッフのmax_days_weekに応じた個別目標値を計算
                         staff_max_days = int(s.get("max_days_week") or 5)
-                        staff_target = staff_max_days * weeks_in_period * 0.5  # max_daysの50%を目標（過剰配置防止）
+                        ng_count = len([d for d in self.dates
+                                        if d in self._get_staff_ng_dates(s)
+                                        or self._get_day_type(d) == "closed"])
+                        available_days = len(self.dates) - ng_count
+
+                        # 需要ベース目標: 全体需要 × (個人max_days / 全体max_days合計)
+                        if total_capacity_per_week > 0:
+                            demand_ratio = staff_max_days / total_capacity_per_week
+                            staff_target = total_demand_days * demand_ratio
+                        else:
+                            staff_target = staff_max_days * weeks_in_period * 0.7
+
+                        # 上限はmax_days_week×週数と出勤可能日数の小さい方
+                        upper_limit = min(staff_max_days * weeks_in_period, available_days)
+                        staff_target = min(staff_target, upper_limit)
+                        staff_target = max(staff_target, 1.0)  # 最低1日は保証
+
                         slack_over = pulp.LpVariable("fair_over_{}".format(sid), 0, None)
                         slack_under = pulp.LpVariable("fair_under_{}".format(sid), 0, None)
                         prob += tv - staff_target <= slack_over
                         prob += staff_target - tv <= slack_under
-                        penalty += (slack_over + slack_under) * 50000
+                        # 公平性ペナルティ強化: 偏りを強力に抑制
+                        penalty += (slack_over + slack_under) * 80000
+
+                    print("[Tier3] Fairness: demand={} days, {} staff, capacity/wk={}".format(
+                        total_demand_days, len(active_staff), total_capacity_per_week))
 
                     # === 店舗運営者視点：離職防止アルゴリズム（ゼロシフト絶対回避） ===
-                    # 1日でも希望を出しているスタッフが「シフト0」になることは、退職の直接的な原因になります。
-                    # 過剰配置ペナルティを支払ってでも、全員に最低限のシフト（週1回程度）を保証します。
+                    # 全員に最低限のシフト（週1回程度）を保証する
                     for s in active_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
-                        # 期間中に提出された希望シフトの日数をカウント（出勤可能な日数）
+                        # 期間中に出勤可能な日数をカウント
                         submitted_days = len([d for d in self.dates if staff_opts.get((sid, d))])
                         if submitted_days > 0:
-                            # 最低保証シフト数：月間に最低1日（ゼロシフトによる離職を絶対阻止）
-                            # ※週1回などの高いハード制約は、スタッフのNG申請や週上限日数と矛盾して計算不可能(Infeasible)になるため、
-                            # 絶対安全な「1」をハード制約とし、残りは公平性アルゴリズム（5万ボーナス）に委ねる。
-                            guarantee_shifts = min(submitted_days, 1)
+                            # 最低保証シフト数: 週あたり1日（ただしmax_days_weekとsubmitted_daysで安全に制限）
+                            staff_max_days = int(s.get("max_days_week") or 5)
+                            # 週1日 × 週数、ただし出勤可能日数とmax_daysの範囲内
+                            weekly_guarantee = min(1, staff_max_days)
+                            guarantee_shifts = min(
+                                int(weekly_guarantee * weeks_in_period),
+                                submitted_days,
+                                int(staff_max_days * weeks_in_period)
+                            )
+                            guarantee_shifts = max(guarantee_shifts, 1)  # 絶対最低1日
                             prob += tv >= guarantee_shifts
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---
                 # min_days_weekのハード制約で確保済みなので、ボーナスは補助的に軽めに
@@ -1178,19 +1223,69 @@ class ShiftScheduler:
 
     def _validate(self, shifts):
         violations = 0
+        # ±1品質チェック用カウンター
+        total_slots_checked = 0
+        slots_within_pm1 = 0  # ±1以内に収まったスロット数
+        daily_within_pm1 = 0  # ±1以内の日数
+        daily_checked = 0
 
-        # カバレッジ検証
+        # カバレッジ検証 + ±1品質チェック
         for d in self.dates:
             reqs = self._build_slot_requirements(d)
             day_s = [s for s in shifts if s["date"] == d]
+
+            if not reqs:
+                continue
+
+            req_daily = self._get_required_staff(d)
+            daily_assigned = len(day_s)
+            if req_daily > 0:
+                daily_checked += 1
+                daily_diff = daily_assigned - req_daily
+                if -1 <= daily_diff <= 1:
+                    daily_within_pm1 += 1
+                elif daily_diff < -1:
+                    print("  BALANCE: {} daily: need={} got={} ({}名不足)".format(
+                        d, req_daily, daily_assigned, abs(daily_diff)))
+                elif daily_diff > 1:
+                    print("  BALANCE: {} daily: need={} got={} (+{}名過剰)".format(
+                        d, req_daily, daily_assigned, daily_diff))
+
             for slot_min, req in reqs.items():
                 cov = sum(1 for s in day_s
                           if self._to_minutes(s["start_time"]) <= slot_min
                           < self._to_minutes(s["end_time"]))
+                total_slots_checked += 1
+                diff = cov - req
+                if -1 <= diff <= 1:
+                    slots_within_pm1 += 1
                 if cov < req:
                     print("  VIOLATION: {} {} need={} got={}".format(
                         d, self._from_minutes(slot_min), req, cov))
                     violations += 1
+
+        # ±1達成率のログ出力
+        if total_slots_checked > 0:
+            slot_rate = (slots_within_pm1 / total_slots_checked) * 100
+            print("  [±1 QUALITY] Slot: {}/{} ({:.1f}%) within ±1".format(
+                slots_within_pm1, total_slots_checked, slot_rate))
+        if daily_checked > 0:
+            daily_rate = (daily_within_pm1 / daily_checked) * 100
+            print("  [±1 QUALITY] Daily: {}/{} ({:.1f}%) within ±1".format(
+                daily_within_pm1, daily_checked, daily_rate))
+
+        # スタッフ別配置日数のバラツキ検証
+        staff_days = {}
+        for sh in shifts:
+            sid = sh["staff_id"]
+            staff_days.setdefault(sid, set()).add(sh["date"])
+        if staff_days:
+            days_list = [len(ds) for ds in staff_days.values()]
+            avg_days = sum(days_list) / len(days_list)
+            max_days = max(days_list)
+            min_days = min(days_list)
+            print("  [FAIRNESS] Staff days: avg={:.1f}, min={}, max={}, spread={}".format(
+                avg_days, min_days, max_days, max_days - min_days))
 
         # 連勤検証
         sorted_d = sorted(self.dates)
