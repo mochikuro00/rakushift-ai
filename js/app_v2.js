@@ -2037,7 +2037,7 @@ const app = {
                     
                     // イレギュラーアサイン（社員の強制アサイン等）の強調
                     if (shift.is_irregular) {
-                        barColor = 'bg-red-50 text-red-700 border-red-500 pattern-diagonal-lines shadow-[inset_0_0_0_2px_rgba(239,68,68,0.5)]';
+                        barColor = 'bg-red-50 text-red-700 border-red-500 border-2 pattern-diagonal-lines ring-2 ring-red-400 ring-inset';
                     }
                     
                     // 過去の場合は少し透明にして元の色を残す
@@ -4820,7 +4820,7 @@ const app = {
         this.state.shifts = this.state.shifts.filter(function(s){ return targetDates.indexOf(s.date) === -1; });
 
         var cleanShifts = shifts.map(function(s){
-            return {
+            var obj = {
                 organization_id: this.state.organization_id,
                 staff_id: s.staff_id,
                 date: s.date,
@@ -4828,6 +4828,9 @@ const app = {
                 end_time: s.end_time,
                 break_minutes: s.break_minutes || 0
             };
+            // イレギュラーフラグがある場合のみ保存（通常シフトではfalse/未設定）
+            if (s.is_irregular) obj.is_irregular = true;
+            return obj;
         }.bind(this));
 
         var batchSize = 50;

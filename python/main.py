@@ -647,9 +647,10 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
 修正後の完全なシフト表をJSON配列で出力してください。
 **重要**: 純粋なJSON配列のみ出力。マークダウンや解説は不要。
 [
-  {{"staff_id": "...", "date": "YYYY-MM-DD", "start_time": "HH:MM", "end_time": "HH:MM", "break_minutes": 60}},
+  {{"staff_id": "...", "date": "YYYY-MM-DD", "start_time": "HH:MM", "end_time": "HH:MM", "break_minutes": 60, "is_irregular": false}},
   ...
-]""".format(
+]
+※ 欠員補充のために社員（monthly）のシフトを延長した、または休みから呼び出した場合は、該当シフトの `"is_irregular": true` としてください。通常シフトは `false` です。""".format(
             "、".join(closed_days_names) if closed_days_names else "なし",
             ", ".join(config.get("special_holidays", [])) if config.get("special_holidays") else "なし",
             json.dumps(break_rules, ensure_ascii=False),

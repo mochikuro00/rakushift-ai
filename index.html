@@ -114,6 +114,17 @@
             #viewContainer { padding: 8px !important; }
         }
 
+        /* 斜線パターン（特別休日・イレギュラーシフト表示用） */
+        .pattern-diagonal-lines {
+            background-image: repeating-linear-gradient(
+                135deg,
+                transparent,
+                transparent 4px,
+                rgba(239, 68, 68, 0.12) 4px,
+                rgba(239, 68, 68, 0.12) 6px
+            );
+        }
+
         /* Print Styles - Standard Fallback */
         @media print {
             body * {
