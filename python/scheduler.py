@@ -1,5 +1,6 @@
 import pulp
 from datetime import datetime, timedelta
+import random
 
 
 class ShiftScheduler:
@@ -914,7 +915,9 @@ class ShiftScheduler:
                             labor_cost = 0.0 if is_monthly else (hourly_wage * work_hours)
                             
                             # 人件費を最小化しつつ、評価の高いスタッフを優先するハイブリッドコスト
-                            total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus
+                            # 同条件で毎回同じシフトになるのを防ぐため、微小なランダムジッターを加える
+                            jitter = random.uniform(-10.0, 10.0)
+                            total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus + jitter
                             penalty += x[(sid, d, oi)] * total_cost
 
                 # --- 勤務日数の公平性と離職防止 (需要ベースの按分方式) ---
