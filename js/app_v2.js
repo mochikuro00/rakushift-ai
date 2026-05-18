@@ -2278,22 +2278,19 @@ const app = {
                     // 不足スロットがある
                     cellBg = 'bg-red-50';
                     const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
-                    cellContent = `<div class="flex flex-row flex-wrap items-center justify-center h-full px-1 gap-x-1">
-                        <span class="text-red-600 font-black text-xs animate-pulse">${label}</span>
-                        <span class="text-[10px] text-red-500 font-bold">${assigned}名(要${maxSlotReq})</span>
+                    cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
+                        <span class="text-red-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter animate-pulse">${label} <span class="opacity-80 ml-0.5">${assigned}名(要${maxSlotReq})</span></span>
                     </div>`;
                 } else if (surplusSlots > totalSlots / 3) {
                     // 過剰スロットが多い（±1超え）
                     cellBg = 'bg-amber-50';
-                    cellContent = `<div class="flex flex-row flex-wrap items-center justify-center h-full px-1 gap-x-1">
-                        <span class="text-amber-500 text-xs font-bold"><i class="fa-solid fa-arrow-up"></i>過剰</span>
-                        <span class="text-[10px] text-amber-500 font-bold">${assigned}名(要${maxSlotReq})</span>
+                    cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
+                        <span class="text-amber-500 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">過剰 <span class="opacity-80 ml-0.5">${assigned}名(要${maxSlotReq})</span></span>
                     </div>`;
                 } else {
                     // ±1以内で適正
-                    cellContent = `<div class="flex flex-row flex-wrap items-center justify-center h-full px-1 gap-x-1">
-                        <span class="text-green-600 text-xs font-bold"><i class="fa-solid fa-check"></i> ぴったり</span>
-                        <span class="text-[10px] text-green-600 font-bold">${assigned}名(要${maxSlotReq})</span>
+                    cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
+                        <span class="text-green-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">ぴったり <span class="opacity-80 ml-0.5">${assigned}名(要${maxSlotReq})</span></span>
                     </div>`;
                 }
 
