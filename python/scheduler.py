@@ -1,7 +1,7 @@
 import pulp
 from datetime import datetime, timedelta
 import random
-
+import re
 
 class ShiftScheduler:
     """
@@ -175,7 +175,7 @@ class ShiftScheduler:
             self._ng_cache[s["id"]] = self._compute_staff_ng_dates(s)
             
             sid1 = s["id"]
-            for target_name in [n.strip() for n in s.get("ng_pairs", "").split(",") if n.strip()]:
+            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', s.get("ng_pairs", "")) if n.strip()]:
                 sid2 = name_to_id.get(target_name)
                 if not sid2:
                     for n, _sid in name_to_id.items():
@@ -184,7 +184,7 @@ class ShiftScheduler:
                 if sid2 and sid1 != sid2:
                     self._ng_pair_constraints.append((sid1, sid2))
             
-            for target_name in [n.strip() for n in s.get("req_pairs", "").split(",") if n.strip()]:
+            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', s.get("req_pairs", "")) if n.strip()]:
                 sid2 = name_to_id.get(target_name)
                 if not sid2:
                     for n, _sid in name_to_id.items():

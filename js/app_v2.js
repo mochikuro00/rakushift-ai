@@ -2851,8 +2851,8 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">店舗内の役割（ホール、キッチンなど）を自由に設定できます。</p>
                     </div>
                     <div class="p-6">
-                        <label class="block text-xs font-bold text-gray-500 mb-2">ポジション一覧（カンマ区切り）</label>
-                        <input type="text" id="settingPositions" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm font-bold bg-white" value="${positions.join(', ')}" placeholder="例: ホール, キッチン, デリバリー">
+                        <label class="block text-xs font-bold text-gray-500 mb-2">ポジション一覧（スペース・読点等で区切って入力）</label>
+                        <input type="text" id="settingPositions" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm font-bold bg-white" value="${positions.join('　')}" placeholder="例: ホール　キッチン　デリバリー">
                         <p class="text-xs text-gray-400 mt-3">※ ここで設定したポジションは、スタッフ管理の「担当ポジション」や、時間帯別ルールの「ポジション指定」の選択肢になります。</p>
                         <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 leading-relaxed">
                             <i class="fa-solid fa-circle-exclamation mr-1 text-yellow-600"></i> <strong>【重要】ポジション変更時のご注意</strong><br>
@@ -3452,7 +3452,7 @@ const app = {
 
         // ポジション設定
         const posInput = document.getElementById('settingPositions')?.value || '';
-        config.positions = posInput.split(',').map(p => p.trim()).filter(p => p !== '');
+        config.positions = posInput.split(/[,、\s　]+/).map(p => p.trim()).filter(p => p !== '');
         if (config.positions.length === 0) config.positions = ['ホール', 'キッチン'];
 
         // 役職・ロール設定
@@ -5679,7 +5679,7 @@ const app = {
 
                     <div class="border-l-4 border-teal-400 pl-4 py-1">
                         <h4 class="font-bold text-teal-700 text-base mb-1">1.5. ポジション設定（重要）</h4>
-                        <p>店舗内の役割（ホール・キッチン・デリバリーなど）をカンマ区切りで自由に設定できます。</p>
+                        <p>店舗内の役割（ホール・キッチン・デリバリーなど）をスペースや読点等で区切って自由に設定できます。</p>
                         <p class="text-xs text-red-600 font-bold mt-1">※注意: 稼働中にポジション名を変更・削除すると、過去そのポジションだったスタッフは「指定なし (全般)」扱いになるため、なるべく初期設定で確定させてください。</p>
                     </div>
                     
