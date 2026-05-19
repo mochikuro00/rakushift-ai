@@ -1631,7 +1631,7 @@ const app = {
                 const start = new Date(`${dateStr}T${shift.start_time}`);
                 const end = new Date(`${dateStr}T${shift.end_time}`);
                 if (end < start) end.setDate(end.getDate() + 1);
-                let hours = (end - start) / (1000 * 60 * 60) - (shift.break_minutes / 60);
+                let hours = (end - start) / (1000 * 60 * 60) - ((shift.break_minutes || 0) / 60);
                 if (hours < 0) hours = 0;
 
                 let wage = staff.hourly_wage;
@@ -2080,7 +2080,7 @@ const app = {
                                     <div class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-20 hover:bg-black/10 rounded-r" style="touch-action:none;"></div>
                         ` : '';
                         content = `
-                            <div class="w-full h-full relative group bg-white overflow-hidden">
+                            <div class="w-full h-full relative group bg-transparent overflow-hidden">
                                 ${bgGuides}
                                 <!-- Bar with text -->
                                 <div class="absolute top-1/2 -translate-y-1/2 h-8 ${period==='week'?'':'h-6'} rounded ${barColor} border shadow-sm flex items-center justify-center overflow-hidden z-10 hover:brightness-95 transition-all px-1"
@@ -2117,29 +2117,8 @@ const app = {
                     const openPct = timeToPct(openTime);
                     const closePct = timeToPct(closeTime);
 
-                    // CSS Gradientで細かいグリッドを描画
-                    const oneHour = 100/24;
-                    const oneFifteen = oneHour / 4;
-                    const guides = `
-                        <!-- Fine Grid (CSS Gradient) -->
-                        <div class="absolute top-0 bottom-0 left-0 right-0 pointer-events-none" 
-                                style="
-                                background-image: 
-                                    linear-gradient(to right, #d1d5db 1px, transparent 1px), /* 1h */
-                                    linear-gradient(to right, #f3f4f6 1px, transparent 1px); /* 15m */
-                                background-size: 
-                                    ${oneHour}% 100%, 
-                                    ${oneFifteen}% 100%;
-                                ">
-                        </div>
-                        <!-- 6h Major Lines -->
-                        <div class="absolute top-0 bottom-0 left-[25%] w-px bg-gray-400"></div>
-                        <div class="absolute top-0 bottom-0 left-[50%] w-px bg-gray-400"></div>
-                        <div class="absolute top-0 bottom-0 left-[75%] w-px bg-gray-400"></div>
-                        
-                        <!-- Business Hours Mask (透明化) -->
-                    `;
-                    content = `<div class="w-full h-full relative group overflow-hidden bg-white">${guides}</div>`;
+                    const guides = '';
+                    content = `<div class="w-full h-full relative group overflow-hidden bg-transparent">${guides}</div>`;
                 }
 
                 bodyHtml += `<td class="p-0 border-b border-r border-gray-100 h-14 relative transition-colors ${bgClass} ${cursor}" ${action}>${content}</td>`;
@@ -2579,7 +2558,7 @@ const app = {
             const start = new Date(`${shift.date}T${shift.start_time}`);
             const end = new Date(`${shift.date}T${shift.end_time}`);
             if (end < start) end.setDate(end.getDate() + 1);
-            let hours = (end - start) / (1000 * 60 * 60) - (shift.break_minutes / 60);
+            let hours = (end - start) / (1000 * 60 * 60) - ((shift.break_minutes || 0) / 60);
             if (hours < 0) hours = 0;
 
             let cost = 0;
@@ -3910,7 +3889,7 @@ const app = {
                 const breakRules = this.state.config.break_rules || this.state.defaultConfig.break_rules || [];
                 let brk = 0;
                 for (const rule of breakRules.sort((a, b) => a.min_hours - b.min_hours)) {
-                    if (hours > rule.min_hours) brk = rule.break_minutes;
+                    if (hours >= rule.min_hours) brk = rule.break_minutes;
                 }
                 if (shift.break_minutes !== brk) {
                     shift.break_minutes = brk;
@@ -5796,7 +5775,7 @@ const app = {
             const start = new Date(`${shift.date}T${shift.start_time}`);
             const end = new Date(`${shift.date}T${shift.end_time}`);
             if (end < start) end.setDate(end.getDate() + 1);
-            const hours = (end - start) / (1000 * 60 * 60) - (shift.break_minutes / 60);
+            const hours = (end - start) / (1000 * 60 * 60) - ((shift.break_minutes || 0) / 60);
             if (hours > 0) {
                 totalHours += hours;
                 if (staff.salary_type === 'hourly') {

@@ -153,6 +153,9 @@ class ShiftScheduler:
                     if d.startswith("ngPair:"): s["ng_pairs"] = d.replace("ngPair:", "")
                     if d.startswith("reqPair:"): s["req_pairs"] = d.replace("reqPair:", "")
                     if d.startswith("position:"): s["position"] = d.replace("position:", "")
+                    # シフト優先度と契約区分のタグ解析（フロントエンドがunavailable_datesに埋め込む）
+                    if d.startswith("priority:"): s["shift_priority"] = d.replace("priority:", "")
+                    if d.startswith("contract:"): s["contract_type"] = d.replace("contract:", "")
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
         
@@ -1309,29 +1312,40 @@ class ShiftScheduler:
                                 penalty += x[(eid, d, oi)] * 10000
 
             # 人間関係（相性）制約: NGペア
+            # slot_reqs のキー（実際のスロット分単位）でイテレーションする
             for (sid1, sid2) in getattr(self, '_ng_pair_constraints', []):
                 for d in self.dates:
-                    for t in range(self.time_len):
-                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
-                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
-                        overlap = pulp.LpVariable(f"NG_overlap_{sid1}_{sid2}_{d}_{t}", lowBound=0)
+                    slot_reqs_ng = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
+                    if slot_reqs_ng is None:
+                        slot_reqs_ng = self._build_slot_requirements(d)
+                    if not slot_reqs_ng:
+                        continue
+                    for slot_min in slot_reqs_ng:
+                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= slot_min < opt["end_min"])
+                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= slot_min < opt["end_min"])
+                        overlap = pulp.LpVariable("NG_overlap_{}_{}_{}_{}".format(sid1[:8], sid2[:8], d, slot_min), lowBound=0)
                         prob += (overlap >= sid1_w + sid2_w - 1)
                         penalty += overlap * 100000
 
             # 人間関係（相性）制約: 必須ペア
             for (sid1, sid2) in getattr(self, '_req_pair_constraints', []):
                 for d in self.dates:
-                    for t in range(self.time_len):
-                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
-                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"])
-                        shortage = pulp.LpVariable(f"REQ_shortage_{sid1}_{sid2}_{d}_{t}", lowBound=0)
+                    slot_reqs_rp = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
+                    if slot_reqs_rp is None:
+                        slot_reqs_rp = self._build_slot_requirements(d)
+                    if not slot_reqs_rp:
+                        continue
+                    for slot_min in slot_reqs_rp:
+                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= slot_min < opt["end_min"])
+                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= slot_min < opt["end_min"])
+                        shortage = pulp.LpVariable("REQ_shortage_{}_{}_{}_{}".format(sid1[:8], sid2[:8], d, slot_min), lowBound=0)
                         prob += (shortage >= sid1_w - sid2_w)
                         penalty += shortage * 100000
 
             # ポジション別の必要人数確保（ソフト制約）
             for d in self.dates:
                 pos_reqs = self._build_pos_requirements(d)
-                for t, reqs in pos_reqs.items():
+                for slot_min_pos, reqs in pos_reqs.items():
                     for pos, req_num in reqs.items():
                         if req_num > 0:
                             pos_staff = []
@@ -1345,9 +1359,9 @@ class ShiftScheduler:
                                 x[(sid, d, oi)]
                                 for sid in pos_staff
                                 for oi, opt in enumerate(staff_opts.get((sid, d), []))
-                                if opt["start_min"] <= (self.start_min + t * 15) < opt["end_min"]
+                                if opt["start_min"] <= slot_min_pos < opt["end_min"]
                             )
-                            shortage = pulp.LpVariable(f"POS_short_{pos}_{d}_{t}", lowBound=0)
+                            shortage = pulp.LpVariable("POS_short_{}_{}_{}" .format(pos, d, slot_min_pos), lowBound=0)
                             prob += (shortage >= req_num - working_pos)
                             penalty += shortage * 200000
 
@@ -1626,7 +1640,6 @@ class ShiftScheduler:
             # 不足スロットを埋める（ただし過剰配置は防止）
             for _ in range(30):
                 deficit = {}
-                total_day_cov = 0
                 max_slot_req_day = 0
                 for slot_min, req in slot_reqs.items():
                     cov = sum(1 for s in day_shifts

@@ -934,7 +934,7 @@
         document.getElementById('statExpired').textContent = expired;
 
         // MRR計算（Stripe決済済み + OEMプラン）
-        const prices = { standard: 2980, pro: 4480, premium: 9980, oem: 4000 };
+        const prices = { standard: 3380, pro: 4880, premium: 9980, oem: 4000 };
         let mrr = 0;
         allTenants.filter(t => t.subscription_status === 'active' && (t.stripe_customer_id || t.stripe_plan === 'oem')).forEach(t => {
             const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : null;
@@ -1313,7 +1313,7 @@
     }
 
     // --- 収益計算・表示 ---
-    const PLAN_PRICES = { standard: 2980, pro: 4480, premium: 9980, oem: 4000 };
+    const PLAN_PRICES = { standard: 3380, pro: 4880, premium: 9980, oem: 4000 };
     const PLAN_NAMES = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM' };
     const PLAN_COLORS = { standard: '#3b82f6', pro: '#22c55e', premium: '#a855f7', oem: '#f59e0b' };
 
