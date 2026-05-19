@@ -2072,25 +2072,7 @@ const app = {
                         // 1h = 100/24 %, 15m = 1h/4
                         const oneHour = 100/24;
                         const oneFifteen = oneHour / 4;
-                        const bgGuides = `
-                            <!-- Fine Grid (CSS Gradient) -->
-                            <div class="absolute top-0 bottom-0 left-0 right-0 pointer-events-none" 
-                                 style="
-                                    background-image: 
-                                        linear-gradient(to right, #d1d5db 1px, transparent 1px), /* 1h: Stronger */
-                                        linear-gradient(to right, #f3f4f6 1px, transparent 1px); /* 15m: Lighter */
-                                    background-size: 
-                                        ${oneHour}% 100%, 
-                                        ${oneFifteen}% 100%;
-                                 ">
-                            </div>
-                            <!-- 6h Major Lines -->
-                            <div class="absolute top-0 bottom-0 left-[25%] w-px bg-gray-400 z-0"></div>
-                            <div class="absolute top-0 bottom-0 left-[50%] w-px bg-gray-400 z-0"></div>
-                            <div class="absolute top-0 bottom-0 left-[75%] w-px bg-gray-400 z-0"></div>
-                            
-                            <!-- Business Hours Mask (削除: ご要望により1週間ビューでのグレーアウト排除) -->
-                        `;
+                        const bgGuides = '';
                         
                         const adminDrag = this.state.isAdmin ? `data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px; cursor: grab;"` : `style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px;"`;
                         const resizeHandles = this.state.isAdmin ? `
