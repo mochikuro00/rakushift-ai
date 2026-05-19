@@ -1747,16 +1747,16 @@
                             ${meta.label}
                             ${statusBadge}
                         </label>
-                        <input type="${meta.type}" id="setting_${s.key}"
+                        <input type="${meta.type}" id="setting_${escapeHtml(s.key)}"
                             class="input font-mono text-sm"
-                            placeholder="${s.has_value ? s.masked_value : meta.placeholder}">
-                        <p class="text-[11px] text-gray-400 mt-1.5">${s.description || ''}</p>
+                            placeholder="${s.has_value ? escapeHtml(s.masked_value) : meta.placeholder}">
+                        <p class="text-[11px] text-gray-400 mt-1.5">${escapeHtml(s.description || '')}</p>
                     </div>
                 `;
             }).join('');
         } catch (e) {
             document.getElementById('settingsGrid').innerHTML =
-                `<p class="text-red-500 text-sm col-span-2">エラー: ${e.message}</p>`;
+                `<p class="text-red-500 text-sm col-span-2">エラー: ${escapeHtml(e.message)}</p>`;
         }
     }
 
