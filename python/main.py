@@ -1100,6 +1100,15 @@ async def stripe_webhook(request: Request):
                 address = metadata.get("address", "")
                 referrer_code = (metadata.get("referrer_code", "") or "").strip().upper()
 
+                # 0. 重複チェック（既に同じsubscription_idで作成済みか）
+                existing = await supabase_query(
+                    "config",
+                    "stripe_subscription_id=eq.{}&select=id".format(subscription_id)
+                )
+                if isinstance(existing, list) and len(existing) > 0:
+                    print("[Webhook] SKIPPED: Tenant already exists for subscription {}".format(subscription_id))
+                    return JSONResponse(status_code=200, content={"status": "already_processed"})
+
                 # 1. テナント作成
                 tenant_result = await supabase_rpc("create_tenant", {"p_org_name": org_name})
                 if isinstance(tenant_result, dict) and tenant_result.get("status") == "success":
