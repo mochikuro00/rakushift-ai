@@ -1,16 +1,16 @@
 const app = {
-    // セキュリチE��: ログイン試行回数制陁E
+    // セキュリチE��: ログイン試行回数制陁E
     _loginAttempts: {},
     _MAX_LOGIN_ATTEMPTS: 5,
-    _LOCKOUT_DURATION_MS: 5 * 60 * 1000, // 5刁E��ロチE��アウチE
+    _LOCKOUT_DURATION_MS: 5 * 60 * 1000, // 5刁E��ロチE��アウチE
 
-    // セキュリチE��: 入力サニタイゼーション
+    // セキュリチE��: 入力サニタイゼーション
     _sanitize(str) {
         if (typeof str !== 'string') return '';
         return str.replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
     },
 
-    // セキュリチE��: ログイン試行チェチE��
+    // セキュリチE��: ログイン試行チェチE��
     _checkLoginLock(key) {
         const record = this._loginAttempts[key];
         if (!record) return false;
@@ -21,7 +21,7 @@ const app = {
                 this.showToast('ログイン試行回数の上限に達しました、E + remainSec + '秒後に再試行してください、E, 'error');
                 return true;
             }
-            // ロチE��アウト期間が過ぎた�EでリセチE��
+            // ロチE��アウト期間が過ぎた�EでリセチE��
             delete this._loginAttempts[key];
         }
         return false;
@@ -45,11 +45,11 @@ const app = {
         shiftViewMode: 'table', // 'table' or 'calendar'
         shiftTablePeriod: 'month', // 'month', 'week', '2weeks'
         dashboardMode: 'month', // 'month', '2week-1', '2week-2'
-        isShopLoggedIn: false, // 店�Eログイン状慁E
-        isAdmin: false, // 管琁E��E��グイン状慁E
+        isShopLoggedIn: false, // 店�Eログイン状慁E
+        isAdmin: false, // 管琁E��E��グイン状慁E
         isHQ: false, // 本部ログイン状慁E
         
-        // チE�Eタ�E�EPIからロード！E
+        // チE�Eタ�E�EPIからロード！E
         config: {},
         staff: [],
         shifts: [],
@@ -63,7 +63,7 @@ const app = {
             closing_time: "22:00",
             hourly_wage_default: 1100,
             
-            // 営業時間�E�詳細�E�E
+            // 営業時間�E�詳細�E�E
             opening_times: {
                 weekday: { start: "09:00", end: "22:00" },
                 weekend: { start: "10:00", end: "20:00" },
@@ -73,7 +73,7 @@ const app = {
             // 定休日 (0=日, 1=朁E..)
             closed_days: [], 
             
-            // 人員配置ルール�E�詳細�E�E
+            // 人員配置ルール�E�詳細�E�E
             staff_req: {
                 min_manager: 1,
                 min_weekday: 2,
@@ -99,25 +99,25 @@ const app = {
             // 時間帯別人員ルール
             time_staff_req: [], // [{ days: [0,6], start: '11:00', end: '14:00', count: 4 }]
 
-            // カレンダー備老E(YYYY-MM-DD: "メモ冁E��")
+            // カレンダー備老E(YYYY-MM-DD: "メモ冁E��")
             calendar_notes: {},
 
-            // 休�E時間ルール
+            // 休�E時間ルール
             break_rules: [
                 { min_hours: 6, break_minutes: 45 },
                 { min_hours: 8, break_minutes: 60 }
             ],
             
-            // お店�Eルール�E��E由記述�E�E
-            shop_rules_text: "希望休�E提�Eは前月20日までにお願いします、En急な欠勤の場合�E、忁E��店長まで直接連絡してください、Enシフトの変更希望は「休暇・シフト申請」�Eタンから行えます、E,
+            // お店�Eルール�E��E由記述�E�E
+            shop_rules_text: "希望休�E提�Eは前月20日までにお願いします、En急な欠勤の場合�E、忁E��店長まで直接連絡してください、Enシフトの変更希望は「休暇・シフト申請」�Eタンから行えます、E,
 
             // 旧互換
             // staffing_rules removed
             
-            // カスタムシフト設宁E(早番・遁E��など)
+            // カスタムシフト設宁E(早番・遁E��など)
             custom_shifts: [
                 { name: "早番", start: "09:00", end: "17:00" },
-                { name: "遁E��", start: "17:00", end: "22:00" }
+                { name: "遁E��", start: "17:00", end: "22:00" }
             ],
             
             special_days: {} 
@@ -126,12 +126,12 @@ const app = {
         
         // チャートインスタンス保持用
         dashboardChartInstance: null,
-        // ダチE��ュボ�Eド�E動更新用タイマ�E
+        // ダチE��ュボ�Eド�E動更新用タイマ�E
         dashboardTimer: null
     },
 
     /**
-     * ログインタブ�E刁E��替ぁE
+     * ログインタブ�E刁E��替ぁE
      */
     switchLoginTab(tabId) {
         const tabs = ['shop', 'admin', 'hq', 'platform'];
@@ -162,7 +162,7 @@ const app = {
     },
 
     /**
-     * 初期化�E琁E
+     * 初期化�E琁E
      */
     async init() {
 
@@ -173,25 +173,25 @@ const app = {
             this.state.currentDate = new Date();
             this.bindEvents();
 
-            // Stripe決済完亁E��の処琁E
+            // Stripe決済完亁E��の処琁E
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('payment') === 'success') {
-                setTimeout(() => this.showToast('決済が完亁E��ました。�Eランが有効化されました、E, 'success'), 1000);
+                setTimeout(() => this.showToast('決済が完亁E��ました。�Eランが有効化されました、E, 'success'), 1000);
                 window.history.replaceState({}, '', window.location.pathname);
             } else if (urlParams.get('payment') === 'cancelled') {
                 setTimeout(() => this.showToast('決済がキャンセルされました、E, 'info'), 1000);
                 window.history.replaceState({}, '', window.location.pathname);
             }
             
-            // セチE��ョンチェチE��
+            // セチE��ョンチェチE��
             if (API.session) {
 
                 
-                // 【復允E�E琁E��E
-                // session冁E�Euser惁E��から状態を復允E��めE
+                // 【復允E�E琁E��E
+                // session冁E�Euser惁E��から状態を復允E��めE
                 const user = API.session.user;
                 if (user) {
-                    // ライセンス状態チェチE���E�セチE��ョン復允E���E�E
+                    // ライセンス状態チェチE���E�セチE��ョン復允E���E�E
                     if (user.contract_id) {
                         try {
                             const licenseCheck = await API.rpc('check_license_status', { p_contract_id: user.contract_id });
@@ -203,7 +203,7 @@ const app = {
                                 this.renderCurrentView();
                                 this.updateHeader();
                                 this.openModal('loginModal');
-                                this.showToast('ライセンスが停止中のため、�E動ログアウトしました。運営までお問ぁE��わせください、E, 'error');
+                                this.showToast('ライセンスが停止中のため、�E動ログアウトしました。運営までお問ぁE��わせください、E, 'error');
                                 return;
                             }
                         } catch (e) {
@@ -216,7 +216,7 @@ const app = {
                     if (user.contract_id) {
                         this.state.organization_id = user.contract_id;
                     }
-                    // 管琁E��E��どぁE��の復允E
+                    // 管琁E��E��どぁE��の復允E
                     if (user.role === 'admin' || user.role === 'Manager' || user.role === 'manager') {
                         this.state.isAdmin = true;
                     }
@@ -225,13 +225,13 @@ const app = {
                 await this.loadData();
             } else {
 
-                // チE�Eタをロードせず、空の状態で描画してからログインモーダルを�EぁE
+                // チE�Eタをロードせず、空の状態で描画してからログインモーダルを�EぁE
                 this.state.isAdmin = false;
-                this.state.isShopLoggedIn = false; // 明示皁E��false
+                this.state.isShopLoggedIn = false; // 明示皁E��false
                 this.renderCurrentView();
                 this.updateHeader();
 
-                // ログインモーダルを表示�E�お知らせはサイドバーで確認する方式に統一�E�E
+                // ログインモーダルを表示�E�お知らせはサイドバーで確認する方式に統一�E�E
                 this.openModal('loginModal');
                 
                 const loadingEl = document.getElementById('viewContainer').querySelector('.loading-spinner')?.parentElement?.parentElement;
@@ -249,7 +249,7 @@ const app = {
     },
 
     /**
-     * イベントリスナ�E登録
+     * イベントリスナ�E登録
      */
     bindEvents() {
         const closeSidebar = () => {
@@ -285,12 +285,12 @@ const app = {
     },
 
     /**
-     * チE�EタのローチE
+     * チE�EタのローチE
      */
     async loadData() {
         if (!this._shiftGenInProgress) this.showLoading(true);
         try {
-            // 1. organization_id を確定すめE(セチE��ョン ↁElocalStorage の頁E
+            // 1. organization_id を確定すめE(セチE��ョン ↁElocalStorage の頁E
             let orgId = null;
 
             if (API.session?.user?.organization_id) {
@@ -309,7 +309,7 @@ const app = {
                 orgId = localStorage.getItem('rakushift_org_id') || this.state.organization_id;
             }
 
-            // orgIdが無ければチE�Eタ取得不可 ↁEログイン画面へ
+            // orgIdが無ければチE�Eタ取得不可 ↁEログイン画面へ
             if (!orgId) {
                 console.error("No organization_id available. Cannot load data.");
                 this.showLoading(false);
@@ -320,12 +320,12 @@ const app = {
             this.state.organization_id = orgId;
             localStorage.setItem('rakushift_org_id', orgId);
 
-            // 2. チE��ント�E離: 全クエリにorganization_idフィルタを適用
+            // 2. チE��ント�E離: 全クエリにorganization_idフィルタを適用
             const orgFilter = { organization_id: `eq.${orgId}` };
 
 
 
-            // staffは全カラム取得（存在しなぁE��ラム持E��エラーを防ぐ！E
+            // staffは全カラム取得（存在しなぁE��ラム持E��エラーを防ぐ！E
             const staffSelect = '*';
             const [configRes, staffRes, shiftsRes, requestsRes] = await Promise.all([
                 API.list('config_safe', orgFilter),
@@ -334,7 +334,7 @@ const app = {
                 API.list('requests', orgFilter)
             ]);
 
-            // 3. configを�Eージ (DBの値を優先、足りなぁE��E��はチE��ォルトで補宁E
+            // 3. configを�Eージ (DBの値を優先、足りなぁE��E��はチE��ォルトで補宁E
             if (configRes.data && configRes.data.length > 0) {
                 this.state.config = { ...this.state.defaultConfig, ...configRes.data[0] };
             } else {
@@ -343,7 +343,7 @@ const app = {
                 }
             }
 
-            // 4. チE�EタをStateに保孁E
+            // 4. チE�EタをStateに保孁E
             this.state.staff = staffRes.data || [];
             this.state.shifts = shiftsRes.data || [];
             this.state.requests = requestsRes.data || [];
@@ -351,7 +351,7 @@ const app = {
 
             this.updateRequestBadge();
 
-            // スタチE��数が�Eラン上限を趁E��てぁE��ら警呁E
+            // スタチE��数が�Eラン上限を趁E��てぁE��ら警呁E
             if (this.isStaffOverLimit()) {
                 this.showStaffOverLimitAlert();
             } else {
@@ -372,35 +372,35 @@ const app = {
 
     handleAuth() {
         if (this.state.isAdmin) {
-            // 管琁E��E��グアウト�Eみ�E�店�Eログインは維持E��E
-            if(confirm('管琁E��E��限からログアウトしますか�E�E)) {
+            // 管琁E��E��グアウト�Eみ�E�店�Eログインは維持E��E
+            if(confirm('管琁E��E��限からログアウトしますか�E�E)) {
                 this.state.isAdmin = false;
-                // セチE��ョン惁E��を更新�E�管琁E��E��報を消す�E�E
+                // セチE��ョン惁E��を更新�E�管琁E��E��報を消す�E�E
                 const currentUser = API.session.user;
-                // 契紁E��報は残すが、個人特定�E消すイメージ�E�ここでは簡易的にisAdminフラグのみ操作！E
+                // 契紁E��報は残すが、個人特定�E消すイメージ�E�ここでは簡易的にisAdminフラグのみ操作！E
                 const shopUser = {
                     contract_id: currentUser.contract_id,
                     organization_id: currentUser.organization_id, // RLSフィルター用に維持E
-                    session_id: currentUser.session_id,           // セチE��ョンを維持E
+                    session_id: currentUser.session_id,           // セチE��ョンを維持E
                     name: 'Guest (Staff)',
                     role: 'Guest'
                 };
                 API.setSession(shopUser);
                 
-                this.showToast('管琁E��E��らログアウトしました', 'info');
+                this.showToast('管琁E��E��らログアウトしました', 'info');
                 this.updateAuthUI();
                 this.updateHeader();
                 this.changeView('dashboard');
             }
         } else {
-            // 管琁E��E��グインタブを開く
+            // 管琁E��E��グインタブを開く
             this.switchLoginTab('admin');
             this.openModal('loginModal');
         }
     },
 
     /**
-     * 契紁E��E��店�E�E�ログイン処琁E- RPC経由bcrypt認証
+     * 契紁E��E��店�E�E�ログイン処琁E- RPC経由bcrypt認証
      */
     async login() {
 
@@ -409,7 +409,7 @@ const app = {
         const passwordEl = document.getElementById('loginShopPass');
 
         if (!contractIdEl) {
-            alert('エラー: 入力欁E��見つかりません。�Eージを�E読み込みしてください、E);
+            alert('エラー: 入力欁E��見つかりません。�Eージを�E読み込みしてください、E);
             return;
         }
 
@@ -421,17 +421,17 @@ const app = {
             return;
         }
 
-        // セキュリチE��: ブルートフォース対筁E
+        // セキュリチE��: ブルートフォース対筁E
         if (this._checkLoginLock('shop_' + contractId)) return;
 
         this.showLoading(true);
         try {
-            // 1. ライセンス・サブスクリプション状態チェチE��
+            // 1. ライセンス・サブスクリプション状態チェチE��
             try {
                 const subCheck = await API.rpc('check_subscription_status', { p_contract_id: contractId });
                 if (subCheck && !subCheck.allowed) {
                     if (subCheck.status === 'suspended') {
-                        this.showToast('こ�Eアカウント�Eライセンスは停止中です。運営までお問ぁE��わせください、E, 'error');
+                        this.showToast('こ�Eアカウント�Eライセンスは停止中です。運営までお問ぁE��わせください、E, 'error');
                         this.showLoading(false);
                         return;
                     } else if (subCheck.status === 'not_found') {
@@ -439,14 +439,14 @@ const app = {
                         this.showLoading(false);
                         return;
                     } else if (subCheck.status === 'canceled' || subCheck.status === 'unpaid') {
-                        this.showToast('サブスクリプションが無効です。�Eランを�E度ご契紁E��ださい、E, 'error');
+                        this.showToast('サブスクリプションが無効です。�Eランを�E度ご契紁E��ださい、E, 'error');
                         this.showLoading(false);
                         return;
                     } else if (subCheck.status === 'past_due') {
                         this._paymentPastDue = true;
                     }
                 }
-                // サブスク未契紁Efree)の場吁EↁEログインは許可するが決済を俁E��
+                // サブスク未契紁Efree)の場吁EↁEログインは許可するが決済を俁E��
                 if (subCheck && subCheck.status === 'free') {
                     this._pendingPayment = true;
                 } else {
@@ -484,9 +484,9 @@ const app = {
                 this.updateAuthUI();
                 this.updateHeader();
 
-                // サブスク未契紁E�E場合、決済を俁E��
+                // サブスク未契紁E�E場合、決済を俁E��
                 if (this._pendingPayment) {
-                    this.showToast('ご利用にはプランの契紁E��忁E��でぁE, 'warning');
+                    this.showToast('ご利用にはプランの契紁E��忁E��でぁE, 'warning');
                     this.changeView('settings');
                     setTimeout(() => {
                         const section = document.getElementById('subscriptionSection');
@@ -499,7 +499,7 @@ const app = {
                     this.showToast(`契約ID: ${contractId} でログインしました`, 'success');
                 }
 
-                // お知らせバッジを更新�E�サイドバーで確認する方式に統一�E�E
+                // お知らせバッジを更新�E�サイドバーで確認する方式に統一�E�E
                 this.updateAnnouncementBadge();
             } else {
                 this._recordLoginAttempt('shop_' + contractId, false);
@@ -508,7 +508,7 @@ const app = {
 
         } catch (error) {
             console.error('[ShopLogin] Error:', error);
-            this.showToast(`ログイン処琁E��にエラーが発生しました: ${error.message}`, 'error');
+            this.showToast(`ログイン処琁E��にエラーが発生しました: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
@@ -516,8 +516,8 @@ const app = {
 
 
     /**
-     * 管琁E��E��グイン処琁E- RPC経由bcrypt認証
-     * 契約IDと管琁E��E��スワードで直接ログイン可能
+     * 管琁E��E��グイン処琁E- RPC経由bcrypt認証
+     * 契約IDと管琁E��E��スワードで直接ログイン可能
      * verify_admin_login ↁEverify_shop_login ↁEdemo フォールバック
      */
     async adminLogin() {
@@ -525,11 +525,11 @@ const app = {
         const inputContractId = this._sanitize(document.getElementById('adminLoginContractId')?.value.trim() || '');
 
         if (!inputContractId) {
-            this.showToast('契約IDを�E力してください', 'error');
+            this.showToast('契約IDを�E力してください', 'error');
             return;
         }
         if (!password) {
-            this.showToast('管琁E��E��スワードを入力してください', 'error');
+            this.showToast('管琁E��E��スワードを入力してください', 'error');
             return;
         }
 
@@ -556,7 +556,7 @@ const app = {
                 console.warn('[AdminLogin] admin RPC failed:', rpcErr.message);
             }
 
-            // 方況E: verify_shop_login で店�E認証
+            // 方況E: verify_shop_login で店�E認証
             if (authMethod === 'none') {
                 try {
                     authResult = await API.rpc('verify_shop_login', {
@@ -576,17 +576,17 @@ const app = {
             if (authMethod === 'none') {
                 console.warn('[AdminLogin] All RPCs failed. Trying direct config lookup...');
                 try {
-                    // config_safeチE�Eブルからcontract_idでorganization_idを検索
+                    // config_safeチE�Eブルからcontract_idでorganization_idを検索
                     const configRes = await API.list('config_safe', {
                         contract_id: `eq.${inputContractId}`,
                         select: 'organization_id,contract_id'
                     });
                     if (configRes.data && configRes.data.length > 0) {
                         orgId = configRes.data[0].organization_id;
-                        // 契約IDが存在する ↁE認証成功扱ぁE��EPC未設定環墁E���E�E
+                        // 契約IDが存在する ↁE認証成功扱ぁE��EPC未設定環墁E���E�E
                         authResult = {
                             success: true,
-                            name: '管琁E��E,
+                            name: '管琁E��E,
                             organization_id: orgId,
                             staff_id: null,
                             session_id: 'fallback_' + Date.now(),
@@ -611,7 +611,7 @@ const app = {
                     contract_id: inputContractId,
                     organization_id: orgId,
                     session_id: authResult.session_id || ('admin_' + Date.now()),
-                    name: authResult.name || '管琁E��E,
+                    name: authResult.name || '管琁E��E,
                     role: authResult.role || 'admin'
                 });
 
@@ -619,11 +619,11 @@ const app = {
                 await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
-                this.showToast(`管琁E��E ${this._sanitize(authResult.name || '管琁E��E)} でログインしました`, 'success');
+                this.showToast(`管琁E��E ${this._sanitize(authResult.name || '管琁E��E)} でログインしました`, 'success');
                 this.updateAnnouncementBadge();
             } else {
                 this._recordLoginAttempt('admin_' + inputContractId, false);
-                this.showToast(authResult?.message || '契約IDまた�Eパスワードが正しくありません', 'error');
+                this.showToast(authResult?.message || '契約IDまた�Eパスワードが正しくありません', 'error');
             }
 
         } catch(e) {
@@ -636,7 +636,7 @@ const app = {
 
 
     // =========================================================
-    // 3店�E以上お問い合わせフォーム送信
+    // 3店�E以上お問い合わせフォーム送信
     // =========================================================
     async submitMultiStoreInquiry() {
         const company = document.getElementById('inquiryCompany')?.value.trim() || '';
@@ -656,26 +656,26 @@ const app = {
         // 時間帯ラジオ取征E
         const timeSlot = document.querySelector('input[name="inquiryTimeSlot"]:checked')?.value || '';
 
-        // バリチE�Eション
+        // バリチE�Eション
         if (!company) { this.showToast('会社名を入力してください', 'error'); return; }
-        if (!address) { this.showToast('会社住所を�E力してください', 'error'); return; }
+        if (!address) { this.showToast('会社住所を�E力してください', 'error'); return; }
         if (!phone) { this.showToast('会社連絡先を入力してください', 'error'); return; }
-        if (!name) { this.showToast('ご担当老E��を�E力してください', 'error'); return; }
+        if (!name) { this.showToast('ご担当老E��を�E力してください', 'error'); return; }
 
-        // プラン件数チェチE���E�合訁E件以上！E
+        // プラン件数チェチE���E�合訁E件以上！E
         const totalPlans = (parseInt(lightCount) || 0) + (parseInt(standardCount) || 0) + (parseInt(premiumCount) || 0);
         if (totalPlans === 0 && lightCount === '0' && standardCount === '0' && premiumCount === '0') {
-            this.showToast('契紁E��定�EランめE件以上選択してください', 'error'); return;
+            this.showToast('契紁E��定�EランめE件以上選択してください', 'error'); return;
         }
 
         if (!date1) { this.showToast('第1希望日を選択してください', 'error'); return; }
 
         this.showLoading(true);
         try {
-            // プランサマリー斁E���Eを構篁E
+            // プランサマリー斁E���Eを構篁E
             const planParts = [];
-            if (lightCount !== '0') planParts.push(`ライト�Eラン ${lightCount}件`);
-            if (standardCount !== '0') planParts.push(`スタンダード�Eラン ${standardCount}件`);
+            if (lightCount !== '0') planParts.push(`ライト�Eラン ${lightCount}件`);
+            if (standardCount !== '0') planParts.push(`スタンダード�Eラン ${standardCount}件`);
             if (premiumCount !== '0') planParts.push(`プレミアムプラン ${premiumCount}件`);
             const planSummary = planParts.join('、E);
 
@@ -705,12 +705,12 @@ const app = {
                 created_at: new Date().toISOString()
             };
 
-            // localStorageにバックアチE�E保孁E
+            // localStorageにバックアチE�E保孁E
             const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
             pending.push(inquiryData);
             localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
 
-            // Railwayサーバ�E経由でメール送信
+            // Railwayサーバ�E経由でメール送信
             try {
                 const serverUrl = RAKUSHIFT_CONFIG.CALC_SERVER_URL || '';
                 const res = await fetch(`${serverUrl}/api/inquiry`, {
@@ -724,7 +724,7 @@ const app = {
                 console.warn('[Inquiry] Server send failed:', serverErr.message);
             }
 
-            // フォームリセチE��
+            // フォームリセチE��
             ['inquiryCompany', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage', 'inquiryDate1', 'inquiryDate2', 'inquiryDate3'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
@@ -737,7 +737,7 @@ const app = {
             if (checkedRadio) checkedRadio.checked = false;
 
             this.closeModal('multiStoreInquiryModal');
-            this.showToast('お問ぁE��わせを受け付けました。担当老E��めE営業日以冁E��ご連絡ぁE��します、E, 'success');
+            this.showToast('お問ぁE��わせを受け付けました。担当老E��めE営業日以冁E��ご連絡ぁE��します、E, 'success');
         } catch (e) {
             console.error('Inquiry Error:', e);
             this.showToast('送信に失敗しました。時間をおいて再度お試しください、E, 'error');
@@ -747,7 +747,7 @@ const app = {
     },
 
     // =========================================================
-    // ログインタブ�Eり替ぁE
+    // ログインタブ�Eり替ぁE
     // =========================================================
     switchLoginTab(tab) {
         const tabs = ['admin', 'shop', 'hq', 'platform'];
@@ -768,7 +768,7 @@ const app = {
     },
 
     signUpMode() {
-        alert("新規登録機�Eは現在メンチE��ンス中です。管琁E��E��連絡してアカウントを発行してください、E);
+        alert("新規登録機�Eは現在メンチE��ンス中です。管琁E��E��連絡してアカウントを発行してください、E);
     },
 
     async hqLogin() {
@@ -779,7 +779,7 @@ const app = {
             return;
         }
 
-        // セキュリチE��: ブルートフォース対筁E
+        // セキュリチE��: ブルートフォース対筁E
         if (this._checkLoginLock('hq_' + loginId)) return;
 
         this.showLoading(true);
@@ -791,8 +791,8 @@ const app = {
                 result = await API.rpc('hq_login', { p_login_id: loginId, p_password: password });
             } catch (rpcErr) {
                 console.warn('[HQ] hq_login RPC not available, using fallback auth:', rpcErr.message);
-                // RPC未作�Eの場合�Eフォールバック認証
-                // ※Supabaseにマイグレーション適用後�ERPCが優先される
+                // RPC未作�Eの場合�Eフォールバック認証
+                // ※Supabaseにマイグレーション適用後�ERPCが優先される
                 const HQ_ACCOUNTS = [
                     { login_id: 'hq_master', password: 'rakushift_hq' },
                     { login_id: 'demo', password: 'demo1234' }
@@ -801,7 +801,7 @@ const app = {
                 if (match) {
                     result = { status: 'success', role: 'hq_admin', login_id: match.login_id };
                 } else {
-                    result = { status: 'error', message: '本部IDまた�Eパスワードが違いまぁE };
+                    result = { status: 'error', message: '本部IDまた�Eパスワードが違いまぁE };
                 }
             }
 
@@ -835,10 +835,10 @@ const app = {
     },
 
     async logout() {
-        if(!confirm('アプリケーションから完�Eにログアウトしますか�E�\n�E�ログイン画面に戻ります！E)) return;
+        if(!confirm('アプリケーションから完�Eにログアウトしますか�E�\n�E�ログイン画面に戻ります！E)) return;
         
         await API.logout();
-        // セキュリチE��: 全ての認証状態を完�Eにクリア
+        // セキュリチE��: 全ての認証状態を完�Eにクリア
         this.state.isAdmin = false;
         this.state.isShopLoggedIn = false;
         this.state.isHQ = false;
@@ -847,7 +847,7 @@ const app = {
         this.state.staff = [];
         this.state.shifts = [];
         this.state.requests = [];
-        // セキュリチE��: セチE��ョン関連のlocalStorageを�E消去
+        // セキュリチE��: セチE��ョン関連のlocalStorageを�E消去
         localStorage.removeItem('rakushift_user');
         localStorage.removeItem('supabase.auth.token');
         localStorage.removeItem('rakushift_org_id');
@@ -862,11 +862,11 @@ const app = {
         const adminLinks = document.querySelectorAll('.admin-link');
         const adminHeader = document.getElementById('adminHeaderControls');
 
-        // --- 本部�E�閲覧専用�E�モード�E制御 ---
+        // --- 本部�E�閲覧専用�E�モード�E制御 ---
         if (this.state.isHQ) {
             if (authBtn) authBtn.classList.add('hidden'); // サイドバーのログインボタンを隠ぁE
             
-            // 管琁E��E��ニューは一部�E�ダチE��ュボ�Eド、シフト作�E、スタチE��等）表示させるが編雁E��可
+            // 管琁E��E��ニューは一部�E�ダチE��ュボ�Eド、シフト作�E、スタチE��等）表示させるが編雁E��可
             adminLinks.forEach(link => link.classList.remove('hidden'));
 
             if (adminHeader) {
@@ -875,7 +875,7 @@ const app = {
                         <i class="fa-solid fa-eye"></i> 閲覧専用モーチE
                     </div>
                     <button onclick="app.changeView('hq_dashboard')" class="px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded bg-white transition-all mr-2 shadow-sm">
-                        <i class="fa-solid fa-list mr-1"></i>店�E一覧
+                        <i class="fa-solid fa-list mr-1"></i>店�E一覧
                     </button>
                     <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all shadow-sm">
                         <i class="fa-solid fa-power-off mr-1"></i>ログアウチE
@@ -883,9 +883,9 @@ const app = {
                 `;
             }
 
-            // 吁E��追加・保存�E作�E系のボタンを隠すか無効化すめE
+            // 吁E��追加・保存�E作�E系のボタンを隠すか無効化すめE
             setTimeout(() => {
-                const actionKeywords = ['追加', '保孁E, '作�E', '申諁E, '編雁E, '設宁E, '削除', '承誁E, '却丁E];
+                const actionKeywords = ['追加', '保孁E, '作�E', '申諁E, '編雁E, '設宁E, '削除', '承誁E, '却丁E];
                 document.querySelectorAll('button').forEach(btn => {
                     if (!btn.closest('#adminHeaderControls') && !btn.closest('#sidebar') && !btn.closest('#viewContainer')?.querySelector('header')) {
                         const txt = btn.textContent;
@@ -901,20 +901,20 @@ const app = {
             return;
         }
 
-        // サイドバーの「管琁E��E��グイン」�Eタンの表示
+        // サイドバーの「管琁E��E��グイン」�Eタンの表示
         if (authBtn) {
             if (this.state.isAdmin) {
-                authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket w-6 text-center"></i> 管琁E��E��グアウチE;
+                authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket w-6 text-center"></i> 管琁E��E��グアウチE;
                 authBtn.classList.remove('text-blue-600', 'hover:bg-blue-50');
                 authBtn.classList.add('text-red-600', 'hover:bg-red-50');
             } else {
-                authBtn.innerHTML = '<i class="fa-solid fa-user-shield w-6 text-center"></i> 管琁E��E��グイン';
+                authBtn.innerHTML = '<i class="fa-solid fa-user-shield w-6 text-center"></i> 管琁E��E��グイン';
                 authBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
                 authBtn.classList.remove('text-red-600', 'hover:bg-red-50');
             }
         }
         
-        // 管琁E��E��用メニューの表示刁E��替ぁE
+        // 管琁E��E��用メニューの表示刁E��替ぁE
         adminLinks.forEach(link => {
             if (this.state.isAdmin) {
                 link.classList.remove('hidden');
@@ -923,7 +923,7 @@ const app = {
             }
         });
 
-        // ヘッダーへの管琁E��E��ントロール注入
+        // ヘッダーへの管琁E��E��ントロール注入
         if (adminHeader) {
             if (this.state.isAdmin) {
                 adminHeader.innerHTML = `
@@ -932,7 +932,7 @@ const app = {
                     </button>
                 `;
             } else {
-                // スタチE��モード（閲覧のみ�E��Eとき�Eヘッダーに契約IDと完�Eログアウト�Eタンを表示
+                // スタチE��モード（閲覧のみ�E��Eとき�Eヘッダーに契約IDと完�Eログアウト�Eタンを表示
                 if (this.state.isShopLoggedIn) {
                      adminHeader.innerHTML = `
                         <div class="hidden md:block px-3 py-1 text-xs font-mono text-gray-400 border border-gray-200 rounded bg-gray-50 mr-2">
@@ -954,7 +954,7 @@ const app = {
     },
 
     changeView(viewName) {
-        // タイマ�Eクリア
+        // タイマ�Eクリア
         if (this.state.dashboardTimer) {
             clearInterval(this.state.dashboardTimer);
             this.state.dashboardTimer = null;
@@ -1024,26 +1024,26 @@ const app = {
         }
     },
 
-    // --- 開発老E��チE�Eル (Dev Tools) ---
+    // --- 開発老E��チE�Eル (Dev Tools) ---
     async devCreateTestData() {
-        // 1. マスターアカウントチェチE��
+        // 1. マスターアカウントチェチE��
         const currentUser = API.session?.user?.email;
 
         if (currentUser !== 'master@mochikuro.com') {
-            alert(`現在のアカウンチE(${currentUser}) ではこ�E機�Eを使用できません、En管琁E��Emaster@mochikuro.com)のみ実行可能です。`);
+            alert(`現在のアカウンチE(${currentUser}) ではこ�E機�Eを使用できません、En管琁E��Emaster@mochikuro.com)のみ実行可能です。`);
             return;
         }
 
-        // 削除確認ではなく「データ整備」�E確認に変更
-        if (!confirm("【開発老E��】テストデータを整備しますか�E�\n※既存データは保持され、不足してぁE��スタチE��めE��定が補�Eされます、E)) return;
+        // 削除確認ではなく「データ整備」�E確認に変更
+        if (!confirm("【開発老E��】テストデータを整備しますか�E�\n※既存データは保持され、不足してぁE��スタチE��めE��定が補�Eされます、E)) return;
         
         this.showLoading(true);
         try {
-            // 2. 絁E��IDの確保と検証 (自己修復ロジチE��)
+            // 2. 絁E��IDの確保と検証 (自己修復ロジチE��)
             let orgId = this.state.organization_id || localStorage.getItem('rakushift_org_id');
             let isValidOrg = false;
 
-            // IDを持ってぁE��場合、DBに実在するか確誁E
+            // IDを持ってぁE��場合、DBに実在するか確誁E
             if (orgId) {
                 try {
                     const check = await API.list('organizations', { id: `eq.${orgId}` });
@@ -1051,12 +1051,12 @@ const app = {
                 } catch(e) { console.warn("Org check failed", e); }
             }
 
-            // 無効また�E持ってぁE��ぁE��合、�E取得�E作�E
+            // 無効また�E持ってぁE��ぁE��合、�E取得�E作�E
             if (!isValidOrg) {
 
                 const orgRes = await API.list('organizations');
                 if (orgRes && orgRes.data && orgRes.data.length > 0) {
-                    orgId = orgRes.data[0].id; // 既存�Eも�Eを採用
+                    orgId = orgRes.data[0].id; // 既存�Eも�Eを採用
                 } else {
 
                     const newOrg = await API.create('organizations', { name: 'Test Shop' });
@@ -1074,7 +1074,7 @@ const app = {
                         await API.update('profiles', userId, { organization_id: orgId }).catch(e=>{});
                     }
                 } else {
-                    throw new Error("絁E��IDの生�Eに失敗しました、E);
+                    throw new Error("絁E��IDの生�Eに失敗しました、E);
                 }
             }
 
@@ -1082,19 +1082,19 @@ const app = {
             const allStaffRes = await API.list('staff', { organization_id: `eq.${orgId}` });
             const currentStaff = allStaffRes.data || [];
             
-            // 4. 不足刁E�E補�E
-            // 少なくとめE0名�E確保したい
+            // 4. 不足刁E�E補�E
+            // 少なくとめE0名�E確保したい
             const targetCount = 13;
             const currentCount = currentStaff.length;
             
             if (currentCount < targetCount) {
-                this.showToast(`スタチE��を補�E中... (${currentCount} -> ${targetCount}吁E`, 'info');
+                this.showToast(`スタチE��を補�E中... (${currentCount} -> ${targetCount}吁E`, 'info');
                 
-                // 補�E用チE��プレーチE(シフトが埋まりやすい「最強バイト」を含める)
+                // 補�E用チE��プレーチE(シフトが埋まりやすい「最強バイト」を含める)
                 // ランクA-D, 年間休日対忁E
                 const templates = [
-                    { name: "【丁E�E】佐藤 (店長)", role: 'manager', max_days: 5, max_hours: 8, wage: 1500, eval: 'A', salary_type: 'monthly', holidays: 105 }, 
-                    { name: "【丁E�E】鈴木 (副店長)", role: 'manager', max_days: 5, max_hours: 8, wage: 1400, eval: 'A', salary_type: 'monthly', holidays: 110 },
+                    { name: "【丁E�E】佐藤 (店長)", role: 'manager', max_days: 5, max_hours: 8, wage: 1500, eval: 'A', salary_type: 'monthly', holidays: 105 }, 
+                    { name: "【丁E�E】鈴木 (副店長)", role: 'manager', max_days: 5, max_hours: 8, wage: 1400, eval: 'A', salary_type: 'monthly', holidays: 110 },
                     { name: "高橁E(リーダー)", role: 'leader', max_days: 5, max_hours: 8, wage: 1300, eval: 'B', salary_type: 'monthly', holidays: 120 },
                     { name: "田中 (フル)", role: 'staff', max_days: 5, max_hours: 8, wage: 1100, eval: 'B' },
                     { name: "渡辺 (フル)", role: 'staff', max_days: 5, max_hours: 8, wage: 1100, eval: 'B' },
@@ -1108,7 +1108,7 @@ const app = {
                     { name: "新人H", role: 'staff', max_days: 3, max_hours: 4, wage: 950, eval: 'D' }
                 ];
 
-                // 足りなぁE��数刁E��け追加
+                // 足りなぁE��数刁E��け追加
                 const addCount = targetCount - currentCount;
                 const createdStaff = [];
                 
@@ -1117,7 +1117,7 @@ const app = {
                     const tmpl = templates[i % templates.length];
                     const uniqueName = currentCount > 0 ? `${tmpl.name} ${i+1}` : tmpl.name;
                     
-                    // 個別の作�EエラーをキャチE��せず、失敗したら全体を止める
+                    // 個別の作�EエラーをキャチE��せず、失敗したら全体を止める
                     const data = {
                         name: uniqueName,
                         role: tmpl.role,
@@ -1138,7 +1138,7 @@ const app = {
                     const res = await API.create('staff', data);
                     
                     if (!res) {
-                        throw new Error(`スタチE��、E{uniqueName}」�EDB保存に失敗しました。RLS設定を確認してください。`);
+                        throw new Error(`スタチE��、E{uniqueName}」�EDB保存に失敗しました。RLS設定を確認してください。`);
                     }
                     createdStaff.push(res);
                 }
@@ -1148,22 +1148,22 @@ const app = {
                 
                 // 画面更新 (リロードなしで即時反映)
                 this.renderCurrentView();
-                this.showToast(`完亁E��E${this.state.staff.length}名�EスタチE��を表示中`, 'success');
+                this.showToast(`完亁E��E${this.state.staff.length}名�EスタチE��を表示中`, 'success');
                 
             } else {
-                this.showToast('スタチE��数は十�EでぁE(チE�Eタ維持E', 'success');
+                this.showToast('スタチE��数は十�EでぁE(チE�Eタ維持E', 'success');
                 this.state.staff = currentStaff;
             }
 
-            // 5. 設定データの修復 (空の場合�Eみ)
+            // 5. 設定データの修復 (空の場合�Eみ)
             if (!this.state.config.id) {
-                // configはcreate_tenant RPCで作�Eされるため、ここでは再読み込みのみ
+                // configはcreate_tenant RPCで作�Eされるため、ここでは再読み込みのみ
                 const confRes = await API.list('config_safe', { organization_id: `eq.${orgId}` });
                 if(confRes.data?.[0]) this.state.config = { ...this.state.defaultConfig, ...confRes.data[0] };
             }
 
             this.renderCurrentView();
-            this.showToast(`チE�Eタ整備完亁E��現在のスタチE��: ${this.state.staff.length}名`, 'success');
+            this.showToast(`チE�Eタ整備完亁E��現在のスタチE��: ${this.state.staff.length}名`, 'success');
             
         } catch(e) {
             console.error("Test data setup failed:", e);
@@ -1175,7 +1175,7 @@ const app = {
 
     // =================================================================
     // =================================================================
-    // HQ (本部) ダチE��ュボ�EチE
+    // HQ (本部) ダチE��ュボ�EチE
     // =================================================================
     async renderHQDashboard(container) {
         if (!this.state.isHQ) return;
@@ -1187,14 +1187,14 @@ const app = {
             shops = result || [];
         } catch (e) {
             console.error('Failed to load shops', e);
-            this.showToast('店�E一覧の取得に失敗しました', 'error');
+            this.showToast('店�E一覧の取得に失敗しました', 'error');
         } finally {
             this.showLoading(false);
         }
 
         let tableRows = '';
         if (shops.length === 0) {
-            tableRows = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">登録されてぁE��店�Eがありません</td></tr>`;
+            tableRows = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">登録されてぁE��店�Eがありません</td></tr>`;
         } else {
             tableRows = shops.map(shop => {
                 const date = new Date(shop.created_at);
@@ -1227,8 +1227,8 @@ const app = {
             <div class="max-w-6xl mx-auto space-y-6 pb-20">
                 <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl shadow-lg p-6 md:p-8 text-white flex justify-between items-center relative overflow-hidden">
                     <div class="relative z-10">
-                        <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダチE��ュボ�EチE/h2>
-                        <p class="text-indigo-100 text-sm md:text-base">全チE��ント�E店�Eの稼働状況を把握・確認できます（本部用�E�、E/p>
+                        <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダチE��ュボ�EチE/h2>
+                        <p class="text-indigo-100 text-sm md:text-base">全チE��ント�E店�Eの稼働状況を把握・確認できます（本部用�E�、E/p>
                     </div>
                     <div class="relative z-10 flex gap-3">
                         <button onclick="app.logout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
@@ -1243,7 +1243,7 @@ const app = {
                 <!-- Manual Shop Login Card -->
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-key text-blue-500 mr-2"></i>持E���E店�Eを閲覧 (IDとパスワードでアクセス)</h3>
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-key text-blue-500 mr-2"></i>持E���E店�Eを閲覧 (IDとパスワードでアクセス)</h3>
                     </div>
                     <div class="p-6">
                         <div class="flex flex-col md:flex-row gap-4 items-end">
@@ -1253,7 +1253,7 @@ const app = {
                             </div>
                             <div class="flex-1">
                                 <label class="block text-xs font-bold text-gray-500 mb-1">パスワーチE/label>
-                                <input type="password" id="hqManualPassword" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="店�E用また�E管琁E��E��スワーチE onkeydown="if(event.key==='Enter') app.hqManualShopLogin()">
+                                <input type="password" id="hqManualPassword" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="店�E用また�E管琁E��E��スワーチE onkeydown="if(event.key==='Enter') app.hqManualShopLogin()">
                             </div>
                             <div>
                                 <button onclick="app.hqManualShopLogin()" class="w-full md:w-auto px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition whitespace-nowrap">
@@ -1266,13 +1266,13 @@ const app = {
 
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店�E一覧 (${filteredShops.length}店�E)</h3>
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店�E一覧 (${filteredShops.length}店�E)</h3>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店�E吁E/ 契約ID</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店�E吁E/ 契約ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">契約ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">プラン</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
@@ -1302,9 +1302,9 @@ const app = {
 
         this.showLoading(true);
         try {
-            // 店�Eのパスワード（スタチE��また�E管琁E��E��を検証
-            // 管琁E��E��スワードでも通るように、まぁEshop login、ダメなめEadmin login を試すか、shop login で一允E��
-            // 今回は店�E用ログインを試ぁE
+            // 店�Eのパスワード（スタチE��また�E管琁E��E��を検証
+            // 管琁E��E��スワードでも通るように、まぁEshop login、ダメなめEadmin login を試すか、shop login で一允E��
+            // 今回は店�E用ログインを試ぁE
             const authResult = await API.rpc('verify_shop_login', {
                 p_contract_id: contractId,
                 p_password: password
@@ -1322,10 +1322,10 @@ const app = {
 
                 this.state.organization_id = authResult.organization_id;
                 await this.loadData();
-                this.showToast('店�E (' + contractId + ') の閲覧を開始しまぁE, 'success');
+                this.showToast('店�E (' + contractId + ') の閲覧を開始しまぁE, 'success');
                 this.changeView('dashboard');
             } else {
-                // 管琁E��E��して試ぁE
+                // 管琁E��E��して試ぁE
                 const adminResult = await API.rpc('verify_admin_login', {
                     p_contract_id: contractId,
                     p_login_id: 'admin',
@@ -1344,10 +1344,10 @@ const app = {
 
                     this.state.organization_id = adminResult.organization_id;
                     await this.loadData();
-                    this.showToast('管琁E��E��限で店�E (' + contractId + ') の閲覧を開始しまぁE, 'success');
+                    this.showToast('管琁E��E��限で店�E (' + contractId + ') の閲覧を開始しまぁE, 'success');
                     this.changeView('dashboard');
                 } else {
-                    this.showToast('IDまた�Eパスワードが正しくありません', 'error');
+                    this.showToast('IDまた�Eパスワードが正しくありません', 'error');
                 }
             }
         } catch(e) {
@@ -1359,12 +1359,12 @@ const app = {
     },
 
     removeHQShop(orgId) {
-        if (!confirm('こ�E店�Eをリストから削除しますか�E�\n(※チE�Eタベ�EスのチE�Eタは削除されません)')) return;
+        if (!confirm('こ�E店�Eをリストから削除しますか�E�\n(※チE�Eタベ�EスのチE�Eタは削除されません)')) return;
         try {
             let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
             savedOrgIds = savedOrgIds.filter(id => id !== orgId);
             localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
-            this.showToast('店�Eをリストから削除しました', 'info');
+            this.showToast('店�Eをリストから削除しました', 'info');
             this.renderCurrentView();
         } catch(e) {
             console.error('Failed to remove shop', e);
@@ -1377,20 +1377,20 @@ const app = {
         try {
             this.state.organization_id = orgId;
             await this.loadData();
-            this.showToast('店�E惁E��を読み込みました�E�閲覧専用モード！E, 'success');
+            this.showToast('店�E惁E��を読み込みました�E�閲覧専用モード！E, 'success');
             this.changeView('dashboard');
         } catch(e) {
             console.error('Shop loading error:', e);
-            this.showToast('店�E惁E��の読み込みに失敗しました', 'error');
+            this.showToast('店�E惁E��の読み込みに失敗しました', 'error');
         } finally {
             this.showLoading(false);
         }
     },
 
-    // 1. ダチE��ュボ�EチE(Dashboard)
+    // 1. ダチE��ュボ�EチE(Dashboard)
     // =================================================================
     renderDashboard(container) {
-        // タイマ�Eクリア�E�念のため�E�E
+        // タイマ�Eクリア�E�念のため�E�E
         if (this.state.dashboardTimer) {
             clearInterval(this.state.dashboardTimer);
             this.state.dashboardTimer = null;
@@ -1407,21 +1407,21 @@ const app = {
                 <!-- 左カラム -->
                 <div class="lg:col-span-2 space-y-6">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <!-- 承認征E�� (管琁E��E�E場合�EみクリチE��可) -->
+                        <!-- 承認征E�� (管琁E��E�E場合�EみクリチE��可) -->
                         <div class="bg-white p-4 rounded-xl shadow-sm border ${pendingCount > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200'} ${this.state.isAdmin ? 'cursor-pointer hover:scale-[1.02]' : ''} transition-transform" ${this.state.isAdmin ? `onclick="app.changeView('requests')"` : ''}>
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-bold text-gray-500 uppercase">未承認�E申諁E/p>
+                                    <p class="text-xs font-bold text-gray-500 uppercase">未承認�E申諁E/p>
                                     <h3 class="text-2xl font-bold ${pendingCount > 0 ? 'text-red-600' : 'text-gray-700'}">${pendingCount} <span class="text-sm text-gray-500">件</span></h3>
                                 </div>
                                 <div class="w-10 h-10 rounded-full ${pendingCount > 0 ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'} flex items-center justify-center">
                                     <i class="fa-solid fa-inbox"></i>
                                 </div>
                             </div>
-                            ${this.state.isAdmin ? (pendingCount > 0 ? '<p class="text-xs text-red-500 mt-2 font-bold">確認してください</p>' : '<p class="text-xs text-gray-400 mt-2">対応�E完亁E��てぁE��ぁE/p>') : '<p class="text-xs text-gray-400 mt-2">※管琁E��のみ閲覧可能</p>'}
+                            ${this.state.isAdmin ? (pendingCount > 0 ? '<p class="text-xs text-red-500 mt-2 font-bold">確認してください</p>' : '<p class="text-xs text-gray-400 mt-2">対応�E完亁E��てぁE��ぁE/p>') : '<p class="text-xs text-gray-400 mt-2">※管琁E��のみ閲覧可能</p>'}
                         </div>
 
-                        <!-- 本日のスタチE��数 -->
+                        <!-- 本日のスタチE��数 -->
                         <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                              <div class="flex justify-between items-start">
                                 <div>
@@ -1453,36 +1453,36 @@ const app = {
 
                 <!-- 右カラム -->
                 <div class="space-y-6">
-                    <!-- グラチE(管琁E��E�Eみ表示) -->
+                    <!-- グラチE(管琁E��E�Eみ表示) -->
                     ${this.state.isAdmin ? `
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                        <h3 class="font-bold text-gray-800 mb-1 text-sm">直迁E日間�E人件費(概箁E</h3>
-                        <p class="text-xs text-gray-400 mb-4">祝日割増�E休�E控除を含みまぁE/p>
+                        <h3 class="font-bold text-gray-800 mb-1 text-sm">直迁E日間�E人件費(概箁E</h3>
+                        <p class="text-xs text-gray-400 mb-4">祝日割増�E休�E控除を含みまぁE/p>
                         <div class="h-[200px] w-full">
                             <canvas id="dashboardChart"></canvas>
                         </div>
                     </div>
                     ` : ''}
 
-                    <!-- クイチE��アクション -->
+                    <!-- クイチE��アクション -->
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                         <h3 class="font-bold text-gray-800 mb-3 text-sm">クイチE��メニュー</h3>
+                         <h3 class="font-bold text-gray-800 mb-3 text-sm">クイチE��メニュー</h3>
                          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             ${this.state.isAdmin ? `
                             <button onclick="app.openModal('staffModal'); document.getElementById('staffForm').reset(); document.getElementById('staffId').value=''; app.toggleSalaryInputs(); app.togglePrefHoursInputs();" 
                                 class="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-lg text-sm font-bold text-gray-600 hover:text-blue-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-blue-200">
-                                <i class="fa-solid fa-user-plus text-blue-500 text-lg"></i> スタチE��追加
+                                <i class="fa-solid fa-user-plus text-blue-500 text-lg"></i> スタチE��追加
                             </button>
                             ` : ''}
                             
                             <button onclick="app.openModal('requestModal'); app.initRequestModal();"
                                 class="w-full text-left px-4 py-3 hover:bg-red-50 rounded-lg text-sm font-bold text-gray-600 hover:text-red-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-red-200">
-                                <i class="fa-solid fa-umbrella-beach text-red-400 text-lg"></i> 休み希望を�EぁE
+                                <i class="fa-solid fa-umbrella-beach text-red-400 text-lg"></i> 休み希望を�EぁE
                             </button>
 
                             <button onclick="app.showShopRules()" 
                                 class="w-full text-left px-4 py-3 hover:bg-orange-50 rounded-lg text-sm font-bold text-gray-600 hover:text-orange-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-orange-200">
-                                <i class="fa-solid fa-book-open text-orange-400 text-lg"></i> お店�Eルール
+                                <i class="fa-solid fa-book-open text-orange-400 text-lg"></i> お店�Eルール
                             </button>
 
                             <button id="btn-quick-shift" onclick="app.changeView('manual-shift')" 
@@ -1503,7 +1503,7 @@ const app = {
 
             const now = new Date();
             // 修正: 時間もゼロパディングして2桁にする (侁E 1:05 -> 01:05)
-            // これにより斁E���E比輁E"01:00" >= "09:00" が正しく false になめE
+            // これにより斁E���E比輁E"01:00" >= "09:00" が正しく false になめE
             const currentHour = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
             
             // 時刻表示更新
@@ -1527,13 +1527,13 @@ const app = {
 
                 if (s.start_time > s.end_time) {
                     // 日またぎシフト (侁E 22:00 - 05:00)
-                    // 現在時刻が開始時刻以陁E22:00-23:59) また�E 終亁E��刻以剁E00:00-05:00)
+                    // 現在時刻が開始時刻以陁E22:00-23:59) また�E 終亁E��刻以剁E00:00-05:00)
                     if (currentHour >= s.start_time || currentHour <= s.end_time) {
                         isWorking = true;
                     } else {
                         // 勤務時間夁E
-                        // 侁E 06:00 (終亁E��E -> 21:00 (開始前)
-                        // 今日の日付�Eシフトとして扱われてぁE��ため、終亁E��刻を過ぎてぁE��ば「終亁E��とみなぁE
+                        // 侁E 06:00 (終亁E��E -> 21:00 (開始前)
+                        // 今日の日付�Eシフトとして扱われてぁE��ため、終亁E��刻を過ぎてぁE��ば「終亁E��とみなぁE
                         isFinished = currentHour > s.end_time && currentHour < s.start_time;
                     }
                 } else {
@@ -1552,7 +1552,7 @@ const app = {
                                 ${staff ? this._sanitize(staff.name.charAt(0)) : '?'}
                             </div>
                             <div>
-                                <div class="font-bold text-sm text-gray-800">${staff ? this._sanitize(staff.name) : '削除済スタチE��'}</div>
+                                <div class="font-bold text-sm text-gray-800">${staff ? this._sanitize(staff.name) : '削除済スタチE��'}</div>
                                 <div class="text-[10px] text-gray-500">${s.start_time} - ${s.end_time}</div>
                             </div>
                         </div>
@@ -1569,7 +1569,7 @@ const app = {
         // 初回実衁E
         updateShiftList();
 
-        // タイマ�EセチE�� (1刁E��と)
+        // タイマ�EセチE�� (1刁E��と)
         this.state.dashboardTimer = setInterval(updateShiftList, 60000);
 
         // チャート描画
@@ -1656,8 +1656,8 @@ const app = {
                 <div class="flex flex-col items-center justify-center h-full text-gray-500">
                     <i class="fa-solid fa-lock text-4xl mb-4 text-gray-300"></i>
                     <p class="font-bold text-gray-600">権限がありません</p>
-                    <p class="text-sm">申請�E管琁E��行うには管琁E��E��してログインしてください</p>
-                    <button onclick="app.openModal('loginModal')" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700">管琁E��E��グイン</button>
+                    <p class="text-sm">申請�E管琁E��行うには管琁E��E��してログインしてください</p>
+                    <button onclick="app.openModal('loginModal')" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-blue-700">管琁E��E��グイン</button>
                 </div>
             `;
             return;
@@ -1672,13 +1672,13 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-blue-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2">
-                            <i class="fa-solid fa-inbox text-blue-600"></i> 承認征E��
+                            <i class="fa-solid fa-inbox text-blue-600"></i> 承認征E��
                             <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">${pending.length}</span>
                         </h3>
                         ${pending.length > 1 ? `<button onclick="app.handleBatchApprove()" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><i class="fa-solid fa-check-double"></i> 全て承誁E/button>` : ''}
                     </div>
                     <div class="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
-                        ${pending.length === 0 ? '<div class="p-8 text-center text-gray-400">現在、承認征E��の申請�Eありません</div>' : ''}
+                        ${pending.length === 0 ? '<div class="p-8 text-center text-gray-400">現在、承認征E��の申請�Eありません</div>' : ''}
                         ${pending.map(req => {
                             const staff = this.getStaff(req.staff_id);
                             return `
@@ -1689,7 +1689,7 @@ const app = {
                                                 ${staff ? this._sanitize(staff.name.charAt(0)) : '?'}
                                             </div>
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm">${staff ? this._sanitize(staff.name) : '不�E'}</div>
+                                                <div class="font-bold text-gray-800 text-sm">${staff ? this._sanitize(staff.name) : '不�E'}</div>
                                                 <div class="text-xs text-gray-500">${new Date(req.created_at || Date.now()).toLocaleDateString()} 申諁E/div>
                                             </div>
                                         </div>
@@ -1723,7 +1723,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden opacity-80">
                     <div class="p-4 border-b border-gray-100 bg-gray-50">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2">
-                            <i class="fa-solid fa-clock-rotate-left text-gray-500"></i> 処琁E��歴 (直迁E0件)
+                            <i class="fa-solid fa-clock-rotate-left text-gray-500"></i> 処琁E��歴 (直迁E0件)
                         </h3>
                     </div>
                     <div class="divide-y divide-gray-100">
@@ -1735,7 +1735,7 @@ const app = {
                                     <div class="flex items-center gap-3">
                                         <div class="w-2 h-2 rounded-full ${isApproved ? 'bg-green-500' : 'bg-red-500'}"></div>
                                         <div>
-                                            <span class="font-bold text-gray-700">${staff ? this._sanitize(staff.name) : '不�E'}</span>
+                                            <span class="font-bold text-gray-700">${staff ? this._sanitize(staff.name) : '不�E'}</span>
                                             <span class="text-gray-400 mx-1">|</span>
                                             <span class="text-gray-600">${req.dates}</span>
                                         </div>
@@ -1808,7 +1808,7 @@ const app = {
                     <div class="flex items-center gap-2">
                         ${this.state.isAdmin ? `
                         <button onclick="app.openModal('autoFillModal')" class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> AIシフト作�E
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> AIシフト作�E
                         </button>
                         ` : ''}
                         ${periodControls}
@@ -1891,7 +1891,7 @@ const app = {
             });
         } else {
             const range = period === 'week' ? 7 : 14;
-            // 1週間ならさらに幁E��庁E��て15刁E��位を見やすくする (1200px = 1h50px = 15m12.5px)
+            // 1週間ならさらに幁E��庁E��て15刁E��位を見やすくする (1200px = 1h50px = 15m12.5px)
             colWidthClass = period === 'week' ? 'min-w-[1200px]' : 'min-w-[600px]';
             isGanttMode = true; 
             
@@ -1903,8 +1903,8 @@ const app = {
             });
         }
         
-        // ヘッダー生�E
-        let headerHtml = `<th class="p-3 sticky left-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタチE��</th>`;
+        // ヘッダー生�E
+        let headerHtml = `<th class="p-3 sticky left-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタチE��</th>`;
         days.forEach(date => {
             const d = date.getDate();
             const m = date.getMonth() + 1;
@@ -1918,19 +1918,19 @@ const app = {
             // Show Month/Date if crossing months or in week mode
             const label = period === 'month' ? d : `${m}/${d}`;
             
-            // 時間スケールを�EチE��ーに追加 (ガントチャート用)
+            // 時間スケールを�EチE��ーに追加 (ガントチャート用)
             let timeScale = '';
             if (isGanttMode) {
                 // 1時間おきに数字を表示
                 let scaleHtml = '';
                 for (let i = 0; i <= 24; i++) {
                     const left = (i / 24) * 100;
-                    // 数字�E間引き: 幁E��狭ぁE��合�E偶数のみ
+                    // 数字�E間引き: 幁E��狭ぁE��合�E偶数のみ
                     if (period === '2weeks' && i % 2 !== 0) continue;
                     
                     scaleHtml += `<span class="absolute -translate-x-1/2 font-mono" style="left: ${left}%">${String(i).padStart(2,'0')}</span>`;
                     
-                    // 15刁E��みの目盛り (Weekモード�Eみ)
+                    // 15刁E��みの目盛り (Weekモード�Eみ)
                     if (period === 'week' && i < 24) {
                         for(let m=1; m<4; m++) {
                             const mLeft = ((i + m/4) / 24) * 100;
@@ -1955,7 +1955,7 @@ const app = {
             </th>`;
         });
 
-        // ボディ生�E
+        // ボディ生�E
         let bodyHtml = '';
         this.state.staff.forEach(staff => {
             bodyHtml += `<tr data-staff-id="${staff.id}">`;
@@ -1987,7 +1987,7 @@ const app = {
                     bgClass = 'hover:bg-gray-50';
                 }
 
-                // セルアクション (ガントモードではバ�EのドラチE��操作があるため、空セルのみクリチE��イベンチE
+                // セルアクション (ガントモードではバ�EのドラチE��操作があるため、空セルのみクリチE��イベンチE
                 let action = '';
                 let cursor = '';
                 if (this.state.isAdmin) {
@@ -1999,7 +1999,7 @@ const app = {
                     cursor = 'cursor-pointer';
                 }
 
-                // ガントチャート用: 営業時間の背景�E�Epen-Close以外をグレーアウト）を生�Eするための時間取征E
+                // ガントチャート用: 営業時間の背景�E�Epen-Close以外をグレーアウト）を生�Eするための時間取征E
                 let openTime = "09:00";
                 let closeTime = "22:00";
                 if (isGanttMode) {
@@ -2039,18 +2039,18 @@ const app = {
                     if (startH < 10) barColor = 'bg-yellow-100 text-yellow-800 border-yellow-500';
                     if (startH >= 17) barColor = 'bg-purple-100 text-purple-700 border-purple-500';
                     
-                    // イレギュラーアサイン�E�社員の強制アサイン等）�E強調
+                    // イレギュラーアサイン�E�社員の強制アサイン等）�E強調
                     if (shift.is_irregular) {
                         barColor = 'bg-red-50 text-red-700 border-red-500 border-2 pattern-diagonal-lines ring-2 ring-red-400 ring-inset';
                     }
                     
-                    // 社員�E�月給制・店長・副店長・社員�E��Eシフト枠絁E��の色を変更して強調
+                    // 社員�E�月給制・店長・副店長・社員�E��Eシフト枠絁E��の色を変更して強調
                     const isEmployeeRole = staff && (staff.salary_type === 'monthly' || ['manager', 'sub_manager', 'employee'].includes(staff.role));
                     if (isEmployeeRole) {
                         barColor += ' border-emerald-500 shadow-md';
                     }
                     
-                    // 過去の場合�E少し透�Eにして允E�E色を残す
+                    // 過去の場合�E少し透�Eにして允E�E色を残す
                     if (isPast) {
                         barColor += ' opacity-50 hover:opacity-70';
                     }
@@ -2066,11 +2066,11 @@ const app = {
                         if (endPct <= startPct) endPct += 100;
                         const widthPct = endPct - startPct;
                         
-                        // 営業時間外�Eスク (Open前、Close征E
+                        // 営業時間外�Eスク (Open前、Close征E
                         const openPct = timeToPct(openTime);
                         const closePct = timeToPct(closeTime);
                         
-                        // CSS Gradientで細かいグリチE��を描画
+                        // CSS Gradientで細かいグリチE��を描画
                         // 1h = 100/24 %, 15m = 1h/4
                         const oneHour = 100/24;
                         const oneFifteen = oneHour / 4;
@@ -2108,10 +2108,10 @@ const app = {
                     content = `<div class="w-full h-full flex items-center justify-center"><span class="text-[10px] text-red-300 font-bold">企E/span></div>`;
                 }
 
-                // Ganttモード�E場合�E空セルにもガイド線を表示
+                // Ganttモード�E場合�E空セルにもガイド線を表示
                 if (!shift && isGanttMode && !isSpecialHoliday) {
-                    // 営業時間取征E(繰り返しロジチE��になるが、shift有無に関わらず忁E��E
-                    // 上記で計算済み変数を�E利用
+                    // 営業時間取征E(繰り返しロジチE��になるが、shift有無に関わらず忁E��E
+                    // 上記で計算済み変数を�E利用
                     const timeToPct = (t) => {
                         const [h, m] = t.split(':').map(Number);
                         return ((h + m/60) / 24) * 100;
@@ -2128,7 +2128,7 @@ const app = {
             bodyHtml += `</tr>`;
         });
 
-        // === 人員不足アラート行�E生�E ===
+        // === 人員不足アラート行�E生�E ===
         let alertRowHtml = '';
         if (this.state.isAdmin && this.state.config) {
             const staffReq = this.state.config.staff_req || this.state.defaultConfig.staff_req;
@@ -2147,7 +2147,7 @@ const app = {
                 const dayOfWeek = date.getDay();
                 const jsDow = dayOfWeek; // 0=日, 6=圁E
 
-                // 休業日チェチE��
+                // 休業日チェチE��
                 const isSpecialHoliday = specialHolidays.includes(dateStr);
                 const isClosedDay = closedDays.map(Number).includes(jsDow);
                 if (isSpecialHoliday || isClosedDay) {
@@ -2157,11 +2157,11 @@ const app = {
                     return;
                 }
 
-                // 祝日チェチE��
+                // 祝日チェチE��
                 const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
                 const isHoliday = jh ? jh.isHoliday(dateStr) : false;
 
-                // 忁E��人数を取得（�Eース値�E�E
+                // 忁E��人数を取得（�Eース値�E�E
                 let required = parseInt(staffReq.min_weekday || 2);
                 if (isHoliday || dayOfWeek === 0) {
                     required = parseInt(staffReq.min_holiday || 3);
@@ -2191,20 +2191,20 @@ const app = {
                 let closeM = toMins(dayClose);
                 if (closeM <= openM) closeM += 24 * 60; // 日またぎ対忁E
 
-                // 時間帯別の忁E��人数ルール適用�E�Eays配�Eの型を数値に統一して安�Eにフィルタ�E�E
+                // 時間帯別の忁E��人数ルール適用�E�Eays配�Eの型を数値に統一して安�Eにフィルタ�E�E
                 const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(jsDow));
 
-                // 15刁E��ロチE��ごとに「同時在籍人数」vs「そのスロチE��の要件」を比輁E
+                // 15刁E��ロチE��ごとに「同時在籍人数」vs「そのスロチE��の要件」を比輁E
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
                 let totalSlots = 0;
                 let shortageSlots = 0;
-                let worstDeficit = 0; // 最悪の不足数�E�正値=不足あり�E�E
+                let worstDeficit = 0; // 最悪の不足数�E�正値=不足あり�E�E
                 let maxConcurrent = 0;
                 let maxSlotReq = required;
                 let surplusSlots = 0;
 
                 for (let t = openM; t < closeM; t += 15) {
-                    // こ�EスロチE��での忁E��人数�E��Eース or 時間帯別ルールの大きい方�E�E
+                    // こ�EスロチE��での忁E��人数�E��Eース or 時間帯別ルールの大きい方�E�E
                     let slotReq = required;
                     timeRules.forEach(rule => {
                         const rs = toMins(rule.start);
@@ -2215,7 +2215,7 @@ const app = {
                         }
                     });
 
-                    // こ�EスロチE��の同時在籍人数
+                    // こ�EスロチE��の同時在籍人数
                     const concurrent = shiftsForDay.filter(s => {
                         const sStart = toMins(s.start_time);
                         let sEnd = toMins(s.end_time);
@@ -2232,26 +2232,26 @@ const app = {
                     if (concurrent > slotReq + 1) surplusSlots++;
                 }
 
-                // 表示用: スロチE��ごとの刁E��結果から判定（±1の実�E表示�E�E
+                // 表示用: スロチE��ごとの刁E��結果から判定（±1の実�E表示�E�E
                 const assigned = shiftsForDay.length;
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
                 if (shortageSlots > 0) {
-                    // 不足スロチE��があめE
+                    // 不足スロチE��があめE
                     cellBg = 'bg-red-50';
                     const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
                     cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
                         <span class="text-red-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter animate-pulse">${label} <span class="opacity-80 ml-0.5">${assigned}吁E要E{maxSlotReq})</span></span>
                     </div>`;
                 } else if (surplusSlots > totalSlots / 3) {
-                    // 過剰スロチE��が多い�E�±1趁E���E�E
+                    // 過剰スロチE��が多い�E�±1趁E���E�E
                     cellBg = 'bg-amber-50';
                     cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
                         <span class="text-amber-500 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">過剰 <span class="opacity-80 ml-0.5">${assigned}吁E要E{maxSlotReq})</span></span>
                     </div>`;
                 } else {
-                    // ±1以冁E��適正
+                    // ±1以冁E��適正
                     cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
                         <span class="text-green-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">ぴったり <span class="opacity-80 ml-0.5">${assigned}吁E要E{maxSlotReq})</span></span>
                     </div>`;
@@ -2317,7 +2317,7 @@ const app = {
             const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
             // 特定日判宁E(短縮営業など)
             const specialDayConfig = (this.state.config.special_days || {})[dateStr];
-            // 備老E��モ
+            // 備老E��モ
             const note = (this.state.config.calendar_notes || {})[dateStr];
             
             if (dayOfWeek === 0 || holidayName) dateColorClass = 'text-red-500';
@@ -2335,10 +2335,10 @@ const app = {
                 .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
             // Admin: Click to add shift. Guest: No click action.
-            const cellAction = this.state.isAdmin ? `onclick="app.openAddShift('${dateStr}')"` : `onclick="app.showToast('シフトの編雁E�E管琁E��E�Eみ可能でぁE)"` ;
+            const cellAction = this.state.isAdmin ? `onclick="app.openAddShift('${dateStr}')"` : `onclick="app.showToast('シフトの編雁E�E管琁E��E�Eみ可能でぁE)"` ;
             const hoverClass = this.state.isAdmin ? 'hover:bg-blue-50/30 cursor-pointer' : '';
             
-            // アクションボタン群 (管琁E��E�Eみ)
+            // アクションボタン群 (管琁E��E�Eみ)
             let actionBtns = '';
             if (this.state.isAdmin) {
                 actionBtns = `
@@ -2434,7 +2434,7 @@ const app = {
     },
 
     async deleteCalendarNote() {
-        if (!confirm('こ�Eメモを削除しますか�E�E)) return;
+        if (!confirm('こ�Eメモを削除しますか�E�E)) return;
         const date = (document.getElementById('noteDate')?.value || '');
         
         if (this.state.config.calendar_notes && this.state.config.calendar_notes[date]) {
@@ -2464,14 +2464,14 @@ const app = {
     },
 
     // =================================================================
-    // 4. 刁E�� (Analytics) - Admin Only
+    // 4. 刁E�� (Analytics) - Admin Only
     // =================================================================
     renderAnalytics(container) {
         if (!this.state.isAdmin) return; // Sidebar should hide this, but safe guard.
         
         const stats = this.calculateMonthlyAnalytics();
         
-        // ヘルパ�E関数: 日本語通貨表訁E
+        // ヘルパ�E関数: 日本語通貨表訁E
         const formatMoney = (n) => {
             if(n < 10000) return '¥' + n.toLocaleString();
             const man = Math.floor(n / 10000);
@@ -2481,34 +2481,34 @@ const app = {
 
         container.innerHTML = `
             <div class="space-y-6">
-                <h2 class="text-xl font-bold text-gray-800">刁E��レポ�EチE(${this.state.currentDate.getFullYear()}年${this.state.currentDate.getMonth()+1}朁E</h2>
+                <h2 class="text-xl font-bold text-gray-800">刁E��レポ�EチE(${this.state.currentDate.getFullYear()}年${this.state.currentDate.getMonth()+1}朁E</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                     <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
                         <p class="text-sm font-bold text-gray-500 uppercase">月間推定人件費</p>
                         <h3 class="text-2xl font-bold text-gray-800 mt-2 truncate" title="${stats.totalCost.toLocaleString()}冁E>
                             ${formatMoney(stats.totalCost)}
                         </h3>
-                        <p class="text-xs text-gray-400 mt-1">※祝日割増�E深夜手当を含む概箁E/p>
+                        <p class="text-xs text-gray-400 mt-1">※祝日割増�E深夜手当を含む概箁E/p>
                     </div>
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <p class="text-sm font-bold text-gray-500 uppercase">総労働時閁E/p>
                         <h3 class="text-2xl font-bold text-blue-600 mt-2">${stats.totalHours.toFixed(1)}h</h3>
                     </div>
                     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                        <p class="text-sm font-bold text-gray-500 uppercase">スタチE��稼働数</p>
+                        <p class="text-sm font-bold text-gray-500 uppercase">スタチE��稼働数</p>
                         <h3 class="text-2xl font-bold text-indigo-600 mt-2">${stats.activeStaffCount} <span class="text-lg text-gray-500">吁E/span></h3>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">日次コスト推移</h3><div class="h-[200px] sm:h-[300px]"><canvas id="dailyCostChart"></canvas></div></div>
-                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">スタチE��別コスト構�E毁E/h3><div class="h-[200px] sm:h-[300px] flex justify-center"><canvas id="staffShareChart"></canvas></div></div>
+                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">スタチE��別コスト構�E毁E/h3><div class="h-[200px] sm:h-[300px] flex justify-center"><canvas id="staffShareChart"></canvas></div></div>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="p-4 border-b border-gray-100 bg-gray-50"><h3 class="font-bold text-gray-800">スタチE��別詳細・労働時間チェチE��</h3></div>
+                    <div class="p-4 border-b border-gray-100 bg-gray-50"><h3 class="font-bold text-gray-800">スタチE��別詳細・労働時間チェチE��</h3></div>
                     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                         <thead class="bg-gray-50 text-gray-500 border-b border-gray-200">
                             <tr>
-                                <th class="p-4 font-medium">スタチE��吁E/th>
+                                <th class="p-4 font-medium">スタチE��吁E/th>
                                 <th class="p-4 font-medium text-right">出勤日数</th>
                                 <th class="p-4 font-medium text-right">労働時閁E/th>
                                 <th class="p-4 font-medium text-right">法定目宁E176h)との差</th>
@@ -2517,7 +2517,7 @@ const app = {
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             ${stats.staffStats.map(s => {
-                                const limit = 176; // 月間法定労働時間�E目宁E(40週 * 4.4週)
+                                const limit = 176; // 月間法定労働時間�E目宁E(40週 * 4.4週)
                                 const diff = s.hours - limit;
                                 const isOver = diff > 0;
                                 const diffText = isOver ? `+${diff.toFixed(1)}h` : 'OK';
@@ -2606,7 +2606,7 @@ const app = {
         const otherCost = stats.staffStats.slice(5).reduce((sum, s) => sum + s.cost, 0);
         const labels = topStaff.map(s => s.name);
         const data = topStaff.map(s => s.cost);
-        if (otherCost > 0) { labels.push('そ�E仁E); data.push(otherCost); }
+        if (otherCost > 0) { labels.push('そ�E仁E); data.push(otherCost); }
 
         this.analyticsShareChart = new Chart(document.getElementById('staffShareChart'), {
             type: 'doughnut',
@@ -2616,7 +2616,7 @@ const app = {
     },
 
     // =================================================================
-    // 5. スタチE��管琁E(Staff) - Admin Only
+    // 5. スタチE��管琁E(Staff) - Admin Only
     // =================================================================
     renderStaffList(container) {
         if (!this.state.isAdmin) return;
@@ -2624,7 +2624,7 @@ const app = {
         container.innerHTML = `
             <div class="max-w-6xl mx-auto space-y-6 pb-20">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-2xl font-bold text-gray-800">スタチE��管琁E/h2>
+                    <h2 class="text-2xl font-bold text-gray-800">スタチE��管琁E/h2>
                     <button onclick="app.prepareStaffModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
                         <i class="fa-solid fa-plus mr-2"></i>新規登録
                     </button>
@@ -2644,7 +2644,7 @@ const app = {
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                                 ${this.state.staff.map(s => {
-                                    // 安�E筁E config.rolesが無ぁE��合�EチE��ォルトを使ぁE
+                                    // 安�E筁E config.rolesが無ぁE��合�EチE��ォルトを使ぁE
                                     const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
                                     const role = roleList.find(r => r.id === s.role) || { name: '未設宁E, color: 'gray' };
                                     const colorMap = {
@@ -2704,7 +2704,7 @@ const app = {
                                         </div>
                                     </td>
                                 </tr>`}).join('')}
-                                ${this.state.staff.length === 0 ? '<tr><td colspan="5" class="p-12 text-center text-gray-400 flex flex-col items-center gap-2"><i class="fa-solid fa-users-slash text-3xl mb-2 text-gray-300"></i><span>スタチE��が登録されてぁE��せん</span></td></tr>' : ''}
+                                ${this.state.staff.length === 0 ? '<tr><td colspan="5" class="p-12 text-center text-gray-400 flex flex-col items-center gap-2"><i class="fa-solid fa-users-slash text-3xl mb-2 text-gray-300"></i><span>スタチE��が登録されてぁE��せん</span></td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -2730,14 +2730,14 @@ const app = {
         const specialHolidays = config.special_holidays || [];
         const specialDays = config.special_days || {};
         const timeStaffReq = config.time_staff_req || [];
-        const positions = config.positions || ['ホ�Eル', 'キチE��ン'];
+        const positions = config.positions || ['ホ�Eル', 'キチE��ン'];
 
         container.innerHTML = `
             <div class="max-w-4xl mx-auto space-y-8 pb-24">
                 <div class="flex items-center justify-between border-b border-gray-200 pb-4">
                     <div>
-                        <h2 class="text-2xl font-bold text-gray-800">店�E設宁E/h2>
-                        <p class="text-sm text-gray-500 mt-1">AIシフト生�Eに使われるルールです、E/p>
+                        <h2 class="text-2xl font-bold text-gray-800">店�E設宁E/h2>
+                        <p class="text-sm text-gray-500 mt-1">AIシフト生�Eに使われるルールです、E/p>
                     </div>
                     <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
                         <i class="fa-solid fa-save mr-2"></i>設定を保孁E
@@ -2745,12 +2745,12 @@ const app = {
                 </div>
 
                 <div class="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-lg text-sm text-purple-900 leading-relaxed shadow-sm">
-                    <strong><i class="fa-solid fa-triangle-exclamation text-purple-600 mr-2"></i> 【重要】店�E設定�E正確さがAIの精度を決めまぁE/strong><br>
+                    <strong><i class="fa-solid fa-triangle-exclamation text-purple-600 mr-2"></i> 【重要】店�E設定�E正確さがAIの精度を決めまぁE/strong><br>
                     <div class="mt-2 space-y-2">
-                        <p>ラクシフトAIは、ここに入力された条件を「店�Eの絶対皁E��ルール」として学習しシフトを絁E��ます、E/p>
-                        <p>・<span class="font-bold text-purple-700">正確に設定した場吁E/span>�E�時間帯ごとの最適な人員配置、管琁E��E�E確実なカバ�E、休�Eの自動付与など「店長が頭を抱えてぁE��パズル」を完璧に解ぁE��シフトを生成します、E/p>
-                        <p>・<span class="font-bold text-red-500">設定が甘い場吁E/span>�E�侁E 忁E��な人数を�Eて0にする、管琁E��E��設定しなぁE��）：AIは「何人でも良ぁE��「誰でも良ぁE��と判断するため、人が足りなぁE��間帯ができたり、法律上�E問題なくても実用皁E��なぁE��フトが�E来上がってしまぁE��す、E/p>
-                        <p class="font-bold mt-2">※特に「営業時間冁E�E管琁E��E��バ�E」と「時間帯別の忁E��人数」�E、店�Eの実�Eに合わせて正確に入力してください、E/p>
+                        <p>ラクシフトAIは、ここに入力された条件を「店�Eの絶対皁E��ルール」として学習しシフトを絁E��ます、E/p>
+                        <p>・<span class="font-bold text-purple-700">正確に設定した場吁E/span>�E�時間帯ごとの最適な人員配置、管琁E��E�E確実なカバ�E、休�Eの自動付与など「店長が頭を抱えてぁE��パズル」を完璧に解ぁE��シフトを生成します、E/p>
+                        <p>・<span class="font-bold text-red-500">設定が甘い場吁E/span>�E�侁E 忁E��な人数を�Eて0にする、管琁E��E��設定しなぁE��）：AIは「何人でも良ぁE��「誰でも良ぁE��と判断するため、人が足りなぁE��間帯ができたり、法律上�E問題なくても実用皁E��なぁE��フトが�E来上がってしまぁE��す、E/p>
+                        <p class="font-bold mt-2">※特に「営業時間冁E�E管琁E��E��バ�E」と「時間帯別の忁E��人数」�E、店�Eの実�Eに合わせて正確に入力してください、E/p>
                     </div>
                 </div>
 
@@ -2758,7 +2758,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-id-badge text-indigo-500"></i> 役職・ロール設宁E/h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">スタチE��の肩書きを設定します、EIは「Manager」を管琁E��E��「Rookie」を新人として自動判定します、E/p>
+                        <p class="text-xs text-gray-400 font-normal ml-6">スタチE��の肩書きを設定します、EIは「Manager」を管琁E��E��「Rookie」を新人として自動判定します、E/p>
                         <button onclick="app.addRole()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
                             <i class="fa-solid fa-plus mr-1"></i>役職追加
                         </button>
@@ -2803,7 +2803,7 @@ const app = {
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-xs text-gray-400 mt-3">※ IDはシスチE��冁E��で使用するため変更できません。新規追加時�Eみ自動生成されます、E/p>
+                        <p class="text-xs text-gray-400 mt-3">※ IDはシスチE��冁E��で使用するため変更できません。新規追加時�Eみ自動生成されます、E/p>
                     </div>
                 </div>
 
@@ -2811,15 +2811,15 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-map-pin text-teal-500"></i> ポジション設宁E/h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">店�E冁E�E役割�E��Eール、キチE��ンなど�E�を自由に設定できます、E/p>
+                        <p class="text-xs text-gray-400 font-normal ml-6">店�E冁E�E役割�E��Eール、キチE��ンなど�E�を自由に設定できます、E/p>
                     </div>
                     <div class="p-6">
-                        <label class="block text-xs font-bold text-gray-500 mb-2">ポジション一覧�E�スペ�Eス・読点等で区刁E��て入力！E/label>
-                        <input type="text" id="settingPositions" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm font-bold bg-white" value="${positions.join('　')}" placeholder="侁E ホ�Eル　キチE��ン　チE��バリー">
-                        <p class="text-xs text-gray-400 mt-3">※ ここで設定した�Eジションは、スタチE��管琁E�E「担当�Eジション」や、時間帯別ルールの「�Eジション持E��」�E選択肢になります、E/p>
+                        <label class="block text-xs font-bold text-gray-500 mb-2">ポジション一覧�E�スペ�Eス・読点等で区刁E��て入力！E/label>
+                        <input type="text" id="settingPositions" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm font-bold bg-white" value="${positions.join('　')}" placeholder="侁E ホ�Eル　キチE��ン　チE��バリー">
+                        <p class="text-xs text-gray-400 mt-3">※ ここで設定した�Eジションは、スタチE��管琁E�E「担当�Eジション」や、時間帯別ルールの「�Eジション持E��」�E選択肢になります、E/p>
                         <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 leading-relaxed">
-                            <i class="fa-solid fa-circle-exclamation mr-1 text-yellow-600"></i> <strong>【重要】�Eジション変更時�Eご注愁E/strong><br>
-                            稼働中にポジション名を変更・削除すると、E��去にそ�Eポジションに設定されてぁE��スタチE��は「指定なぁE(全般)」として扱われます。なるべく�E期設定�E段階でポジションを確定させてください、E
+                            <i class="fa-solid fa-circle-exclamation mr-1 text-yellow-600"></i> <strong>【重要】�Eジション変更時�Eご注愁E/strong><br>
+                            稼働中にポジション名を変更・削除すると、E��去にそ�Eポジションに設定されてぁE��スタチE��は「指定なぁE(全般)」として扱われます。なるべく�E期設定�E段階でポジションを確定させてください、E
                         </div>
                     </div>
                 </div>
@@ -2828,7 +2828,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-regular fa-clock text-blue-500"></i> 営業時間 & 定休日</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">AIはこ�E時間帯の中でだけシフトを生成します。定休日にはシフトを�Eれません、E/p>
+                        <p class="text-xs text-gray-400 font-normal ml-6">AIはこ�E時間帯の中でだけシフトを生成します。定休日にはシフトを�Eれません、E/p>
                     </div>
                     <div class="p-6 space-y-8">
                         <!-- 営業時間 -->
@@ -2838,7 +2838,7 @@ const app = {
                                 <div class="md:col-span-3 font-bold text-gray-700">平日 (朁E釁E</div>
                                 <div class="md:col-span-9 flex items-center gap-3">
                                     ${this.get15MinTimeSelect(times.weekday?.start || '09:00', 'time_weekday_start', 'form-input border-gray-300 rounded-lg w-full')}
-                                    <span class="text-gray-400">�E�E/span>
+                                    <span class="text-gray-400">�E�E/span>
                                     ${this.get15MinTimeSelect(times.weekday?.end || '22:00', 'time_weekday_end', 'form-input border-gray-300 rounded-lg w-full')}
                                 </div>
                             </div>
@@ -2846,7 +2846,7 @@ const app = {
                                 <div class="md:col-span-3 font-bold text-blue-600">土曜日</div>
                                 <div class="md:col-span-9 flex items-center gap-3">
                                     ${this.get15MinTimeSelect(times.weekend?.start || '10:00', 'time_weekend_start', 'form-input border-gray-300 rounded-lg w-full')}
-                                    <span class="text-gray-400">�E�E/span>
+                                    <span class="text-gray-400">�E�E/span>
                                     ${this.get15MinTimeSelect(times.weekend?.end || '20:00', 'time_weekend_end', 'form-input border-gray-300 rounded-lg w-full')}
                                 </div>
                             </div>
@@ -2854,7 +2854,7 @@ const app = {
                                 <div class="md:col-span-3 font-bold text-red-600">日祝日</div>
                                 <div class="md:col-span-9 flex items-center gap-3">
                                     ${this.get15MinTimeSelect(times.holiday?.start || '10:00', 'time_holiday_start', 'form-input border-gray-300 rounded-lg w-full')}
-                                    <span class="text-gray-400">�E�E/span>
+                                    <span class="text-gray-400">�E�E/span>
                                     ${this.get15MinTimeSelect(times.holiday?.end || '20:00', 'time_holiday_end', 'form-input border-gray-300 rounded-lg w-full')}
                                 </div>
                             </div>
@@ -2887,13 +2887,13 @@ const app = {
                                 ${specialHolidays.length === 0 ? '<span class="text-xs text-gray-400">設定なぁE/span>' : ''}
                             </div>
                             
-                            <!-- 特定日の営業時間�E�短縮営業など�E�E-->
+                            <!-- 特定日の営業時間�E�短縮営業など�E�E-->
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-3">特定日の営業時間変更 (短縮営業など)</h4>
                             <div class="space-y-3" id="specialDaysContainer">
                                 <div class="flex items-center gap-2 flex-wrap bg-yellow-50 p-2 rounded-lg border border-yellow-100">
                                     <input type="date" id="newSpecialDayDate" class="border-gray-300 rounded px-2 py-1 text-sm">
                                     <div class="w-24">${this.get15MinTimeSelect('', 'newSpecialDayStart', 'border-gray-300 rounded px-2 py-1 text-sm w-full')}</div>
-                                    <span class="text-gray-400 text-xs">�E�E/span>
+                                    <span class="text-gray-400 text-xs">�E�E/span>
                                     <div class="w-24">${this.get15MinTimeSelect('', 'newSpecialDayEnd', 'border-gray-300 rounded px-2 py-1 text-sm w-full')}</div>
                                     <input type="text" id="newSpecialDayNote" class="border-gray-300 rounded px-2 py-1 text-sm w-24" placeholder="メモ (侁E 短縮)">
                                     <button onclick="app.addSpecialDay()" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded text-xs font-bold hover:bg-yellow-200 transition">追加</button>
@@ -2920,8 +2920,8 @@ const app = {
                 <!-- 3. シフトパターン設宁E-->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> シフトパターン (早番/遁E��など)</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">AIが絁E��合わせるシフトの「型」です。例：早番9-14時、E��番17-22時など、E/p>
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> シフトパターン (早番/遁E��など)</h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">AIが絁E��合わせるシフトの「型」です。例：早番9-14時、E��番17-22時など、E/p>
                         <button onclick="app.addShiftPattern()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-200 transition">
                             <i class="fa-solid fa-plus mr-1"></i>追加
                         </button>
@@ -2933,7 +2933,7 @@ const app = {
                                     <tr>
                                         <th class="p-3 rounded-l-lg">パターン吁E/th>
                                         <th class="p-3">開始時閁E/th>
-                                        <th class="p-3">終亁E��閁E/th>
+                                        <th class="p-3">終亁E��閁E/th>
                                         <th class="p-3 text-right rounded-r-lg">操佁E/th>
                                     </tr>
                                 </thead>
@@ -2956,13 +2956,13 @@ const app = {
                                             </td>
                                         </tr>
                                     `).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されてぁE��せん。「追加」�Eタンまた�EプリセチE��から登録してください、E/td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されてぁE��せん。「追加」�Eタンまた�EプリセチE��から登録してください、E/td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-xs text-gray-400 mt-3">💡 ここで登録したパターンの中からAIが最適な絁E��合わせを選びます。パターンが多いほどAIの選択肢が庁E��ります、E/p>
+                        <p class="text-xs text-gray-400 mt-3">💡 ここで登録したパターンの中からAIが最適な絁E��合わせを選びます。パターンが多いほどAIの選択肢が庁E��ります、E/p>
                         <div class="mt-4 pt-4 border-t border-gray-100">
-                            <p class="text-xs font-bold text-gray-500 mb-2"><i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-1"></i>プリセチE��から一括追加</p>
+                            <p class="text-xs font-bold text-gray-500 mb-2"><i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-1"></i>プリセチE��から一括追加</p>
                             <div class="flex flex-wrap gap-2">
                                 <button onclick="app.applyShiftPreset('restaurant')" class="text-xs bg-orange-50 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-lg font-bold hover:bg-orange-100 transition">
                                     <i class="fa-solid fa-utensils mr-1"></i>飲食店向ぁE
@@ -2974,7 +2974,7 @@ const app = {
                                     <i class="fa-solid fa-store mr-1"></i>小売店向ぁE
                                 </button>
                                 <button onclick="app.applyShiftPreset('medical')" class="text-xs bg-pink-50 text-pink-600 border border-pink-200 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition">
-                                    <i class="fa-solid fa-hospital mr-1"></i>医療�E介護向け
+                                    <i class="fa-solid fa-hospital mr-1"></i>医療�E介護向け
                                 </button>
                             </div>
                         </div>
@@ -2985,20 +2985,20 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-users text-green-500"></i> 人員配置要件</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">「最低何人ぁE��ばお店が回るか」を設定します、EIはこ�E人数を忁E��確保しようとします、E/p>
+                        <p class="text-xs text-gray-400 font-normal ml-6">「最低何人ぁE��ばお店が回るか」を設定します、EIはこ�E人数を忁E��確保しようとします、E/p>
                     </div>
                     <div class="p-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
                             <div>
-                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">管琁E��E��件</h4>
+                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">管琁E��E��件</h4>
                                 <div>
-                                    <label class="block text-xs font-bold text-gray-500 mb-1">最低管琁E��E�� (店長/リーダー)</label>
+                                    <label class="block text-xs font-bold text-gray-500 mb-1">最低管琁E��E�� (店長/リーダー)</label>
                                     <input type="number" id="req_min_manager" class="w-full border-gray-300 rounded-lg px-3 py-2" value="${reqs.min_manager || 1}">
-                                    <p class="text-xs text-gray-400 mt-1">営業中に常に最佁E名�E管琁E��E店長/リーダー)がいるよぁE��制御しまぁE/p>
+                                    <p class="text-xs text-gray-400 mt-1">営業中に常に最佁E名�E管琁E��E店長/リーダー)がいるよぁE��制御しまぁE/p>
                                 </div>
                             </div>
                             <div>
-                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">スタチE��総数要件</h4>
+                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">スタチE��総数要件</h4>
                                 <div class="space-y-4">
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-gray-600">平日</label>
@@ -3070,54 +3070,54 @@ const app = {
                                         }).join('')}
                                     </tbody>
                                 </table>
-                                ${timeStaffReq.length === 0 ? '<p class="text-xs text-gray-400 text-center py-4">特定�E時間帯�E�例：ランチタイム�E�に忁E��な人数を設定できまぁE/p>' : ''}
+                                ${timeStaffReq.length === 0 ? '<p class="text-xs text-gray-400 text-center py-4">特定�E時間帯�E�例：ランチタイム�E�に忁E��な人数を設定できまぁE/p>' : ''}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 5. シスチE��設宁E-->
+                <!-- 5. シスチE��設宁E-->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-gears text-gray-500"></i> シスチE��設宁E/h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">時給の初期値、管琁E��E��スワード、休�Eルールなどの基本設定です、E/p>
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-gears text-gray-500"></i> シスチE��設宁E/h3>
+                        <p class="text-xs text-gray-400 font-normal ml-6">時給の初期値、管琁E��E��スワード、休�Eルールなどの基本設定です、E/p>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">チE��ォルト時給 (冁E</label>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">チE��ォルト時給 (冁E</label>
                                 <input type="number" id="settingHourlyWage" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="${config.hourly_wage_default || 1100}">
                             </div>
                             
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">管琁E��E��スワーチE/label>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">管琁E��E��スワーチE/label>
                                 <input type="text" id="settingPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono tracking-wider" value="${config.admin_password || '0000'}">
                             </div>
                         </div>
                         
                         <div class="border-t border-gray-100 pt-4">
                             <button onclick="app.openModal('changePasswordModal')" class="flex items-center gap-2 text-sm font-bold text-amber-600 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-lg hover:bg-amber-100 transition">
-                                <i class="fa-solid fa-key"></i> 店�Eログインパスワードを変更
+                                <i class="fa-solid fa-key"></i> 店�Eログインパスワードを変更
                             </button>
-                            <p class="text-xs text-gray-400 mt-1">※ 店�Eログイン時に使用するパスワードを変更できまぁE/p>
+                            <p class="text-xs text-gray-400 mt-1">※ 店�Eログイン時に使用するパスワードを変更できまぁE/p>
                         </div>
 
-                        <!-- AI設宁E(運営管琁E�Eため非表示) -->
+                        <!-- AI設宁E(運営管琁E�Eため非表示) -->
                         
-                        <!-- 休�E時間ルール -->
+                        <!-- 休�E時間ルール -->
                         <div class="border-t border-gray-100 pt-4">
-                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">休�E時間ルール</h4>
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">休�E時間ルール</h4>
                             <div class="space-y-3" id="breakRulesContainer">
                                 ${breakRules.map((rule, idx) => `
                                     <div class="flex items-center gap-3">
                                         <div class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
                                             <input type="number" class="setting-break-hours w-16 border-gray-300 rounded px-2 py-1 text-sm text-center font-bold" value="${rule.min_hours}">
-                                            <span class="text-xs text-gray-500">時間趁E��</span>
+                                            <span class="text-xs text-gray-500">時間趁E��</span>
                                         </div>
                                         <i class="fa-solid fa-arrow-right text-gray-300 text-xs"></i>
                                         <div class="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
                                             <input type="number" class="setting-break-minutes w-16 border-blue-200 rounded px-2 py-1 text-sm text-center font-bold text-blue-700" value="${rule.break_minutes}">
-                                            <span class="text-xs text-blue-500">刁E���E</span>
+                                            <span class="text-xs text-blue-500">刁E���E</span>
                                         </div>
                                         <button onclick="app.removeBreakRule(${idx})" class="text-gray-400 hover:text-red-500 ml-2"><i class="fa-solid fa-times"></i></button>
                                     </div>
@@ -3128,15 +3128,15 @@ const app = {
                     </div>
                 </div>
 
-                <!-- 6. 運用ルール (お店�Eルール) -->
+                <!-- 6. 運用ルール (お店�Eルール) -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-orange-500"></i> 運用ルール (スタチE��向け表示)</h3>
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-orange-500"></i> 運用ルール (スタチE��向け表示)</h3>
                     </div>
                     <div class="p-6">
-                        <label class="block text-xs font-bold text-gray-500 mb-2">お店�Eルール・連絡事頁E/label>
-                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[60px] sm:min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提�E期限めE��意事頁E��どを�E力してください...">${shopRulesText}</textarea>
-                        <p class="text-xs text-gray-400 mt-2">※ ここに入力した�E容は、スタチE��画面の「お店�Eルール」に表示されます、E/p>
+                        <label class="block text-xs font-bold text-gray-500 mb-2">お店�Eルール・連絡事頁E/label>
+                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[60px] sm:min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提�E期限めE��意事頁E��どを�E力してください...">${shopRulesText}</textarea>
+                        <p class="text-xs text-gray-400 mt-2">※ ここに入力した�E容は、スタチE��画面の「お店�Eルール」に表示されます、E/p>
                     </div>
                 </div>
                 
@@ -3153,12 +3153,12 @@ const app = {
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">登録メールアドレス</label>
                             <div class="flex gap-2">
-                                <input type="email" id="settingEmail" value="${config.customer_email || ''}" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="メールアドレスを�E劁E>
+                                <input type="email" id="settingEmail" value="${config.customer_email || ''}" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="メールアドレスを�E劁E>
                                 <button onclick="app.updateEmail()" class="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
                                     <i class="fa-solid fa-save mr-1"></i>変更
                                 </button>
                             </div>
-                            <p class="text-xs text-gray-400 mt-1">案�Eメールの送信先アドレスでぁE/p>
+                            <p class="text-xs text-gray-400 mt-1">案�Eメールの送信先アドレスでぁE/p>
                         </div>
                     </div>
                 </div>
@@ -3179,7 +3179,7 @@ const app = {
                                 <div>
                                     <p class="text-white/70 text-xs font-medium">現在ご利用中のプラン</p>
                                     <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium'}[config.stripe_plan] || 'Standard'}</p>
-                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380冁E朁E- スタチE��10名まで', pro:'4,880冁E朁E- スタチE��50名まで', premium:'9,980冁E朁E- スタチE��無制陁E}[config.stripe_plan] || '3,380冁E朁E- スタチE��10名まで'}</p>
+                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380冁E朁E- スタチE��10名まで', pro:'4,880冁E朁E- スタチE��50名まで', premium:'9,980冁E朁E- スタチE��無制陁E}[config.stripe_plan] || '3,380冁E朁E- スタチE��10名まで'}</p>
                                 </div>
                                 <div class="text-right">
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-sm font-bold backdrop-blur-sm">
@@ -3194,9 +3194,9 @@ const app = {
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">プラン変更</h4>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                                 ${[
-                                    { key: 'standard', name: 'Standard', price: '3,380', staffs: '10吁E, color: 'blue', features: ['スタチE��10名まで', 'AI自動シフト生�E', 'AI労基法チェチE��', 'シフト管琁E�E機�E'] },
-                                    { key: 'pro', name: 'Pro', price: '4,880', staffs: '50吁E, color: 'green', badge: '人氁E, features: ['スタチE��50名まで', '全AI機�E', '優先サポ�EチE, '刁E��レポ�EチE] },
-                                    { key: 'premium', name: 'Premium', price: '9,980', staffs: '無制陁E, color: 'purple', features: ['スタチE��無制陁E, '全AI機�E', '褁E��店�E対忁E, '専属サポ�EチE] },
+                                    { key: 'standard', name: 'Standard', price: '3,380', staffs: '10吁E, color: 'blue', features: ['スタチE��10名まで', 'AI自動シフト生�E', 'AI労基法チェチE��', 'シフト管琁E�E機�E'] },
+                                    { key: 'pro', name: 'Pro', price: '4,880', staffs: '50吁E, color: 'green', badge: '人氁E, features: ['スタチE��50名まで', '全AI機�E', '優先サポ�EチE, '刁E��レポ�EチE] },
+                                    { key: 'premium', name: 'Premium', price: '9,980', staffs: '無制陁E, color: 'purple', features: ['スタチE��無制陁E, '全AI機�E', '褁E��店�E対忁E, '専属サポ�EチE] },
                                 ].map(p => {
                                     const currentPlanKey = (config.stripe_plan && config.stripe_plan !== 'free') ? config.stripe_plan : 'standard';
                                     const isCurrent = currentPlanKey === p.key;
@@ -3218,7 +3218,7 @@ const app = {
                                         btnHtml = '<p class="mt-3 text-xs font-bold text-gray-500 text-center py-1.5"><i class="fa-solid fa-circle-check mr-1"></i>ご利用中</p>';
                                     } else if (isUpgrade) {
                                         const btnColor = p.color === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700';
-                                        btnHtml = '<button onclick="app.startCheckout(&#39;'+p.key+'&#39;)" class="mt-3 w-full py-2 '+btnColor+' text-white rounded-lg text-xs font-bold transition"><i class="fa-solid fa-arrow-up mr-1"></i>アチE�EグレーチE/button>';
+                                        btnHtml = '<button onclick="app.startCheckout(&#39;'+p.key+'&#39;)" class="mt-3 w-full py-2 '+btnColor+' text-white rounded-lg text-xs font-bold transition"><i class="fa-solid fa-arrow-up mr-1"></i>アチE�EグレーチE/button>';
                                     } else {
                                         btnHtml = '<button onclick="app.startCheckout(&#39;'+p.key+'&#39;)" class="mt-3 w-full py-2 bg-gray-200 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-300 transition"><i class="fa-solid fa-arrow-down mr-1"></i>ダウングレーチE/button>';
                                     }
@@ -3230,7 +3230,7 @@ const app = {
                                         + currentBadge + badgeHtml
                                         + '<p class="font-bold '+nameColor+' text-lg">'+p.name+'</p>'
                                         + '<p class="text-2xl font-extrabold text-gray-900 mt-1">'+p.price+'<span class="text-sm font-normal text-gray-400">冁E朁E/span></p>'
-                                        + '<p class="text-xs text-gray-500 mt-1">スタチE��'+p.staffs+'</p>'
+                                        + '<p class="text-xs text-gray-500 mt-1">スタチE��'+p.staffs+'</p>'
                                         + '<ul class="text-xs text-gray-600 mt-3 space-y-1 text-left flex-1">'
                                         + p.features.map(f => '<li class="flex items-center gap-1.5"><i class="fa-solid fa-check '+checkColor+' text-[10px]"></i>'+f+'</li>').join('')
                                         + '</ul>'
@@ -3240,19 +3240,19 @@ const app = {
                             </div>
                         </div>
 
-                        <!-- Stripeポ�Eタルリンク -->
+                        <!-- Stripeポ�Eタルリンク -->
                         ${config.stripe_subscription_id ? `
                         <div class="border-t border-gray-100 pt-4 flex justify-between items-center">
-                            <p class="text-xs text-gray-400">請求書・支払い方法�E変更・解紁E�EStripeポ�Eタルから</p>
+                            <p class="text-xs text-gray-400">請求書・支払い方法�E変更・解紁E�EStripeポ�Eタルから</p>
                             <button onclick="app.openStripePortal()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200 transition">
-                                <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> 請求管琁E�Eータル
+                                <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> 請求管琁E�Eータル
                             </button>
                         </div>
                         ` : ''}
                     </div>
                 </div>
 
-                <!-- 下部保存�Eタン -->
+                <!-- 下部保存�Eタン -->
                 <div class="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                     <p class="text-sm text-gray-500"><i class="fa-solid fa-info-circle text-blue-400 mr-1"></i>上部の変更を含め、すべての設定を一括保存しまぁE/p>
                     <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
@@ -3260,10 +3260,10 @@ const app = {
                     </button>
                 </div>
 
-                <!-- チE�EタリセチE�� -->
+                <!-- チE�EタリセチE�� -->
                 <div class="text-right">
-                    <button onclick="if(confirm('【警告】�EてのチE�Eタを削除して初期化しますか�E�E)) { localStorage.clear(); location.reload(); }" class="text-red-500 text-xs hover:text-red-700 font-bold opacity-60 hover:opacity-100 transition">
-                        <i class="fa-solid fa-trash mr-1"></i>全チE�EタをリセチE��
+                    <button onclick="if(confirm('【警告】�EてのチE�Eタを削除して初期化しますか�E�E)) { localStorage.clear(); location.reload(); }" class="text-red-500 text-xs hover:text-red-700 font-bold opacity-60 hover:opacity-100 transition">
+                        <i class="fa-solid fa-trash mr-1"></i>全チE�EタをリセチE��
                     </button>
                 </div>
             </div>
@@ -3284,7 +3284,7 @@ const app = {
     addRole() {
         this.state.config = this.readSettingsFromDOM();
         if(!this.state.config.roles) this.state.config.roles = [];
-        // ユニ�EクID生�E
+        // ユニ�EクID生�E
         const newId = 'role_' + Math.random().toString(36).substr(2, 5);
         this.state.config.roles.push({ id: newId, name: '新規役職', color: 'gray', level: 1 });
         this.renderSettings(document.getElementById('viewContainer'));
@@ -3294,7 +3294,7 @@ const app = {
         this.state.config = this.readSettingsFromDOM();
         const role = this.state.config.roles[index];
         if(role.id === 'manager' || role.id === 'staff') {
-            this.showToast('こ�E役職は削除できません', 'error');
+            this.showToast('こ�E役職は削除できません', 'error');
             return;
         }
         this.state.config.roles.splice(index, 1);
@@ -3392,7 +3392,7 @@ const app = {
     },
 
     readSettingsFromDOM() {
-        const config = { ...this.state.config }; // 既存�E設定をコピ�E
+        const config = { ...this.state.config }; // 既存�E設定をコピ�E
 
         // 基本設宁E
         config.hourly_wage_default = Number(document.getElementById('settingHourlyWage')?.value || 1100);
@@ -3416,7 +3416,7 @@ const app = {
         // ポジション設宁E
         const posInput = document.getElementById('settingPositions')?.value || '';
         config.positions = posInput.split(/[,、\s　]+/).map(p => p.trim()).filter(p => p !== '');
-        if (config.positions.length === 0) config.positions = ['ホ�Eル', 'キチE��ン'];
+        if (config.positions.length === 0) config.positions = ['ホ�Eル', 'キチE��ン'];
 
         // 役職・ロール設宁E
         const roleNames = document.querySelectorAll('.setting-role-name');
@@ -3462,7 +3462,7 @@ const app = {
             min_holiday: Number(document.getElementById('req_min_holiday')?.value || 3)
         };
 
-        // 休�Eルール
+        // 休�Eルール
         const breakRules = [];
         const breakRuleDivs = document.querySelectorAll('#breakRulesContainer > div');
         breakRuleDivs.forEach(div => {
@@ -3498,13 +3498,13 @@ const app = {
 
         const configId = this.state.config.id;
         if (!configId) {
-            this.showToast('設定IDが見つかりません。�Eログインしてください、E, 'error');
+            this.showToast('設定IDが見つかりません。�Eログインしてください、E, 'error');
             return;
         }
 
         this.showLoading(true);
         try {
-            // RPC経由で安�Eに設定を更新 (機寁E��ィールド�E個別関数で更新)
+            // RPC経由で安�Eに設定を更新 (機寁E��ィールド�E個別関数で更新)
             const updateData = {
                 opening_time: newConfig.opening_time,
                 closing_time: newConfig.closing_time,
@@ -3528,7 +3528,7 @@ const app = {
                 p_data: updateData
             });
 
-            // 管琁E��E��スワードが変更されてぁE��ら、staffチE�Eブルの管琁E��E��カウントも更新
+            // 管琁E��E��スワードが変更されてぁE��ら、staffチE�Eブルの管琁E��E��カウントも更新
             if (newConfig.admin_password && newConfig.admin_password !== this.state.config.admin_password) {
                 const adminStaff = this.state.staff.find(s => s.login_id === 'admin');
                 if (adminStaff) {
@@ -3537,12 +3537,12 @@ const app = {
                             p_staff_id: adminStaff.id,
                             p_new_password: newConfig.admin_password
                         });
-                        // config側のadmin_passwordも更新�E�表示用のフォールバック�E�E
+                        // config側のadmin_passwordも更新�E�表示用のフォールバック�E�E
                         await API.rpc('update_config_safe', {
                             p_config_id: configId,
                             p_data: { admin_password: newConfig.admin_password }
                         });
-                        // パスワード更新完亁E��ログ省略�E�E
+                        // パスワード更新完亁E��ログ省略�E�E
                     } catch (pwErr) {
                         console.error('[Settings] Password update failed:', pwErr);
                         this.showToast('パスワード更新に失敗しました', 'error');
@@ -3561,7 +3561,7 @@ const app = {
         }
     },
 
-    // --- 印刷機�E (完�E牁Ev7・刁E��レイアウチE& PDF対忁E ---
+    // --- 印刷機�E (完�E牁Ev7・刁E��レイアウチE& PDF対忁E ---
     // Fixed syntax error
     printShiftTable() {
         // 現在の表示モードと期間を取征E
@@ -3585,21 +3585,21 @@ const app = {
             });
         }
 
-        // 2. 期間刁E�� (A4横に収まるよぁE7日区刁E�� でチE�Eブルを生戁E
+        // 2. 期間刁E�� (A4横に収まるよぁE7日区刁E�� でチE�Eブルを生戁E
         const CHUNK_SIZE = 7; // 1週間ずつ
         const dayChunks = [];
         for (let i = 0; i < allDays.length; i += CHUNK_SIZE) {
             dayChunks.push(allDays.slice(i, i + CHUNK_SIZE));
         }
 
-        // 3. 印刷用ウィンドウ作�E
+        // 3. 印刷用ウィンドウ作�E
         const printWindow = window.open('', '_blank');
         if (!printWindow) {
-            alert('ポップアチE�EがブロチE��されました。「許可」してください、E);
+            alert('ポップアチE�EがブロチE��されました。「許可」してください、E);
             return;
         }
 
-        // --- コンチE��チE��成関数 ---
+        // --- コンチE��チE��成関数 ---
         const generateTableHTML = (days, chunkIndex, totalChunks) => {
             // 時間目盛り
             const timeScaleHtml = `
@@ -3608,7 +3608,7 @@ const app = {
                 </div>
             `;
 
-            // ヘッダー生�E
+            // ヘッダー生�E
             const headerCols = days.map(date => {
                 const d = date.getDate();
                 const m = date.getMonth() + 1;
@@ -3626,7 +3626,7 @@ const app = {
                 `;
             }).join('');
 
-            // ボディ生�E
+            // ボディ生�E
             const bodyRows = this.state.staff.map(staff => {
                 const cols = days.map(date => {
                     const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -3666,7 +3666,7 @@ const app = {
                                 border: 1px solid ${borderColor};
                                 border-radius: 3px;
                                 z-index: 10;
-                                overflow: visible; /* 斁E���Eみ出し許可 */
+                                overflow: visible; /* 斁E���Eみ出し許可 */
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
@@ -3685,7 +3685,7 @@ const app = {
                         `;
                     }
                     
-                    // 背景グリチE��
+                    // 背景グリチE��
                     const gridLines = `
                         <div style="position:absolute; left:25%; top:0; bottom:0; border-left:1px dotted #ccc; z-index:0;"></div>
                         <div style="position:absolute; left:50%; top:0; bottom:0; border-left:1px solid #ccc; z-index:0;"></div>
@@ -3723,7 +3723,7 @@ const app = {
                     <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px;">
                         <thead>
                             <tr>
-                                <th style="width: 140px; background-color: #e5e7eb; border: 1px solid #666; padding: 4px;">スタチE��</th>
+                                <th style="width: 140px; background-color: #e5e7eb; border: 1px solid #666; padding: 4px;">スタチE��</th>
                                 ${headerCols}
                             </tr>
                         </thead>
@@ -3757,11 +3757,11 @@ const app = {
             </head>
             <body>
                 <div class="no-print">
-                    <h2 style="margin-top:0;">🖨 印刷プレビュー (刁E��レイアウト版)</h2>
+                    <h2 style="margin-top:0;">🖨 印刷プレビュー (刁E��レイアウト版)</h2>
                     <p style="font-size: 14px; line-height: 1.6;">
-                        視認性を確保するため、Estrong>7日ごとに刁E��して表示</strong>してぁE��す、Ebr>
-                        「印刷」�Eタンを押し、E��信先で<strong>「PDFに保存、E/strong>を選択すると、�E期間を含むPDFファイルが作�Eできます、Ebr>
-                        ※ 紙に印刷する場合も、A4横サイズで綺麗にペ�Eジ刁E��されます、E
+                        視認性を確保するため、Estrong>7日ごとに刁E��して表示</strong>してぁE��す、Ebr>
+                        「印刷」�Eタンを押し、E��信先で<strong>「PDFに保存、E/strong>を選択すると、�E期間を含むPDFファイルが作�Eできます、Ebr>
+                        ※ 紙に印刷する場合も、A4横サイズで綺麗にペ�Eジ刁E��されます、E
                     </p>
                     <div style="margin-top: 15px;">
                         <button onclick="window.print()">🖨 印刷 / PDF保孁E/button>
@@ -3784,7 +3784,7 @@ const app = {
     },
 
     // =================================================================
-    // ロジチE��・ヘルパ�E関数
+    // ロジチE��・ヘルパ�E関数
     // =================================================================
 
     // --- シフト編雁E---
@@ -3804,7 +3804,7 @@ const app = {
         }
         
         const idAttr = id ? `id="${id}"` : '';
-        // 既存�E input が持ってぁE��クラスを継承しつつ、appearance-none でブラウザチE��ォルト�Eスタイルを消す
+        // 既存�E input が持ってぁE��クラスを継承しつつ、appearance-none でブラウザチE��ォルト�Eスタイルを消す
         const finalClass = `${className || ''} appearance-none cursor-pointer bg-white`;
         
         return `
@@ -3820,12 +3820,12 @@ const app = {
     },
 
     generateTimeOptionsHTML(selectedValue) {
-        // 正規化: 秒が含まれてぁE��場吁EHH:mm:ss)はHH:mmに刁E��詰める
+        // 正規化: 秒が含まれてぁE��場吁EHH:mm:ss)はHH:mmに刁E��詰める
         const normalizedSelected = selectedValue ? selectedValue.substr(0, 5) : '';
         
         let options = [];
         let found = false;
-        // 15刁E��みの選択肢を生戁E
+        // 15刁E��みの選択肢を生戁E
         for (let i = 0; i < 24; i++) {
             for (let j = 0; j < 60; j += 15) {
                 const h = String(i).padStart(2, '0');
@@ -3835,7 +3835,7 @@ const app = {
                 options.push(time);
             }
         }
-        // 既存�E値ぁE5刁E��みでなぁE��合も、表示崩れを防ぐために選択肢に追加
+        // 既存�E値ぁE5刁E��みでなぁE��合も、表示崩れを防ぐために選択肢に追加
         if (normalizedSelected && !found) {
             options.push(normalizedSelected);
             options.sort(); 
@@ -3851,7 +3851,7 @@ const app = {
         document.getElementById('editShiftDateDisplay').textContent = dateStr;
         document.getElementById('deleteShiftBtn').classList.add('hidden');
         
-        const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタチE��を選抁E/option>${this.state.staff.map(s => `<option value="${s.id}">${this._sanitize(s.name)}</option>`).join('')}</select>`;
+        const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタチE��を選抁E/option>${this.state.staff.map(s => `<option value="${s.id}">${this._sanitize(s.name)}</option>`).join('')}</select>`;
         document.getElementById('editShiftStaffName').innerHTML = staffSelectHtml;
         
         // Selectボックスの初期匁E
@@ -3864,7 +3864,7 @@ const app = {
         startEl.innerHTML = this.generateTimeOptionsHTML(defStart);
         endEl.innerHTML = this.generateTimeOptionsHTML(defEnd);
         
-        // 値を�E示皁E��セチE��して確実にする
+        // 値を�E示皁E��セチE��して確実にする
         startEl.value = defStart;
         endEl.value = defEnd;
 
@@ -3880,12 +3880,12 @@ const app = {
     async updateShiftDrag(shiftId, updates) {
         try {
             await API.update('shifts', shiftId, updates);
-            // ローカルスチE�Eトも更新
+            // ローカルスチE�Eトも更新
             const shift = this.state.shifts.find(s => s.id === shiftId);
             if (shift) {
                 Object.assign(shift, updates);
             }
-            // 休�E時間を�E計箁E
+            // 休�E時間を�E計箁E
             if (shift && (updates.start_time || updates.end_time)) {
                 const [sh, sm] = shift.start_time.split(':').map(Number);
                 const [eh, em] = shift.end_time.split(':').map(Number);
@@ -3921,7 +3921,7 @@ const app = {
         document.getElementById('editShiftStaffId').value = shift.staff_id;
         document.getElementById('editShiftTitle').textContent = 'シフト編雁E;
         document.getElementById('editShiftDateDisplay').textContent = shift.date;
-        const safeName = staff ? this._sanitize(staff.name) : '不�EなスタチE��';
+        const safeName = staff ? this._sanitize(staff.name) : '不�EなスタチE��';
         document.getElementById('editShiftStaffName').innerHTML = `<div class="py-2 text-xl text-gray-800">${safeName}</div>`;
         
         // 時間の正規化 (HH:mm:ss -> HH:mm)
@@ -3935,7 +3935,7 @@ const app = {
         startEl.innerHTML = this.generateTimeOptionsHTML(startTime);
         endEl.innerHTML = this.generateTimeOptionsHTML(endTime);
         
-        // 値を�E示皁E��セチE��して確実にする
+        // 値を�E示皁E��セチE��して確実にする
         startEl.value = startTime;
         endEl.value = endTime;
         
@@ -3961,8 +3961,8 @@ const app = {
         const selectEl = document.getElementById('editShiftStaffSelect');
         if (selectEl) staffId = selectEl.value;
 
-        if (!staffId || !start || !end) { alert('忁E��頁E��を�E力してください'); return; }
-        if (start >= end) { alert('時間の頁E��が不正でぁE); return; }
+        if (!staffId || !start || !end) { alert('忁E��頁E��を�E力してください'); return; }
+        if (start === end) { alert('�J�n���ԂƏI�����Ԃ������ł�'); return; }
         if (document.getElementById('editShiftHoliday').checked && id) { await this.deleteShift(id); this.closeModal('editShiftModal'); return; }
 
         const data = { staff_id: staffId, date, start_time: start, end_time: end, break_minutes: breakMins };
@@ -3996,7 +3996,7 @@ const app = {
                 this.renderCurrentView();
             }
 
-            // ヘッダーの刁E��数値�E�人件費など�E�を更新
+            // ヘッダーの刁E��数値�E�人件費など�E�を更新
             this.calculateMonthlyStats();
 
             this.closeModal('editShiftModal');
@@ -4005,10 +4005,10 @@ const app = {
     },
 
     async deleteShift(id) {
-        // シフト削除の安�E確誁E
+        // シフト削除の安�E確誁E
         const shift = this.state.shifts.find(s => s.id === id);
-        const staffName = shift ? (this.state.staff.find(st => st.id === shift.staff_id)?.name || '不�E') : '不�E';
-        if (!confirm(`【シフト削除確認】\n\nスタチE��: ${staffName}\n日仁E ${shift?.date || '不�E'}\n\nこ�Eシフトを削除しますか�E�\n※こ�E操作�E允E��戻せません`)) return;
+        const staffName = shift ? (this.state.staff.find(st => st.id === shift.staff_id)?.name || '不�E') : '不�E';
+        if (!confirm(`【シフト削除確認】\n\nスタチE��: ${staffName}\n日仁E ${shift?.date || '不�E'}\n\nこ�Eシフトを削除しますか�E�\n※こ�E操作�E允E��戻せません`)) return;
         this.showLoading(true);
         try {
             await API.delete('shifts', id);
@@ -4037,7 +4037,7 @@ const app = {
                 this.renderCurrentView();
             }
 
-            // ヘッダーの刁E��数値�E�人件費など�E�を更新
+            // ヘッダーの刁E��数値�E�人件費など�E�を更新
             this.calculateMonthlyStats();
 
             this.closeModal('editShiftModal');
@@ -4045,7 +4045,7 @@ const app = {
         } catch (e) { this.showToast('失敗しました', 'error'); } finally { this.showLoading(false); }
     },
 
-    // --- スタチE��管琁E---
+    // --- スタチE��管琁E---
     prepareStaffModal() {
         this.updateStaffRoleSelect();
         this.updateStaffPositionSelect();
@@ -4069,17 +4069,17 @@ const app = {
     updateStaffPositionSelect() {
         const select = document.getElementById('staffPosition');
         if(!select) return;
-        const positions = this.state.config.positions || ['ホ�Eル', 'キチE��ン'];
-        let html = '<option value="any">持E��なぁE(全般)</option>';
+        const positions = this.state.config.positions || ['ホ�Eル', 'キチE��ン'];
+        let html = '<option value="any">持E��なぁE(全般)</option>';
         positions.forEach(p => {
             html += `<option value="${this._sanitize(p)}">${this._sanitize(p)}専用</option>`;
         });
         select.innerHTML = html;
     },
 
-    // プラン別スタチE��上限
+    // プラン別スタチE��上限
     getStaffLimit() {
-        // demoチE��ント�E無制陁E
+        // demoチE��ント�E無制陁E
         const contractId = this.state.config.contract_id || '';
         if (contractId === 'demo') return 9999;
 
@@ -4087,16 +4087,16 @@ const app = {
         if (plan === 'premium') return 9999;
         if (plan === 'pro') return 50;
         if (plan === 'standard') return 10;
-        return 30; // プラン未設定時のチE��ォルチE
+        return 30; // プラン未設定時のチE��ォルチE
     },
 
-    // スタチE��数が�Eラン上限を趁E��てぁE��かチェチE��
+    // スタチE��数が�Eラン上限を趁E��てぁE��かチェチE��
     isStaffOverLimit() {
         const limit = this.getStaffLimit();
         return this.state.staff.length > limit;
     },
 
-    // スタチE��趁E��警告を表示�E�ダウングレード後など�E�E
+    // スタチE��趁E��警告を表示�E�ダウングレード後など�E�E
     showStaffOverLimitAlert() {
         const limit = this.getStaffLimit();
         const current = this.state.staff.length;
@@ -4112,17 +4112,17 @@ const app = {
         alert.innerHTML = `
             <div class="max-w-3xl mx-auto flex items-center justify-center gap-3 flex-wrap">
                 <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-                <span class="font-bold">${planName}プランのスタチE��上限(${limit}吁EめE{over}名趁E��してぁE��す、E/span>
-                <span class="text-red-200">スタチE��めE{over}名削除するまでシフト作�Eはできません、E/span>
+                <span class="font-bold">${planName}プランのスタチE��上限(${limit}吁EめE{over}名趁E��してぁE��す、E/span>
+                <span class="text-red-200">スタチE��めE{over}名削除するまでシフト作�Eはできません、E/span>
                 <button onclick="app.changeView('staff'); document.getElementById('staffOverLimitAlert')?.remove();" class="px-4 py-1 bg-white text-red-600 rounded font-bold text-sm hover:bg-red-50 transition">
-                    スタチE��管琁E��
+                    スタチE��管琁E��
                 </button>
             </div>
         `;
         document.body.prepend(alert);
     },
 
-    // スタチE��趁E��警告を消す
+    // スタチE��趁E��警告を消す
     clearStaffOverLimitAlert() {
         const alertEl = document.getElementById('staffOverLimitAlert');
         if (alertEl) alertEl.remove();
@@ -4139,8 +4139,8 @@ const app = {
         alert.innerHTML = `
             <div class="max-w-3xl mx-auto flex items-center justify-center gap-3 flex-wrap">
                 <i class="fa-solid fa-credit-card text-lg animate-pulse"></i>
-                <span class="font-bold">決済エラーが発生してぁE��ぁE/span>
-                <span class="text-orange-100">お支払い方法を更新してください。未対応�E場合サービスが停止されます、E/span>
+                <span class="font-bold">決済エラーが発生してぁE��ぁE/span>
+                <span class="text-orange-100">お支払い方法を更新してください。未対応�E場合サービスが停止されます、E/span>
                 <button onclick="app.openStripePortal()" class="px-4 py-1.5 bg-white text-orange-600 rounded font-bold text-sm hover:bg-orange-50 transition">
                     <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>支払い方法を更新
                 </button>
@@ -4155,16 +4155,16 @@ const app = {
     async saveStaff() {
         const id = (document.getElementById('staffId')?.value || '');
 
-        // チE��ント情報を確実に取征E
+        // チE��ント情報を確実に取征E
         const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
         const orgId = this.state.config.organization_id || this.state.organization_id || API.session?.user?.organization_id;
 
         if (!contractId || !orgId) {
-            this.showToast('チE��ント情報が取得できません。�Eログインしてください、E, 'error');
+            this.showToast('チE��ント情報が取得できません。�Eログインしてください、E, 'error');
             return;
         }
 
-        // 新規作�E晁E プラン別スタチE��数制限チェチE��
+        // 新規作�E晁E プラン別スタチE��数制限チェチE��
         if (!id) {
             const limit = this.getStaffLimit();
             const currentCount = this.state.staff.length;
@@ -4189,7 +4189,7 @@ const app = {
         };
 
         if (data.min_days_week > data.max_days_week) {
-            this.showToast('最低�E勤日数は、最大出勤日数以下に設定してください', 'error');
+            this.showToast('最低�E勤日数は、最大出勤日数以下に設定してください', 'error');
             return;
         }
 
@@ -4197,7 +4197,7 @@ const app = {
             data.organization_id = orgId;
         }
 
-        // DBマイグレーション不要で保存するため�Eハック�E�unavailable_datesにメタチE�Eタを埋め込む
+        // DBマイグレーション不要で保存するため�Eハック�E�unavailable_datesにメタチE�Eタを埋め込む
         const existingStaff = this.state.staff.find(st => st.id === id);
         let uDates = [];
         if (existingStaff && existingStaff.unavailable_dates) {
@@ -4205,7 +4205,7 @@ const app = {
                 ? [...existingStaff.unavailable_dates] 
                 : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
         }
-        // 既存�Eタグを削除
+        // 既存�Eタグを削除
         uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart') && !d.startsWith('prefEnd') && !d.startsWith('ngDay:') && !d.startsWith('ngPair:') && !d.startsWith('reqPair:') && !d.startsWith('position:'));
         
         const contractType = document.getElementById('staffContractType')?.value || 'general';
@@ -4239,14 +4239,14 @@ const app = {
         try {
             let result;
             if (id) {
-                // 更新: 先にAPIに送信し、�E功後にStateを更新
+                // 更新: 先にAPIに送信し、�E功後にStateを更新
                 await API.update('staff', id, data);
                 const index = this.state.staff.findIndex(s => s.id === id);
                 if (index !== -1) {
                     this.state.staff[index] = { ...this.state.staff[index], ...data };
                 }
             } else {
-                // 新規作�E
+                // 新規作�E
                 result = await API.create('staff', data);
                 if (!result) {
                     data.id = 'temp_' + Date.now();
@@ -4261,7 +4261,7 @@ const app = {
             this.showToast('保存しました', 'success');
         } catch (e) { 
             console.error('[SaveStaff] 保存失敁E', e);
-            // 保存失敗時はDBから最新チE�Eタを�E取得してStateを復允E
+            // 保存失敗時はDBから最新チE�Eタを�E取得してStateを復允E
             try { await this.loadData(); } catch(reloadErr) { console.error(reloadErr); }
             this.renderStaffList(document.getElementById('viewContainer'));
             this.showToast('保存に失敗しました: ' + e.message, 'error');
@@ -4279,7 +4279,7 @@ const app = {
         document.getElementById('staffRole').value = s.role;
         document.getElementById('staffEvaluation').value = s.evaluation || 'B';
         
-        // unavailable_datesからメタチE�Eタを抽出
+        // unavailable_datesからメタチE�Eタを抽出
         let shiftPriority = 'medium';
         let contractType = 'general';
         let prefStartWd = '';
@@ -4304,7 +4304,7 @@ const app = {
                 if (txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
                 if (txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
                 if (txt.startsWith('position:')) position = txt.replace('position:', '');
-                // 互換性のため古ぁE��グもサポ�EチE
+                // 互換性のため古ぁE��グもサポ�EチE
                 if (txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); hasPref = true; }
                 if (txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); hasPref = true; }
                 if (txt.startsWith('ngDay:')) ngDays.push(txt.replace('ngDay:', ''));
@@ -4341,29 +4341,29 @@ const app = {
         this.openModal('staffModal');
     },
     async deleteStaff(id) {
-        // 管琁E��E��限チェチE��
+        // 管琁E��E��限チェチE��
         if (!this.state.isAdmin) {
-            this.showToast('スタチE��の削除には管琁E��E��限が忁E��でぁE, 'error');
+            this.showToast('スタチE��の削除には管琁E��E��限が忁E��でぁE, 'error');
             return;
         }
 
         const staff = this.state.staff.find(s => s.id === id);
         if (!staff) {
-            this.showToast('スタチE��が見つかりません', 'error');
+            this.showToast('スタチE��が見つかりません', 'error');
             return;
         }
 
-        // 管琁E��E��カウント�E絶対に削除不可
+        // 管琁E��E��カウント�E絶対に削除不可
         if (staff.login_id === 'admin' || staff.role === 'manager' || staff.role === 'admin') {
-            this.showToast('管琁E��E�E店長アカウント�E削除できません、E, 'error');
+            this.showToast('管琁E��E�E店長アカウント�E削除できません、E, 'error');
             return;
         }
 
         // 二重確誁E 1回目
-        if (!confirm(`【スタチE��削除 - 最終確認】\n\n、E{staff.name}」を本当に削除しますか�E�\n\n⚠�E�Eこ�E操作�E允E��戻せません\n⚠�E�E関連するシフト・申請データも�Eて削除されます`)) return;
+        if (!confirm(`【スタチE��削除 - 最終確認】\n\n、E{staff.name}」を本当に削除しますか�E�\n\n⚠�E�Eこ�E操作�E允E��戻せません\n⚠�E�E関連するシフト・申請データも�Eて削除されます`)) return;
 
-        // 二重確誁E 2回目�E�名前�E力！E
-        const inputName = prompt(`最終確誁E 削除するスタチE��名、E{staff.name}」を入力してください:`);
+        // 二重確誁E 2回目�E�名前�E力！E
+        const inputName = prompt(`最終確誁E 削除するスタチE��名、E{staff.name}」を入力してください:`);
         if (inputName !== staff.name) {
             this.showToast('名前が一致しません。削除をキャンセルしました、E, 'info');
             return;
@@ -4506,19 +4506,19 @@ const app = {
         const reason = (document.getElementById('requestReason')?.value || '');
 
         if (!staffId || dates.length === 0) {
-            alert('スタチE��と日付を選択してください');
+            alert('スタチE��と日付を選択してください');
             return;
         }
 
         const typeStr = type === 'off' ? '【休み希望、E : '【勤務希望、E;
         const datesStr = dates.join(', ');
-        const confirmMsg = `以下�E冁E��で申請を提�Eします、En\n日仁E ${datesStr}\n件数: ${dates.length}日刁En冁E��: ${typeStr}\n琁E��: ${reason || 'なぁE}\n\n送信しますか�E�`;
+        const confirmMsg = `以下�E冁E��で申請を提�Eします、En\n日仁E ${datesStr}\n件数: ${dates.length}日刁En冁E��: ${typeStr}\n琁E��: ${reason || 'なぁE}\n\n送信しますか�E�`;
 
         if (!confirm(confirmMsg)) return;
 
         this.showLoading(true);
         try {
-            // 日付ごとに1件ずつ申請を作�E
+            // 日付ごとに1件ずつ申請を作�E
             for (const date of dates) {
                 const data = {
                     staff_id: staffId,
@@ -4533,7 +4533,7 @@ const app = {
                 if (type === 'work') {
                     data.start_time = (document.getElementById('requestStartTime')?.value || '');
                     data.end_time = (document.getElementById('requestEndTime')?.value || '');
-                    if (!data.start_time || !data.end_time) { alert('時間を�E力してください'); return; }
+                    if (!data.start_time || !data.end_time) { alert('時間を�E力してください'); return; }
                 }
 
                 await API.create('requests', data);
@@ -4553,7 +4553,7 @@ const app = {
     async submitMultiRequest() { return this.submitRequest(); },
 
     async handleRequest(id, status) {
-        if (!confirm(status === 'approved' ? '承認しますか�E�E : '却下しますか�E�E)) return;
+        if (!confirm(status === 'approved' ? '承認しますか�E�E : '却下しますか�E�E)) return;
         this.showLoading(true);
         try {
             await API.update('requests', id, { status: status });
@@ -4562,10 +4562,10 @@ const app = {
             if (status === 'approved') {
                 const req = this.state.requests.find(r => r.id == id);
                 if (req) {
-                    // 1. 勤務希望ならシフト作�E
+                    // 1. 勤務希望ならシフト作�E
                     if (req.type === 'work') {
-                        // 開始�E終亁E��間が持E��されてぁE��ぁE��合�E店�E設定から取得などのロジチE��が忁E��だぁE
-                        // ここではリクエストになければチE��ォルト値を�Eれる
+                        // 開始�E終亁E��間が持E��されてぁE��ぁE��合�E店�E設定から取得などのロジチE��が忁E��だぁE
+                        // ここではリクエストになければチE��ォルト値を�Eれる
                         const start = req.start_time || this.state.config.opening_time || '09:00';
                         const end = req.end_time || this.state.config.closing_time || '18:00';
                         await API.create('shifts', { 
@@ -4573,7 +4573,7 @@ const app = {
                             date: req.dates, 
                             start_time: start, 
                             end_time: end, 
-                            break_minutes: 60, // チE��ォルチE
+                            break_minutes: 60, // チE��ォルチE
                             organization_id: this.state.organization_id
                         });
                     }
@@ -4581,7 +4581,7 @@ const app = {
                     else if (req.type === 'off' || req.type === 'holiday') {
                         const staff = this.getStaff(req.staff_id);
                         if (staff) {
-                            // 褁E��日カンマ区刁E��対忁E
+                            // 褁E��日カンマ区刁E��対忁E
                             const reqDates = String(req.dates).split(',').map(d => d.trim()).filter(d => d);
                             let uDates = [];
                             if (staff.unavailable_dates) {
@@ -4608,14 +4608,14 @@ const app = {
             }
             await this.loadData();
             this.renderRequests(document.getElementById('viewContainer'));
-            this.showToast('処琁E��亁E, 'success');
+            this.showToast('処琁E��亁E, 'success');
         } catch(e) { this.showToast('エラー発甁E, 'error'); } finally { this.showLoading(false); }
     },
 
     async handleBatchApprove() {
         const pending = this.state.requests.filter(r => r.status === 'pending');
         if (pending.length === 0) return;
-        if (!confirm(`承認征E�� ${pending.length}件 を�Eて承認しますか�E�`)) return;
+        if (!confirm(`承認征E�� ${pending.length}件 を�Eて承認しますか�E�`)) return;
 
         this.showLoading(true);
         try {
@@ -4638,36 +4638,36 @@ const app = {
         }
     },
 
-       // --- AIシフト作�E (Python + Gemini) ---
+       // --- AIシフト作�E (Python + Gemini) ---
        _shiftGenTips: [
-            '労基況E2条: 1日8時間・週40時間が法定労働時間�E上限でぁE,
-            '労基況E4条: 6時間趁E��45刁E��E時間趁E��60刁E�E休�Eが忁E��でぁE,
-            '労基況E5条: 週1日以上�E休日が忁E��です（連綁E日まで�E�E,
-            'AIが各スタチE��の希望休を尊重しながら最適配置を計算中...',
-            '土日祝�E割増賁E��(1.25倁Eを老E�Eしてコスト最適化してぁE��ぁE,
-            '管琁E��E��吁E��フトに最佁E名�E置されるよぁE��整してぁE��ぁE,
-            'スタチE��の評価・スキルに応じてバランスよく配置しまぁE,
-            '新人スタチE��にはメンター�E�管琁E��E��を配置しまぁE,
-            '月間の総人件費が最小になるよぁE��琁E��適化を実行中...',
-            'Pythonで一次案を作�E ↁEAIで労基法チェチE���E�E��終調整',
+            '労基況E2条: 1日8時間・週40時間が法定労働時間�E上限でぁE,
+            '労基況E4条: 6時間趁E��45刁E��E時間趁E��60刁E�E休�Eが忁E��でぁE,
+            '労基況E5条: 週1日以上�E休日が忁E��です（連綁E日まで�E�E,
+            'AIが各スタチE��の希望休を尊重しながら最適配置を計算中...',
+            '土日祝�E割増賁E��(1.25倁Eを老E�Eしてコスト最適化してぁE��ぁE,
+            '管琁E��E��吁E��フトに最佁E名�E置されるよぁE��整してぁE��ぁE,
+            'スタチE��の評価・スキルに応じてバランスよく配置しまぁE,
+            '新人スタチE��にはメンター�E�管琁E��E��を配置しまぁE,
+            '月間の総人件費が最小になるよぁE��琁E��適化を実行中...',
+            'Pythonで一次案を作�E ↁEAIで労基法チェチE���E�E��終調整',
         ],
         _tipTimer: null,
 
        async runAutoFill() {
         if (this._shiftGenInProgress) return;
         if (!this.state.isShopLoggedIn || !this.state.organization_id) {
-            this.showToast('セチE��ョンエラー: 再ログインしてください', 'error');
+            this.showToast('セチE��ョンエラー: 再ログインしてください', 'error');
             return;
         }
 
-        // スタチE��趁E��チェチE���E�ダウングレード後�Eハック防止�E�E
+        // スタチE��趁E��チェチE���E�ダウングレード後�Eハック防止�E�E
         if (this.isStaffOverLimit()) {
             const limit = this.getStaffLimit();
             const over = this.state.staff.length - limit;
             const planName = {standard: 'Standard', pro: 'Pro', premium: 'Premium'}[this.state.config.stripe_plan] || 'Standard';
             this.closeModal('autoFillModal');
             this.showStaffOverLimitAlert();
-            this.showToast(`${planName}プランの上限(${limit}吁EめE{over}名趁E��してぁE��す。スタチE��を削除してください。`, 'error');
+            this.showToast(`${planName}プランの上限(${limit}吁EめE{over}名趁E��してぁE��す。スタチE��を削除してください。`, 'error');
             this.changeView('staff');
             return;
         }
@@ -4687,14 +4687,14 @@ const app = {
         if (loadingDefault) loadingDefault.style.display = 'none';
         if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
         if (loadingEl) loadingEl.classList.remove('hidden');
-        if (stepEl) stepEl.textContent = 'スタチE��惁E��を読み込んでぁE��ぁE..';
+        if (stepEl) stepEl.textContent = 'スタチE��惁E��を読み込んでぁE��ぁE..';
         if (barEl) { barEl.style.transition = 'width 2s ease'; barEl.style.width = '5%'; }
 
         // 最低表示時間を保証
         const loadingStartTime = Date.now();
         const MIN_LOADING_MS = 12000;
 
-        // プログレスバ�Eを滑らかに進める�E�実�E琁E��独立！E
+        // プログレスバ�Eを滑らかに進める�E�実�E琁E��独立！E
         let fakeProgress = 5;
         const progressTimer = setInterval(() => {
             if (fakeProgress < 90) {
@@ -4704,7 +4704,7 @@ const app = {
             }
         }, 800);
 
-        // 豁E��識ローチE�Eション開姁E
+        // 豁E��識ローチE�Eション開姁E
         let tipIdx = 0;
         if (this._tipTimer) clearInterval(this._tipTimer);
         this._tipTimer = setInterval(() => {
@@ -4718,12 +4718,12 @@ const app = {
             }
         }, 4000);
 
-        // スチE��プメチE��ージをゆっくり刁E��替ぁE
+        // スチE��プメチE��ージをゆっくり刁E��替ぁE
         const steps = [
-            { delay: 2000, msg: '人員配置の事前チェチE��中...' },
-            { delay: 4500, msg: 'AIがシフトを最適化してぁE��ぁE..' },
-            { delay: 7000, msg: '労働基準法に基づぁE��検証中...' },
-            { delay: 9500, msg: '最終調整を行ってぁE��ぁE..' },
+            { delay: 2000, msg: '人員配置の事前チェチE��中...' },
+            { delay: 4500, msg: 'AIがシフトを最適化してぁE��ぁE..' },
+            { delay: 7000, msg: '労働基準法に基づぁE��検証中...' },
+            { delay: 9500, msg: '最終調整を行ってぁE��ぁE..' },
         ];
         const stepTimers = steps.map(s => setTimeout(() => { if (stepEl) stepEl.textContent = s.msg; }, s.delay));
 
@@ -4764,11 +4764,11 @@ const app = {
                 mode: 'auto'
             };
 
-            // チE��チE��: 送信スタチE��数を確誁E
+            // チE��チE��: 送信スタチE��数を確誁E
 
 
 
-            // === STEP 2: 事前チェチE�� ===
+            // === STEP 2: 事前チェチE�� ===
 
             const checkResult = await API.checkFeasibility(payload);
 
@@ -4778,8 +4778,8 @@ const app = {
                 const summary = checkResult.summary || {};
                 const details = checkResult.daily_details || [];
 
-                let alertMsg = '⚠�E�E人員不足が検�Eされました\n\n';
-                alertMsg += '稼働可能スタチE��: ' + summary.usable_staff + '/' + summary.total_staff + '名\n';
+                let alertMsg = '⚠�E�E人員不足が検�Eされました\n\n';
+                alertMsg += '稼働可能スタチE��: ' + summary.usable_staff + '/' + summary.total_staff + '名\n';
                 alertMsg += '不足合訁E ' + summary.total_shortage_hours + ' 人晁En';
                 alertMsg += '影響日数: ' + summary.affected_days + '日\n\n';
 
@@ -4787,7 +4787,7 @@ const app = {
                     alertMsg += '--- 不足の詳細 (最大5日) ---\n';
                     for (var di = 0; di < Math.min(details.length, 5); di++) {
                         var dd = details[di];
-                        alertMsg += dd.date + ': 出勤可能' + dd.available_staff + '吁E/ 忁E��E + dd.required_per_slot + '名\n';
+                        alertMsg += dd.date + ': 出勤可能' + dd.available_staff + '吁E/ 忁E��E + dd.required_per_slot + '名\n';
                         for (var ri = 0; ri < dd.shortage_ranges.length; ri++) {
                             var r = dd.shortage_ranges[ri];
                             alertMsg += '  ' + r.start + '~' + r.end + ': ' + r.shortage + '名不足\n';
@@ -4807,14 +4807,14 @@ const app = {
                     if (loadingShiftGen) loadingShiftGen.style.display = 'none';
                     if (loadingDefault) loadingDefault.style.display = 'flex';
                     if (loadingEl) loadingEl.classList.add('hidden');
-                    this.showToast('シフト生�Eを中止しました。スタチE��の追加めE��件の見直しを検討してください、E, 'info');
+                    this.showToast('シフト生�Eを中止しました。スタチE��の追加めE��件の見直しを検討してください、E, 'info');
                     return;
                 }
 
                 payload.mode = 'force';
                 if (loadingEl) loadingEl.classList.remove('hidden');
                 if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
-                this.showToast('⚠�E�E労働条件を緩和して生�EしまぁE, 'warning');
+                this.showToast('⚠�E�E労働条件を緩和して生�EしまぁE, 'warning');
             }
 
             // === STEP 3: 削除処琁E===
@@ -4832,13 +4832,13 @@ const app = {
                 });
             }
 
-            // === STEP 4: シフト生�E ===
+            // === STEP 4: シフト生�E ===
 
 
             const result = await API.generateShifts(payload);
 
             if (result.status === 'error') {
-                this.showToast('生�Eエラー: ' + result.message, 'error');
+                this.showToast('生�Eエラー: ' + result.message, 'error');
                 this._generationSuccess = false;
                 return;
             }
@@ -4861,7 +4861,7 @@ const app = {
                     finalShifts.push(s);
                 }
 
-                // プレビュー表示 (DB保存�Eプレビュー承認後に実衁E
+                // プレビュー表示 (DB保存�Eプレビュー承認後に実衁E
                 this._generationSuccess = finalShifts.length > 0;
                 this._generationCount = finalShifts.length;
                 this._pendingPreviewShifts = finalShifts;
@@ -4869,14 +4869,14 @@ const app = {
                 this._pendingPreviewDates = dates;
 
             } else if (result.status === 'success' && result.mode === 'math_failed') {
-                // 数琁E��適化が解を見つけられなかっぁE
+                // 数琁E��適化が解を見つけられなかっぁE
                 console.warn('Math optimization failed - no feasible solution');
-                this.showToast('最適化エンジンが解を見つけられませんでした。スタチE��の勤務条件を緩和するか、スタチE��を追加してください、E, 'warning');
+                this.showToast('最適化エンジンが解を見つけられませんでした。スタチE��の勤務条件を緩和するか、スタチE��を追加してください、E, 'warning');
                 this._generationSuccess = false;
             } else if (result.status === 'success' && (!result.shifts || result.shifts.length === 0)) {
                 // シフトぁE件
                 console.warn('No shifts generated');
-                this.showToast('生�E可能なシフトがありませんでした。スタチE��の設定や休暇申請を確認してください、E, 'warning');
+                this.showToast('生�E可能なシフトがありませんでした。スタチE��の設定や休暇申請を確認してください、E, 'warning');
                 this._generationSuccess = false;
             } else {
                 this._generationSuccess = false;
@@ -4886,22 +4886,22 @@ const app = {
             console.error('AutoFill Error:', e);
             this._generationSuccess = false;
         } finally {
-            // タイマ�E全クリア
+            // タイマ�E全クリア
             clearInterval(progressTimer);
             stepTimers.forEach(t => clearTimeout(t));
             if (this._tipTimer) { clearInterval(this._tipTimer); this._tipTimer = null; }
 
-            // 最低表示時間を征E��
+            // 最低表示時間を征E��
             const elapsed = Date.now() - loadingStartTime;
             if (elapsed < MIN_LOADING_MS) {
-                if (stepEl) stepEl.textContent = this._generationSuccess ? 'シフトの最終確認中...' : '処琁E��完亁E��てぁE��ぁE..';
+                if (stepEl) stepEl.textContent = this._generationSuccess ? 'シフトの最終確認中...' : '処琁E��完亁E��てぁE��ぁE..';
                 if (barEl) barEl.style.width = '95%';
                 await new Promise(r => setTimeout(r, MIN_LOADING_MS - elapsed));
             }
 
-            // 100%にしてから少し征E��
+            // 100%にしてから少し征E��
             if (barEl) barEl.style.width = '100%';
-            if (stepEl) stepEl.textContent = this._generationSuccess ? '完亁E��ました�E�E : '処琁E��終亁E��ました';
+            if (stepEl) stepEl.textContent = this._generationSuccess ? '完亁E��ました�E�E : '処琁E��終亁E��ました';
             if (tipEl) { tipEl.style.opacity = '0'; setTimeout(() => { tipEl.textContent = 'カレンダーに反映しまぁE; tipEl.style.opacity = '1'; }, 200); }
             await new Promise(r => setTimeout(r, 1500));
 
@@ -4923,7 +4923,7 @@ const app = {
 
             this._shiftGenInProgress = false;
 
-            // プレビューモーダルを表示�E�生成�E功時�E�E
+            // プレビューモーダルを表示�E�生成�E功時�E�E
             if (this._generationSuccess && this._pendingPreviewShifts && this._pendingPreviewShifts.length > 0) {
                 setTimeout(() => {
                     this.showShiftPreview(this._pendingPreviewShifts, this._pendingPreviewTargetType, this._pendingPreviewDates);
@@ -4932,7 +4932,7 @@ const app = {
                     this._pendingPreviewDates = null;
                 }, 300);
             } else if (!this._generationSuccess) {
-                this.showToast('シフト作�Eに問題がありました。条件を見直してください、E, 'warning');
+                this.showToast('シフト作�Eに問題がありました。条件を見直してください、E, 'warning');
             }
         }
     },
@@ -4966,7 +4966,7 @@ const app = {
                 end_time: s.end_time,
                 break_minutes: s.break_minutes || 0
             };
-            // イレギュラーフラグがある場合�Eみ保存（通常シフトではfalse/未設定！E
+            // イレギュラーフラグがある場合�Eみ保存（通常シフトではfalse/未設定！E
             if (s.is_irregular) obj.is_irregular = true;
             return obj;
         }.bind(this));
@@ -4991,7 +4991,7 @@ const app = {
 
     async generateShiftsForDay(dateStr, existingShifts, generatedShiftsSoFar = []) {
         // ---------------------------------------------------------
-        // 0. 日付と設定�E初期匁E(厳格モーチE
+        // 0. 日付と設定�E初期匁E(厳格モーチE
         // ---------------------------------------------------------
         const dateObj = new Date(dateStr.replace(/-/g, '/'));
         const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
@@ -5019,7 +5019,7 @@ const app = {
             else { openTime = getT('weekday').start; closeTime = getT('weekday').end; }
         }
 
-        // 時間変換ヘルパ�E (刁E��佁E
+        // 時間変換ヘルパ�E (刁E��佁E
         const toMins = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
         const fromMins = (m) => { 
             let h = Math.floor(m / 60); 
@@ -5035,12 +5035,12 @@ const app = {
         const effectiveEndMins = endMins < startMins ? endMins + (24 * 60) : endMins;
 
         // ---------------------------------------------------------
-        // 1. 忁E��人数の算�E (15刁E��みバケチE��)
+        // 1. 忁E��人数の算�E (15刁E��みバケチE��)
         // ---------------------------------------------------------
         const timeReqs = new Map(); // key: minutes, val: count
         const timeReqManager = new Map(); // key: minutes, val: count (1 or 0)
 
-        // ベ�Eス要件
+        // ベ�Eス要件
         let baseReq = 2;
         const sReq = config.staff_req || {};
         if (isHoliday) baseReq = sReq.min_holiday || 3;
@@ -5049,13 +5049,13 @@ const app = {
         
         const reqManager = sReq.min_manager || 1;
 
-        // 全スロチE��初期匁E(15刁E��み)
+        // 全スロチE��初期匁E(15刁E��み)
         for (let t = startMins; t < effectiveEndMins; t += 15) {
             timeReqs.set(t, Number(baseReq));
             timeReqManager.set(t, Number(reqManager));
         }
 
-        // 時間帯別ルールの適用 (time_staff_req)�E�Eays配�Eの型を数値に統一�E�E
+        // 時間帯別ルールの適用 (time_staff_req)�E�Eays配�Eの型を数値に統一�E�E
         const timeRules = (config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(dayOfWeek));
         timeRules.forEach(rule => {
             const rStart = toMins(rule.start);
@@ -5063,24 +5063,24 @@ const app = {
             if (rEnd < rStart) rEnd += 24*60;
             
             for (let t = startMins; t < effectiveEndMins; t += 15) {
-                // ルール期間冁E�� (絶対値 or 日またぎ老E�E)
-                // 簡易判定として、シフト生�E日(当日)の営業篁E��冁E��、ルールの開始〜終亁E��合�EするぁE
+                // ルール期間冁E�� (絶対値 or 日またぎ老E�E)
+                // 簡易判定として、シフト生�E日(当日)の営業篁E��冁E��、ルールの開始〜終亁E��合�EするぁE
                 
-                // ※日またぎ同士の厳寁E��定�E褁E��だが、ここでは「営業日」とぁE��概念冁E�E絶対刁E��比輁E��めE
+                // ※日またぎ同士の厳寁E��定�E褁E��だが、ここでは「営業日」とぁE��概念冁E�E絶対刁E��比輁E��めE
                 // rule.start ぁE"22:00"(1320), rule.end ぁE"02:00"(1560)
-                // t ぁE"23:00"(1380) なら篁E��冁E��E
-                // 営業時間ぁE"18:00"(1080) ~ "26:00"(1560) であれば、t=1380 は篁E��冁E��E
+                // t ぁE"23:00"(1380) なら篁E��冁E��E
+                // 営業時間ぁE"18:00"(1080) ~ "26:00"(1560) であれば、t=1380 は篁E��冁E��E
                 
-                // ただし、rule.start ぁE"01:00"(60) で rule.end ぁE"02:00"(120) の場合（深夜�Eみ持E��！E
-                // 営業時間が深夜に及�E場合、t=60 は "翌日の01:00" を指す可能性がある、E
-                // startMinsぁE40(9:00)でeffectiveEndMinsぁE320(22:00)なら、t=60は存在しなぁE��E
+                // ただし、rule.start ぁE"01:00"(60) で rule.end ぁE"02:00"(120) の場合（深夜�Eみ持E��！E
+                // 営業時間が深夜に及�E場合、t=60 は "翌日の01:00" を指す可能性がある、E
+                // startMinsぁE40(9:00)でeffectiveEndMinsぁE320(22:00)なら、t=60は存在しなぁE��E
                 // startMinsぁE080(18:00)でeffectiveEndMinsぁE560(26:00)なら、t=1500(25:00=01:00)が存在する、E
-                // 入力された rule.start(01:00) をどぁE��釈するか�E�E
-                // 通常、「営業時間冁E�E 01:00」とみなすべき、E
-                // => t めE24h正規化した値 (t % 1440) と ruleの時刻を比輁E��る！E
+                // 入力された rule.start(01:00) をどぁE��釈するか�E�E
+                // 通常、「営業時間冁E�E 01:00」とみなすべき、E
+                // => t めE24h正規化した値 (t % 1440) と ruleの時刻を比輁E��る！E
                 
                 // ここではシンプルに、ruleも絶対刁EstartMins基溁Eに変換できればベストだが、E
-                // ruleはただの時刻斁E���E、E
+                // ruleはただの時刻斁E���E、E
                 // 「開始時刻 >= rule.start && 開始時刻 < rule.end、E
                 
                 // A. ruleが日またぎでなぁE(11:00-14:00)
@@ -5098,8 +5098,8 @@ const app = {
                     inRule = (tMod >= rStart || tMod < rEnd);
                 }
                 
-                // さらに、t自体が「営業開始前」�E深夜（早朝）でなぁE��との保証が忁E��だが、E
-                // loop篁E��ぁEstartMins〜effectiveEndMins なのでOK、E
+                // さらに、t自体が「営業開始前」�E深夜（早朝）でなぁE��との保証が忁E��だが、E
+                // loop篁E��ぁEstartMins〜effectiveEndMins なのでOK、E
                 
                 if (inRule) {
                     const current = timeReqs.get(t) || 0;
@@ -5109,7 +5109,7 @@ const app = {
         });
 
         // ---------------------------------------------------------
-        // 2. 現在の允E��状況�EチE�E作�E
+        // 2. 現在の允E��状況�EチE�E作�E
         // ---------------------------------------------------------
         const currentDayNewShifts = [];
         const getAllShifts = () => [...existingShifts, ...generatedShiftsSoFar, ...currentDayNewShifts];
@@ -5161,7 +5161,7 @@ const app = {
         });
 
         // ---------------------------------------------------------
-        // 4. スタチE��リスト�E準備 (ランク頁EA>B>C)
+        // 4. スタチE��リスト�E準備 (ランク頁EA>B>C)
         // ---------------------------------------------------------
         const offStaffIds = this.state.requests
             .filter(r => r.dates === dateStr && (r.type === 'off' || r.type === 'holiday') && r.status === 'approved')
@@ -5182,20 +5182,20 @@ const app = {
         });
 
         // ---------------------------------------------------------
-        // 5. 不足刁E�E允E�� (Gap Filling) - 強化版
+        // 5. 不足刁E�E允E�� (Gap Filling) - 強化版
         // ---------------------------------------------------------
-        const ignoredSlots = new Set(); // 埋められなかったスロチE��を記�Eして無限ループ回避
+        const ignoredSlots = new Set(); // 埋められなかったスロチE��を記�Eして無限ループ回避
 
-        // ループ�E琁E(最大100パス)
+        // ループ�E琁E(最大100パス)
         for (let pass = 0; pass < 100; pass++) {
             const { coverage, managerCoverage } = getCoverage();
             
-            // 不足スロチE��探索
+            // 不足スロチE��探索
             let deficitSlot = -1;
             let missingType = null;
 
             for (let t = startMins; t < effectiveEndMins; t += 15) {
-                if (ignoredSlots.has(t)) continue; // 諦めたスロチE��はスキチE�E
+                if (ignoredSlots.has(t)) continue; // 諦めたスロチE��はスキチE�E
 
                 if (managerCoverage.get(t) < timeReqManager.get(t)) {
                     deficitSlot = t;
@@ -5209,7 +5209,7 @@ const app = {
                 }
             }
 
-            if (deficitSlot === -1) break; // 全允E�� (また�E全て諦めた)
+            if (deficitSlot === -1) break; // 全允E�� (また�E全て諦めた)
 
             let shiftAddedOrExtended = false;
             
@@ -5223,18 +5223,18 @@ const app = {
             for (const s of currentDayNewShifts) {
                 const sEnd = toMins(s.end_time) + (s.end_time < s.start_time ? 24*60 : 0);
                 
-                // ギャチE�EぁE0刁E��冁E��ら結合対象
+                // ギャチE�EぁE0刁E��冁E��ら結合対象
                 if (sEnd <= deficitSlot && (deficitSlot - sEnd) <= 60) {
                     const staff = this.getStaff(s.staff_id);
                     if (roleFilter && !roleFilter(staff)) continue;
 
                     const maxMins = (Number(staff.max_hours_day) || 8) * 60;
-                    // 延長後�E終亁E��閁E(最低でもdeficitを埋めるために+3h)
+                    // 延長後�E終亁E��閁E(最低でもdeficitを埋めるために+3h)
                     const newEndMins = Math.min(deficitSlot + 180, effectiveEndMins);
                     const sStart = toMins(s.start_time);
                     const newDurMins = newEndMins - sStart;
 
-                    // 通常上限冁E��あれば延長
+                    // 通常上限冁E��あれば延長
                     if (newDurMins <= maxMins) {
                         s.end_time = fromMins(newEndMins);
                         if (newDurMins > 480) s.break_minutes = 60; else if (newDurMins > 360) s.break_minutes = 45;
@@ -5254,7 +5254,7 @@ const app = {
                 const maxH = Number(candidate.max_hours_day) || 8;
                 const dur = Math.min(480, maxH * 60);
                 const endT = Math.min(deficitSlot + dur, effectiveEndMins);
-                // オーバ�Eタイム許可なぁE第4引数省略)で作�E
+                // オーバ�Eタイム許可なぁE第4引数省略)で作�E
                 const newShift = this.createShiftObject(candidate.id, dateStr, fromMins(deficitSlot), fromMins(endT));
                 currentDayNewShifts.push(newShift);
                 shiftAddedOrExtended = true;
@@ -5293,7 +5293,7 @@ const app = {
             // まず週制限だけ無視して探ぁE
             candidate = this.findAvailableStaff(sortedStaff, dateStr, getAllShifts(), roleFilter, { timeRange: reqTimeRange, ignoreWeekLimit: true });
             
-            // それでもいなければ、E��褁E��外なんでもあめE(Manager欠員など深刻な場吁E
+            // それでもいなければ、E��褁E��外なんでもあめE(Manager欠員など深刻な場吁E
             if (!candidate) {
                  candidate = this.findAvailableStaff(sortedStaff, dateStr, getAllShifts(), roleFilter, { 
                      timeRange: reqTimeRange, ignoreWeekLimit: true, ignoreOverlap: false 
@@ -5302,12 +5302,12 @@ const app = {
 
             if (candidate) {
                 const maxH = Number(candidate.max_hours_day) || 8;
-                // 緊急時�E+3hまで許容
+                // 緊急時�E+3hまで許容
                 const limitMins = Math.min((maxH + 3) * 60, 660);
                 const dur = Math.min(480, limitMins);
                 const endT = Math.min(deficitSlot + dur, effectiveEndMins);
                 
-                // createShiftObjectにオーバ�Eタイム許可フラグ(true)を渡ぁE
+                // createShiftObjectにオーバ�Eタイム許可フラグ(true)を渡ぁE
                 const newShift = this.createShiftObject(candidate.id, dateStr, fromMins(deficitSlot), fromMins(endT), true);
                 currentDayNewShifts.push(newShift);
                 shiftAddedOrExtended = true;
@@ -5326,7 +5326,7 @@ const app = {
     findAvailableStaff(staffList, dateStr, allShiftsContext, filterFn = null, options = {}) {
         const { ignoreWeekLimit = false, timeRange = null } = options;
         
-        // 日付篁E��計箁E
+        // 日付篁E��計箁E
         const dateObj = new Date(dateStr.replace(/-/g, '/'));
         const day = dateObj.getDay();
         const startOfWeek = new Date(dateObj);
@@ -5342,13 +5342,13 @@ const app = {
             // 基本フィルター
             if (filterFn && !filterFn(staff)) continue;
 
-            // 1. 休み希望チェチE��
+            // 1. 休み希望チェチE��
             const isOff = this.state.requests.some(r => 
                 r.staff_id === staff.id && r.dates === dateStr && (r.type === 'off' || r.type === 'holiday') && r.status === 'approved'
             );
             if (isOff && !ignoreWeekLimit) continue; 
 
-            // 2. 重褁E��ェチE�� & 勤務時閁E
+            // 2. 重褁E��ェチE�� & 勤務時閁E
             const dailyShifts = allShiftsContext.filter(s => s.staff_id === staff.id && s.date === dateStr);
             
             if (timeRange) {
@@ -5389,7 +5389,7 @@ const app = {
             
             if (currentMins + newDur > limitMins) continue;
 
-            // 4. 週勤務日数チェチE��
+            // 4. 週勤務日数チェチE��
             if (!ignoreWeekLimit) {
                 const weekShifts = allShiftsContext.filter(s => s.staff_id === staff.id && s.date >= startStr && s.date <= endStr);
                 const workedDays = new Set(weekShifts.map(s => s.date)).size;
@@ -5407,15 +5407,15 @@ const app = {
     createShiftObject(staffId, date, start, end, allowOvertime = false) {
         if (!staffId || !date || !start || !end) {
             console.warn('Shift creation skipped due to missing data', { staffId, date, start, end });
-            // ダミ�Eを返してエラーを防ぐが、保存時に除外されるようにする�E�あるいはバリチE�Eションで弾く！E
+            // ダミ�Eを返してエラーを防ぐが、保存時に除外されるようにする�E�あるいはバリチE�Eションで弾く！E
             return { staff_id: staffId, date, start_time: start || '00:00', end_time: end || '00:00', break_minutes: 0, _invalid: true };
         }
 
-        // --- スタチE��の勤務時間を厳格に守るためのファイヤーウォール ---
+        // --- スタチE��の勤務時間を厳格に守るためのファイヤーウォール ---
         const staff = this.getStaff(staffId);
         let maxHours = (staff && staff.max_hours_day) ? Number(staff.max_hours_day) : 8;
         
-        // オーバ�Eタイム許可時�E最大11時間まで拡張
+        // オーバ�Eタイム許可時�E最大11時間まで拡張
         if (allowOvertime) {
             maxHours = Math.min(maxHours + 3, 11);
         }
@@ -5429,31 +5429,31 @@ const app = {
 
         let duration = (endDate - startDate) / 3600000;
 
-        // 最大勤務時間を趁E��てぁE��場合、強制皁E��短縮する
+        // 最大勤務時間を趁E��てぁE��場合、強制皁E��短縮する
         if (duration > maxHours) {
-            // 短縮ロジチE��:
-            // 基本皁E��は「終亁E��間を早める」ことで調整する、E
-            // ただし、�Eのシフトが「遅番�E�侁E 17-22�E�」�Eような場合、E
-            // 、E7-20 (早上がめE」にするか、E9-22 (遁E�EめE」にするか�E斁E��による、E
-            // ここでは安�E策として「終亁E��間を基準」に調整�E�遅入り）するロジチE��を採用するケースも老E�EしたぁE��、E
-            // 最も汎用皁E��のは「開始時間を維持して早上がり」させることである、E
-            // しかし、ユーザーの苦惁E��E7-22シフト」に対し、E時間制限」がある場合、E
-            // 17-20になる�Eが�E然、E
+            // 短縮ロジチE��:
+            // 基本皁E��は「終亁E��間を早める」ことで調整する、E
+            // ただし、�Eのシフトが「遅番�E�侁E 17-22�E�」�Eような場合、E
+            // 、E7-20 (早上がめE」にするか、E9-22 (遁E�EめE」にするか�E斁E��による、E
+            // ここでは安�E策として「終亁E��間を基準」に調整�E�遅入り）するロジチE��を採用するケースも老E�EしたぁE��、E
+            // 最も汎用皁E��のは「開始時間を維持して早上がり」させることである、E
+            // しかし、ユーザーの苦惁E��E7-22シフト」に対し、E時間制限」がある場合、E
+            // 17-20になる�Eが�E然、E
             
-            // 例外対忁E もしシフトが「店�Eの閉店時閁Econfig.closing_time)」と一致して終わる場合、E
-            // 「ラストまで」とぁE��意味合いが強ぁE��め、「開始時間を遁E��せる」ほぁE��適刁E��もしれなぁE��E
-            // が、configへのアクセスが褁E��になるため、ここではシンプルに
-            // 「開始時間を維持し、終亁E��間をmaxHours後に設定する」方式で統一し、E
-            // 絶対にmaxHoursを趁E��なぁE��とを保証する、E
+            // 例外対忁E もしシフトが「店�Eの閉店時閁Econfig.closing_time)」と一致して終わる場合、E
+            // 「ラストまで」とぁE��意味合いが強ぁE��め、「開始時間を遁E��せる」ほぁE��適刁E��もしれなぁE��E
+            // が、configへのアクセスが褁E��になるため、ここではシンプルに
+            // 「開始時間を維持し、終亁E��間をmaxHours後に設定する」方式で統一し、E
+            // 絶対にmaxHoursを趁E��なぁE��とを保証する、E
             
-            // もし呼び出し�Eで「遅番だから遁E��始めてほしい」場合�E、E
-            // 呼び出し�Eで時間を計算して渡すべきである、E
-            // ここは「最終防衛ライン」として機�Eさせる、E
+            // もし呼び出し�Eで「遅番だから遁E��始めてほしい」場合�E、E
+            // 呼び出し�Eで時間を計算して渡すべきである、E
+            // ここは「最終防衛ライン」として機�Eさせる、E
 
             const newEndMillis = startDate.getTime() + (maxHours * 3600000);
             endDate = new Date(newEndMillis);
             
-            // end斁E���Eを�E生�E (HH:mm)
+            // end斁E���Eを�E生�E (HH:mm)
             end = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
             
             // 再計箁E
@@ -5461,9 +5461,9 @@ const app = {
         }
 
         let breakMins = 0;
-        // 設定された休�Eルールを適用
+        // 設定された休�Eルールを適用
         const rules = this.state.config.break_rules || this.state.defaultConfig.break_rules;
-        // 降頁E��ソートして、最大の条件に合�Eするも�Eを適用
+        // 降頁E��ソートして、最大の条件に合�Eするも�Eを適用
         const sortedRules = [...rules].sort((a,b) => b.min_hours - a.min_hours);
         
         for(const rule of sortedRules) {
@@ -5481,60 +5481,60 @@ const app = {
         if (!this.state.isAdmin) { this.changeView('dashboard'); return; }
         container.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6 pb-20">
-            <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-book mr-2 text-indigo-500"></i>シスチE��マニュアル</h2>
+            <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-book mr-2 text-indigo-500"></i>シスチE��マニュアル</h2>
 
             <!-- 目次 -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="font-bold text-gray-800 mb-3">目次</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                    <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定�E重要性</a>
+                    <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定�E重要性</a>
                     <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
-                    <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタチE��評価 (A〜D)</a>
-                    <a href="#m-shift" class="text-indigo-600 hover:underline">3. AIシフト作�E</a>
+                    <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタチE��評価 (A〜D)</a>
+                    <a href="#m-shift" class="text-indigo-600 hover:underline">3. AIシフト作�E</a>
                     <a href="#m-labor" class="text-indigo-600 hover:underline">4. 労働基準法ルール</a>
-                    <a href="#m-break" class="text-indigo-600 hover:underline">5. 休�Eルール</a>
+                    <a href="#m-break" class="text-indigo-600 hover:underline">5. 休�Eルール</a>
                     <a href="#m-request" class="text-indigo-600 hover:underline">6. 休み希望</a>
-                    <a href="#m-settings" class="text-indigo-600 hover:underline">7. 店�E設宁E/a>
+                    <a href="#m-settings" class="text-indigo-600 hover:underline">7. 店�E設宁E/a>
                     <a href="#m-plan" class="text-indigo-600 hover:underline">8. プラン・課釁E/a>
-                    <a href="#m-auth" class="text-indigo-600 hover:underline">9. 権陁E(管琁E��EスタチE��)</a>
-                    <a href="#m-analytics" class="text-indigo-600 hover:underline">10. 刁E��・レポ�EチE/a>
-                    <a href="#m-other" class="text-indigo-600 hover:underline">11. そ�E他機�E</a>
+                    <a href="#m-auth" class="text-indigo-600 hover:underline">9. 権陁E(管琁E��EスタチE��)</a>
+                    <a href="#m-analytics" class="text-indigo-600 hover:underline">10. 刁E��・レポ�EチE/a>
+                    <a href="#m-other" class="text-indigo-600 hover:underline">11. そ�E他機�E</a>
                 </div>
             </div>
 
-            <!-- 設定�E重要性 -->
+            <!-- 設定�E重要性 -->
             <div id="m-important" class="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl shadow-sm border-2 border-red-300 p-6">
-                <h3 class="text-lg font-bold text-red-700 mb-3"><i class="fa-solid fa-triangle-exclamation mr-2"></i>設定�E重要性  EAIシフト精度を最大化するために</h3>
+                <h3 class="text-lg font-bold text-red-700 mb-3"><i class="fa-solid fa-triangle-exclamation mr-2"></i>設定�E重要性  EAIシフト精度を最大化するために</h3>
                 <div class="bg-white/80 rounded-lg p-4 mb-4">
-                    <p class="text-sm text-gray-800 font-bold mb-2">ラクシフトAIのシフト精度は「設定�E正確さ」に直結します、E/p>
-                    <p class="text-sm text-gray-600">AIは設定された惁E��だけを允E��最適なシフトを絁E��ます。設定が不十刁E��と、偏った�E置めE��抜けの原因になります。以下�E設定を忁E��確認してください、E/p>
+                    <p class="text-sm text-gray-800 font-bold mb-2">ラクシフトAIのシフト精度は「設定�E正確さ」に直結します、E/p>
+                    <p class="text-sm text-gray-600">AIは設定された惁E��だけを允E��最適なシフトを絁E��ます。設定が不十刁E��と、偏った�E置めE��抜けの原因になります。以下�E設定を忁E��確認してください、E/p>
                 </div>
 
                 <div class="space-y-4">
                     <div class="bg-white rounded-lg p-4 border border-orange-200">
-                        <h4 class="font-bold text-orange-700 mb-2"><i class="fa-solid fa-user-gear mr-1"></i>スタチE��設定（最重要E��E/h4>
+                        <h4 class="font-bold text-orange-700 mb-2"><i class="fa-solid fa-user-gear mr-1"></i>スタチE��設定（最重要E��E/h4>
                         <table class="w-full text-sm border-collapse">
-                            <thead><tr class="bg-orange-50"><th class="p-2 text-left border">設定頁E��</th><th class="p-2 text-left border">説昁E/th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
+                            <thead><tr class="bg-orange-50"><th class="p-2 text-left border">設定頁E��</th><th class="p-2 text-left border">説昁E/th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
                             <tbody>
-                                <tr><td class="p-2 border font-bold">週最大出勤日数</td><td class="p-2 border">1週間に最大何日働けるか</td><td class="p-2 border text-red-600">チE��ォルチE日になり、バイトに過剰配置されめE/td></tr>
-                                <tr><td class="p-2 border font-bold">週最低�E勤日数</td><td class="p-2 border">1週間に最低何日は入りたぁE��</td><td class="p-2 border text-red-600">0日扱ぁE��シフトに入らなぁE��合がある</td></tr>
-                                <tr><td class="p-2 border font-bold">1日の最大労働時閁E/td><td class="p-2 border">1日に最大何時間働けるぁE/td><td class="p-2 border text-red-600">8時間扱ぁE��短時間バイトが長時間シフトに入めE/td></tr>
-                                <tr><td class="p-2 border font-bold">役職</td><td class="p-2 border">店長/リーダー/スタチE��/新人</td><td class="p-2 border text-red-600">OJT制紁E��メンター配置が機�EしなぁE/td></tr>
-                                <tr><td class="p-2 border font-bold">評価 (A〜D)</td><td class="p-2 border">スキルレベル</td><td class="p-2 border text-red-600">チ�Eム戦力バランスが偏めE/td></tr>
-                                <tr><td class="p-2 border font-bold">給与形慁E/td><td class="p-2 border">月給制 or 時給制</td><td class="p-2 border text-red-600">月給スタチE��が優先�E置されず人件費が増大</td></tr>
+                                <tr><td class="p-2 border font-bold">週最大出勤日数</td><td class="p-2 border">1週間に最大何日働けるか</td><td class="p-2 border text-red-600">チE��ォルチE日になり、バイトに過剰配置されめE/td></tr>
+                                <tr><td class="p-2 border font-bold">週最低�E勤日数</td><td class="p-2 border">1週間に最低何日は入りたぁE��</td><td class="p-2 border text-red-600">0日扱ぁE��シフトに入らなぁE��合がある</td></tr>
+                                <tr><td class="p-2 border font-bold">1日の最大労働時閁E/td><td class="p-2 border">1日に最大何時間働けるぁE/td><td class="p-2 border text-red-600">8時間扱ぁE��短時間バイトが長時間シフトに入めE/td></tr>
+                                <tr><td class="p-2 border font-bold">役職</td><td class="p-2 border">店長/リーダー/スタチE��/新人</td><td class="p-2 border text-red-600">OJT制紁E��メンター配置が機�EしなぁE/td></tr>
+                                <tr><td class="p-2 border font-bold">評価 (A〜D)</td><td class="p-2 border">スキルレベル</td><td class="p-2 border text-red-600">チ�Eム戦力バランスが偏めE/td></tr>
+                                <tr><td class="p-2 border font-bold">給与形慁E/td><td class="p-2 border">月給制 or 時給制</td><td class="p-2 border text-red-600">月給スタチE��が優先�E置されず人件費が増大</td></tr>
                             </tbody>
                         </table>
                     </div>
 
                     <div class="bg-white rounded-lg p-4 border border-blue-200">
-                        <h4 class="font-bold text-blue-700 mb-2"><i class="fa-solid fa-store mr-1"></i>店�E設定（重要E��E/h4>
+                        <h4 class="font-bold text-blue-700 mb-2"><i class="fa-solid fa-store mr-1"></i>店�E設定（重要E��E/h4>
                         <table class="w-full text-sm border-collapse">
-                            <thead><tr class="bg-blue-50"><th class="p-2 text-left border">設定頁E��</th><th class="p-2 text-left border">説昁E/th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
+                            <thead><tr class="bg-blue-50"><th class="p-2 text-left border">設定頁E��</th><th class="p-2 text-left border">説昁E/th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
                             <tbody>
-                                <tr><td class="p-2 border font-bold">営業時間�E�曜日別�E�E/td><td class="p-2 border">平日/土日/祝日の開店�E閉店時閁E/td><td class="p-2 border text-red-600">閉店後�E時間帯にも人員配置されめE/td></tr>
-                                <tr><td class="p-2 border font-bold">忁E��人員�E�曜日別�E�E/td><td class="p-2 border">平日/土日/祝日の最低�E置人数</td><td class="p-2 border text-red-600">人手不足・過剰配置が発生すめE/td></tr>
-                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遁E��等�E時間チE��プレーチE/td><td class="p-2 border text-red-600">全員が同じ時間帯に雁E��する</td></tr>
-                                <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベ�Eスの休業日</td><td class="p-2 border text-red-600">休業日にシフトが�E置されめE/td></tr>
+                                <tr><td class="p-2 border font-bold">営業時間�E�曜日別�E�E/td><td class="p-2 border">平日/土日/祝日の開店�E閉店時閁E/td><td class="p-2 border text-red-600">閉店後�E時間帯にも人員配置されめE/td></tr>
+                                <tr><td class="p-2 border font-bold">忁E��人員�E�曜日別�E�E/td><td class="p-2 border">平日/土日/祝日の最低�E置人数</td><td class="p-2 border text-red-600">人手不足・過剰配置が発生すめE/td></tr>
+                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遁E��等�E時間チE��プレーチE/td><td class="p-2 border text-red-600">全員が同じ時間帯に雁E��する</td></tr>
+                                <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベ�Eスの休業日</td><td class="p-2 border text-red-600">休業日にシフトが�E置されめE/td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -5542,12 +5542,12 @@ const app = {
                     <div class="bg-green-50 rounded-lg p-4 border border-green-300">
                         <h4 class="font-bold text-green-700 mb-2"><i class="fa-solid fa-lightbulb mr-1"></i>AI精度を最大化するコチE/h4>
                         <ul class="text-sm text-gray-700 space-y-1">
-                            <li>✁E<strong>全スタチE��の勤務制紁E��正確に入劁E/strong>する�E�週最大/最低日数、E日最大時間�E�E/li>
-                            <li>✁E<strong>月給制/時給制を正しく設宁E/strong>する ↁE月給スタチE��が優先�E置され人件費が最適化される</li>
+                            <li>✁E<strong>全スタチE��の勤務制紁E��正確に入劁E/strong>する�E�週最大/最低日数、E日最大時間�E�E/li>
+                            <li>✁E<strong>月給制/時給制を正しく設宁E/strong>する ↁE月給スタチE��が優先�E置され人件費が最適化される</li>
                             <li>✁E<strong>営業時間を曜日別に設宁E/strong>する ↁE土日の短縮営業等が正確に反映されめE/li>
-                            <li>✁E<strong>シフトパターンめEつ以上登録</strong>する ↁEAIが�E動的に中番も生戁E/li>
-                            <li>✁E<strong>忁E��人員を曜日別に設宁E/strong>する ↁE平日と土日の配置バランスが最適化される</li>
-                            <li>✁E<strong>役職と評価を正しく設宁E/strong>する ↁEチ�Eム編成�E質が向上すめE/li>
+                            <li>✁E<strong>シフトパターンめEつ以上登録</strong>する ↁEAIが�E動的に中番も生戁E/li>
+                            <li>✁E<strong>忁E��人員を曜日別に設宁E/strong>する ↁE平日と土日の配置バランスが最適化される</li>
+                            <li>✁E<strong>役職と評価を正しく設宁E/strong>する ↁEチ�Eム編成�E質が向上すめE/li>
                         </ul>
                     </div>
                 </div>
@@ -5557,51 +5557,51 @@ const app = {
             <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">1.</span>役職・ロール</h3>
                 <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生�Eへの影響</th></tr></thead>
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生�Eへの影響</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名�E置忁E��！EIが最優先で配置�E�E/td></tr>
-                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管琁E��E��メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代琁E��して配置可能�E�店長と同等�E権限！E/td></tr>
-                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置�E�月給制の場合�Eコスト計算上有利に働きます！E/td></tr>
-                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任老E��メンター役</td><td class="p-2 border">新人スタチE��の持E��役として重宝されまぁE/td></tr>
-                        <tr><td class="p-2 border font-bold">アルバイチE(Staff)</td><td class="p-2 border">一般スタチE��</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">忁E��メンター�E�店長〜リーダー�E�と同日配置</td></tr>
+                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名�E置忁E��！EIが最優先で配置�E�E/td></tr>
+                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管琁E��E��メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代琁E��して配置可能�E�店長と同等�E権限！E/td></tr>
+                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置�E�月給制の場合�Eコスト計算上有利に働きます！E/td></tr>
+                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任老E��メンター役</td><td class="p-2 border">新人スタチE��の持E��役として重宝されまぁE/td></tr>
+                        <tr><td class="p-2 border font-bold">アルバイチE(Staff)</td><td class="p-2 border">一般スタチE��</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">忁E��メンター�E�店長〜リーダー�E�と同日配置</td></tr>
                     </tbody>
                 </table>
             </div>
 
             <!-- 2. 評価 -->
             <div id="m-eval" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">2.</span>スタチE��評価 (A〜D)</h3>
-                <p class="text-sm text-gray-600 mb-3">評価はAIシフト生�E時�Eチ�Eム編成�E配置優先度に影響します、E/p>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">2.</span>スタチE��評価 (A〜D)</h3>
+                <p class="text-sm text-gray-600 mb-3">評価はAIシフト生�E時�Eチ�Eム編成�E配置優先度に影響します、E/p>
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">評価</th><th class="p-2 text-left border">意味</th><th class="p-2 text-left border">戦力スコア</th><th class="p-2 text-left border">影響</th></tr></thead>
                     <tbody>
-                        <tr class="bg-yellow-50"><td class="p-2 border font-bold text-yellow-700">A</td><td class="p-2 border">優秀</td><td class="p-2 border">3.0</td><td class="p-2 border">優先的に配置、�EナルチE��なぁE/td></tr>
+                        <tr class="bg-yellow-50"><td class="p-2 border font-bold text-yellow-700">A</td><td class="p-2 border">優秀</td><td class="p-2 border">3.0</td><td class="p-2 border">優先的に配置、�EナルチE��なぁE/td></tr>
                         <tr class="bg-blue-50"><td class="p-2 border font-bold text-blue-700">B</td><td class="p-2 border">良好</td><td class="p-2 border">2.0</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold text-gray-500">C</td><td class="p-2 border">普送E/td><td class="p-2 border">1.0</td><td class="p-2 border">めE��控えめに配置</td></tr>
-                        <tr class="bg-red-50"><td class="p-2 border font-bold text-red-600">D</td><td class="p-2 border">研修中・要指封E/td><td class="p-2 border">0.5</td><td class="p-2 border">メンター忁E��、単独配置不可</td></tr>
+                        <tr><td class="p-2 border font-bold text-gray-500">C</td><td class="p-2 border">普送E/td><td class="p-2 border">1.0</td><td class="p-2 border">めE��控えめに配置</td></tr>
+                        <tr class="bg-red-50"><td class="p-2 border font-bold text-red-600">D</td><td class="p-2 border">研修中・要指封E/td><td class="p-2 border">0.5</td><td class="p-2 border">メンター忁E��、単独配置不可</td></tr>
                     </tbody>
                 </table>
-                <p class="text-xs text-gray-400 mt-2">※ チ�Eム全体�E戦力スコアが基準を満たすようAIが�E動調整しまぁE/p>
+                <p class="text-xs text-gray-400 mt-2">※ チ�Eム全体�E戦力スコアが基準を満たすようAIが�E動調整しまぁE/p>
             </div>
 
-            <!-- 3. AIシフト作�E -->
+            <!-- 3. AIシフト作�E -->
             <div id="m-shift" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">3.</span>AIシフト作�E</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">3.</span>AIシフト作�E</h3>
                 <div class="space-y-3 text-sm text-gray-700">
-                    <p><strong>「AIシフト作�E」�Eタン1つ</strong>で以下が自動実行されまぁE</p>
+                    <p><strong>「AIシフト作�E」�Eタン1つ</strong>で以下が自動実行されまぁE</p>
                     <ol class="list-decimal list-inside space-y-1 ml-2">
-                        <li>スタチE��の条件・希望休�E週勤務日数を読み込み</li>
-                        <li>Python数琁E��適化エンジン(PuLP)でベ�Eスシフト生�E</li>
-                        <li>AI(Gemini)が労基法チェチE��・違反修正・最適匁E/li>
-                        <li>シフト保存�EAI診断レポ�Eト表示</li>
+                        <li>スタチE��の条件・希望休�E週勤務日数を読み込み</li>
+                        <li>Python数琁E��適化エンジン(PuLP)でベ�Eスシフト生�E</li>
+                        <li>AI(Gemini)が労基法チェチE��・違反修正・最適匁E/li>
+                        <li>シフト保存�EAI診断レポ�Eト表示</li>
                     </ol>
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
-                        <p class="text-xs text-blue-700"><strong>作�E篁E��の選択肢:</strong></p>
+                        <p class="text-xs text-blue-700"><strong>作�E篁E��の選択肢:</strong></p>
                         <ul class="text-xs text-blue-600 mt-1 space-y-0.5">
                             <li>・今月の空きシフトのみ埋めめE/li>
-                            <li>・来週刁E��作�E</li>
-                            <li>・現在のシフトをリセチE��して再構篁E/li>
+                            <li>・来週刁E��作�E</li>
+                            <li>・現在のシフトをリセチE��して再構篁E/li>
                         </ul>
                     </div>
                 </div>
@@ -5609,27 +5609,27 @@ const app = {
 
             <!-- 4. 労基況E-->
             <div id="m-labor" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>労働基準法ルール�E��E動�E守！E/h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>労働基準法ルール�E��E動�E守！E/h3>
                 <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条頁E/th><th class="p-2 text-left border">冁E��</th><th class="p-2 text-left border">シスチE��の制御</th></tr></thead>
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条頁E/th><th class="p-2 text-left border">冁E��</th><th class="p-2 text-left border">シスチE��の制御</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border">労基況E2条</td><td class="p-2 border">1日8時間以冁E/td><td class="p-2 border">スタチE��個別設定で上書き可</td></tr>
+                        <tr><td class="p-2 border">労基況E2条</td><td class="p-2 border">1日8時間以冁E/td><td class="p-2 border">スタチE��個別設定で上書き可</td></tr>
                         <tr><td class="p-2 border">労基況E2条</td><td class="p-2 border">週40時間以冁E/td><td class="p-2 border">自動計算で制陁E/td></tr>
-                        <tr><td class="p-2 border">労基況E4条</td><td class="p-2 border">6h趁E�E45刁E���E、Eh趁E�E60刁E���E</td><td class="p-2 border">自動付与（設定変更可�E�E/td></tr>
-                        <tr><td class="p-2 border">労基況E5条</td><td class="p-2 border">週1日以上�E休日�E�連綁E日まで�E�E/td><td class="p-2 border">自動�E宁E/td></tr>
+                        <tr><td class="p-2 border">労基況E4条</td><td class="p-2 border">6h趁E�E45刁E���E、Eh趁E�E60刁E���E</td><td class="p-2 border">自動付与（設定変更可�E�E/td></tr>
+                        <tr><td class="p-2 border">労基況E5条</td><td class="p-2 border">週1日以上�E休日�E�連綁E日まで�E�E/td><td class="p-2 border">自動�E宁E/td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- 5. 休�Eルール -->
+            <!-- 5. 休�Eルール -->
             <div id="m-break" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休�Eルール</h3>
-                <p class="text-sm text-gray-600 mb-2">シフト作�E時に勤務時間から�E動計算されます。店�E設定で変更可能です、E/p>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休�Eルール</h3>
+                <p class="text-sm text-gray-600 mb-2">シフト作�E時に勤務時間から�E動計算されます。店�E設定で変更可能です、E/p>
                 <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">勤務時閁E/th><th class="p-2 text-left border">休�E時間</th></tr></thead>
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">勤務時閁E/th><th class="p-2 text-left border">休�E時間</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border">6時間趁E/td><td class="p-2 border">45刁E��丁E/td></tr>
-                        <tr><td class="p-2 border">8時間趁E/td><td class="p-2 border">60刁E��丁E/td></tr>
+                        <tr><td class="p-2 border">6時間趁E/td><td class="p-2 border">45刁E��丁E/td></tr>
+                        <tr><td class="p-2 border">8時間趁E/td><td class="p-2 border">60刁E��丁E/td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5638,60 +5638,60 @@ const app = {
             <div id="m-request" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">6.</span>休み希望</h3>
                 <div class="space-y-2 text-sm text-gray-700">
-                    <p><strong>スタチE��側:</strong> カレンダーから褁E��日をタチE�E選択�E「休み希望を提出、E/p>
-                    <p><strong>管琁E��E�E:</strong> 申請リストで確認�E承誁E却丁E/p>
-                    <p><strong>承認された休み希望</strong>はAIシフト作�E時に自動反映され、その日にはシフトが�E置されません、E/p>
+                    <p><strong>スタチE��側:</strong> カレンダーから褁E��日をタチE�E選択�E「休み希望を提出、E/p>
+                    <p><strong>管琁E��E�E:</strong> 申請リストで確認�E承誁E却丁E/p>
+                    <p><strong>承認された休み希望</strong>はAIシフト作�E時に自動反映され、その日にはシフトが�E置されません、E/p>
                     <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                        <p class="text-xs text-amber-700"><strong>ポインチE</strong> 勤務日数はスタチE��の「週最大勤務日数」設定で自動管琁E��れます。休み希望は追加の休日持E��です、E/p>
+                        <p class="text-xs text-amber-700"><strong>ポインチE</strong> 勤務日数はスタチE��の「週最大勤務日数」設定で自動管琁E��れます。休み希望は追加の休日持E��です、E/p>
                     </div>
                 </div>
             </div>
 
-            <!-- 7. 店�E設宁E-->
+            <!-- 7. 店�E設宁E-->
             <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>店�E設宁E/h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>店�E設宁E/h3>
                 <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
-                    <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店�E設定�EAIシフトの品質に直結します。忁E��正確に設定してください、E/p>
+                    <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店�E設定�EAIシフトの品質に直結します。忁E��正確に設定してください、E/p>
                 </div>
                 <div class="space-y-4 text-sm text-gray-700">
                     
                     <div class="border-l-4 border-indigo-400 pl-4 py-1">
                         <h4 class="font-bold text-indigo-700 text-base mb-1">1. 役職・ロール設宁E/h4>
-                        <p>スタチE��の肩書き（店長・副店長・社員など�E�を自由にカスタマイズし、バチE��の色を設定できます。また、各役職がシスチE��の裏�Eでどの「識別ID�E�Eanager/Sub-Manager/Staffなど�E�」として扱われるかを決定します、E/p>
-                        <p class="text-xs text-gray-500 mt-1">※AIは「Manager」や「Sub-Manager」を管琁E��E��して扱ぁE��店�Eを空にしなぁE��ぁE��E��配置します、E/p>
+                        <p>スタチE��の肩書き（店長・副店長・社員など�E�を自由にカスタマイズし、バチE��の色を設定できます。また、各役職がシスチE��の裏�Eでどの「識別ID�E�Eanager/Sub-Manager/Staffなど�E�」として扱われるかを決定します、E/p>
+                        <p class="text-xs text-gray-500 mt-1">※AIは「Manager」や「Sub-Manager」を管琁E��E��して扱ぁE��店�Eを空にしなぁE��ぁE��E��配置します、E/p>
                     </div>
 
                     <div class="border-l-4 border-teal-400 pl-4 py-1">
-                        <h4 class="font-bold text-teal-700 text-base mb-1">1.5. ポジション設定（重要E��E/h4>
-                        <p>店�E冁E�E役割�E��Eール・キチE��ン・チE��バリーなど�E�をスペ�EスめE��点等で区刁E��て自由に設定できます、E/p>
-                        <p class="text-xs text-red-600 font-bold mt-1">※注愁E 稼働中にポジション名を変更・削除すると、E��去そ�EポジションだったスタチE��は「指定なぁE(全般)」扱ぁE��なるため、なるべく�E期設定で確定させてください、E/p>
+                        <h4 class="font-bold text-teal-700 text-base mb-1">1.5. ポジション設定（重要E��E/h4>
+                        <p>店�E冁E�E役割�E��Eール・キチE��ン・チE��バリーなど�E�をスペ�EスめE��点等で区刁E��て自由に設定できます、E/p>
+                        <p class="text-xs text-red-600 font-bold mt-1">※注愁E 稼働中にポジション名を変更・削除すると、E��去そ�EポジションだったスタチE��は「指定なぁE(全般)」扱ぁE��なるため、なるべく�E期設定で確定させてください、E/p>
                     </div>
                     
                     <div class="border-l-4 border-blue-400 pl-4 py-1">
-                        <h4 class="font-bold text-blue-700 text-base mb-1">2. 営業時間 �E�E定休日</h4>
-                        <p>平日・土日・祝日ごとに開庁E閉店時間を設定します。未設定だと全日同一営業時間で計算されます、Ebr>定休日�E�毎週水曜など�E�を設定すると、AIはそ�E曜日には一刁E��フトを�Eれません、E/p>
+                        <h4 class="font-bold text-blue-700 text-base mb-1">2. 営業時間 �E�E定休日</h4>
+                        <p>平日・土日・祝日ごとに開庁E閉店時間を設定します。未設定だと全日同一営業時間で計算されます、Ebr>定休日�E�毎週水曜など�E�を設定すると、AIはそ�E曜日には一刁E��フトを�Eれません、E/p>
                     </div>
 
                     <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-base mb-1">3. ベ�Eスの人員設定！E日あたり！E/h4>
-                        <p><strong>管琁E��E�E忁E��人数:</strong> 「店長・副店長」とぁE��た管琁E��E��、E日に最低何人忁E��かを設定します、Ebr>
-                        <strong>全体�E最低人数:</strong> 平日・土日・祝日ごとの最低�E置人数。これがシフト表の「人員状況」アラート�E基準値になります、E/p>
+                        <h4 class="font-bold text-orange-700 text-base mb-1">3. ベ�Eスの人員設定！E日あたり！E/h4>
+                        <p><strong>管琁E��E�E忁E��人数:</strong> 「店長・副店長」とぁE��た管琁E��E��、E日に最低何人忁E��かを設定します、Ebr>
+                        <strong>全体�E最低人数:</strong> 平日・土日・祝日ごとの最低�E置人数。これがシフト表の「人員状況」アラート�E基準値になります、E/p>
                     </div>
 
                     <div class="border-l-4 border-red-500 pl-4 py-1">
-                        <h4 class="font-bold text-red-700 text-base mb-1">4. 時間帯別・曜日別 人員増強�E�ピンポイント指定！E/h4>
-                        <p>「毎週金曜日の17:00、E2:00は、�Eールを！E名増やしたぁE��とぁE��たピンポイントなルールの追加が可能です、Ebr>
-                        設定されたルールはAIの計算エンジンに最優先で絁E��込まれ、�Eジションごとの過不足を完璧に防ぎます、E/p>
+                        <h4 class="font-bold text-red-700 text-base mb-1">4. 時間帯別・曜日別 人員増強�E�ピンポイント指定！E/h4>
+                        <p>「毎週金曜日の17:00、E2:00は、�Eールを！E名増やしたぁE��とぁE��たピンポイントなルールの追加が可能です、Ebr>
+                        設定されたルールはAIの計算エンジンに最優先で絁E��込まれ、�Eジションごとの過不足を完璧に防ぎます、E/p>
                     </div>
                     
                     <div class="border-l-4 border-purple-400 pl-4 py-1">
                         <h4 class="font-bold text-purple-700 text-base mb-1">5. シフトパターンの設宁E/h4>
-                        <p>「早番�E�E9:00、E8:00�E�」「遅番�E�E3:00、E2:00�E�」などの時間チE��プレートです、Estrong>2つ以上登録するとAIが�E動的に間を埋める中番パターンも生戁E/strong>し、時間帯の穴抜けを柔軟に防ぎます、E/p>
+                        <p>「早番�E�E9:00、E8:00�E�」「遅番�E�E3:00、E2:00�E�」などの時間チE��プレートです、Estrong>2つ以上登録するとAIが�E動的に間を埋める中番パターンも生戁E/strong>し、時間帯の穴抜けを柔軟に防ぎます、E/p>
                     </div>
 
                     <div class="border-l-4 border-green-400 pl-4 py-1">
-                        <h4 class="font-bold text-green-700 text-base mb-1">6. 休�Eルールの設宁E/h4>
-                        <p>「、E��E��間以上�E勤務なら、E��E�Eの休�Eを与える」とぁE��ルールです。労働基準法に剁E��、E時間趁E��45刁E��E時間趁E��60刁E��チE��ォルトで設定されてぁE��す、E/p>
+                        <h4 class="font-bold text-green-700 text-base mb-1">6. 休�Eルールの設宁E/h4>
+                        <p>「、E��E��間以上�E勤務なら、E��E�Eの休�Eを与える」とぁE��ルールです。労働基準法に剁E��、E時間趁E��45刁E��E時間趁E��60刁E��チE��ォルトで設定されてぁE��す、E/p>
                     </div>
                 </div>
             </div>
@@ -5700,75 +5700,75 @@ const app = {
             <div id="m-plan" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">8.</span>プラン・課釁E/h3>
                 <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月顁E/th><th class="p-2 text-left border">スタチE��上限</th><th class="p-2 text-left border">機�E</th></tr></thead>
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月顁E/th><th class="p-2 text-left border">スタチE��上限</th><th class="p-2 text-left border">機�E</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">3,380冁E/td><td class="p-2 border">10吁E/td><td class="p-2 border">全AI機�E・シフト管琁E�E機�E</td></tr>
-                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880冁E/td><td class="p-2 border">50吁E/td><td class="p-2 border">+ 優先サポ�Eト�E刁E��レポ�EチE/td></tr>
-                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980冁E/td><td class="p-2 border">無制陁E/td><td class="p-2 border">+ 褁E��店�E対応�E専属サポ�EチE/td></tr>
+                        <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">3,380冁E/td><td class="p-2 border">10吁E/td><td class="p-2 border">全AI機�E・シフト管琁E�E機�E</td></tr>
+                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880冁E/td><td class="p-2 border">50吁E/td><td class="p-2 border">+ 優先サポ�Eト�E刁E��レポ�EチE/td></tr>
+                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980冁E/td><td class="p-2 border">無制陁E/td><td class="p-2 border">+ 褁E��店�E対応�E専属サポ�EチE/td></tr>
                     </tbody>
                 </table>
                 <div class="mt-3 space-y-1 text-xs text-gray-500">
-                    <p>・上限趁E��時�EスタチE��追加・シフト作�EがブロチE��されまぁE/p>
-                    <p>・ダウングレード時、趁E��刁E�EスタチE��を削除するまでシフト作�E不可</p>
-                    <p>・解紁E��もチE�Eタは6ヶ月間保持されまぁE/p>
+                    <p>・上限趁E��時�EスタチE��追加・シフト作�EがブロチE��されまぁE/p>
+                    <p>・ダウングレード時、趁E��刁E�EスタチE��を削除するまでシフト作�E不可</p>
+                    <p>・解紁E��もチE�Eタは6ヶ月間保持されまぁE/p>
                     <p>・決済不備から3週間未対応でサービス一時停止</p>
                 </div>
             </div>
 
             <!-- 9. 権陁E-->
             <div id="m-auth" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">9.</span>権陁E(管琁E��E/ スタチE��)</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">9.</span>権陁E(管琁E��E/ スタチE��)</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
-                        <h4 class="font-bold text-green-600 mb-2">管琁E��E��できること</h4>
+                        <h4 class="font-bold text-green-600 mb-2">管琁E��E��できること</h4>
                         <ul class="space-y-1 text-gray-700">
-                            <li>・AIシフト作�E</li>
-                            <li>・シフトの手動編雁E�EドラチE��移勁E/li>
-                            <li>・スタチE��の追加・編雁E�E削除</li>
-                            <li>・休み希望の承認�E却丁E/li>
-                            <li>・店�E設定�E変更</li>
-                            <li>・刁E��レポ�Eト�E閲覧</li>
+                            <li>・AIシフト作�E</li>
+                            <li>・シフトの手動編雁E�EドラチE��移勁E/li>
+                            <li>・スタチE��の追加・編雁E�E削除</li>
+                            <li>・休み希望の承認�E却丁E/li>
+                            <li>・店�E設定�E変更</li>
+                            <li>・刁E��レポ�Eト�E閲覧</li>
                             <li>・プラン変更</li>
-                            <li>・こ�Eマニュアルの閲覧</li>
+                            <li>・こ�Eマニュアルの閲覧</li>
                         </ul>
                     </div>
                     <div>
-                        <h4 class="font-bold text-blue-600 mb-2">スタチE��ができること</h4>
+                        <h4 class="font-bold text-blue-600 mb-2">スタチE��ができること</h4>
                         <ul class="space-y-1 text-gray-700">
-                            <li>・自刁E�Eシフト確誁E/li>
-                            <li>・休み希望の提�E</li>
-                            <li>・お店�Eルール確誁E/li>
+                            <li>・自刁E�Eシフト確誁E/li>
+                            <li>・休み希望の提�E</li>
+                            <li>・お店�Eルール確誁E/li>
                         </ul>
-                        <p class="text-xs text-gray-400 mt-2">※ スタチE��は他�EスタチE��の惁E��めE��フト編雁E��はアクセスできません</p>
+                        <p class="text-xs text-gray-400 mt-2">※ スタチE��は他�EスタチE��の惁E��めE��フト編雁E��はアクセスできません</p>
                     </div>
                 </div>
             </div>
 
-            <!-- 10. 刁E�� -->
+            <!-- 10. 刁E�� -->
             <div id="m-analytics" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">10.</span>刁E��・レポ�EチE/h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">10.</span>刁E��・レポ�EチE/h3>
                 <div class="space-y-2 text-sm text-gray-700">
-                    <p><strong>月間推定人件費:</strong> 時給スタチE��の実績�E�月給スタチE��の固定額。祝日割墁E1.25倁E含む、E/p>
+                    <p><strong>月間推定人件費:</strong> 時給スタチE��の実績�E�月給スタチE��の固定額。祝日割墁E1.25倁E含む、E/p>
                     <p><strong>日次コスト推移:</strong> 日ごとの人件費グラフ、E/p>
-                    <p><strong>スタチE��別詳細:</strong> 出勤日数・労働時間�E法定目宁E176h)との比輁E�E推定支給額、E/p>
-                    <p><strong>コスト構�E毁E</strong> スタチE��別の人件費割合（�Eグラフ）、E/p>
+                    <p><strong>スタチE��別詳細:</strong> 出勤日数・労働時間�E法定目宁E176h)との比輁E�E推定支給額、E/p>
+                    <p><strong>コスト構�E毁E</strong> スタチE��別の人件費割合（�Eグラフ）、E/p>
                 </div>
             </div>
 
-            <!-- 11. そ�E仁E-->
+            <!-- 11. そ�E仁E-->
             <div id="m-other" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">11.</span>そ�E他機�E</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">11.</span>そ�E他機�E</h3>
                 <div class="space-y-2 text-sm text-gray-700">
-                    <p><strong>カレンダーメモ:</strong> 特定�E日にメモを残せます（イベント�E団体予紁E��ど�E�、E/p>
-                    <p><strong>ドラチE��&ドロチE�E:</strong> シフト表でシフトをドラチE��して時間変更・スタチE��変更が可能�E�管琁E��E�Eみ�E�、E/p>
+                    <p><strong>カレンダーメモ:</strong> 特定�E日にメモを残せます（イベント�E団体予紁E��ど�E�、E/p>
+                    <p><strong>ドラチE��&ドロチE�E:</strong> シフト表でシフトをドラチE��して時間変更・スタチE��変更が可能�E�管琁E��E�Eみ�E�、E/p>
                     <p><strong>印刷:</strong> シフト表をPDF/印刷できます、E/p>
-                    <p><strong>チE�EタリセチE��:</strong> 設定画面の最下部から全チE�Eタを�E期化できます（注意：復允E��可�E�、E/p>
+                    <p><strong>チE�EタリセチE��:</strong> 設定画面の最下部から全チE�Eタを�E期化できます（注意：復允E��可�E�、E/p>
                 </div>
             </div>
         </div>`;
     },
 
-    // --- そ�E仁E---
+    // --- そ�E仁E---
     calculateMonthlyStats() {
         const year = this.state.currentDate.getFullYear();
         const month = this.state.currentDate.getMonth() + 1;
@@ -5793,7 +5793,7 @@ const app = {
         });
         this.state.staff.filter(s => s.salary_type === 'monthly').forEach(s => totalCost += (s.monthly_salary || 0));
         
-        // 要素が存在する場合�Eみ表示を更新�E�スタチE��画面では要素がなぁE��めスキチE�Eされる！E
+        // 要素が存在する場合�Eみ表示を更新�E�スタチE��画面では要素がなぁE��めスキチE�Eされる！E
         const costEl = document.getElementById('headerTotalCost');
         const hoursEl = document.getElementById('headerTotalHours');
         
@@ -5801,11 +5801,11 @@ const app = {
         if(hoursEl) hoursEl.textContent = `${Math.floor(totalHours)}h`;
     },
 
-    // --- AI診断 (サーバ�Eサイド経由) ---
+    // --- AI診断 (サーバ�Eサイド経由) ---
     async runAIDiagnosis() {
         this.openModal('aiAdviceModal');
         const content = document.getElementById('aiAnalysisContent');
-        content.innerHTML = `<div class="flex justify-center py-8"><div class="loading-spinner"></div><p class="ml-3 text-gray-500">AIがシフトを�E析中...</p></div>`;
+        content.innerHTML = `<div class="flex justify-center py-8"><div class="loading-spinner"></div><p class="ml-3 text-gray-500">AIがシフトを�E析中...</p></div>`;
 
         try {
             const result = await API.diagnose({
@@ -5866,7 +5866,7 @@ const app = {
     async startCheckout(plan) {
         const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
         if (!contractId) {
-            this.showToast('ログインが忁E��でぁE, 'error');
+            this.showToast('ログインが忁E��でぁE, 'error');
             return;
         }
         this.showLoading(true);
@@ -5875,7 +5875,7 @@ const app = {
             if (result && result.url) {
                 window.location.href = result.url;
             } else {
-                this.showToast('チェチE��アウチERLの取得に失敗しました', 'error');
+                this.showToast('チェチE��アウチERLの取得に失敗しました', 'error');
             }
         } catch (e) {
             console.error('Checkout Error:', e);
@@ -5888,7 +5888,7 @@ const app = {
     async openStripePortal() {
         const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
         if (!contractId) {
-            this.showToast('ログインが忁E��でぁE, 'error');
+            this.showToast('ログインが忁E��でぁE, 'error');
             return;
         }
         this.showLoading(true);
@@ -5897,7 +5897,7 @@ const app = {
             if (result && result.url) {
                 window.location.href = result.url;
             } else {
-                this.showToast('ポ�EタルURLの取得に失敗しました', 'error');
+                this.showToast('ポ�EタルURLの取得に失敗しました', 'error');
             }
         } catch (e) {
             console.error('Portal Error:', e);
@@ -5919,7 +5919,7 @@ const app = {
         }
     },
 
-    // 「なし」相当�E入力かどぁE��判宁E
+    // 「なし」相当�E入力かどぁE��判宁E
     _isReferrerNone(code) {
         const normalized = (code || '').trim().toLowerCase();
         return ['なぁE, '無ぁE, '無', 'none', 'nashi', 'no', 'n/a', 'na'].includes(normalized);
@@ -5928,7 +5928,7 @@ const app = {
     copyCompanyPhoneToContact() {
         const company = document.getElementById('newSubPhone')?.value.trim();
         if (!company) {
-            this.showToast('代表電話番号を�Eに入力してください', 'error');
+            this.showToast('代表電話番号を�Eに入力してください', 'error');
             return;
         }
         const target = document.getElementById('newSubContactPhone');
@@ -5942,12 +5942,12 @@ const app = {
         const raw = document.getElementById('newSubReferrerCode')?.value.trim();
         const status = document.getElementById('referrerCodeStatus');
         if (!raw) {
-            status.innerHTML = '<span class="text-gray-400">コードを入力してください�E�紹介老E��ぁE��ぁE��合�E「なし」！E/span>';
+            status.innerHTML = '<span class="text-gray-400">コードを入力してください�E�紹介老E��ぁE��ぁE��合�E「なし」！E/span>';
             return;
         }
         // 「なし」系の入劁E
         if (this._isReferrerNone(raw)) {
-            status.innerHTML = '<span class="text-blue-600"><i class="fa-solid fa-circle-info mr-1"></i>紹介老E��しで登録しまぁE/span>';
+            status.innerHTML = '<span class="text-blue-600"><i class="fa-solid fa-circle-info mr-1"></i>紹介老E��しで登録しまぁE/span>';
             this._markFieldError('newSubReferrerCode', false);
             return;
         }
@@ -5969,7 +5969,7 @@ const app = {
                 status.innerHTML = `<span class="text-green-600"><i class="fa-solid fa-circle-check mr-1"></i>有効: ${result.name}</span>`;
                 this._markFieldError('newSubReferrerCode', false);
             } else {
-                status.innerHTML = `<span class="text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${result.message || '無効なコードでぁE}�E�紹介老E��ぁE��ぁE��合�E「なし」と入力！E/span>`;
+                status.innerHTML = `<span class="text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${result.message || '無効なコードでぁE}�E�紹介老E��ぁE��ぁE��合�E「なし」と入力！E/span>`;
                 this._markFieldError('newSubReferrerCode', true);
             }
         } catch (e) {
@@ -5987,28 +5987,28 @@ const app = {
         const referrerInput = document.getElementById('newSubReferrerCode')?.value.trim() || '';
         const plan = document.querySelector('input[name="newSubPlan"]:checked')?.value;
 
-        // 全フィールドリセチE��
+        // 全フィールドリセチE��
         ['newSubOrgName','newSubContact','newSubEmail','newSubPhone','newSubContactPhone','newSubAddress','newSubReferrerCode'].forEach(id => this._markFieldError(id, false));
 
         const errors = [];
-        if (!orgName) { errors.push('事業老E��'); this._markFieldError('newSubOrgName', true); }
-        if (!contact) { errors.push('拁E��老E��'); this._markFieldError('newSubContact', true); }
+        if (!orgName) { errors.push('事業老E��'); this._markFieldError('newSubOrgName', true); }
+        if (!contact) { errors.push('拁E��老E��'); this._markFieldError('newSubContact', true); }
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!email || !emailRegex.test(email)) { errors.push('メールアドレス'); this._markFieldError('newSubEmail', true); }
         const phoneRegex = /^[0-9\-\+]{10,15}$/;
         if (!phone || !phoneRegex.test(phone.replace(/[\s\(\)]/g, ''))) { errors.push('代表電話番号'); this._markFieldError('newSubPhone', true); }
-        if (!contactPhone || !phoneRegex.test(contactPhone.replace(/[\s\(\)]/g, ''))) { errors.push('拁E��老E��話番号'); this._markFieldError('newSubContactPhone', true); }
+        if (!contactPhone || !phoneRegex.test(contactPhone.replace(/[\s\(\)]/g, ''))) { errors.push('拁E��老E��話番号'); this._markFieldError('newSubContactPhone', true); }
         if (!address || address.length < 5) { errors.push('住所'); this._markFieldError('newSubAddress', true); }
-        if (!referrerInput) { errors.push('紹介老E��ード（不�Eな場合�E「なし」と入力！E); this._markFieldError('newSubReferrerCode', true); }
+        if (!referrerInput) { errors.push('紹介老E��ード（不�Eな場合�E「なし」と入力！E); this._markFieldError('newSubReferrerCode', true); }
         if (!plan) { errors.push('プラン'); }
 
         if (errors.length > 0) {
-            this.showToast(`以下�E頁E��を正しく入力してください: ${errors.join('、E)}`, 'error');
+            this.showToast(`以下�E頁E��を正しく入力してください: ${errors.join('、E)}`, 'error');
             return;
         }
 
-        // 紹介老E��ード�E琁E
-        let referrerCode = '';  // 「なし」�E場合�E空斁E��をDBに保孁E
+        // 紹介老E��ード�E琁E
+        let referrerCode = '';  // 「なし」�E場合�E空斁E��をDBに保孁E
         if (!this._isReferrerNone(referrerInput)) {
             referrerCode = referrerInput.toUpperCase();
             try {
@@ -6026,11 +6026,11 @@ const app = {
                 const vresult = await vres.json();
                 if (!vresult.valid) {
                     this._markFieldError('newSubReferrerCode', true);
-                    this.showToast(`紹介老E��ーチE ${vresult.message || '無効'}�E�紹介老E��ぁE��ぁE��合�E「なし」と入力）`, 'error');
+                    this.showToast(`紹介老E��ーチE ${vresult.message || '無効'}�E�紹介老E��ぁE��ぁE��合�E「なし」と入力）`, 'error');
                     return;
                 }
             } catch (e) {
-                this.showToast('紹介老E��ード�E検証に失敗しました', 'error');
+                this.showToast('紹介老E��ード�E検証に失敗しました', 'error');
                 return;
             }
         }
@@ -6041,7 +6041,7 @@ const app = {
             if (result && result.url) {
                 window.location.href = result.url;
             } else {
-                this.showToast('決済�Eージの作�Eに失敗しました', 'error');
+                this.showToast('決済�Eージの作�Eに失敗しました', 'error');
             }
         } catch (e) {
             console.error('New Subscription Error:', e);
@@ -6055,12 +6055,12 @@ const app = {
         const email = document.getElementById('settingEmail')?.value.trim();
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!email || !emailRegex.test(email)) {
-            this.showToast('有効なメールアドレスを�E力してください', 'error');
+            this.showToast('有効なメールアドレスを�E力してください', 'error');
             return;
         }
         const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
         if (!contractId) {
-            this.showToast('ログインが忁E��でぁE, 'error');
+            this.showToast('ログインが忁E��でぁE, 'error');
             return;
         }
         try {
@@ -6089,10 +6089,10 @@ const app = {
         const config = this.state.config;
         const content = document.getElementById('shopRulesContent');
         const rulesText = config.shop_rules_text || this.state.defaultConfig.shop_rules_text;
-        // 改行をリストアイチE��に変換
+        // 改行をリストアイチE��に変換
         const rulesList = rulesText.split('\n').filter(line => line.trim() !== '').map(line => `<li>${line}</li>`).join('');
         
-        // 金銭惁E��を完�Eに削除し、業務ルールのみを表示
+        // 金銭惁E��を完�Eに削除し、業務ルールのみを表示
         content.innerHTML = `
             <div class="space-y-4">
                 <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -6106,7 +6106,7 @@ const app = {
                 </div>
 
                 <div class="border-t border-gray-100 pt-4">
-                    <h4 class="font-bold text-gray-800 text-sm mb-2">シフト申請につぁE��・お知らせ</h4>
+                    <h4 class="font-bold text-gray-800 text-sm mb-2">シフト申請につぁE��・お知らせ</h4>
                     <ul class="text-sm text-gray-600 space-y-1 list-disc pl-5">
                         ${rulesList}
                     </ul>
@@ -6135,23 +6135,23 @@ const app = {
         const currentCount = this.state.staff.length;
         const planNames = {standard: 'Standard', pro: 'Pro', premium: 'Premium'};
 
-        // 現在プラン惁E��
+        // 現在プラン惁E��
         const infoEl = document.getElementById('upgradeCurrentInfo');
         if (infoEl) {
-            infoEl.textContent = `現在: ${planNames[currentPlan] || 'Standard'}プラン�E�E{currentCount}/${limit}名）`;
+            infoEl.textContent = `現在: ${planNames[currentPlan] || 'Standard'}プラン�E�E{currentCount}/${limit}名）`;
         }
 
-        // アチE�Eグレード�Eプランカードを動的生�E
+        // アチE�Eグレード�Eプランカードを動的生�E
         const plansEl = document.getElementById('upgradePlans');
         if (!plansEl) return;
 
         const plans = [
-            { key: 'standard', name: 'Standard', price: '3,380', limit: 10, color: 'blue', features: ['スタチE��10名まで', 'AI自動シフト生�E', 'AI労基法チェチE��', 'シフト管琁E�E機�E'] },
-            { key: 'pro', name: 'Pro', price: '4,880', limit: 50, badge: '人氁E, color: 'green', features: ['スタチE��50名まで', '全AI機�E', '優先サポ�EチE, '刁E��レポ�EチE] },
-            { key: 'premium', name: 'Premium', price: '9,980', limit: 9999, color: 'purple', features: ['スタチE��無制陁E, '全AI機�E', '褁E��店�E対忁E, '専属サポ�EチE] },
+            { key: 'standard', name: 'Standard', price: '3,380', limit: 10, color: 'blue', features: ['スタチE��10名まで', 'AI自動シフト生�E', 'AI労基法チェチE��', 'シフト管琁E�E機�E'] },
+            { key: 'pro', name: 'Pro', price: '4,880', limit: 50, badge: '人氁E, color: 'green', features: ['スタチE��50名まで', '全AI機�E', '優先サポ�EチE, '刁E��レポ�EチE] },
+            { key: 'premium', name: 'Premium', price: '9,980', limit: 9999, color: 'purple', features: ['スタチE��無制陁E, '全AI機�E', '褁E��店�E対忁E, '専属サポ�EチE] },
         ];
 
-        // 現在より上�Eプランのみ表示
+        // 現在より上�Eプランのみ表示
         const upgradePlans = plans.filter(p => p.limit > limit);
 
         const colorMap = {
@@ -6178,7 +6178,7 @@ const app = {
                         ${p.features.map(f => `<li class="flex items-center gap-1.5"><i class="fa-solid fa-check ${c.check} text-[10px]"></i>${f}</li>`).join('')}
                     </ul>
                     <button class="w-full py-2.5 ${c.btn} text-white rounded-lg text-sm font-bold transition group-hover:shadow-md">
-                        <i class="fa-solid fa-rocket mr-1"></i>こ�Eプランに変更
+                        <i class="fa-solid fa-rocket mr-1"></i>こ�Eプランに変更
                     </button>
                 </div>
             `;
@@ -6247,7 +6247,7 @@ const app = {
     },
 
     // =========================================================
-    // お知らせ管琁E��ュー (管琁E��E��)
+    // お知らせ管琁E��ュー (管琁E��E��)
     // =========================================================
     renderAnnouncementsAdmin(container) {
         if (!this.state.isAdmin) { this.changeView('dashboard'); return; }
@@ -6288,7 +6288,7 @@ const app = {
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                         <i class="fa-solid fa-bell-slash text-4xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500 font-bold">お知らせはありません</p>
-                        <p class="text-xs text-gray-400 mt-2">現在、E�E信されてぁE��お知らせはありません</p>
+                        <p class="text-xs text-gray-400 mt-2">現在、E�E信されてぁE��お知らせはありません</p>
                     </div>
                 `;
                 return;
@@ -6296,7 +6296,7 @@ const app = {
 
             const typeIcons = { info: 'fa-circle-info', warning: 'fa-triangle-exclamation', promotion: 'fa-gift', update: 'fa-rocket' };
             const typeColors = { info: 'text-blue-500 bg-blue-50', warning: 'text-amber-500 bg-amber-50', promotion: 'text-emerald-500 bg-emerald-50', update: 'text-purple-500 bg-purple-50' };
-            const typeLabels = { info: 'お知らせ', warning: '注愁E, promotion: 'キャンペ�Eン', update: 'アチE�EチE�EチE };
+            const typeLabels = { info: 'お知らせ', warning: '注愁E, promotion: 'キャンペ�Eン', update: 'アチE�EチE�EチE };
 
             const unreadCount = announcements.filter(a => !readIds.includes(a.id)).length;
 
@@ -6382,13 +6382,13 @@ const app = {
     },
 
     // =========================================================
-    // お知らせポップアチE�E機�E
+    // お知らせポップアチE�E機�E
     // =========================================================
     _announcements: [],
     _announcementIndex: 0,
 
     /**
-     * ログイン成功後にお知らせを取得してポップアチE�E表示
+     * ログイン成功後にお知らせを取得してポップアチE�E表示
      */
     async showAnnouncementsAfterLogin() {
         try {
@@ -6398,7 +6398,7 @@ const app = {
             }
             this._announcements = announcements;
             this._announcementIndex = 0;
-            // 少し遁E��させてからポップアチE�E表示�E�ログイント�Eストと被らなぁE��ぁE���E�E
+            // 少し遁E��させてからポップアチE�E表示�E�ログイント�Eストと被らなぁE��ぁE���E�E
             setTimeout(() => this._renderAnnouncement(), 1500);
         } catch (e) {
             console.warn('[Announcements] Load failed:', e.message);
@@ -6482,7 +6482,7 @@ const app = {
     },
 
     closeAnnouncementModal() {
-        // 表示したお知らせを�Eて既読にする
+        // 表示したお知らせを�Eて既読にする
         if (this._announcements && this._announcements.length > 0) {
             for (const item of this._announcements) {
                 if (item.id) this._markAnnouncementRead(item.id);
@@ -6490,7 +6490,7 @@ const app = {
             this.updateAnnouncementBadge();
         }
         this.closeModal('announcementModal');
-        // ペ�Eジ訪問時のお知らせの場合、E��じた後にログインモーダルを表示
+        // ペ�Eジ訪問時のお知らせの場合、E��じた後にログインモーダルを表示
         if (this._showLoginAfterAnnouncement) {
             this._showLoginAfterAnnouncement = false;
             setTimeout(() => this.openModal('loginModal'), 300);
@@ -6498,7 +6498,7 @@ const app = {
     },
 
     /**
-     * ペ�Eジ訪問時�E�ログイン前）にお知らせを表示
+     * ペ�Eジ訪問時�E�ログイン前）にお知らせを表示
      * @returns {boolean} お知らせがあった場吁Erue
      */
     async showAnnouncementsOnPageLoad() {
@@ -6519,7 +6519,7 @@ const app = {
     },
 
     // ===========================================================
-    // シフト生�Eプレビュー機�E
+    // シフト生�Eプレビュー機�E
     // ===========================================================
 
     // プレビュー用の一時データ
@@ -6529,9 +6529,9 @@ const app = {
 
     /**
      * プレビューモーダルを表示
-     * @param {Array} shifts - 生�Eされたシフト配�E
+     * @param {Array} shifts - 生�Eされたシフト配�E
      * @param {string} targetType - 'reset_all' | 'empty_only'
-     * @param {Array} dates - 対象日付�E刁E
+     * @param {Array} dates - 対象日付�E刁E
      */
     showShiftPreview(shifts, targetType, dates) {
         this._previewShifts = shifts;
@@ -6556,7 +6556,7 @@ const app = {
             summaryEl.innerHTML = `
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                     <p class="text-2xl font-bold text-emerald-600">${totalShifts}</p>
-                    <p class="text-xs text-gray-500 mt-1">生�Eシフト数</p>
+                    <p class="text-xs text-gray-500 mt-1">生�Eシフト数</p>
                 </div>
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                     <p class="text-2xl font-bold text-blue-600">${uniqueDates.length}</p>
@@ -6564,7 +6564,7 @@ const app = {
                 </div>
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                     <p class="text-2xl font-bold text-purple-600">${uniqueStaff.length}</p>
-                    <p class="text-xs text-gray-500 mt-1">配置スタチE��数</p>
+                    <p class="text-xs text-gray-500 mt-1">配置スタチE��数</p>
                 </div>
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                     <p class="text-2xl font-bold text-orange-600">${totalHours.toFixed(1)}</p>
@@ -6573,7 +6573,7 @@ const app = {
             `;
         }
 
-        // 日付ごとのチE�Eブル生�E
+        // 日付ごとのチE�Eブル生�E
         const contentEl = document.getElementById('previewContent');
         if (contentEl) {
             let html = '';
@@ -6592,17 +6592,17 @@ const app = {
                         <h4 class="text-sm font-bold ${isWeekend ? 'text-red-600' : 'text-gray-700'} mb-2 flex items-center gap-2">
                             <span class="w-6 h-6 rounded-full ${isWeekend ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'} flex items-center justify-center text-xs font-bold">${dow}</span>
                             ${dateStr}
-                            <span class="text-xs text-gray-400 font-normal">(${dayShifts.length}名�E置)</span>
+                            <span class="text-xs text-gray-400 font-normal">(${dayShifts.length}名�E置)</span>
                         </h4>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead class="bg-gray-50 text-xs text-gray-500">
                                     <tr>
-                                        <th class="px-3 py-2 text-left rounded-l-lg">スタチE��</th>
+                                        <th class="px-3 py-2 text-left rounded-l-lg">スタチE��</th>
                                         <th class="px-3 py-2 text-left">役職</th>
                                         <th class="px-3 py-2 text-center">出勤</th>
                                         <th class="px-3 py-2 text-center">退勤</th>
-                                        <th class="px-3 py-2 text-center">休�E</th>
+                                        <th class="px-3 py-2 text-center">休�E</th>
                                         <th class="px-3 py-2 text-center rounded-r-lg">実働</th>
                                     </tr>
                                 </thead>
@@ -6612,7 +6612,7 @@ const app = {
                 for (const shift of dayShifts) {
                     const staff = staffMap[shift.staff_id] || { name: shift.staff_id, role: '' };
                     const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
-                    const roleObj = roleList.find(r => r.id === staff.role) || { name: 'スタチE��', color: 'gray' };
+                    const roleObj = roleList.find(r => r.id === staff.role) || { name: 'スタチE��', color: 'gray' };
                     const colorMap = {
                         purple: 'bg-purple-100 text-purple-700',
                         blue: 'bg-blue-100 text-blue-700',
@@ -6633,7 +6633,7 @@ const app = {
 
                     html += `
                         <tr class="hover:bg-gray-50">
-                            <td class="px-3 py-2 font-bold text-gray-800">${staff.name || '不�E'}</td>
+                            <td class="px-3 py-2 font-bold text-gray-800">${staff.name || '不�E'}</td>
                             <td class="px-3 py-2">${roleBadge}</td>
                             <td class="px-3 py-2 text-center font-mono text-emerald-600 font-bold">${shift.start_time}</td>
                             <td class="px-3 py-2 text-center font-mono text-red-500 font-bold">${shift.end_time}</td>
@@ -6668,7 +6668,7 @@ const app = {
 
         this.closeModal('shiftPreviewModal');
 
-        // ローチE��ング表示
+        // ローチE��ング表示
         const loadingEl = document.getElementById('globalLoading');
         const loadingDefault = document.getElementById('loadingDefault');
         if (loadingDefault) loadingDefault.style.display = 'flex';
@@ -6678,7 +6678,7 @@ const app = {
             const dates = this._previewDates;
             const targetType = this._previewTargetType;
 
-            // reset_allの場合�E既存削除
+            // reset_allの場合�E既存削除
             if (targetType === 'reset_all') {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -6744,22 +6744,22 @@ const app = {
     },
 
     /**
-     * プレビューをキャンセル�E�破棁E��E
+     * プレビューをキャンセル�E�破棁E��E
      */
     cancelShiftPreview() {
         this._previewShifts = null;
         this._previewTargetType = null;
         this._previewDates = null;
         this.closeModal('shiftPreviewModal');
-        this.showToast('シフト生�Eをキャンセルしました', 'info');
+        this.showToast('シフト生�Eをキャンセルしました', 'info');
     },
 
     // ===========================================================
-    // パスワード変更機�E
+    // パスワード変更機�E
     // ===========================================================
 
     /**
-     * 店�Eパスワードを変更
+     * 店�Eパスワードを変更
      */
     async changeShopPassword() {
         const currentPass = document.getElementById('currentPassword')?.value || '';
@@ -6771,7 +6771,7 @@ const app = {
             return;
         }
         if (!newPass || newPass.length < 6) {
-            this.showToast('新しいパスワード�E6斁E��以上で入力してください', 'error');
+            this.showToast('新しいパスワード�E6斁E��以上で入力してください', 'error');
             return;
         }
         if (newPass !== confirmPass) {
@@ -6782,7 +6782,7 @@ const app = {
         try {
             const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
             if (!contractId) {
-                this.showToast('セチE��ョンエラー: 再ログインしてください', 'error');
+                this.showToast('セチE��ョンエラー: 再ログインしてください', 'error');
                 return;
             }
 
@@ -6793,7 +6793,7 @@ const app = {
             });
 
             // verify_shop_loginはJSONBを返すため、直接オブジェクトとして扱ぁE
-            // �E�ログイン時と同じ形式！E
+            // �E�ログイン時と同じ形式！E
             if (!verifyResult || !verifyResult.success) {
                 this.showToast('現在のパスワードが正しくありません', 'error');
                 return;
@@ -6819,7 +6819,7 @@ const app = {
     },
 
     // ===========================================================
-    // シフトパターンプリセチE��機�E
+    // シフトパターンプリセチE��機�E
     // ===========================================================
 
     SHIFT_PRESETS: {
@@ -6828,10 +6828,10 @@ const app = {
             patterns: [
                 { name: '早番', start: '09:00', end: '15:00' },
                 { name: '中番', start: '12:00', end: '18:00' },
-                { name: '遁E��', start: '16:00', end: '22:00' },
+                { name: '遁E��', start: '16:00', end: '22:00' },
                 { name: '通し', start: '09:00', end: '22:00' },
                 { name: 'ランチE, start: '10:00', end: '14:00' },
-                { name: 'チE��ナ�E', start: '17:00', end: '22:00' },
+                { name: 'チE��ナ�E', start: '17:00', end: '22:00' },
             ]
         },
         office: {
@@ -6839,7 +6839,7 @@ const app = {
             patterns: [
                 { name: '日勤', start: '09:00', end: '18:00' },
                 { name: '早番', start: '08:00', end: '17:00' },
-                { name: '遁E��', start: '10:00', end: '19:00' },
+                { name: '遁E��', start: '10:00', end: '19:00' },
                 { name: '半日AM', start: '09:00', end: '13:00' },
                 { name: '半日PM', start: '13:00', end: '18:00' },
             ]
@@ -6848,7 +6848,7 @@ const app = {
             name: '小売店向ぁE,
             patterns: [
                 { name: '早番', start: '09:00', end: '15:00' },
-                { name: '遁E��', start: '14:00', end: '21:00' },
+                { name: '遁E��', start: '14:00', end: '21:00' },
                 { name: '通し', start: '09:00', end: '21:00' },
                 { name: '午前', start: '09:00', end: '13:00' },
                 { name: '午征E, start: '13:00', end: '17:00' },
@@ -6856,11 +6856,11 @@ const app = {
             ]
         },
         medical: {
-            name: '医療�E介護向け',
+            name: '医療�E介護向け',
             patterns: [
                 { name: '日勤', start: '08:30', end: '17:30' },
                 { name: '早番', start: '07:00', end: '16:00' },
-                { name: '遁E��', start: '10:00', end: '19:00' },
+                { name: '遁E��', start: '10:00', end: '19:00' },
                 { name: '夜勤', start: '16:30', end: '09:00' },
                 { name: '準夜勤', start: '16:30', end: '01:00' },
                 { name: '半日', start: '08:30', end: '12:30' },
@@ -6869,7 +6869,7 @@ const app = {
     },
 
     /**
-     * プリセチE��のシフトパターンを一括適用
+     * プリセチE��のシフトパターンを一括適用
      * @param {string} presetKey - 'restaurant' | 'office' | 'retail' | 'medical'
      */
     applyShiftPreset(presetKey) {
@@ -6878,14 +6878,14 @@ const app = {
 
         const existing = this.state.config.custom_shifts || [];
         if (existing.length > 0) {
-            if (!confirm(`現在のシフトパターン(${existing.length}件)を上書きしますか�E�\n、E{preset.name}、E${preset.patterns.length}パターン)に置き換えます。`)) {
+            if (!confirm(`現在のシフトパターン(${existing.length}件)を上書きしますか�E�\n、E{preset.name}、E${preset.patterns.length}パターン)に置き換えます。`)) {
                 return;
             }
         }
 
         this.state.config.custom_shifts = preset.patterns.map(p => ({ ...p }));
         this.renderCurrentView();
-        this.showToast(`、E{preset.name}」�EリセチE��(${preset.patterns.length}パターン)を適用しました`, 'success');
+        this.showToast(`、E{preset.name}」�EリセチE��(${preset.patterns.length}パターン)を適用しました`, 'success');
     }
 };
 
