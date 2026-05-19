@@ -230,6 +230,29 @@ async def supabase_query(table: str, params: str = "", method: str = "GET",
     return resp.json()
 
 
+def _validate_redirect_url(url: str) -> bool:
+    """リダイレクトURLが許可ドメインか検証（オープンリダイレクト防止）"""
+    if not url:
+        return False
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        allowed = [
+            "rakushift-ai.pages.dev",
+            "localhost",
+            "127.0.0.1",
+        ]
+        # FRONTEND_URLのホストも許可
+        if FRONTEND_URL:
+            fe_host = urlparse(FRONTEND_URL).hostname
+            if fe_host:
+                allowed.append(fe_host)
+        return any(host == a or host.endswith("." + a) for a in allowed)
+    except Exception:
+        return False
+
+
 # === ヘルスチェック ===
 
 @app.get("/")
@@ -253,7 +276,7 @@ async def keepalive():
     except Exception as e:
         msg = repr(e)
         print("[Keepalive] Supabase ping FAILED: {}".format(msg))
-        return {"status": "ok", "db": "error", "message": msg}
+        return {"status": "ok", "db": "error", "message": "DB接続エラー" if IS_PRODUCTION else msg}
 
 
 @app.post("/run-migration")
@@ -344,9 +367,9 @@ async def run_migration(request: Request):
                 elif resp.status_code < 300:
                     results.append({"step": i+1, "status": "ok"})
                 else:
-                    results.append({"step": i+1, "status": "error", "detail": resp.text[:200]})
+                    results.append({"step": i+1, "status": "error", "detail": "SQL実行エラー" if IS_PRODUCTION else resp.text[:200]})
             except Exception as e:
-                results.append({"step": i+1, "status": "error", "detail": str(e)[:200]})
+                results.append({"step": i+1, "status": "error", "detail": "SQL実行エラー" if IS_PRODUCTION else str(e)[:200]})
 
     return {"status": "completed", "results": results}
 
@@ -851,6 +874,11 @@ async def new_subscription(request: Request, req: NewSubscriptionRequest):
             return JSONResponse(status_code=400,
                                 content={"error": "success_url and cancel_url are required"})
 
+        # オープンリダイレクト防止: 許可ドメインのみ受け入れ
+        if not _validate_redirect_url(req.success_url) or not _validate_redirect_url(req.cancel_url):
+            return JSONResponse(status_code=400,
+                                content={"error": "不正なリダイレクトURLです"})
+
         referrer_code = (req.referrer_code or "").strip().upper()
 
         # Stripeカスタマー作成
@@ -979,6 +1007,10 @@ async def create_checkout_session(request: Request, req: CheckoutRequest):
                                     content={"error": "success_url and cancel_url are required"})
         success_url = req.success_url or "{}/index.html?payment=success".format(FRONTEND_URL)
         cancel_url = req.cancel_url or "{}/index.html?payment=cancelled".format(FRONTEND_URL)
+
+        # オープンリダイレクト防止
+        if not _validate_redirect_url(success_url) or not _validate_redirect_url(cancel_url):
+            return JSONResponse(status_code=400, content={"error": "不正なリダイレクトURLです"})
 
         session = stripe.checkout.Session.create(
             customer=customer_id,

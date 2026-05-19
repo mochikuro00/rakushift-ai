@@ -7,7 +7,7 @@ const app = {
     // セキュリティ: 入力サニタイゼーション
     _sanitize(str) {
         if (typeof str !== 'string') return '';
-        return str.replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
+        return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     },
 
     // セキュリティ: ログイン試行チェック
