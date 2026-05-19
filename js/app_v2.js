@@ -380,6 +380,8 @@ const app = {
                 // 契約情報は残すが、個人特定は消すイメージ（ここでは簡易的にisAdminフラグのみ操作）
                 const shopUser = {
                     contract_id: currentUser.contract_id,
+                    organization_id: currentUser.organization_id, // RLSフィルター用に維持
+                    session_id: currentUser.session_id,           // セッションを維持
                     name: 'Guest (Staff)',
                     role: 'Guest'
                 };
@@ -2592,7 +2594,10 @@ const app = {
     },
 
     renderAnalyticsCharts(stats) {
-        new Chart(document.getElementById('dailyCostChart'), {
+        if (this.analyticsDailyChart) this.analyticsDailyChart.destroy();
+        if (this.analyticsShareChart) this.analyticsShareChart.destroy();
+
+        this.analyticsDailyChart = new Chart(document.getElementById('dailyCostChart'), {
             type: 'line',
             data: { labels: stats.dailyLabels, datasets: [{ label: '日次人件費', data: stats.dailyCosts, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.3 }] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
@@ -2603,7 +2608,7 @@ const app = {
         const data = topStaff.map(s => s.cost);
         if (otherCost > 0) { labels.push('その他'); data.push(otherCost); }
 
-        new Chart(document.getElementById('staffShareChart'), {
+        this.analyticsShareChart = new Chart(document.getElementById('staffShareChart'), {
             type: 'doughnut',
             data: { labels: labels, datasets: [{ data: data, backgroundColor: ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ec4899', '#9ca3af'] }] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
