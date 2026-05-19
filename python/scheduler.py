@@ -38,10 +38,14 @@ class ShiftScheduler:
     LEGAL_MAX_CONSECUTIVE_DAYS = 6
 
     def __init__(self, staff_list, config, dates, requests=None):
-        self.staff_list = staff_list or []
+        # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
+        raw_staff = staff_list or []
+        self.staff_list = [s for s in raw_staff if isinstance(s, dict) and s.get("id")]
+        
         self.config = config or {}
         self.dates = sorted(dates or [])
-        self.requests = requests or []
+        raw_req = requests or []
+        self.requests = [r for r in raw_req if isinstance(r, dict) and r.get("staff_id")]
 
         # シフトパターン構築（ミッドシフト自動生成付き）
         raw_patterns = self.config.get("custom_shifts", [])
