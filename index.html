@@ -1234,12 +1234,13 @@
             if(loading) loading.classList.add('hidden');
             const container = document.getElementById('viewContainer');
             if(container) {
+                const esc = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                 container.innerHTML = `
                     <div class="p-8 text-center text-red-600">
                         <h2 class="text-xl font-bold mb-2">システムエラー</h2>
                         <p class="font-mono text-xs bg-red-50 p-4 rounded text-left overflow-auto">
-                            ${msg}<br>
-                            at ${url}:${line}:${col}
+                            ${esc(msg)}<br>
+                            at ${esc(url)}:${line}:${col}
                         </p>
                         <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-200 rounded">再読み込み</button>
                     </div>

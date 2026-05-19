@@ -409,7 +409,7 @@ const app = {
         const passwordEl = document.getElementById('loginShopPass');
 
         if (!contractIdEl) {
-            alert('エラー: 入力欄が見つかりません。ページを再読み込みしてください。');
+            app.showToast('エラー: 入力欄が見つかりません。ページを再読み込みしてください。', 'error');
             return;
         }
 
@@ -745,7 +745,7 @@ const app = {
     },
 
     signUpMode() {
-        alert("新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。");
+        app.showToast('新規登録機能は現在メンテナンス中です。管理者に連絡してアカウントを発行してください。', 'error');
     },
 
     async hqLogin() {
@@ -1007,7 +1007,7 @@ const app = {
         const currentUser = API.session?.user?.email;
         console.log("Current user:", currentUser);
         if (currentUser !== 'master@mochikuro.com') {
-            alert(`現在のアカウント (${currentUser}) ではこの機能を使用できません。\n管理者(master@mochikuro.com)のみ実行可能です。`);
+            app.showToast('現在のアカウントではこの機能を使用できません。管理者のみ実行可能です。', 'error');
             return;
         }
 
@@ -1144,7 +1144,7 @@ const app = {
             
         } catch(e) {
             console.error("Test data setup failed:", e);
-            alert("エラーが発生しました: " + e.message);
+            app.showToast('エラーが発生しました: ' + e.message, 'error');
         } finally {
             this.showLoading(false);
         }
@@ -4483,7 +4483,7 @@ const app = {
         const reason = (document.getElementById('requestReason')?.value || '');
 
         if (!staffId || dates.length === 0) {
-            alert('スタッフと日付を選択してください');
+            app.showToast('スタッフと日付を選択してください', 'error');
             return;
         }
 
@@ -4510,7 +4510,7 @@ const app = {
                 if (type === 'work') {
                     data.start_time = (document.getElementById('requestStartTime')?.value || '');
                     data.end_time = (document.getElementById('requestEndTime')?.value || '');
-                    if (!data.start_time || !data.end_time) { alert('時間を入力してください'); return; }
+                    if (!data.start_time || !data.end_time) { app.showToast('時間を入力してください', 'error'); return; }
                 }
 
                 await API.create('requests', data);
@@ -6101,7 +6101,8 @@ const app = {
         let colorClass = type === 'success' ? 'border-green-200 text-green-600' : type === 'error' ? 'border-red-200 text-red-600' : 'border-gray-200 text-gray-600';
         let icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-circle-xmark' : 'fa-info-circle';
         toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 min-w-[300px] ${colorClass}`;
-        toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="text-sm font-medium text-gray-700">${message}</span>`;
+        const safeMsg = this._sanitize(message);
+        toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="text-sm font-medium text-gray-700">${safeMsg}</span>`;
         container.appendChild(toast);
         requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
         setTimeout(() => { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); }, 3000);
