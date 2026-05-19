@@ -5833,7 +5833,7 @@ const app = {
 
         } catch (e) {
             console.error(e);
-            content.innerHTML = `<div class="text-red-500 p-4"><i class="fa-solid fa-circle-exclamation mr-2"></i>診断エラー: ${e.message}</div>`;
+            content.innerHTML = `<div class="text-red-500 p-4"><i class="fa-solid fa-circle-exclamation mr-2"></i>診断エラー: ${this._sanitize(e.message)}</div>`;
         }
     },
     
@@ -6416,11 +6416,11 @@ const app = {
 
         // 本文 (改行をbrに変換)
         const bodyEl = document.getElementById('announcementBody');
-        bodyEl.innerHTML = item.content.split('\n').map(line => `<p>${line}</p>`).join('');
+        bodyEl.innerHTML = item.content.split('\n').map(line => `<p>${this._sanitize(line)}</p>`).join('');
 
         // アクションボタン
         const actionEl = document.getElementById('announcementAction');
-        if (item.target_url) {
+        if (item.target_url && /^https?:\/\//i.test(item.target_url)) {
             actionEl.classList.remove('hidden');
             document.getElementById('announcementLink').href = item.target_url;
             document.getElementById('announcementBtnText').textContent = item.button_text || '詳しく見る';

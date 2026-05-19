@@ -366,7 +366,8 @@ def check_feasibility(request: Request, req: ShiftRequest):
         return {"status": "success", "check": result}
     except Exception as e:
         print("Check Error: {}".format(e))
-        return {"status": "error", "message": str(e)}
+        err_msg = "チェック中にエラーが発生しました" if IS_PRODUCTION else str(e)
+        return {"status": "error", "message": err_msg}
 
 
 @app.post("/generate")
@@ -565,8 +566,8 @@ typeは重要度順: danger(労基法違反) > warning(人員不足など重大�
         return {"status": "success", "suggestions": suggestions}
 
     except Exception as e:
-        print("Diagnose Error: {}".format(e))
-        return {"status": "error", "message": str(e), "suggestions": []}
+        err_msg = "AI診断中にエラーが発生しました" if IS_PRODUCTION else str(e)
+        return {"status": "error", "message": err_msg, "suggestions": []}
 
 
 # =============================================================
@@ -908,10 +909,12 @@ async def new_subscription(request: Request, req: NewSubscriptionRequest):
 
     except stripe.error.StripeError as e:
         print("Stripe Error: {}".format(e))
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        err_msg = "決済処理中にエラーが発生しました" if IS_PRODUCTION else str(e)
+        return JSONResponse(status_code=400, content={"error": err_msg})
     except Exception as e:
         print("New Subscription Error: {}".format(e))
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        err_msg = "サーバーエラーが発生しました" if IS_PRODUCTION else str(e)
+        return JSONResponse(status_code=500, content={"error": err_msg})
 
 
 @app.post("/stripe/create-checkout")
@@ -1002,12 +1005,14 @@ async def create_checkout_session(request: Request, req: CheckoutRequest):
 
     except stripe.error.StripeError as e:
         print("Stripe Error: {}".format(e))
+        err_msg = "決済セッションの作成に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=400,
-                            content={"error": str(e)})
+                            content={"error": err_msg})
     except Exception as e:
         print("Checkout Error: {}".format(e))
+        err_msg = "サーバーエラーが発生しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500,
-                            content={"error": str(e)})
+                            content={"error": err_msg})
 
 
 @app.post("/stripe/create-portal")
@@ -1048,8 +1053,9 @@ async def create_portal_session(req: PortalRequest):
 
     except Exception as e:
         print("Portal Error: {}".format(e))
+        err_msg = "ポータルの作成に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500,
-                            content={"error": str(e)})
+                            content={"error": err_msg})
 
 
 @app.post("/stripe/webhook")
@@ -1367,8 +1373,8 @@ async def get_subscription_status(contract_id: str):
         return result
 
     except Exception as e:
-        print("Status Error: {}".format(e))
-        return {"status": "error", "message": str(e)}
+        err_msg = "ステータス取得中にエラーが発生しました" if IS_PRODUCTION else str(e)
+        return {"status": "error", "message": err_msg}
 
 
 # =========================================================
