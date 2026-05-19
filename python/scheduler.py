@@ -43,7 +43,16 @@ class ShiftScheduler:
         self.staff_list = [s for s in raw_staff if isinstance(s, dict) and s.get("id")]
         
         self.config = config or {}
-        self.dates = sorted(dates or [])
+        # 安全対策: YYYY-MM-DDフォーマットの正しい日付のみを対象にする
+        valid_dates = []
+        for d in (dates or []):
+            if isinstance(d, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", d):
+                try:
+                    datetime.strptime(d, "%Y-%m-%d")
+                    valid_dates.append(d)
+                except ValueError:
+                    pass
+        self.dates = sorted(valid_dates)
         raw_req = requests or []
         self.requests = [r for r in raw_req if isinstance(r, dict) and r.get("staff_id")]
 
@@ -107,8 +116,19 @@ class ShiftScheduler:
         self.min_manager = int(sr.get("min_manager", 1))
         self.time_staff_req = self.config.get("time_staff_req", [])
 
-        # 休憩ルール
-        self.break_rules = self.config.get("break_rules", [])
+        # 休憩ルール（型安全性の向上）
+        raw_rules = self.config.get("break_rules", [])
+        self.break_rules = []
+        if isinstance(raw_rules, list):
+            for r in raw_rules:
+                if isinstance(r, dict):
+                    try:
+                        self.break_rules.append({
+                            "min_hours": float(r.get("min_hours", 0)),
+                            "break_minutes": int(r.get("break_minutes", 0))
+                        })
+                    except (ValueError, TypeError):
+                        pass
         if not self.break_rules:
             self.break_rules = self.DEFAULT_BREAK_RULES
 
@@ -231,12 +251,26 @@ class ShiftScheduler:
 
     def _get_day_type(self, date_str):
         """日付の種別を判定: weekday / weekend / holiday / closed"""
+        if not date_str:
+            return "closed"
         if date_str in self.special_holidays:
             return "closed"
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return "closed"  # 不正な日付文字列は安全のためにclosed扱い
         # JavaScript互換: 0=日, 1=月, ..., 6=土
         js_dow = (dt.weekday() + 1) % 7
-        if js_dow in [int(d) for d in self.closed_days]:
+        
+        # closed_daysの数値を安全にパース
+        closed_ints = []
+        for d in (self.closed_days or []):
+            try:
+                closed_ints.append(int(d))
+            except Exception:
+                pass
+                
+        if js_dow in closed_ints:
             return "closed"
         if dt.weekday() == 6:  # 日曜
             return "holiday"
