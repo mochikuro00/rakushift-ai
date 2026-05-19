@@ -455,7 +455,8 @@ def generate_shifts(request: Request, req: ShiftRequest):
         print("Error: {}".format(e))
         import traceback
         traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+        err_msg = "シフト生成中にエラーが発生しました" if IS_PRODUCTION else str(e)
+        return {"status": "error", "message": err_msg}
 
 
 # =============================================================

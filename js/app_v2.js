@@ -1676,8 +1676,8 @@ const app = {
                                     </div>
                                     <div class="pl-10">
                                         <div class="text-sm font-bold text-gray-800 mb-1">
-                                            <i class="fa-regular fa-calendar mr-1 text-gray-400"></i> ${req.dates}
-                                            ${req.type === 'work' ? `<span class="ml-2 text-gray-600">${req.start_time} - ${req.end_time}</span>` : ''}
+                                            <i class="fa-regular fa-calendar mr-1 text-gray-400"></i> ${this._sanitize(req.dates)}
+                                            ${req.type === 'work' ? `<span class="ml-2 text-gray-600">${this._sanitize(req.start_time)} - ${this._sanitize(req.end_time)}</span>` : ''}
                                         </div>
                                         ${req.reason ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-3">"${this._sanitize(req.reason)}"</div>` : ''}
                                         
@@ -1714,7 +1714,7 @@ const app = {
                                         <div>
                                             <span class="font-bold text-gray-700">${staff ? this._sanitize(staff.name) : '不明'}</span>
                                             <span class="text-gray-400 mx-1">|</span>
-                                            <span class="text-gray-600">${req.dates}</span>
+                                            <span class="text-gray-600">${this._sanitize(req.dates)}</span>
                                         </div>
                                     </div>
                                     <span class="font-bold text-xs ${isApproved ? 'text-green-600' : 'text-red-500'}">
@@ -2639,7 +2639,7 @@ const app = {
                                     <td class="p-4 whitespace-nowrap">
                                         <div class="flex items-center gap-3">
                                             <div class="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-gray-500 font-bold text-sm shadow-sm">
-                                                ${s.name.charAt(0)}
+                                                ${this._sanitize(s.name.charAt(0))}
                                             </div>
                                             <div>
                                                 <div class="font-bold text-gray-800 text-sm">${this._sanitize(s.name)}</div>
@@ -5943,10 +5943,10 @@ const app = {
             });
             const result = await res.json();
             if (result.valid) {
-                status.innerHTML = `<span class="text-green-600"><i class="fa-solid fa-circle-check mr-1"></i>有効: ${result.name}</span>`;
+                status.innerHTML = `<span class="text-green-600"><i class="fa-solid fa-circle-check mr-1"></i>有効: ${this._sanitize(result.name)}</span>`;
                 this._markFieldError('newSubReferrerCode', false);
             } else {
-                status.innerHTML = `<span class="text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${result.message || '無効なコードです'}（紹介者がいない場合は「なし」と入力）</span>`;
+                status.innerHTML = `<span class="text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${this._sanitize(result.message || '無効なコードです')}（紹介者がいない場合は「なし」と入力）</span>`;
                 this._markFieldError('newSubReferrerCode', true);
             }
         } catch (e) {
@@ -6610,7 +6610,7 @@ const app = {
 
                     html += `
                         <tr class="hover:bg-gray-50">
-                            <td class="px-3 py-2 font-bold text-gray-800">${staff.name || '不明'}</td>
+                            <td class="px-3 py-2 font-bold text-gray-800">${this._sanitize(staff.name || '不明')}</td>
                             <td class="px-3 py-2">${roleBadge}</td>
                             <td class="px-3 py-2 text-center font-mono text-emerald-600 font-bold">${shift.start_time}</td>
                             <td class="px-3 py-2 text-center font-mono text-red-500 font-bold">${shift.end_time}</td>
