@@ -572,33 +572,10 @@ const app = {
                 }
             }
 
-            // 方法3: 全RPC失敗時 → config_safeからorg_id取得してフォールバック認証
-            if (authMethod === 'none') {
-                console.warn('[AdminLogin] All RPCs failed. Trying direct config lookup...');
-                try {
-                    // config_safeテーブルからcontract_idでorganization_idを検索
-                    const configRes = await API.list('config_safe', {
-                        contract_id: `eq.${inputContractId}`,
-                        select: 'organization_id,contract_id'
-                    });
-                    if (configRes.data && configRes.data.length > 0) {
-                        orgId = configRes.data[0].organization_id;
-                        // 契約IDが存在する → 認証成功扱い（RPC未設定環境用）
-                        authResult = {
-                            success: true,
-                            name: '管理者',
-                            organization_id: orgId,
-                            staff_id: null,
-                            session_id: 'fallback_' + Date.now(),
-                            role: 'admin'
-                        };
-                        authMethod = 'config_lookup';
-                        console.log('[AdminLogin] Fallback auth via config_safe, org_id:', orgId);
-                    }
-                } catch (configErr) {
-                    console.warn('[AdminLogin] config_safe lookup failed:', configErr.message);
-                }
-            }
+            // 方法3は削除: config_safeルックアップによるフォールバック認証は
+            // パスワード検証をバイパスするセキュリティリスクがあるため廃止。
+            // RPC（verify_admin_login / verify_shop_login）が両方失敗した場合は
+            // 認証失敗として扱う。
 
             if (authResult && authResult.success) {
                 this._recordLoginAttempt('admin_' + inputContractId, true);

@@ -28,6 +28,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
 if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == [""]:
     ALLOWED_ORIGINS = [
+        "https://rakushift-ai.vercel.app",
+        "https://*.vercel.app",
         "https://rakushift-ai.pages.dev",
         "https://*.rakushift-ai.pages.dev",
         "http://localhost:3000",
