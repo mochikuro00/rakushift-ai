@@ -28,8 +28,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
 if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == [""]:
     ALLOWED_ORIGINS = [
-        "https://rakushift-ai.vercel.app",
-        "https://*.vercel.app",
         "https://rakushift-ai.pages.dev",
         "https://*.rakushift-ai.pages.dev",
         "http://localhost:3000",
@@ -1139,7 +1137,7 @@ async def stripe_webhook(request: Request):
                     )
 
                     # 3. メール自動送信（決済完了→即座にログイン情報を送信）
-                    login_url = FRONTEND_URL or "https://rakushift-ai.vercel.app"
+                    login_url = FRONTEND_URL or "https://rakushift-ai.pages.dev"
                     if customer_email:
                         await send_welcome_email(
                             to_email=customer_email,
@@ -1306,7 +1304,7 @@ async def admin_send_welcome_email(request: Request, req: SendWelcomeEmailReques
         body={"customer_email": req.email}
     )
 
-    login_url = FRONTEND_URL or "https://rakushift-ai.vercel.app"
+    login_url = FRONTEND_URL or "https://rakushift-ai.pages.dev"
     password = "rakushift1234"
 
     try:
