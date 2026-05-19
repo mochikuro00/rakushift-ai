@@ -1549,10 +1549,10 @@ const app = {
                     <div class="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors ${statusClass} ${borderClass}">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-xs">
-                                ${staff ? staff.name.charAt(0) : '?'}
+                                ${staff ? this._sanitize(staff.name.charAt(0)) : '?'}
                             </div>
                             <div>
-                                <div class="font-bold text-sm text-gray-800">${staff ? staff.name : '削除済スタッフ'}</div>
+                                <div class="font-bold text-sm text-gray-800">${staff ? this._sanitize(staff.name) : '削除済スタッフ'}</div>
                                 <div class="text-[10px] text-gray-500">${s.start_time} - ${s.end_time}</div>
                             </div>
                         </div>
@@ -1686,10 +1686,10 @@ const app = {
                                     <div class="flex justify-between items-start mb-2">
                                         <div class="flex items-center gap-2">
                                             <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-500 text-xs">
-                                                ${staff ? staff.name.charAt(0) : '?'}
+                                                ${staff ? this._sanitize(staff.name.charAt(0)) : '?'}
                                             </div>
                                             <div>
-                                                <div class="font-bold text-gray-800 text-sm">${staff ? staff.name : '不明'}</div>
+                                                <div class="font-bold text-gray-800 text-sm">${staff ? this._sanitize(staff.name) : '不明'}</div>
                                                 <div class="text-xs text-gray-500">${new Date(req.created_at || Date.now()).toLocaleDateString()} 申請</div>
                                             </div>
                                         </div>
@@ -1702,7 +1702,7 @@ const app = {
                                             <i class="fa-regular fa-calendar mr-1 text-gray-400"></i> ${req.dates}
                                             ${req.type === 'work' ? `<span class="ml-2 text-gray-600">${req.start_time} - ${req.end_time}</span>` : ''}
                                         </div>
-                                        ${req.reason ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-3">"${req.reason}"</div>` : ''}
+                                        ${req.reason ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-3">"${this._sanitize(req.reason)}"</div>` : ''}
                                         
                                         <div class="flex gap-3 mt-3 justify-end">
                                             <button onclick="app.handleRequest('${req.id}', 'rejected')" class="px-4 py-1.5 border border-gray-300 rounded text-gray-600 text-xs font-bold hover:bg-gray-50 shadow-sm transition-colors">
@@ -1735,7 +1735,7 @@ const app = {
                                     <div class="flex items-center gap-3">
                                         <div class="w-2 h-2 rounded-full ${isApproved ? 'bg-green-500' : 'bg-red-500'}"></div>
                                         <div>
-                                            <span class="font-bold text-gray-700">${staff ? staff.name : '不明'}</span>
+                                            <span class="font-bold text-gray-700">${staff ? this._sanitize(staff.name) : '不明'}</span>
                                             <span class="text-gray-400 mx-1">|</span>
                                             <span class="text-gray-600">${req.dates}</span>
                                         </div>
@@ -3921,7 +3921,8 @@ const app = {
         document.getElementById('editShiftStaffId').value = shift.staff_id;
         document.getElementById('editShiftTitle').textContent = 'シフト編集';
         document.getElementById('editShiftDateDisplay').textContent = shift.date;
-        document.getElementById('editShiftStaffName').innerHTML = `<div class="py-2 text-xl text-gray-800">${staff ? staff.name : '不明なスタッフ'}</div>`;
+        const safeName = staff ? this._sanitize(staff.name) : '不明なスタッフ';
+        document.getElementById('editShiftStaffName').innerHTML = `<div class="py-2 text-xl text-gray-800">${safeName}</div>`;
         
         // 時間の正規化 (HH:mm:ss -> HH:mm)
         const startTime = shift.start_time.substr(0, 5);
