@@ -1137,7 +1137,7 @@ async def stripe_webhook(request: Request):
                     )
 
                     # 3. メール自動送信（決済完了→即座にログイン情報を送信）
-                    login_url = FRONTEND_URL or "https://rakushift-ai.pages.dev"
+                    login_url = FRONTEND_URL or "https://rakushift-ai.vercel.app"
                     if customer_email:
                         await send_welcome_email(
                             to_email=customer_email,
@@ -1304,7 +1304,7 @@ async def admin_send_welcome_email(request: Request, req: SendWelcomeEmailReques
         body={"customer_email": req.email}
     )
 
-    login_url = FRONTEND_URL or "https://rakushift-ai.pages.dev"
+    login_url = FRONTEND_URL or "https://rakushift-ai.vercel.app"
     password = "rakushift1234"
 
     try:

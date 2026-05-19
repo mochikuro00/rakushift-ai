@@ -9,7 +9,7 @@ const SUPABASE_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFI
 const CALC_BASE_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.CALC_SERVER_URL) || "";
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error("[FATAL] js/config.js が未設定です。SUPABASE_URL と SUPABASE_ANON_KEY を設定してください、E);
+    console.error("[FATAL] js/config.js が未設定です。SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。");
 }
 
 const CALC_API_URL = CALC_BASE_URL + "/generate";
@@ -19,29 +19,29 @@ const DIAGNOSE_API_URL = CALC_BASE_URL + "/diagnose";
 const API = {
     session: null,
 
-    // --- 初期匁E& 認証 ---
+    // --- 初期化 & 認証 ---
     async init() {
-
+        console.log("API init start (Supabase Mode)");
         try {
-            // セチE��ョン復允E(Rakushift独自のセチE��ョンキーを優允E
+            // セッション復元 (Rakushift独自のセッションキーを優先)
             const savedSession = localStorage.getItem('rakushift_user'); // 独自認証用
             
             if (savedSession) {
-                // 独自認証モード�E復允E
+                // 独自認証モードの復元
                 const user = JSON.parse(savedSession);
                 this.session = {
                     access_token: 'dummy_token_for_static_auth',
                     user: user
                 };
-                // セチE��ョン復允E��亁E
+                // セッション復元完了
             } else {
-                // (旧互換) Supabase Auth の復允E
+                // (旧互換) Supabase Auth の復元
                 const savedSbSession = localStorage.getItem('supabase.auth.token');
                 if (savedSbSession) {
                     this.session = JSON.parse(savedSbSession);
-                    // セチE��ョン復允E��グは本番では非表示
+                    // セッション復元ログは本番では非表示
                 } else {
-                    // セチE��ョンなぁE
+                    // セッションなし
                 }
             }
         } catch(e) {
@@ -94,31 +94,31 @@ const API = {
         }
     },
 
-    // 認証は app.js 側で staff チE�Eブルを直接検索して行うため (SaaS対忁E StaticMode互換)
-    // ここではセチE��ョン状態�E管琁E�Eみ行う
+    // 認証は app.js 側で staff テーブルを直接検索して行うため (SaaS対応: StaticMode互換)
+    // ここではセッション状態の管理のみ行う
     setSession(user) {
-        // Supabaseモードでも、アプリ冁E�E独自認証�E�契約ID�E�を使ぁE��合�E
-        // userオブジェクトをラチE�Eしてsessionに入れる運用にする
+        // Supabaseモードでも、アプリ内の独自認証（契約ID）を使う場合は
+        // userオブジェクトをラップしてsessionに入れる運用にする
         this.session = {
-            access_token: 'dummy_token_for_static_auth', // 独自認証なのでダミ�E
+            access_token: 'dummy_token_for_static_auth', // 独自認証なのでダミー
             user: user
         };
-        // ローカルストレージにも独自キーで保存！Eupabase標準とは別管琁E��E
-        // セキュリチE��: タイムスタンプを付与してセチE��ョン有効期限を管琁E
+        // ローカルストレージにも独自キーで保存（Supabase標準とは別管理）
+        // セキュリティ: タイムスタンプを付与してセッション有効期限を管理
         user._session_created = Date.now();
         localStorage.setItem('rakushift_user', JSON.stringify(user));
     },
 
-    // セキュリチE��: セチE��ョン有効期限チェチE���E�フロントエンド�Eの補助制御�E�E
+    // セキュリティ: セッション有効期限チェック（フロントエンド側の補助制御）
     isSessionValid() {
         const saved = localStorage.getItem('rakushift_user');
         if (!saved) return false;
         try {
             const user = JSON.parse(saved);
             const created = user._session_created || 0;
-            const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000; // 7日閁E
+            const MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000; // 7日間
             if (Date.now() - created > MAX_SESSION_MS) {
-
+                console.log('[Security] Session expired. Auto logout.');
                 this.logout();
                 return false;
             }
@@ -128,7 +128,7 @@ const API = {
 
     async logout() {
         try {
-            // サーバ�E側のセチE��ョンも確実に破棁E��る（完璧なセキュリチE��拁E��！E
+            // サーバー側のセッションも確実に破棄する（完璧なセキュリティ担保）
             await this.rpc('destroy_session', {});
         } catch(e) {
             console.warn("Session destroy failed on server, proceeding with local logout");
@@ -139,16 +139,16 @@ const API = {
         location.reload();
     },
 
-    // --- 汎用チE�Eタ操佁E(Supabase REST) ---
+    // --- 汎用データ操作 (Supabase REST) ---
     async _request(endpoint, options = {}) {
-        // SaaSモーチE ログインしてぁE��くてめEPIは叩けるようにする�E�契約ID認証前でもconfig等�E読みたい場合があるため�E�E
-        // ただしRLSがかかってぁE��チE�EブルはSupabase側で弾かれめE
+        // SaaSモード: ログインしていなくてもAPIは叩けるようにする（契約ID認証前でもconfig等は読みたい場合があるため）
+        // ただしRLSがかかっているテーブルはSupabase側で弾かれる
         
         const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
         const headers = {
             'Content-Type': 'application/json',
             'apikey': SUPABASE_KEY,
-            // 'Authorization': `Bearer ${this.session?.access_token}`, // 独自認証の場合�EBearer不要、あるいはAnonキーでアクセス
+            // 'Authorization': `Bearer ${this.session?.access_token}`, // 独自認証の場合はBearer不要、あるいはAnonキーでアクセス
             'Authorization': `Bearer ${SUPABASE_KEY}`, // 基本はAnonキーでアクセスし、RLSはフィルタで制御
             'Prefer': 'return=representation',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -172,7 +172,7 @@ const API = {
             try {
                 const res = await fetch(url, { ...options, headers });
                 if (!res.ok) {
-                    // 500系エラーまた�EToo Many Requests (429) の場合�Eリトライ対象
+                    // 500系エラーまたはToo Many Requests (429) の場合はリトライ対象
                     if ((res.status >= 500 && res.status < 600) || res.status === 429) {
                         throw new Error(`Server Error ${res.status}`);
                     }
@@ -185,21 +185,21 @@ const API = {
                     } catch(e) {}
                     
                     console.error(`API Error [${res.status}] ${url}`, errMsg);
-                    throw new Error(`チE�Eタ取得エラー (${res.status}): ${errMsg}`);
+                    throw new Error(`データ取得エラー (${res.status}): ${errMsg}`);
                 }
                 return await res.json();
             } catch (e) {
-                // クライアント起因のエラー�E�E00系�E��E場合�Eそ�Eままスロー
-                if (e.message.includes("チE�Eタ取得エラー")) {
+                // クライアント起因のエラー（400系）の場合はそのままスロー
+                if (e.message.includes("データ取得エラー")) {
                     throw e;
                 }
                 
                 attempt++;
                 if (attempt > MAX_RETRIES) {
                     console.error("Fetch failed after retries:", e);
-                    throw new Error("サーバ�E通信に失敗しました。ネチE��ワークを確認してください、E);
+                    throw new Error("サーバー通信に失敗しました。ネットワークを確認してください。");
                 }
-                // 持E��バックオチE(1回目: 500ms, 2回目: 1000ms)
+                // 指数バックオフ (1回目: 500ms, 2回目: 1000ms)
                 await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
             }
         }
@@ -207,7 +207,7 @@ const API = {
 
     async list(table, params = {}) {
         const qs = new URLSearchParams(params).toString();
-        // Supabase形式�Eレスポンス {data: [], error: null} を模倣するか、直接配�Eを返すぁE
+        // Supabase形式のレスポンス {data: [], error: null} を模倣するか、直接配列を返すか
         // Static Table API互換にするため {data: [...]} 形式で返す
         const data = await this._request(`${table}?${qs}`);
         return { data: data };
@@ -235,11 +235,11 @@ const API = {
     },
 
     async delete(table, id) {
-        // チE��ント保護: 重要テーブルの直接削除を禁止
+        // テナント保護: 重要テーブルの直接削除を禁止
         const protectedTables = ['organizations', 'config', 'hq_admins'];
         if (protectedTables.includes(table)) {
-            console.error(`[BLOCKED] チE�Eブル "${table}" の削除はシスチE��により禁止されてぁE��す`);
-            throw new Error(`${table} の削除は許可されてぁE��せん`);
+            console.error(`[BLOCKED] テーブル "${table}" の削除はシステムにより禁止されています`);
+            throw new Error(`${table} の削除は許可されていません`);
         }
         console.warn(`[DELETE] ${table} id=${id} - 実行`);
         await this._request(`${table}?id=eq.${id}`, {
@@ -259,7 +259,7 @@ const API = {
     },
 
 
-    // --- RPC (サーバ�Eサイド関数) ---
+    // --- RPC (サーバーサイド関数) ---
     async rpc(functionName, params = {}) {
         const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
         const headers = {
@@ -286,11 +286,11 @@ const API = {
         if (!res.ok) {
             const errText = await res.text();
             console.error(`RPC Error [${res.status}] ${functionName}:`, errText);
-            throw new Error(`RPC失敁E ${functionName}`);
+            throw new Error(`RPC失敗: ${functionName}`);
         }
         return await res.json();
     },
-    // --- 事前チェチE�� (人員不足の検�E) ---
+    // --- 事前チェック (人員不足の検出) ---
     async checkFeasibility(payload) {
         try {
             const res = await fetch(CHECK_API_URL, {
@@ -310,12 +310,12 @@ const API = {
 
 
     // --- 計算エンジン連携 (Python Railway) ---
-    // Gemini監査はサーバ�Eサイドで実衁E(APIキーをフロントに露出しなぁE
+    // Gemini監査はサーバーサイドで実行 (APIキーをフロントに露出しない)
     async generateShifts(payload) {
-
+        console.log("Starting shift generation process...");
 
         try {
-            // contract_idを�Eイロードに追加 (サーバ�EがAPIキーを取得するためE
+            // contract_idをペイロードに追加 (サーバーがAPIキーを取得するため)
             const contractId = payload.config?.contract_id || null;
 
             const serverPayload = {
@@ -339,7 +339,7 @@ const API = {
             }
 
             const result = await res.json();
-
+            console.log("Server Result:", result);
 
             if (result.status === 'success' && Array.isArray(result.shifts)) {
                 return {
@@ -376,7 +376,7 @@ const API = {
         }
     },
 
-    // --- Stripe決渁EAPI ---
+    // --- Stripe決済 API ---
     async createCheckout(contractId, plan = 'standard') {
         try {
             const res = await fetch(CALC_BASE_URL + '/stripe/create-checkout', {
@@ -469,4 +469,4 @@ const API = {
 };
 
 window.API = API;
-
+console.log("API Loaded (Supabase Mode)");
