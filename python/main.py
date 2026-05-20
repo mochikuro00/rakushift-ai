@@ -1361,8 +1361,9 @@ async def admin_send_welcome_email(request: Request, req: SendWelcomeEmailReques
         )
         return {"success": True, "message": "メールを送信しました: {}".format(req.email)}
     except Exception as e:
+        print("[WelcomeEmail Error] {}".format(e))
         return JSONResponse(status_code=500,
-                            content={"error": "メール送信に失敗しました: {}".format(str(e))})
+                            content={"error": "メール送信に失敗しました。しばらく時間をおいて再度お試しください。"})
 
 
 @app.get("/stripe/subscription-status/{contract_id}")
@@ -1489,7 +1490,9 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
             msg = MIMEMultipart()
             msg["From"] = smtp_user
             msg["To"] = to_email
-            msg["Subject"] = f"【ラクシフト】法人お問い合わせ - {req.company_name}"
+            # SMTPヘッダーインジェクション防止: 改行文字を除去
+            safe_company = req.company_name.replace("\r", "").replace("\n", "")
+            msg["Subject"] = f"【ラクシフト】法人お問い合わせ - {safe_company}"
             msg.attach(MIMEText(body, "plain", "utf-8"))
 
             with smtplib.SMTP(smtp_host, smtp_port) as server:
