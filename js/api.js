@@ -97,6 +97,11 @@ const API = {
     // 認証は app.js 側で staff テーブルを直接検索して行うため (SaaS対応: StaticMode互換)
     // ここではセッション状態の管理のみ行う
     setSession(user) {
+        if (!user) {
+            this.session = null;
+            localStorage.removeItem('rakushift_user');
+            return;
+        }
         // Supabaseモードでも、アプリ内の独自認証（契約ID）を使う場合は
         // userオブジェクトをラップしてsessionに入れる運用にする
         this.session = {
