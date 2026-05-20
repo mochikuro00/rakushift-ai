@@ -1206,9 +1206,16 @@ const app = {
         const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
         const planColors = { standard: 'bg-blue-100 text-blue-800', pro: 'bg-green-100 text-green-800', premium: 'bg-purple-100 text-purple-800', oem: 'bg-amber-100 text-amber-800', free: 'bg-gray-100 text-gray-500' };
 
+        // ローカルストレージに保存されている店舗のみ表示（入力しない限り見えない）
+        let savedOrgIds = [];
+        try {
+            savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
+        } catch(e) {}
+        shops = shops.filter(shop => savedOrgIds.includes(shop.id) || savedOrgIds.includes(shop.organization_id));
+
         let tableRows = '';
         if (shops.length === 0) {
-            tableRows = `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">登録されている店舗がありません</td></tr>`;
+            tableRows = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">登録されている店舗がありません</td></tr>`;
         } else {
             tableRows = shops.map(shop => {
                 const date = new Date(shop.created_at);
@@ -1240,6 +1247,14 @@ const app = {
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-700">${shop.staff_count || 0}名</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${statusBadge}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">${dateStr}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center font-medium space-x-2">
+                        <button onclick="app.switchToHQShop('${shop.organization_id || shop.id}')" class="text-indigo-600 hover:text-indigo-900 font-bold">
+                            <i class="fa-solid fa-eye"></i> 閲覧
+                        </button>
+                        <button onclick="app.removeHQShop('${shop.organization_id || shop.id}')" class="text-red-600 hover:text-red-900 font-bold ml-2">
+                            <i class="fa-solid fa-trash"></i> 削除
+                        </button>
+                    </td>
                 </tr>
             `}).join('');
         }
@@ -1302,6 +1317,7 @@ const app = {
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">状態</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
