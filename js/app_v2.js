@@ -1346,8 +1346,11 @@ const app = {
                 } catch(e) {}
 
                 this.state.organization_id = authResult.organization_id;
+                this.state.isAdmin = true;
+                this.state.isShopLoggedIn = true;
                 await this.loadData();
                 this.showToast('店舗 (' + contractId + ') の閲覧を開始します', 'success');
+                this.updateAuthUI();
                 this.changeView('dashboard');
             } else {
                 // 管理者として試す
@@ -1368,8 +1371,11 @@ const app = {
                     } catch(e) {}
 
                     this.state.organization_id = adminResult.organization_id;
+                    this.state.isAdmin = true;
+                    this.state.isShopLoggedIn = true;
                     await this.loadData();
                     this.showToast('管理者権限で店舗 (' + contractId + ') の閲覧を開始します', 'success');
+                    this.updateAuthUI();
                     this.changeView('dashboard');
                 } else {
                     this.showToast('IDまたはパスワードが正しくありません', 'error');
@@ -5523,7 +5529,7 @@ const app = {
 
     // --- マニュアル ---
     renderManual(container) {
-        if (!this.state.isAdmin) { this.changeView('dashboard'); return; }
+        if (!this.state.isAdmin && !this.state.isHQ) { this.changeView('dashboard'); return; }
 
         let tabsHtml = '';
         if (this.state.isHQ) {
