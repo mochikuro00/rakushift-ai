@@ -1211,11 +1211,15 @@ const app = {
                 const date = new Date(shop.created_at);
                 const dateStr = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}`;
                 const plan = shop.plan || 'free';
+                const status = shop.license_status || 'active';
+                const statusBadge = status === 'active'
+                    ? '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">稼働中</span>'
+                    : '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-600">停止</span>';
                 return `
-                <tr class="hover:bg-indigo-50/50 cursor-pointer transition-colors border-b border-gray-100 group" onclick="app.switchToHQShop('${this._sanitize(shop.organization_id)}')">
+                <tr class="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
                                 <i class="fa-solid fa-store"></i>
                             </div>
                             <div>
@@ -1224,17 +1228,15 @@ const app = {
                             </div>
                         </div>
                     </td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${this._sanitize(shop.contract_id || '-')}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${this._sanitize(shop.contract_id || '—')}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">
                         <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${planColors[plan] || planColors.free}">
                             ${planLabels[plan] || plan}
                         </span>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-700">${shop.staff_count || 0}名</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${statusBadge}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">${dateStr}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <span class="text-indigo-600 hover:text-indigo-900 bg-white border border-indigo-200 px-3 py-1 rounded shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">閲覧する <i class="fa-solid fa-arrow-right ml-1"></i></span>
-                    </td>
                 </tr>
             `}).join('');
         }
@@ -1244,10 +1246,10 @@ const app = {
                 <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl shadow-lg p-6 md:p-8 text-white flex justify-between items-center relative overflow-hidden">
                     <div class="relative z-10">
                         <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダッシュボード</h2>
-                        <p class="text-indigo-100 text-sm md:text-base">全テナント・店舗の稼働状況を把握・確認できます（本部用）。</p>
+                        <p class="text-indigo-100 text-sm md:text-base">店舗にアクセスするには、下記の入力フォームから契約IDとパスワードを入力してください。</p>
                     </div>
                     <div class="relative z-10 flex gap-3">
-                        <button onclick="app.logout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+                        <button onclick="app.hqLogout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
                             <i class="fa-solid fa-right-from-bracket"></i> ログアウト
                         </button>
                     </div>
@@ -1292,8 +1294,8 @@ const app = {
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">契約ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">プラン</th>
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">状態</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
-                                    <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
