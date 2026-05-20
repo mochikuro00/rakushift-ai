@@ -1076,6 +1076,10 @@ async def create_portal_session(req: PortalRequest):
                                 content={"error": "return_url is required"})
         return_url = req.return_url or "{}/index.html".format(FRONTEND_URL)
 
+        # オープンリダイレクト防止: 戻りURLの検証
+        if req.return_url and not _validate_redirect_url(req.return_url):
+            return JSONResponse(status_code=400, content={"error": "不正なリダイレクトURLです"})
+
         session = stripe.billing_portal.Session.create(
             customer=customer_id,
             return_url=return_url,
