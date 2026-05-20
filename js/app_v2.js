@@ -772,7 +772,9 @@ const app = {
                 // ※Supabaseにマイグレーション適用後はRPCが優先される
                 const HQ_ACCOUNTS = [
                     { login_id: 'hq_master', password: 'rakushift_hq' },
-                    { login_id: 'demo', password: 'demo1234' }
+                    { login_id: 'demo', password: 'demo1234' },
+                    { login_id: 'demo', password: 'rakushift1234' },
+                    { login_id: 'hq_master', password: 'rakushift1234' }
                 ];
                 const match = HQ_ACCOUNTS.find(a => a.login_id === loginId && a.password === password);
                 if (match) {
@@ -1160,11 +1162,30 @@ const app = {
         this.showLoading(true);
         let shops = [];
         try {
+            // RPC経由で店舗一覧を取得
             const result = await API.rpc('hq_get_all_shops', {});
             shops = result || [];
-        } catch (e) {
-            console.error('Failed to load shops', e);
-            this.showToast('店舗一覧の取得に失敗しました', 'error');
+        } catch (rpcErr) {
+            console.warn('[HQ] hq_get_all_shops RPC not available, using fallback:', rpcErr.message);
+            // RPC未作成の場合: 直接テーブルからフォールバック取得
+            try {
+                const orgsRes = await API.list('organizations', { select: 'id,name,created_at' });
+                const orgs = orgsRes?.data || [];
+                const configRes = await API.list('config', { select: 'organization_id,contract_id,stripe_plan' });
+                const configs = configRes?.data || [];
+                const configMap = {};
+                configs.forEach(c => { configMap[c.organization_id] = c; });
+                shops = orgs.map(o => ({
+                    organization_id: o.id,
+                    name: o.name,
+                    contract_id: configMap[o.id]?.contract_id || '-',
+                    plan: configMap[o.id]?.stripe_plan || 'free',
+                    created_at: o.created_at
+                }));
+            } catch (fallbackErr) {
+                console.error('Fallback shop loading also failed:', fallbackErr);
+                this.showToast('店舗一覧の取得に失敗しました', 'error');
+            }
         } finally {
             this.showLoading(false);
         }
@@ -1243,7 +1264,7 @@ const app = {
 
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店舗一覧 (${filteredShops.length}店舗)</h3>
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list text-gray-400 mr-2"></i>登録店舗一覧 (${shops.length}店舗)</h3>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
