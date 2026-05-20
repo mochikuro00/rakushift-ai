@@ -1005,6 +1005,9 @@ const app = {
             case 'manual':
                 this.renderManual(container);
                 break;
+            case 'hq_manual':
+                this.renderHQManual(container);
+                break;
             case 'announcements':
                 this.renderAnnouncementsAdmin(container);
                 break;
@@ -1248,8 +1251,11 @@ const app = {
                         <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダッシュボード</h2>
                         <p class="text-indigo-100 text-sm md:text-base">店舗にアクセスするには、下記の入力フォームから契約IDとパスワードを入力してください。</p>
                     </div>
-                    <div class="relative z-10 flex gap-3">
-                        <button onclick="app.hqLogout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+                    <div class="relative z-10 flex gap-2 md:gap-3">
+                        <button onclick="app.changeView('hq_manual')" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-book"></i> 本部マニュアル
+                        </button>
+                        <button onclick="app.hqLogout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
                             <i class="fa-solid fa-right-from-bracket"></i> ログアウト
                         </button>
                     </div>
@@ -5518,7 +5524,23 @@ const app = {
     // --- マニュアル ---
     renderManual(container) {
         if (!this.state.isAdmin) { this.changeView('dashboard'); return; }
+
+        let tabsHtml = '';
+        if (this.state.isHQ) {
+            tabsHtml = `
+            <div class="flex border-b border-gray-200 mb-6 bg-white rounded-xl p-1 shadow-sm max-w-4xl mx-auto">
+                <button onclick="app.changeView('manual')" class="flex-1 py-2.5 text-sm font-bold text-center rounded-lg bg-indigo-50 text-indigo-700 shadow-sm transition-all">
+                    <i class="fa-solid fa-book mr-1"></i>店舗管理者マニュアル
+                </button>
+                <button onclick="app.changeView('hq_manual')" class="flex-1 py-2.5 text-sm font-bold text-center rounded-lg text-gray-500 hover:text-gray-900 transition-all">
+                    <i class="fa-solid fa-building-user mr-1"></i>本部管理者マニュアル
+                </button>
+            </div>
+            `;
+        }
+
         container.innerHTML = `
+        ${tabsHtml}
         <div class="max-w-4xl mx-auto space-y-6 pb-20">
             <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-book mr-2 text-indigo-500"></i>システムマニュアル</h2>
 
@@ -5805,6 +5827,167 @@ const app = {
                 </div>
             </div>
         </div>`;
+    },
+
+    renderHQManual(container) {
+        if (!this.state.isHQ) { this.changeView('dashboard'); return; }
+
+        // 店舗選択中（＝organization_idがある）なら、サイドバーの枠内なので店舗マニュアルとの切り替えタブを表示
+        // 店舗未選択（＝本部ダッシュボードから直接アクセス）なら、本部ダッシュボードに戻るボタンを表示
+        const hasShop = !!this.state.organization_id;
+        let headerHtml = '';
+        if (hasShop) {
+            headerHtml = `
+            <div class="flex border-b border-gray-200 mb-6 bg-white rounded-xl p-1 shadow-sm max-w-4xl mx-auto">
+                <button onclick="app.changeView('manual')" class="flex-1 py-2.5 text-sm font-bold text-center rounded-lg text-gray-500 hover:text-gray-900 transition-all">
+                    <i class="fa-solid fa-book mr-1"></i>店舗管理者マニュアル
+                </button>
+                <button onclick="app.changeView('hq_manual')" class="flex-1 py-2.5 text-sm font-bold text-center rounded-lg bg-indigo-50 text-indigo-700 shadow-sm transition-all">
+                    <i class="fa-solid fa-building-user mr-1"></i>本部管理者マニュアル
+                </button>
+            </div>
+            `;
+        } else {
+            headerHtml = `
+            <div class="max-w-4xl mx-auto flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-building-user mr-2 text-indigo-500"></i>本部管理者マニュアル</h2>
+                <button onclick="app.changeView('hq_dashboard')" class="px-4 py-2 text-sm font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded-xl bg-white transition-all shadow-sm">
+                    <i class="fa-solid fa-arrow-left mr-1"></i>本部ダッシュボードへ戻る
+                </button>
+            </div>
+            `;
+        }
+
+        container.innerHTML = `
+        ${headerHtml}
+        <div class="max-w-4xl mx-auto space-y-6 pb-20">
+            <!-- 概要 -->
+            <div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl shadow-sm border border-indigo-100 p-6">
+                <h3 class="text-lg font-bold text-indigo-900 mb-2"><i class="fa-solid fa-circle-info mr-2"></i>本部アカウントとは</h3>
+                <p class="text-sm text-indigo-700 leading-relaxed">
+                    本部アカウントは、複数店舗（テナント）のシフト稼働状況や人件費、スタッフ構成を横断的に把握・閲覧するための専用アカウントです。<br>
+                    <strong>セキュリティ保護のため、全店舗データは「閲覧専用」であり、本部から直接データの追加や編集、削除を行うことはできません。</strong>
+                </p>
+            </div>
+
+            <!-- 目次 -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h3 class="font-bold text-gray-800 mb-3">目次</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    <a href="#hq-auth" class="text-indigo-600 hover:underline">1. 本部権限とセキュリティポリシー</a>
+                    <a href="#hq-dashboard-guide" class="text-indigo-600 hover:underline">2. 本部ダッシュボードの使い方</a>
+                    <a href="#hq-shop-access" class="text-indigo-600 hover:underline">3. 店舗へのアクセス手順</a>
+                    <a href="#hq-view-mode" class="text-indigo-600 hover:underline">4. 閲覧専用モードでの制限操作</a>
+                    <a href="#hq-faq" class="text-indigo-600 hover:underline">5. よくある質問 (FAQ)</a>
+                </div>
+            </div>
+
+            <!-- 1. 本部権限 -->
+            <div id="hq-auth" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">1.</span>本部権限とセキュリティポリシー</h4>
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-600">本部管理者は、店舗のデータを誤って変更することを防ぐため、各画面が読み取り専用（閲覧のみ）の構成に自動制限されます。</p>
+                    <table class="w-full text-sm border-collapse border border-gray-200">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-700 font-bold">
+                                <th class="p-2 border text-left">操作項目</th>
+                                <th class="p-2 border text-center">本部管理者</th>
+                                <th class="p-2 border text-center">店舗管理者</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-gray-600">
+                            <tr>
+                                <td class="p-2 border font-bold">登録店舗一覧の表示</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                                <td class="p-2 border text-center text-red-500"><i class="fa-solid fa-circle-xmark"></i> 不可</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2 border font-bold">シフト表の閲覧・印刷</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2 border font-bold">スタッフ構成の閲覧</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2 border font-bold">シフトの新規作成・編集</td>
+                                <td class="p-2 border text-center text-red-500 font-bold"><i class="fa-solid fa-circle-xmark"></i> 閲覧のみ</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2 border font-bold">スタッフの追加・変更</td>
+                                <td class="p-2 border text-center text-red-500 font-bold"><i class="fa-solid fa-circle-xmark"></i> 閲覧のみ</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 2. ダッシュボード -->
+            <div id="hq-dashboard-guide" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">2.</span>本部ダッシュボードの使い方</h4>
+                <div class="space-y-3 text-sm text-gray-600 leading-relaxed">
+                    <p>ログイン後に表示される本部管理者用コントロールパネルです。ここでは以下の情報が確認できます。</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li><strong>登録店舗一覧:</strong> 傘下の全店舗の名前、契約ID、契約中のプラン（Standard/Proなど）、登録スタッフ数、および稼働状態が一覧で表示されます。</li>
+                        <li><strong>店舗へのアクセス:</strong> セキュリティ保護のため、一覧から店舗を直接クリックして入ることはできません。店舗に入るには次の「店舗へのアクセス手順」を実行してください。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 3. 店舗へのアクセス手順 -->
+            <div id="hq-shop-access" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">3.</span>店舗へのアクセス手順</h4>
+                <div class="space-y-4">
+                    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-900">
+                        店舗の詳細情報やシフト表を確認するには、以下の手順で<strong>認証</strong>を行ってください。
+                    </div>
+                    <ol class="list-decimal pl-5 text-sm text-gray-600 space-y-3">
+                        <li>本部ダッシュボードの<strong>「指定の店舗を閲覧」</strong>欄を確認します。</li>
+                        <li>一覧表から、アクセスしたい店舗の<strong>契約ID（15桁）</strong>をコピーまたは入力します。</li>
+                        <li>その店舗の<strong>管理者パスワード</strong>（または店舗用一般パスワード）を入力します。</li>
+                        <li><strong>「閲覧する」</strong>ボタンをクリックします。</li>
+                        <li>認証に成功すると、店舗側の管理画面に切り替わり、ヘッダーに「<i class="fa-solid fa-eye mr-1"></i>閲覧専用モード」と表示されます。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- 4. 閲覧専用モードでの制限操作 -->
+            <div id="hq-view-mode" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">4.</span>閲覧専用モードでの制限操作</h4>
+                <div class="space-y-3 text-sm text-gray-600 leading-relaxed">
+                    <p>店舗に入った後は、店長アカウントと同等の表示情報を確認できますが、操作ボタンの大部分は非表示または無効化されます。</p>
+                    <div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-xs">
+                        ⚠️ <strong>ご注意:</strong> 本部閲覧中は、ボタン（「追加」「保存」「作成」「削除」など）は画面から自動的に非表示になります。もし編集が必要な場合は、自店舗の管理者が「店舗管理者ログイン」からアクセスして操作する必要があります。
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. FAQ -->
+            <div id="hq-faq" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">5.</span>よくある質問 (FAQ)</h4>
+                <div class="space-y-4">
+                    <div class="space-y-1">
+                        <p class="text-sm font-bold text-gray-800">Q. 店舗一覧から直接入れないのはなぜですか？</p>
+                        <p class="text-sm text-gray-600">A. セキュリティおよび誤操作防止のため、各テナントの管理者パスワードを入力する追加認証を必須としています。これにより不正アクセスや意図しない店舗データの閲覧を防止しています。</p>
+                    </div>
+                    <hr class="border-gray-100">
+                    <div class="space-y-1">
+                        <p class="text-sm font-bold text-gray-800">Q. ログアウトするにはどうすればよいですか？</p>
+                        <p class="text-sm text-gray-600">A. 画面ヘッダー右上の「ログアウト」ボタンをクリックしてください。即座にセッションがクリアされ、ログイン画面に戻ります。</p>
+                    </div>
+                    <hr class="border-gray-100">
+                    <div class="space-y-1">
+                        <p class="text-sm font-bold text-gray-800">Q. パスワードが一致しているのに店舗に入れません。</p>
+                        <p class="text-sm text-gray-600">A. 契約IDが15桁正確に入力されているかご確認ください（スペースなどの余分な文字が含まれていないか注意してください）。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
     },
 
     // --- その他 ---
