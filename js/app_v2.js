@@ -787,8 +787,9 @@ const app = {
             if (result && result.status === 'success') {
                 this._recordLoginAttempt('hq_' + loginId, true);
                 this.state.isHQ = true;
-                this.state.isAdmin = true;
-                this.state.isShopLoggedIn = true;
+                this.state.isAdmin = false;
+                this.state.isShopLoggedIn = false;
+                this.state.organization_id = null;
                 
                 API.setSession({
                     session_id: result.session_id || ('hq_' + Date.now()),
@@ -843,10 +844,17 @@ const app = {
 
         // --- 本部（閲覧専用）モードの制御 ---
         if (this.state.isHQ) {
-            if (authBtn) authBtn.classList.add('hidden'); // サイドバーのログインボタンを隠す
+            if (authBtn) authBtn.classList.add('hidden');
             
-            // 管理者メニューは一部（ダッシュボード、シフト作成、スタッフ等）表示させるが編集不可
-            adminLinks.forEach(link => link.classList.remove('hidden'));
+            // 店舗が選択されている場合のみサイドバーメニューを表示
+            const hasShop = !!this.state.organization_id;
+            adminLinks.forEach(link => {
+                if (hasShop) {
+                    link.classList.remove('hidden');
+                } else {
+                    link.classList.add('hidden');
+                }
+            });
 
             if (adminHeader) {
                 adminHeader.innerHTML = `
@@ -856,24 +864,26 @@ const app = {
                     <button onclick="app.changeView('hq_dashboard')" class="px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded bg-white transition-all mr-2 shadow-sm">
                         <i class="fa-solid fa-list mr-1"></i>店舗一覧
                     </button>
-                    <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all shadow-sm">
+                    <button onclick="app.hqLogout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all shadow-sm">
                         <i class="fa-solid fa-power-off mr-1"></i>ログアウト
                     </button>
                 `;
             }
 
-            // 各種追加・保存・作成系のボタンを隠すか無効化する
-            setTimeout(() => {
-                const actionKeywords = ['追加', '保存', '作成', '申請', '編集', '設定', '削除', '承認', '却下'];
-                document.querySelectorAll('button').forEach(btn => {
-                    if (!btn.closest('#adminHeaderControls') && !btn.closest('#sidebar') && !btn.closest('#viewContainer')?.querySelector('header')) {
-                        const txt = btn.textContent;
-                        if (actionKeywords.some(kw => txt.includes(kw))) {
-                            btn.classList.add('hidden');
+            // 閲覧専用: 編集系ボタンを隠す
+            if (hasShop) {
+                setTimeout(() => {
+                    const actionKeywords = ['追加', '保存', '作成', '申請', '編集', '設定', '削除', '承認', '却下'];
+                    document.querySelectorAll('button').forEach(btn => {
+                        if (!btn.closest('#adminHeaderControls') && !btn.closest('#sidebar')) {
+                            const txt = btn.textContent;
+                            if (actionKeywords.some(kw => txt.includes(kw))) {
+                                btn.classList.add('hidden');
+                            }
                         }
-                    }
-                });
-            }, 100);
+                    });
+                }, 100);
+            }
 
             this.updateRequestBadge();
             this.updateAnnouncementBadge();
@@ -1162,57 +1172,65 @@ const app = {
         this.showLoading(true);
         let shops = [];
         try {
-            // RPC経由で店舗一覧を取得
-            const result = await API.rpc('hq_get_all_shops', {});
-            shops = result || [];
-        } catch (rpcErr) {
-            console.warn('[HQ] hq_get_all_shops RPC not available, using fallback:', rpcErr.message);
-            // RPC未作成の場合: 直接テーブルからフォールバック取得
+            // バックエンド(Railway)経由で取得（サービスキーでRLSバイパス）
+            const backendUrl = RAKUSHIFT_CONFIG?.CALC_SERVER_URL || 'https://rakushift-ai-production.up.railway.app';
+            const sessionData = JSON.parse(localStorage.getItem('rakushift_user') || '{}');
+            const res = await fetch(`${backendUrl}/hq/shops`, {
+                headers: {
+                    'x-session-id': sessionData.session_id || '',
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (res.ok) {
+                shops = await res.json();
+            } else {
+                throw new Error('Backend returned ' + res.status);
+            }
+        } catch (backendErr) {
+            console.warn('[HQ] Backend fallback failed:', backendErr.message);
+            // フォールバック: Supabase RPC
             try {
-                const orgsRes = await API.list('organizations', { select: 'id,name,created_at' });
-                const orgs = orgsRes?.data || [];
-                const configRes = await API.list('config', { select: 'organization_id,contract_id,stripe_plan' });
-                const configs = configRes?.data || [];
-                const configMap = {};
-                configs.forEach(c => { configMap[c.organization_id] = c; });
-                shops = orgs.map(o => ({
-                    organization_id: o.id,
-                    name: o.name,
-                    contract_id: configMap[o.id]?.contract_id || '-',
-                    plan: configMap[o.id]?.stripe_plan || 'free',
-                    created_at: o.created_at
-                }));
-            } catch (fallbackErr) {
-                console.error('Fallback shop loading also failed:', fallbackErr);
+                const result = await API.rpc('hq_get_all_shops', {});
+                shops = result || [];
+            } catch (rpcErr) {
+                console.warn('[HQ] RPC also failed:', rpcErr.message);
                 this.showToast('店舗一覧の取得に失敗しました', 'error');
             }
         } finally {
             this.showLoading(false);
         }
 
+        const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
+        const planColors = { standard: 'bg-blue-100 text-blue-800', pro: 'bg-green-100 text-green-800', premium: 'bg-purple-100 text-purple-800', oem: 'bg-amber-100 text-amber-800', free: 'bg-gray-100 text-gray-500' };
+
         let tableRows = '';
         if (shops.length === 0) {
-            tableRows = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">登録されている店舗がありません</td></tr>`;
+            tableRows = `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">登録されている店舗がありません</td></tr>`;
         } else {
             tableRows = shops.map(shop => {
                 const date = new Date(shop.created_at);
                 const dateStr = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')}`;
+                const plan = shop.plan || 'free';
                 return `
-                <tr class="hover:bg-indigo-50/50 cursor-pointer transition-colors border-b border-gray-100 group" onclick="app.switchToHQShop('${shop.organization_id}')">
+                <tr class="hover:bg-indigo-50/50 cursor-pointer transition-colors border-b border-gray-100 group" onclick="app.switchToHQShop('${this._sanitize(shop.organization_id)}')">
                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
                                 <i class="fa-solid fa-store"></i>
                             </div>
-                            <span class="font-bold">${shop.name || '未設定'}</span>
+                            <div>
+                                <span class="font-bold">${this._sanitize(shop.name || '未設定')}</span>
+                                ${shop.contact_name ? `<div class="text-xs text-gray-400">${this._sanitize(shop.contact_name)}</div>` : ''}
+                            </div>
                         </div>
                     </td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${shop.contract_id || '-'}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${this._sanitize(shop.contract_id || '-')}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">
-                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                            ${shop.plan || 'Free'}
+                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${planColors[plan] || planColors.free}">
+                            ${planLabels[plan] || plan}
                         </span>
                     </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-700">${shop.staff_count || 0}名</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">${dateStr}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <span class="text-indigo-600 hover:text-indigo-900 bg-white border border-indigo-200 px-3 py-1 rounded shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">閲覧する <i class="fa-solid fa-arrow-right ml-1"></i></span>
@@ -1270,9 +1288,10 @@ const app = {
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店舗名 / 契約ID</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店舗名</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">契約ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">プラン</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
                                     <th scope="col" class="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">操作</th>
                                 </tr>
@@ -1374,8 +1393,11 @@ const app = {
         this.showLoading(true);
         try {
             this.state.organization_id = orgId;
+            this.state.isAdmin = true;
+            this.state.isShopLoggedIn = true;
             await this.loadData();
             this.showToast('店舗情報を読み込みました（閲覧専用モード）', 'success');
+            this.updateAuthUI();
             this.changeView('dashboard');
         } catch(e) {
             console.error('Shop loading error:', e);
@@ -1383,6 +1405,23 @@ const app = {
         } finally {
             this.showLoading(false);
         }
+    },
+
+    // 本部ログアウト（confirmなしで即時実行）
+    hqLogout() {
+        this.state.isHQ = false;
+        this.state.isAdmin = false;
+        this.state.isShopLoggedIn = false;
+        this.state.organization_id = null;
+        this.state.config = {};
+        this.state.staff = [];
+        this.state.shifts = [];
+        this.state.requests = [];
+        API.setSession(null);
+        localStorage.removeItem('rakushift_user');
+        localStorage.removeItem('rakushift_org_id');
+        localStorage.removeItem('hq_saved_shops');
+        window.location.reload();
     },
 
     // 1. ダッシュボード (Dashboard)

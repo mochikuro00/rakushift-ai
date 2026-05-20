@@ -376,6 +376,59 @@ async def run_migration(request: Request):
 
 
 # =============================================================
+# 本部管理 API
+# =============================================================
+
+@app.get("/hq/shops")
+async def hq_get_shops(request: Request):
+    """本部用: 全テナント店舗一覧を取得（サービスキーでRLSバイパス）"""
+    # セッション認証（HQセッションのみ許可）
+    session_id = request.headers.get("x-session-id", "")
+    if not session_id or not session_id.startswith("hq_"):
+        return JSONResponse(status_code=403, content={"error": "本部認証が必要です"})
+
+    try:
+        # organizationsテーブルから全店舗取得
+        orgs = await supabase_query(
+            "organizations",
+            "select=id,name,created_at&order=created_at.desc"
+        )
+        if not orgs:
+            orgs = []
+
+        # configテーブルから契約情報取得
+        configs = await supabase_query(
+            "config",
+            "select=organization_id,contract_id,stripe_plan,staff_count,customer_email,contact_name,license_status"
+        )
+        config_map = {}
+        if configs:
+            for c in configs:
+                config_map[c.get("organization_id")] = c
+
+        # 結合
+        shops = []
+        for o in orgs:
+            cfg = config_map.get(o["id"], {})
+            shops.append({
+                "organization_id": o["id"],
+                "name": o.get("name", "未設定"),
+                "contract_id": cfg.get("contract_id", ""),
+                "plan": cfg.get("stripe_plan", "free"),
+                "staff_count": cfg.get("staff_count", 0),
+                "contact_name": cfg.get("contact_name", ""),
+                "customer_email": cfg.get("customer_email", ""),
+                "license_status": cfg.get("license_status", "active"),
+                "created_at": o.get("created_at", ""),
+            })
+
+        return shops
+    except Exception as e:
+        print("[HQ] Shop list error: {}".format(e))
+        return JSONResponse(status_code=500, content={"error": "店舗一覧の取得に失敗しました"})
+
+
+# =============================================================
 # シフト生成 API
 # =============================================================
 
