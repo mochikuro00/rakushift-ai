@@ -94,13 +94,33 @@ class ShiftScheduler:
         self.dates = sorted(valid_dates)
         raw_req = requests or []
         self.requests = [r for r in raw_req if isinstance(r, dict) and r.get("staff_id")]
-        # 既存シフト (empty_only モード時に固定として扱う) - id 不要、staff_id/date/start_time/end_time のみ参照
+        # 既存シフト (empty_only モード時に固定として扱う)
+        # HH:MM 形式と YYYY-MM-DD 形式を厳密検証して、_to_minutes での ValueError を未然に防ぐ
+        time_pat = re.compile(r"^\d{1,2}:\d{2}(:\d{2})?$")
+        date_pat = re.compile(r"^\d{4}-\d{2}-\d{2}$")
         raw_existing = existing_shifts or []
-        self.existing_shifts = [
-            s for s in raw_existing
-            if isinstance(s, dict) and s.get("staff_id") and s.get("date")
-               and s.get("start_time") and s.get("end_time")
-        ]
+        self.existing_shifts = []
+        for s in raw_existing:
+            if not isinstance(s, dict):
+                continue
+            sid = s.get("staff_id")
+            sd = s.get("date")
+            st = s.get("start_time")
+            et = s.get("end_time")
+            if not (sid and sd and st and et):
+                continue
+            if not (isinstance(sd, str) and date_pat.match(sd)):
+                continue
+            if not (isinstance(st, str) and time_pat.match(st)):
+                continue
+            if not (isinstance(et, str) and time_pat.match(et)):
+                continue
+            self.existing_shifts.append({
+                "staff_id": sid,
+                "date": sd,
+                "start_time": st[:5],
+                "end_time": et[:5],
+            })
 
         # 旧 random.uniform ジッターは廃止 (常に決定論的: ガチャ要素ゼロ)。
         # 同点解消は staff_id ハッシュベースのタイブレーカーで公平かつ deterministic に行う。
