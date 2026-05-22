@@ -300,6 +300,52 @@ const app = {
         document.getElementById('prevPeriod')?.addEventListener('click', () => this.navigatePeriod(-1));
         document.getElementById('nextPeriod')?.addEventListener('click', () => this.navigatePeriod(1));
         document.getElementById('todayBtn')?.addEventListener('click', () => this.goToToday());
+
+        // ヘッダの年/月ドロップダウン (任意の年月へ直接ジャンプ)
+        this._initJumpDropdowns();
+    },
+
+    _initJumpDropdowns() {
+        const ySel = document.getElementById('jumpYear');
+        const mSel = document.getElementById('jumpMonth');
+        if (!ySel || !mSel) return;
+        const now = new Date();
+        const baseYear = (this.state.currentDate || now).getFullYear();
+        // 過去5年〜未来3年
+        let yOpts = '';
+        for (let y = baseYear - 5; y <= baseYear + 3; y++) {
+            yOpts += `<option value="${y}">${y}年</option>`;
+        }
+        ySel.innerHTML = yOpts;
+        let mOpts = '';
+        for (let m = 1; m <= 12; m++) {
+            mOpts += `<option value="${m}">${m}月</option>`;
+        }
+        mSel.innerHTML = mOpts;
+        ySel.value = baseYear;
+        mSel.value = (this.state.currentDate || now).getMonth() + 1;
+
+        const onJump = () => {
+            const y = parseInt(ySel.value, 10);
+            const m = parseInt(mSel.value, 10) - 1;
+            if (isNaN(y) || isNaN(m)) return;
+            const d = new Date(this.state.currentDate || now);
+            const day = Math.min(d.getDate(), new Date(y, m + 1, 0).getDate());
+            d.setFullYear(y, m, day);
+            this.state.currentDate = d;
+            // 月モードなら1日揃え、週/日モードはそのまま
+            if (this.state.view === 'manual-shift' && this.state.shiftTablePeriod === 'week') {
+                d.setDate(d.getDate() - d.getDay());
+                this.state.currentDate = d;
+            } else if (!(this.state.view === 'manual-shift' && this.state.shiftTablePeriod === 'day')) {
+                d.setDate(1);
+                this.state.currentDate = d;
+            }
+            this.updateHeader();
+            this.renderCurrentView();
+        };
+        ySel.addEventListener('change', onJump);
+        mSel.addEventListener('change', onJump);
     },
 
     // 表示中ビュー/期間モードに応じた前後送り
@@ -1066,6 +1112,19 @@ const app = {
         const month = this.state.currentDate.getMonth() + 1;
         const display = document.getElementById('currentPeriodDisplay');
         if(display) display.textContent = `${year}年 ${month}月`;
+        // 年月ドロップダウンも追従
+        const ySel = document.getElementById('jumpYear');
+        const mSel = document.getElementById('jumpMonth');
+        if (ySel && mSel) {
+            // 範囲外の年を表示する場合は option を追加
+            if (!Array.from(ySel.options).some(o => o.value === String(year))) {
+                const opt = document.createElement('option');
+                opt.value = year; opt.textContent = `${year}年`;
+                ySel.appendChild(opt);
+            }
+            ySel.value = year;
+            mSel.value = month;
+        }
         this.calculateMonthlyStats();
     },
 
@@ -4652,15 +4711,7 @@ const app = {
             return;
         }
 
-        // 二重確認: 1回目
-        if (!confirm(`【スタッフ削除 - 最終確認】\n\n「${staff.name}」を本当に削除しますか？\n\n⚠️ この操作は元に戻せません\n⚠️ 関連するシフト・申請データも全て削除されます`)) return;
-
-        // 二重確認: 2回目（名前入力）
-        const inputName = prompt(`最終確認: 削除するスタッフ名「${staff.name}」を入力してください:`);
-        if (inputName !== staff.name) {
-            this.showToast('名前が一致しません。削除をキャンセルしました。', 'info');
-            return;
-        }
+        if (!confirm(`「${staff.name}」を削除しますか？\n\n※関連するシフト・申請データも全て削除されます。\nこの操作は元に戻せません。`)) return;
 
         this.showLoading(true);
         try {

@@ -1,7 +1,10 @@
 import pulp
-from datetime import datetime, timedelta
+import logging
 import random
 import re
+from datetime import datetime, timedelta
+
+logger = logging.getLogger("rakushift.scheduler")
 
 class ShiftScheduler:
     """
@@ -37,6 +40,42 @@ class ShiftScheduler:
     LEGAL_MAX_HOURS_WEEK = 40
     LEGAL_MAX_CONSECUTIVE_DAYS = 6
 
+    # ===========================================================
+    # ペナルティ重み定数 (集中管理)
+    #   - 旧バージョンは即値が散在し調整が困難だったため、
+    #     全ての penalty 加算で参照する単一の定数源に統合。
+    #   - 大きいほど "強い禁止/誘導"。負値は "ボーナス"。
+    #   - 順序関係 (重要): EMPTY_SLOT > OPEN_CLOSE_NO_EMP > COVERAGE_UNDER > ...
+    # ===========================================================
+    class W:
+        # カバレッジ (店舗運営の根幹)
+        EMPTY_SLOT          = 1_000_000   # 任意スロット 0名 (絶対回避)
+        OPEN_CLOSE_NO_EMP   = 5_000_000   # 開け締めに社員/管理者不在 (絶対回避)
+        COVERAGE_UNDER      = 500_000     # スロット必要人数不足
+        COVERAGE_OVER_DAY   = 400_000     # 日次過剰人員
+        COVERAGE_OVER_SLOT  = 200_000     # スロット過剰人員
+        MIN_MANAGER         = 500_000     # 管理者数不足
+        # 品質
+        OJT_NO_MENTOR       = 200_000     # 新人×メンター不在
+        FAIRNESS_DRIFT      = 80_000      # 公平性偏差 (需要按分との差)
+        PEAK_SKILL          = 50_000      # ピーク帯スキルミックス不足
+        POSITION_SHORT      = 200_000     # ポジション (レジ等) 不足
+        WEEKEND_FAIR        = 50_000      # 土日出勤バランス偏差
+        POWER_BALANCE       = 10_000      # 戦力バランス
+        TIMEBAND_IMBALANCE  = 20_000      # 時間帯分散 (朝/昼/夕)
+        CONSEC_DAYS_FATIGUE = 30_000      # 連続勤務後の疲労インセンティブ
+        MENTOR_MATCH_BONUS  = -8_000      # 主担当メンターとのペアリング
+        # スタッフ属性ベース調整
+        PRIORITY_HIGH       = -50_000     # 優先度 High スタッフを最優先配置
+        PRIORITY_LOW        = 20_000      # 優先度 Low スタッフは穴埋め
+        CONTRACT_REGULAR    = -10_000     # レギュラー契約優先
+        CONTRACT_SPOT       = 5_000       # スポット契約は後回し
+        MIN_DAYS_WEEK_BONUS = -5_000      # min_days_week>0 スタッフ配置補助
+        # 希望シフト (旧 -500/-700/-1000 → 10倍化、他ペナルティと釣り合う水準に)
+        PREFERENCE_BASE     = -5_000      # 希望日に何らかのシフト
+        PREFERENCE_CLOSE    = -7_000      # ±1時間以内の一致
+        PREFERENCE_EXACT    = -10_000     # 完全一致
+
     def __init__(self, staff_list, config, dates, requests=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
         raw_staff = staff_list or []
@@ -55,6 +94,15 @@ class ShiftScheduler:
         self.dates = sorted(valid_dates)
         raw_req = requests or []
         self.requests = [r for r in raw_req if isinstance(r, dict) and r.get("staff_id")]
+
+        # ジッターの再現性制御 (config.random_seed が None なら従来通り非決定的)
+        seed = self.config.get("random_seed") if isinstance(self.config, dict) else None
+        if seed is not None:
+            try:
+                random.seed(int(seed))
+                logger.info("[Init] Deterministic mode: seed={}".format(seed))
+            except (TypeError, ValueError):
+                pass
 
         # シフトパターン構築（ミッドシフト自動生成付き）
         raw_patterns = self.config.get("custom_shifts", [])
@@ -220,12 +268,12 @@ class ShiftScheduler:
                 if sid2 and sid1 != sid2:
                     self._req_pair_constraints.append((sid1, sid2))
 
-        print("[Init] Staff:{} Dates:{} Patterns:{}".format(
+        logger.info("[Init] Staff:{} Dates:{} Patterns:{}".format(
             len(self.staff_list), len(self.dates), len(self.shift_patterns)))
-        print("[Init] Req: wd={} we={} hol={} mgr={}".format(
+        logger.info("[Init] Req: wd={} we={} hol={} mgr={}".format(
             self.min_weekday, self.min_weekend,
             self.min_holiday, self.min_manager))
-        print("[Init] Mentors:{} Rookies:{} Monthly:{}".format(
+        logger.info("[Init] Mentors:{} Rookies:{} Monthly:{}".format(
             len(self._mentor_ids), len(self._rookie_ids),
             len(self._monthly_ids)))
 
@@ -663,22 +711,22 @@ class ShiftScheduler:
     def solve(self, force=False):
         result = self._solve_milp(force=force, tier=3)
         if result:
-            print("[Solve] Tier 3 (full) succeeded")
+            logger.info("[Solve] Tier 3 (full) succeeded")
             return result
 
-        print("[Fallback] Relaxing Tier 3...")
+        logger.info("[Fallback] Relaxing Tier 3...")
         result = self._solve_milp(force=force, tier=2)
         if result:
-            print("[Solve] Tier 2 (no OJT/balance) succeeded")
+            logger.info("[Solve] Tier 2 (no OJT/balance) succeeded")
             return result
 
-        print("[Fallback] Relaxing to Tier 1 + force...")
+        logger.info("[Fallback] Relaxing to Tier 1 + force...")
         result = self._solve_milp(force=True, tier=1)
         if result:
-            print("[Solve] Tier 1 (legal only) succeeded")
+            logger.info("[Solve] Tier 1 (legal only) succeeded")
             return result
 
-        print("[Fallback] Greedy...")
+        logger.info("[Fallback] Greedy...")
         return self._solve_greedy()
 
     def _solve_milp(self, force=False, tier=3):
@@ -731,9 +779,9 @@ class ShiftScheduler:
                 if (wsid, wd, best_oi) in x:
                     prob += x[(wsid, wd, best_oi)] == 1
                     fixed_assignments.add((wsid, wd))
-                    print("[WorkReq] Fixed: staff={} date={}".format(wsid, wd))
+                    logger.info("[WorkReq] Fixed: staff={} date={}".format(wsid, wd))
 
-            print("[Requests] {} work requests applied".format(len(work_requests)))
+            logger.info("[Requests] {} work requests applied".format(len(work_requests)))
 
             # ====================================================
             # TIER 1: 法的制約 (ハード制約)
@@ -778,7 +826,7 @@ class ShiftScheduler:
                 # --- 週の最低出勤日数 (全週ハード制約: 絶対遵守) ---
                 min_days_week = int(s.get("min_days_week") or 0)
                 if not force and min_days_week > 0:
-                    print("[MinDays] Staff {} min_days_week={}".format(
+                    logger.info("[MinDays] Staff {} min_days_week={}".format(
                         s.get("name", sid), min_days_week))
                     for week in week_groups:
                         wv = []
@@ -882,7 +930,7 @@ class ShiftScheduler:
                         daily_slack_under = pulp.LpVariable(
                             "daily_under_{}".format(d), 0, None, pulp.LpInteger)
                         prob += daily_sum + daily_slack_under >= req_daily
-                        penalty += daily_slack_under * 500000  # 不足ペナルティ（重い）
+                        penalty += daily_slack_under * self.W.COVERAGE_UNDER
                         # 上限: 必要人数+1以内に抑える（±1制御の核心）
                         # ただしスロットレベルの要件が日次ベースより大きい場合は、
                         # スロット要件の最大値を基準にして矛盾を防ぐ
@@ -896,7 +944,7 @@ class ShiftScheduler:
                         daily_slack_over = pulp.LpVariable(
                             "daily_over_{}".format(d), 0, None, pulp.LpInteger)
                         prob += daily_sum - daily_slack_over <= daily_upper
-                        penalty += daily_slack_over * 400000  # 過剰ペナルティ（不足に次ぐ重さ）
+                        penalty += daily_slack_over * self.W.COVERAGE_OVER_DAY
 
                 # --- 各時間スロットの人員: 必要人数±1に収束させる ---
                 # ※_slot_reqs_cacheを利用して_build_slot_requirementsの二重呼び出しを回避
@@ -918,16 +966,15 @@ class ShiftScheduler:
                                 min1_slack = pulp.LpVariable(
                                     "min1_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += workers_sum + min1_slack >= 1
-                                penalty += min1_slack * 1000000  # 0名回避（最重要）
-                            # 必要人数を確保（不足は許容するがペナルティ）
+                                penalty += min1_slack * self.W.EMPTY_SLOT
                             slack_under = pulp.LpVariable(
                                 "cov_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += workers_sum + slack_under >= req
-                            penalty += slack_under * 500000  # 不足ペナルティ（強化）
+                            penalty += slack_under * self.W.COVERAGE_UNDER
                             slack_over = pulp.LpVariable(
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                            prob += workers_sum - slack_over <= req  # +0を目指す（旧: req + 1）
-                            penalty += slack_over * 200000  # 過剰ペナルティ（旧: 10000 → 20倍強化）
+                            prob += workers_sum - slack_over <= req
+                            penalty += slack_over * self.W.COVERAGE_OVER_SLOT
 
                 # --- 管理者常駐制約 ---
                 for d in self.dates:
@@ -952,15 +999,13 @@ class ShiftScheduler:
                         
                         if emp_vars:
                             if slot_min == first_slot or slot_min == last_slot:
-                                # 開け作業と締め作業は必ず社員（月給制・店長）が1名以上必要
                                 slack = pulp.LpVariable("emp_openclose_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(emp_vars) + slack >= 1
-                                penalty += slack * 5000000  # バイトだけでの開け締めを強烈に回避
+                                penalty += slack * self.W.OPEN_CLOSE_NO_EMP
                             else:
-                                # その他の時間は設定された管理者数（min_manager）を目指す
                                 slack = pulp.LpVariable("emp_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(emp_vars) + slack >= self.min_manager
-                                penalty += slack * 500000
+                                penalty += slack * self.W.MIN_MANAGER
 
             # ====================================================
             # TIER 3: 品質最適化 (ソフト制約)
@@ -993,10 +1038,15 @@ class ShiftScheduler:
                                     "ojt_{}_{}".format(d, slot_min),
                                     0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(mentor_vars) + slack >= pulp.lpSum(rookie_vars)
-                                penalty += slack * 200000
+                                penalty += slack * self.W.OJT_NO_MENTOR
                             elif rookie_vars and not mentor_vars:
-                                for rv in rookie_vars:
-                                    penalty += rv * 200000
+                                # config.block_rookie_without_mentor=True なら新人配置を強制禁止
+                                if self.config.get("block_rookie_without_mentor"):
+                                    for rv in rookie_vars:
+                                        prob += rv == 0
+                                else:
+                                    for rv in rookie_vars:
+                                        penalty += rv * self.W.OJT_NO_MENTOR
 
                 # --- 戦力バランス ---
                 for d in self.dates:
@@ -1018,7 +1068,7 @@ class ShiftScheduler:
                     if min_req > 0:
                         slack = pulp.LpVariable("pw_{}".format(d), 0, None)
                         prob += power_expr + slack >= 1.5 * min_req
-                        penalty += slack * 10000
+                        penalty += slack * self.W.POWER_BALANCE
 
                 # --- 人件費と評価ランクによる最適化 (コスト最小化) ---
                 for s in self.staff_list:
@@ -1036,14 +1086,14 @@ class ShiftScheduler:
                     
                     priority_bonus = 0
                     if shift_priority == "high":
-                        priority_bonus -= 50000  # 最優先でシフトに入れる
+                        priority_bonus += self.W.PRIORITY_HIGH   # 負値
                     elif shift_priority == "low":
-                        priority_bonus += 20000  # 穴埋めとしてのみ利用
-                        
+                        priority_bonus += self.W.PRIORITY_LOW
+
                     if contract_type == "regular":
-                        priority_bonus -= 10000  # レギュラーは優先
+                        priority_bonus += self.W.CONTRACT_REGULAR  # 負値
                     elif contract_type == "spot":
-                        priority_bonus += 5000   # スポットは後回し
+                        priority_bonus += self.W.CONTRACT_SPOT
 
                     for d in self.dates:
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
@@ -1111,10 +1161,9 @@ class ShiftScheduler:
                         slack_under = pulp.LpVariable("fair_under_{}".format(sid), 0, None)
                         prob += tv - staff_target <= slack_over
                         prob += staff_target - tv <= slack_under
-                        # 公平性ペナルティ強化: 偏りを強力に抑制
-                        penalty += (slack_over + slack_under) * 80000
+                        penalty += (slack_over + slack_under) * self.W.FAIRNESS_DRIFT
 
-                    print("[Tier3] Fairness: demand={} days, {} staff, capacity/wk={}".format(
+                    logger.info("[Tier3] Fairness: demand={} days, {} staff, capacity/wk={}".format(
                         total_demand_days, len(active_staff), total_capacity_per_week))
 
                     # === 店舗運営者視点：離職防止アルゴリズム（ゼロシフト絶対回避） ===
@@ -1152,8 +1201,7 @@ class ShiftScheduler:
                     if min_dw > 0:
                         for d in self.dates:
                             for oi in range(len(staff_opts.get((sid, d), []))):
-                                # 軽いボーナスで配置を促進（過剰配置ペナルティとバランス）
-                                penalty -= x[(sid, d, oi)] * 5000
+                                penalty += x[(sid, d, oi)] * self.W.MIN_DAYS_WEEK_BONUS
 
                 # --- ピーク時スキルミックス制約 ---
                 # ピーク時間帯（ランチ帯等）に最低1名のA/B評価スタッフを確保する
@@ -1192,9 +1240,9 @@ class ShiftScheduler:
                             slack = pulp.LpVariable(
                                 "peak_{}_{}".format(d, rs), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(qualified) + slack >= req_count
-                            penalty += slack * 50000
+                            penalty += slack * self.W.PEAK_SKILL
 
-                print("[Tier3] Peak skill mix constraints applied ({} rules)".format(len(peak_rules)))
+                logger.info("[Tier3] Peak skill mix constraints applied ({} rules)".format(len(peak_rules)))
 
                 # --- 希望シフト充足率の最大化 (従業員満足度スコア) ---
                 # 未承認（pending）の出勤希望に対してボーナス（負のペナルティ）を付与し、
@@ -1219,50 +1267,98 @@ class ShiftScheduler:
                             req_end = req.get("end_time")
                             
                             for oi, opt in enumerate(opts_r):
-                                bonus = -500  # 基本ボーナス（希望通りにすると報酬）
-                                
-                                # 希望時間帯との一致度でボーナス増額
+                                bonus = self.W.PREFERENCE_BASE
                                 if req_start and req_end:
                                     rs_m = self._to_minutes(req_start)
                                     re_m = self._to_minutes(req_end)
                                     diff = abs(opt["start_min"] - rs_m) + abs(opt["end_min"] - re_m)
                                     if diff == 0:
-                                        bonus = -1000  # 完全一致で2倍ボーナス
+                                        bonus = self.W.PREFERENCE_EXACT
                                     elif diff <= 60:
-                                        bonus = -700   # ±1時間以内で1.4倍
-                                
+                                        bonus = self.W.PREFERENCE_CLOSE
                                 penalty += x[(rsid, rd, oi)] * bonus
                                 preference_count += 1
 
-                print("[Tier3] Preference fulfillment: {} shift preferences processed".format(preference_count))
+                logger.info("[Tier3] Preference fulfillment: {} shift preferences processed".format(preference_count))
 
-                # --- 時間帯分散制約（朝番/遅番の偏り防止） ---
-                # 各スタッフが常に同じ時間帯に配置されないよう、早番/遅番のバランスを取る
+                # --- 時間帯分散制約 (朝/昼/夕の3区分でバランス) ---
+                # 朝: 開始 < 11:00 / 昼: 11:00 <= 開始 < 16:00 / 夕: 開始 >= 16:00
+                # 旧2区分 (14時境界) より細かく、変数は1スタッフ1差分のみで負荷低
+                BAND_MORNING_END = 11 * 60
+                BAND_AFTERNOON_END = 16 * 60
                 for s in self.staff_list:
                     sid = s["id"]
                     max_days = int(s.get("max_days_week") or 5)
                     if max_days <= 1:
-                        continue  # 週1日のスタッフは分散不要
-                    early_vars = []  # 14時以前に開始するシフト
-                    late_vars = []   # 14時以降に開始するシフト
+                        continue
+                    bands = {"m": [], "a": [], "e": []}
                     for d in self.dates:
                         if self._get_day_type(d) == "closed":
                             continue
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            if opt["start_min"] < 14 * 60:
-                                early_vars.append(x[(sid, d, oi)])
+                            sm = opt["start_min"]
+                            if sm < BAND_MORNING_END:
+                                bands["m"].append(x[(sid, d, oi)])
+                            elif sm < BAND_AFTERNOON_END:
+                                bands["a"].append(x[(sid, d, oi)])
                             else:
-                                late_vars.append(x[(sid, d, oi)])
-                    # 早番と遅番の差が大きすぎるとペナルティ
-                    if early_vars and late_vars:
-                        early_sum = pulp.lpSum(early_vars)
-                        late_sum = pulp.lpSum(late_vars)
-                        # 差分のスラック変数
+                                bands["e"].append(x[(sid, d, oi)])
+                    sums = {k: pulp.lpSum(v) for k, v in bands.items() if v}
+                    if len(sums) >= 2:
+                        # 最大バンドと最小バンドの差をペナルティ化
                         imbalance = pulp.LpVariable("imbal_{}".format(sid), 0, None)
-                        prob += early_sum - late_sum <= imbalance
-                        prob += late_sum - early_sum <= imbalance
-                        # 偏りが大きいほどペナルティ
-                        penalty += imbalance * 20000
+                        keys = list(sums.keys())
+                        for i in range(len(keys)):
+                            for j in range(i+1, len(keys)):
+                                prob += sums[keys[i]] - sums[keys[j]] <= imbalance
+                                prob += sums[keys[j]] - sums[keys[i]] <= imbalance
+                        penalty += imbalance * self.W.TIMEBAND_IMBALANCE
+
+                # --- 連続勤務後の疲労インセンティブ (5日連続後の翌日は休み優先) ---
+                sorted_d_fatigue = sorted(self.dates)
+                if len(sorted_d_fatigue) >= 6:
+                    for s in self.staff_list:
+                        sid = s["id"]
+                        for i in range(len(sorted_d_fatigue) - 5):
+                            window5 = sorted_d_fatigue[i:i+5]
+                            next_day = sorted_d_fatigue[i+5]
+                            w5_vars = [x[(sid, d, oi)]
+                                       for d in window5
+                                       for oi in range(len(staff_opts.get((sid, d), [])))]
+                            next_vars = [x[(sid, next_day, oi)]
+                                         for oi in range(len(staff_opts.get((sid, next_day), [])))]
+                            if not w5_vars or not next_vars:
+                                continue
+                            # 5日連続出勤 (w5_sum=5) のとき翌日出勤するとペナルティ
+                            fatigue_slack = pulp.LpVariable(
+                                "fatigue_{}_{}".format(sid, next_day), 0, None)
+                            prob += pulp.lpSum(w5_vars) + pulp.lpSum(next_vars) - 5 <= fatigue_slack
+                            penalty += fatigue_slack * self.W.CONSEC_DAYS_FATIGUE
+
+                # --- メンター主担当マッチング (preferred_mentor がある新人を主担当と同シフトに) ---
+                if self._rookie_ids:
+                    for s in self.staff_list:
+                        sid = s["id"]
+                        if sid not in self._rookie_ids:
+                            continue
+                        pref_mentor_id = s.get("preferred_mentor")
+                        if not pref_mentor_id or pref_mentor_id not in self._staff_map:
+                            continue
+                        for d in self.dates:
+                            if self._get_day_type(d) == "closed":
+                                continue
+                            rookie_d = [x[(sid, d, oi)]
+                                        for oi in range(len(staff_opts.get((sid, d), [])))]
+                            mentor_d = [x[(pref_mentor_id, d, oi)]
+                                        for oi in range(len(staff_opts.get((pref_mentor_id, d), [])))]
+                            if rookie_d and mentor_d:
+                                # 新人が出勤するときに主担当も出勤しているとボーナス
+                                # ペアリングインジケータ: pair <= rookie_sum, pair <= mentor_sum
+                                pair_ind = pulp.LpVariable(
+                                    "pair_{}_{}".format(sid, d), 0, 1, pulp.LpBinary)
+                                prob += pair_ind <= pulp.lpSum(rookie_d)
+                                prob += pair_ind <= pulp.lpSum(mentor_d)
+                                penalty += pair_ind * self.W.MENTOR_MATCH_BONUS
 
                 # --- 土日ローテーション公平性制約 ---
                 # 全スタッフが公平に土日シフトを担当するよう制約
@@ -1295,11 +1391,10 @@ class ShiftScheduler:
                             wk_slack = pulp.LpVariable("wkend_{}".format(sid), 0, None)
                             prob += wsum - target <= wk_slack
                             prob += target - wsum <= wk_slack
-                            # 月給スタッフは土日出勤を強く促進
-                            weight = 30000 if sid in self._monthly_ids else 15000
+                            weight = self.W.WEEKEND_FAIR if sid in self._monthly_ids else (self.W.WEEKEND_FAIR // 2)
                             penalty += wk_slack * weight
 
-                print("[Tier3] Time slot diversity + weekend rotation applied")
+                logger.info("[Tier3] Time slot diversity + weekend rotation applied")
 
             # ====================================================
             # 目的関数: コスト最小化
@@ -1401,7 +1496,7 @@ class ShiftScheduler:
                             )
                             shortage = pulp.LpVariable("POS_short_{}_{}_{}" .format(pos, d, slot_min_pos), lowBound=0)
                             prob += (shortage >= req_num - working_pos)
-                            penalty += shortage * 200000
+                            penalty += shortage * self.W.POSITION_SHORT
 
             prob += penalty
             # Tierごとにタイムリミットを段階化（合計最大110秒でRailway制限内に収める）
@@ -1410,7 +1505,7 @@ class ShiftScheduler:
             prob.solve(solver)
 
             status = pulp.LpStatus[prob.status]
-            print("[MILP] Status: {} (tier={}, force={})".format(
+            logger.info("[MILP] Status: {} (tier={}, force={})".format(
                 status, tier, force))
 
             if status not in ("Optimal", "Not Solved"):
@@ -1443,15 +1538,15 @@ class ShiftScheduler:
 
             self._validate(shifts)
             if warnings:
-                print("[OVERTIME]")
+                logger.info("[OVERTIME]")
                 for w in warnings:
-                    print("  " + w)
+                    logger.info("  " + w)
 
-            print("[Result] {} shifts".format(len(shifts)))
+            logger.info("[Result] {} shifts".format(len(shifts)))
             return shifts if shifts else None
 
         except Exception as e:
-            print("[MILP Error] {}".format(e))
+            logger.info("[MILP Error] {}".format(e))
             import traceback
             traceback.print_exc()
             return None
@@ -1487,10 +1582,10 @@ class ShiftScheduler:
                 if -1 <= daily_diff <= 1:
                     daily_within_pm1 += 1
                 elif daily_diff < -1:
-                    print("  BALANCE: {} daily: need={} got={} ({}名不足)".format(
+                    logger.info("  BALANCE: {} daily: need={} got={} ({}名不足)".format(
                         d, daily_effective_req, daily_assigned, abs(daily_diff)))
                 elif daily_diff > 1:
-                    print("  BALANCE: {} daily: need={} got={} (+{}名過剰)".format(
+                    logger.info("  BALANCE: {} daily: need={} got={} (+{}名過剰)".format(
                         d, daily_effective_req, daily_assigned, daily_diff))
 
             for slot_min, req in reqs.items():
@@ -1502,18 +1597,18 @@ class ShiftScheduler:
                 if -1 <= diff <= 1:
                     slots_within_pm1 += 1
                 if cov < req:
-                    print("  VIOLATION: {} {} need={} got={}".format(
+                    logger.info("  VIOLATION: {} {} need={} got={}".format(
                         d, self._from_minutes(slot_min), req, cov))
                     violations += 1
 
         # ±1達成率のログ出力
         if total_slots_checked > 0:
             slot_rate = (slots_within_pm1 / total_slots_checked) * 100
-            print("  [±1 QUALITY] Slot: {}/{} ({:.1f}%) within ±1".format(
+            logger.info("  [±1 QUALITY] Slot: {}/{} ({:.1f}%) within ±1".format(
                 slots_within_pm1, total_slots_checked, slot_rate))
         if daily_checked > 0:
             daily_rate = (daily_within_pm1 / daily_checked) * 100
-            print("  [±1 QUALITY] Daily: {}/{} ({:.1f}%) within ±1".format(
+            logger.info("  [±1 QUALITY] Daily: {}/{} ({:.1f}%) within ±1".format(
                 daily_within_pm1, daily_checked, daily_rate))
 
         # スタッフ別配置日数のバラツキ検証
@@ -1526,7 +1621,7 @@ class ShiftScheduler:
             avg_days = sum(days_list) / len(days_list)
             max_days = max(days_list)
             min_days = min(days_list)
-            print("  [FAIRNESS] Staff days: avg={:.1f}, min={}, max={}, spread={}".format(
+            logger.info("  [FAIRNESS] Staff days: avg={:.1f}, min={}, max={}, spread={}".format(
                 avg_days, min_days, max_days, max_days - min_days))
 
         # 連勤検証
@@ -1538,7 +1633,7 @@ class ShiftScheduler:
                 if any(sh["staff_id"] == sid and sh["date"] == d for sh in shifts):
                     consec += 1
                     if consec > self.LEGAL_MAX_CONSECUTIVE_DAYS:
-                        print("  VIOLATION: {} consec={} days at {}".format(
+                        logger.info("  VIOLATION: {} consec={} days at {}".format(
                             s.get("name", sid), consec, d))
                         violations += 1
                 else:
@@ -1559,7 +1654,7 @@ class ShiftScheduler:
                             brk = self._get_break_minutes(raw_hrs) / 60.0
                             total_hours += (raw_hrs - brk)
                 if total_hours > self.LEGAL_MAX_HOURS_WEEK:
-                    print("  VIOLATION: {} week {} hours={:.1f} > {}".format(
+                    logger.info("  VIOLATION: {} week {} hours={:.1f} > {}".format(
                         s.get("name", sid), week[0], total_hours,
                         self.LEGAL_MAX_HOURS_WEEK))
                     violations += 1
@@ -1570,14 +1665,14 @@ class ShiftScheduler:
             ng = self._get_staff_ng_dates(s)
             for sh in shifts:
                 if sh["staff_id"] == sid and sh["date"] in ng:
-                    print("  VIOLATION: {} assigned on NG date {}".format(
+                    logger.info("  VIOLATION: {} assigned on NG date {}".format(
                         s.get("name", sid), sh["date"]))
                     violations += 1
 
         if violations == 0:
-            print("  VALIDATION: All constraints satisfied!")
+            logger.info("  VALIDATION: All constraints satisfied!")
         else:
-            print("  VALIDATION: {} violations".format(violations))
+            logger.info("  VALIDATION: {} violations".format(violations))
 
     # ===========================================================
     # グリーディ解法 (MILP失敗時のフォールバック)
@@ -1752,7 +1847,7 @@ class ShiftScheduler:
 
             assigned_days[d] = assigned
 
-        print("[Greedy] {} shifts".format(len(shifts)))
+        logger.info("[Greedy] {} shifts".format(len(shifts)))
         self._validate(shifts)
         return shifts if shifts else None
 
