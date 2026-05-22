@@ -389,10 +389,11 @@ const API = {
                 return {
                     status: "success",
                     shifts: result.shifts,
-                    mode: result.mode || "python_optimized"
+                    mode: result.mode || "python_optimized",
+                    report: result.report || null
                 };
             } else if (result.status === 'success' && result.mode === 'math_failed') {
-                return { status: "success", shifts: [], mode: "math_failed" };
+                return { status: "success", shifts: [], mode: "math_failed", report: result.report || null };
             } else {
                 throw new Error(result.message || "Invalid response from server");
             }

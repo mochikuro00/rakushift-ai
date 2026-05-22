@@ -5226,6 +5226,7 @@ const app = {
                 this._pendingPreviewShifts = finalShifts;
                 this._pendingPreviewTargetType = targetType;
                 this._pendingPreviewDates = dates;
+                this._pendingPreviewReport = result.report || null;
 
             } else if (result.status === 'success' && result.mode === 'math_failed') {
                 // 数理最適化が解を見つけられなかった
@@ -5285,10 +5286,11 @@ const app = {
             // プレビューモーダルを表示（生成成功時）
             if (this._generationSuccess && this._pendingPreviewShifts && this._pendingPreviewShifts.length > 0) {
                 setTimeout(() => {
-                    this.showShiftPreview(this._pendingPreviewShifts, this._pendingPreviewTargetType, this._pendingPreviewDates);
+                    this.showShiftPreview(this._pendingPreviewShifts, this._pendingPreviewTargetType, this._pendingPreviewDates, this._pendingPreviewReport);
                     this._pendingPreviewShifts = null;
                     this._pendingPreviewTargetType = null;
                     this._pendingPreviewDates = null;
+                    this._pendingPreviewReport = null;
                 }, 300);
             } else if (!this._generationSuccess) {
                 this.showToast('シフト作成に問題がありました。条件を見直してください。', 'warning');
@@ -7050,10 +7052,11 @@ const app = {
      * @param {string} targetType - 'reset_all' | 'empty_only'
      * @param {Array} dates - 対象日付配列
      */
-    showShiftPreview(shifts, targetType, dates) {
+    showShiftPreview(shifts, targetType, dates, report) {
         this._previewShifts = shifts;
         this._previewTargetType = targetType;
         this._previewDates = dates;
+        this._previewReport = report || null;
 
         // サマリー統計
         const totalShifts = shifts.length;
@@ -7090,6 +7093,58 @@ const app = {
             `;
         }
 
+        // ⚠️ 制約違反レポート (report があれば表示)
+        if (this._previewReport) {
+            const r = this._previewReport;
+            const ot = (r.overtime_warnings || []).slice(0, 10);
+            const cg = r.coverage_gaps || [];
+            const oc = r.open_close_gaps || [];
+            const mg = r.manager_gaps || [];
+            const hasAny = ot.length || cg.length || oc.length || mg.length;
+            let warnHtml = '';
+            if (hasAny) {
+                warnHtml = `<div class="mt-4 mb-2 bg-amber-50 border border-amber-300 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-bold text-amber-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i>制約違反・警告レポート</div>
+                        <div class="text-xs text-gray-500">Tier ${r.tier || '?'} / ${r.mode || '?'} モード</div>
+                    </div>`;
+                if (cg.length) {
+                    warnHtml += `<div class="mb-2"><div class="text-xs font-bold text-amber-700 mb-1">🟧 スタッフ不足: ${cg.length}件</div><div class="text-xs text-gray-700 max-h-32 overflow-y-auto bg-white rounded p-2 border border-amber-100">${
+                        cg.slice(0, 20).map(g => `<div>・${g.date} ${g.time}: 必要 ${g.required}名 / <span class="text-red-600 font-bold">${g.shortage}名不足</span></div>`).join('')
+                    }${cg.length > 20 ? `<div class="text-gray-400 mt-1">... 他 ${cg.length - 20} 件</div>` : ''}</div></div>`;
+                }
+                if (oc.length) {
+                    warnHtml += `<div class="mb-2"><div class="text-xs font-bold text-red-700 mb-1">🟥 開け締めに社員不在: ${oc.length}件</div><div class="text-xs text-gray-700 max-h-24 overflow-y-auto bg-white rounded p-2 border border-amber-100">${
+                        oc.slice(0, 15).map(g => `<div>・${g.date} ${g.time}: 月給/管理者ロールのスタッフが不在</div>`).join('')
+                    }${oc.length > 15 ? `<div class="text-gray-400 mt-1">... 他 ${oc.length - 15} 件</div>` : ''}</div></div>`;
+                }
+                if (mg.length) {
+                    warnHtml += `<div class="mb-2"><div class="text-xs font-bold text-amber-700 mb-1">🟨 管理者不足: ${mg.length}件</div><div class="text-xs text-gray-700 max-h-24 overflow-y-auto bg-white rounded p-2 border border-amber-100">${
+                        mg.slice(0, 15).map(g => `<div>・${g.date} ${g.time}: 必要 ${g.required}名 / ${g.shortage}名不足</div>`).join('')
+                    }${mg.length > 15 ? `<div class="text-gray-400 mt-1">... 他 ${mg.length - 15} 件</div>` : ''}</div></div>`;
+                }
+                if (ot.length) {
+                    warnHtml += `<div class="mb-1"><div class="text-xs font-bold text-amber-700 mb-1">⏰ 時間超過: ${ot.length}件</div><div class="text-xs text-gray-700 bg-white rounded p-2 border border-amber-100">${
+                        ot.map(w => `<div>・${this._sanitize(w)}</div>`).join('')
+                    }</div></div>`;
+                }
+                warnHtml += `<div class="text-[11px] text-amber-700 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>これらは制約緩和で「強行生成」された場合のみ発生します。スタッフ追加や勤務条件見直しで解消可能。</div>`;
+                warnHtml += `</div>`;
+            } else {
+                warnHtml = `<div class="mt-4 mb-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-600"></i><span class="text-sm font-bold text-emerald-700">制約違反なし: 全条件を満たした最適配置です</span></div>`;
+            }
+            const summaryParent = document.getElementById('previewSummary');
+            if (summaryParent) {
+                // summaryEl の直後に挿入
+                const existing = document.getElementById('previewReportSection');
+                if (existing) existing.remove();
+                const wrapper = document.createElement('div');
+                wrapper.id = 'previewReportSection';
+                wrapper.innerHTML = warnHtml;
+                summaryParent.parentNode.insertBefore(wrapper, summaryParent.nextSibling);
+            }
+        }
+
         // 日付ごとのテーブル生成
         const contentEl = document.getElementById('previewContent');
         if (contentEl) {
@@ -7120,7 +7175,8 @@ const app = {
                                         <th class="px-3 py-2 text-center">出勤</th>
                                         <th class="px-3 py-2 text-center">退勤</th>
                                         <th class="px-3 py-2 text-center">休憩</th>
-                                        <th class="px-3 py-2 text-center rounded-r-lg">実働</th>
+                                        <th class="px-3 py-2 text-center">実働</th>
+                                        <th class="px-3 py-2 text-left rounded-r-lg">配置理由</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
@@ -7148,6 +7204,18 @@ const app = {
                     if (endMin <= startMin) endMin += 1440;
                     const workHours = ((endMin - startMin) - breakMin) / 60;
 
+                    const reasonText = shift.reason || '通常配置';
+                    // 理由ごとに色分け (一覧性UP)
+                    const reasonColor = reasonText.includes('既存')   ? 'bg-gray-100 text-gray-700' :
+                                        reasonText.includes('承認済') ? 'bg-emerald-100 text-emerald-700' :
+                                        reasonText.includes('完全一致')? 'bg-blue-100 text-blue-700' :
+                                        reasonText.includes('希望')    ? 'bg-sky-100 text-sky-700' :
+                                        reasonText.includes('優先度')  ? 'bg-amber-100 text-amber-700' :
+                                        reasonText.includes('メンター')? 'bg-purple-100 text-purple-700' :
+                                        reasonText.includes('月給')    ? 'bg-pink-100 text-pink-700' :
+                                        reasonText.includes('レギュラ')? 'bg-indigo-100 text-indigo-700' :
+                                        reasonText.includes('高評価')  ? 'bg-yellow-100 text-yellow-700' :
+                                                                          'bg-slate-100 text-slate-600';
                     html += `
                         <tr class="hover:bg-gray-50">
                             <td class="px-3 py-2 font-bold text-gray-800">${this._sanitize(staff.name || '不明')}</td>
@@ -7156,6 +7224,7 @@ const app = {
                             <td class="px-3 py-2 text-center font-mono text-red-500 font-bold">${shift.end_time}</td>
                             <td class="px-3 py-2 text-center text-gray-500">${breakMin}分</td>
                             <td class="px-3 py-2 text-center font-bold">${workHours.toFixed(1)}h</td>
+                            <td class="px-3 py-2"><span class="inline-block ${reasonColor} text-[11px] px-2 py-0.5 rounded-full font-bold">${this._sanitize(reasonText)}</span></td>
                         </tr>
                     `;
                 }

@@ -1079,8 +1079,8 @@
         <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-teal-600 flex justify-between items-center shrink-0">
                 <div>
-                    <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-eye"></i> シフト生成プレビュー</h3>
-                    <p class="text-white/70 text-xs mt-0.5">保存前に生成結果を確認できます</p>
+                    <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-flask"></i> シフト生成プレビュー (シミュレーション)</h3>
+                    <p class="text-white/80 text-xs mt-0.5">これは試算結果です。「確定して保存」を押すまで本番には反映されません</p>
                 </div>
                 <button onclick="app.cancelShiftPreview()" class="text-white/60 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
@@ -1095,7 +1095,7 @@
             <div class="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center shrink-0">
                 <p class="text-xs text-gray-400"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
                 <div class="flex gap-3">
-                    <button onclick="app.cancelShiftPreview()" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                    <button onclick="app.cancelShiftPreview()" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition" title="この結果を破棄して終了 (DB保存なし)"><i class="fa-solid fa-trash-can mr-1"></i>破棄 (保存しない)</button>
                     <button onclick="app.confirmShiftPreview()" class="px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center gap-2">
                         <i class="fa-solid fa-check"></i> 確定して保存
                     </button>
@@ -1334,11 +1334,11 @@
     </div>
 
     <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
-    <script src="js/holidays.js?v=202605230040"></script>
-    <script src="js/config.js?v=202605230040"></script>
-    <script src="js/api.js?v=202605230040"></script>
-    <script src="js/app_v2.js?v=202605230040"></script>
-    <script src="js/gantt_drag.js?v=202605230040"></script>
+    <script src="js/holidays.js?v=202605230059"></script>
+    <script src="js/config.js?v=202605230059"></script>
+    <script src="js/api.js?v=202605230059"></script>
+    <script src="js/app_v2.js?v=202605230059"></script>
+    <script src="js/gantt_drag.js?v=202605230059"></script>
     
 </body>
 </html>

@@ -106,6 +106,9 @@ class ShiftScheduler:
         # 同点解消は staff_id ハッシュベースのタイブレーカーで公平かつ deterministic に行う。
         # config.random_seed は後方互換のため受け取るが、現状の MILP では作用しない。
 
+        # 生成サマリレポート (制約違反・不足の可視化用) を main.py が取得する
+        self._last_report = None
+
         # シフトパターン構築（ミッドシフト自動生成付き）
         raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
@@ -785,9 +788,14 @@ class ShiftScheduler:
 
             logger.info("[Requests] {} work requests applied".format(len(work_requests)))
 
+            # 配置理由トラッキング (sid, d) → 簡潔な日本語ラベル
+            assignment_reasons = {}
+            for wr in work_requests:
+                wsid, wd = wr.get("staff_id"), wr.get("date")
+                if (wsid, wd) in fixed_assignments:
+                    assignment_reasons[(wsid, wd)] = "承認済み出勤希望"
+
             # ========== 既存シフトを固定 (empty_only モードで空きだけ埋める) ==========
-            # フロントが既存シフトを payload に含めて送ってきた場合、それを固定して
-            # MILP は空白スロットだけを最適化する。
             existing_fixed = 0
             for es in self.existing_shifts:
                 esid = es["staff_id"]
@@ -795,7 +803,7 @@ class ShiftScheduler:
                 if ed not in self.dates:
                     continue
                 if (esid, ed) in fixed_assignments:
-                    continue  # work_request で既に固定済み
+                    continue
                 opts = staff_opts.get((esid, ed), [])
                 if not opts:
                     continue
@@ -811,8 +819,37 @@ class ShiftScheduler:
                 if (esid, ed, best_oi) in x:
                     prob += x[(esid, ed, best_oi)] == 1
                     fixed_assignments.add((esid, ed))
+                    assignment_reasons[(esid, ed)] = "既存シフトを維持"
                     existing_fixed += 1
             logger.info("[Existing] {} existing shifts fixed (empty_only mode)".format(existing_fixed))
+
+            # 希望シフト (pending) の (sid, d) → 希望時間帯を控える
+            pref_index = {}  # (sid, d) -> {start, end}
+            for req in self.requests:
+                if req.get("type") == "work" and req.get("status") == "pending":
+                    rsid = req.get("staff_id")
+                    rd_list = req.get("dates", [])
+                    if isinstance(rd_list, str):
+                        rd_list = [d.strip() for d in rd_list.split(",") if d.strip()]
+                    for rd in rd_list:
+                        rd = str(rd).strip()
+                        if rd in self.dates:
+                            pref_index[(rsid, rd)] = {
+                                "start": req.get("start_time"),
+                                "end": req.get("end_time")
+                            }
+
+            # slack 変数の追跡 (validation_report 用)
+            tracked_slacks = {
+                "coverage_under": [],   # スロット人員不足
+                "open_close_under": [], # 開け締め不在
+                "manager_under": [],    # 管理者不足
+                "ojt": [],              # OJT 不在
+                "fairness": [],         # 公平性偏差
+                "fatigue": [],          # 連続勤務疲労
+                "peak_skill": [],       # ピーク帯スキル不足
+            }
+            self._tracked_slacks = tracked_slacks
 
             # ====================================================
             # TIER 1: 法的制約 (ハード制約)
@@ -1002,6 +1039,7 @@ class ShiftScheduler:
                                 "cov_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += workers_sum + slack_under >= req
                             penalty += slack_under * self.W.COVERAGE_UNDER
+                            tracked_slacks["coverage_under"].append((d, slot_min, req, slack_under))
                             slack_over = pulp.LpVariable(
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += workers_sum - slack_over <= req
@@ -1033,10 +1071,12 @@ class ShiftScheduler:
                                 slack = pulp.LpVariable("emp_openclose_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(emp_vars) + slack >= 1
                                 penalty += slack * self.W.OPEN_CLOSE_NO_EMP
+                                tracked_slacks["open_close_under"].append((d, slot_min, slack))
                             else:
                                 slack = pulp.LpVariable("emp_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(emp_vars) + slack >= self.min_manager
                                 penalty += slack * self.W.MIN_MANAGER
+                                tracked_slacks["manager_under"].append((d, slot_min, self.min_manager, slack))
 
             # ====================================================
             # TIER 3: 品質最適化 (ソフト制約)
@@ -1546,24 +1586,54 @@ class ShiftScheduler:
                 return None
 
             # ====================================================
-            # 結果抽出
+            # 結果抽出 + 配置理由ラベル付与
             # ====================================================
             shifts = []
             warnings = []
             for s in self.staff_list:
                 sid = s["id"]
+                rank = self._eval_rank.get(sid, "B")
+                priority = str(s.get("shift_priority", "medium")).lower()
+                contract = str(s.get("contract_type", "general")).lower()
                 for d in self.dates:
                     for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                         if (sid, d, oi) in x and pulp.value(x[(sid, d, oi)]) and pulp.value(x[(sid, d, oi)]) > 0.5:
                             hrs = opt["hours"]
                             brk = self._get_break_minutes(hrs)
                             mh = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
+                            # 配置理由を判定 (優先順位高い順)
+                            reason = assignment_reasons.get((sid, d))
+                            if not reason:
+                                pref = pref_index.get((sid, d))
+                                if pref and pref.get("start") and pref.get("end"):
+                                    ps = self._to_minutes(pref["start"])
+                                    pe = self._to_minutes(pref["end"])
+                                    diff = abs(opt["start_min"] - ps) + abs(opt["end_min"] - pe)
+                                    if diff == 0:
+                                        reason = "希望シフトと完全一致"
+                                    elif diff <= 60:
+                                        reason = "希望シフトに近い時間帯"
+                                    else:
+                                        reason = "希望日に配置"
+                                elif priority == "high":
+                                    reason = "シフト優先度: 高"
+                                elif contract == "regular":
+                                    reason = "レギュラー契約優先"
+                                elif sid in self._mentor_ids:
+                                    reason = "メンター・管理者ロール"
+                                elif sid in self._monthly_ids:
+                                    reason = "月給スタッフ (固定費活用)"
+                                elif rank in ("A", "B"):
+                                    reason = "高評価ランク (戦力)"
+                                else:
+                                    reason = "公平性に基づく自動配置"
                             entry = {
                                 "staff_id": sid,
                                 "date": d,
                                 "start_time": opt["start"],
                                 "end_time": opt["end"],
                                 "break_minutes": brk,
+                                "reason": reason,
                             }
                             if opt["work_hours"] > mh:
                                 warnings.append("{} {}: {:.1f}h over".format(
@@ -1571,11 +1641,63 @@ class ShiftScheduler:
                             shifts.append(entry)
 
             self._validate(shifts)
+
+            # ====================================================
+            # validation_report 生成 (slack 集計)
+            # ====================================================
+            def _name(sid):
+                rec = self._staff_map.get(sid, {})
+                return rec.get("name", sid[:8])
+
+            coverage_gaps = []
+            for (d, slot_min, req, sv) in tracked_slacks.get("coverage_under", []):
+                v = pulp.value(sv) or 0
+                if v >= 0.5:
+                    coverage_gaps.append({
+                        "date": d,
+                        "time": self._from_minutes(slot_min),
+                        "required": int(req),
+                        "shortage": int(round(v)),
+                    })
+
+            open_close_gaps = []
+            for (d, slot_min, sv) in tracked_slacks.get("open_close_under", []):
+                v = pulp.value(sv) or 0
+                if v >= 0.5:
+                    open_close_gaps.append({
+                        "date": d,
+                        "time": self._from_minutes(slot_min),
+                    })
+
+            manager_gaps = []
+            for (d, slot_min, req, sv) in tracked_slacks.get("manager_under", []):
+                v = pulp.value(sv) or 0
+                if v >= 0.5:
+                    manager_gaps.append({
+                        "date": d,
+                        "time": self._from_minutes(slot_min),
+                        "required": int(req),
+                        "shortage": int(round(v)),
+                    })
+
+            report = {
+                "tier": tier,
+                "mode": "force" if force else "auto",
+                "total_shifts": len(shifts),
+                "overtime_warnings": warnings,
+                "coverage_gaps": coverage_gaps[:50],          # スロット人員不足 (top 50)
+                "open_close_gaps": open_close_gaps[:30],      # 開け締め社員不在
+                "manager_gaps": manager_gaps[:50],            # 管理者数不足
+                "has_violations": bool(warnings or coverage_gaps or open_close_gaps or manager_gaps),
+            }
+            self._last_report = report
+
             if warnings:
                 logger.info("[OVERTIME]")
                 for w in warnings:
                     logger.info("  " + w)
-
+            logger.info("[Report] coverage_gaps={} open_close_gaps={} manager_gaps={}".format(
+                len(coverage_gaps), len(open_close_gaps), len(manager_gaps)))
             logger.info("[Result] {} shifts".format(len(shifts)))
             return shifts if shifts else None
 

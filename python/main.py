@@ -622,13 +622,15 @@ async def generate_shifts(request: Request, req: ShiftRequest,
                     return {
                         "status": "success",
                         "mode": "math_plus_gemini_audit" if not force else "math_force_plus_gemini",
-                        "shifts": result
+                        "shifts": result,
+                        "report": getattr(scheduler, "_last_report", None)
                     }
 
         return {
             "status": "success",
             "mode": "math_force" if force else "math",
-            "shifts": result
+            "shifts": result,
+            "report": getattr(scheduler, "_last_report", None)
         }
 
     except Exception as e:
