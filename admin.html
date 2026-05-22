@@ -825,6 +825,36 @@
                 </div>
             </div>
 
+            <!-- 店舗ID + 管理者パスワードで管轄登録モーダル -->
+            <div id="registerStoreModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onclick="if(event.target===this) this.classList.add('hidden')">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+                    <div class="p-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+                        <h3 class="font-bold text-lg"><i class="fas fa-plus-circle mr-2"></i>店舗を管轄に登録</h3>
+                        <button onclick="document.getElementById('registerStoreModal').classList.add('hidden')" class="text-white/80 hover:text-white"><i class="fas fa-xmark text-xl"></i></button>
+                    </div>
+                    <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                        <div class="text-sm text-gray-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <i class="fas fa-building text-amber-600 mr-1"></i>登録先本部: <span id="regModalHqName" class="font-bold text-gray-900">-</span>
+                            <div class="text-xs text-gray-500 mt-0.5">ログインID: <span id="regModalHqLoginId" class="font-mono"></span></div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">店舗ID <span class="text-red-500">*</span></label>
+                            <input id="regModalContractId" type="text" inputmode="numeric" maxlength="20" placeholder="例: 254995332101138" class="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-amber-300 focus:outline-none">
+                            <p class="text-[11px] text-gray-400 mt-1">15桁の数字 (テナント発行時に発行されたID)</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード <span class="text-red-500">*</span></label>
+                            <input id="regModalPassword" type="password" maxlength="64" placeholder="店舗側で設定されたパスワード" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-300 focus:outline-none">
+                            <p class="text-[11px] text-gray-400 mt-1">運営マスターパスワード (rakushift1234) でも認証可</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+                        <button onclick="document.getElementById('registerStoreModal').classList.add('hidden')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg">キャンセル</button>
+                        <button onclick="submitRegisterStoreModal()" class="inline-flex items-center gap-1.5 px-5 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-bold shadow-md"><i class="fas fa-plus-circle"></i>登録する</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- お問い合わせ詳細モーダル -->
             <div id="inquiryDetailModal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onclick="if(event.target===this) this.classList.add('hidden')">
                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -1060,7 +1090,7 @@
     </div>
 
     <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
-    <script src="js/config.js?v=202605230011"></script>
+    <script src="js/config.js?v=202605230032"></script>
     <script>
     // =========================================================
     // 運営管理画面 JavaScript
@@ -1578,10 +1608,14 @@
 
                 const deleteBtn = h.is_global
                     ? ''
-                    : `<button onclick="confirmDeleteHqAdmin('${escapeHtml(h.login_id)}')" class="ml-2 px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-md hover:bg-red-100 border border-red-100"><i class="fas fa-trash"></i></button>`;
+                    : `<button onclick="confirmDeleteHqAdmin('${escapeHtml(h.login_id)}')" class="ml-1 px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-md hover:bg-red-100 border border-red-100" title="本部削除"><i class="fas fa-trash"></i></button>`;
                 const editBtn = h.is_global
                     ? ''
-                    : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 border border-amber-100"><i class="fas fa-pen"></i></button>`;
+                    : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="ml-1 px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 border border-amber-100" title="管轄を一覧から選択"><i class="fas fa-pen"></i></button>`;
+                // 常設「+ 店舗登録」ボタン (展開不要でモーダル起動)
+                const quickRegBtn = h.is_global
+                    ? ''
+                    : `<button onclick='openRegisterStoreModal(${JSON.stringify(h)})' class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 font-bold shadow-sm" title="店舗ID + 管理者パスワードで管轄に登録"><i class="fas fa-plus-circle"></i>店舗登録</button>`;
 
                 const scopeDetailHtml = scopeList.length === 0
                     ? '<p class="text-xs text-gray-400 py-2">管轄テナントがありません</p>'
@@ -1601,21 +1635,12 @@
                     ? '<span class="text-[11px] text-gray-400">グローバル本部は全店舗が自動的に管轄対象です</span>'
                     : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold shadow-sm"><i class="fas fa-list-check"></i>一覧から選択して編集</button>`;
 
-                // 「+ 店舗を新規登録」ボタンと、押下で開く店舗ID/パスワード入力フォーム (顧客本部のみ)
-                const safeHqLogin = (h.login_id || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                // 展開エリア内: モーダル起動のショートカットボタン (顧客本部のみ)
                 const registerFormHtml = h.is_global ? '' : `
                     <div class="mt-3">
-                        <button onclick="toggleRegisterForm('${safeKey}')" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-bold shadow-md transition-all">
+                        <button onclick='openRegisterStoreModal(${JSON.stringify(h)})' class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-bold shadow-md transition-all">
                             <i class="fas fa-plus-circle"></i>店舗を新規登録 (店舗ID + 管理者パスワード)
                         </button>
-                        <div id="registerForm-${safeKey}" class="hidden mt-2 bg-white border border-amber-200 rounded-md p-3">
-                            <div class="text-xs font-bold text-amber-700 mb-2"><i class="fas fa-key mr-1"></i>店舗IDと管理者パスワードを入力して登録 <span class="text-gray-400 font-normal">(登録後はテナント一覧から👁いつでも観覧可能)</span></div>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <input id="regContract-${safeKey}" type="text" inputmode="numeric" maxlength="20" placeholder="店舗ID (例: 254995332101138)" class="flex-1 min-w-[200px] px-3 py-1.5 text-sm border border-gray-300 rounded-md font-mono focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                                <input id="regPassword-${safeKey}" type="password" maxlength="64" placeholder="管理者パスワード" class="flex-1 min-w-[160px] px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                                <button onclick="submitRegisterStoreToHq('${safeHqLogin}','${safeKey}')" class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600 font-bold whitespace-nowrap shadow-sm"><i class="fas fa-plus-circle"></i>登録</button>
-                            </div>
-                        </div>
                     </div>`;
 
                 return `<tr class="border-b border-gray-100">
@@ -1625,7 +1650,7 @@
                     <td class="py-3 px-3 text-xs text-gray-500">${escapeHtml(h.contact_email||'-')}</td>
                     <td class="py-3 px-3 text-center">${scopeBtn}</td>
                     <td class="py-3 px-3 text-xs text-gray-500">${h.created_at?formatDate(h.created_at):'-'}</td>
-                    <td class="py-3 px-3 text-center whitespace-nowrap">${editBtn}${deleteBtn}</td>
+                    <td class="py-3 px-3 text-center whitespace-nowrap">${quickRegBtn}${editBtn}${deleteBtn}</td>
                 </tr>
                 <tr id="hqScopeRow-${safeKey}" class="hidden bg-indigo-50/30 border-b border-gray-100">
                     <td colspan="7" class="py-3 px-4">
@@ -1655,39 +1680,41 @@
         }
     }
 
-    function toggleRegisterForm(safeKey) {
-        const form = document.getElementById('registerForm-' + safeKey);
-        if (!form) return;
-        const willShow = form.classList.contains('hidden');
-        form.classList.toggle('hidden');
-        if (willShow) {
-            // 表示時に店舗ID 入力にフォーカス
-            setTimeout(() => document.getElementById('regContract-' + safeKey)?.focus(), 50);
-        }
+    // 「店舗登録」モーダルを開く (本部行のクリック → モーダル直接起動)
+    let _registerStoreTargetHq = null;
+    function openRegisterStoreModal(hq) {
+        if (!hq || hq.is_global) return;
+        _registerStoreTargetHq = hq;
+        document.getElementById('regModalHqName').textContent = hq.company_name || '(会社名未設定)';
+        document.getElementById('regModalHqLoginId').textContent = hq.login_id || '';
+        document.getElementById('regModalContractId').value = '';
+        document.getElementById('regModalPassword').value = '';
+        document.getElementById('registerStoreModal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('regModalContractId')?.focus(), 50);
     }
 
-    // 店舗ID + 管理者パスワードで本部の管轄に登録
-    async function submitRegisterStoreToHq(hqLoginId, safeKey) {
-        const cEl = document.getElementById('regContract-' + safeKey);
-        const pEl = document.getElementById('regPassword-' + safeKey);
-        const contractId = (cEl?.value || '').trim();
-        const password = (pEl?.value || '').trim();
+    async function submitRegisterStoreModal() {
+        const hq = _registerStoreTargetHq;
+        if (!hq) { showToast('登録先本部が選択されていません', 'error'); return; }
+        const contractId = (document.getElementById('regModalContractId')?.value || '').trim();
+        const password = (document.getElementById('regModalPassword')?.value || '').trim();
         if (!contractId || !password) {
             showToast('店舗IDと管理者パスワードを入力してください', 'error');
             return;
         }
         try {
             const result = await rpc('register_store_to_hq', {
-                p_hq_login_id: hqLoginId,
+                p_hq_login_id: hq.login_id,
                 p_contract_id: contractId,
                 p_admin_password: password
             });
             if (result && result.success) {
                 showToast(result.message || '登録しました', 'success');
-                if (cEl) cEl.value = '';
-                if (pEl) pEl.value = '';
+                document.getElementById('registerStoreModal').classList.add('hidden');
+                _registerStoreTargetHq = null;
                 await loadHqAdmins();
-                // 登録後は当該本部の展開エリアを開きっぱなしに
+                // 登録した本部の管轄一覧を自動展開
+                const safeKey = (hq.login_id || '').replace(/[^A-Za-z0-9_-]/g, '_');
                 const row = document.getElementById('hqScopeRow-' + safeKey);
                 if (row && row.classList.contains('hidden')) {
                     toggleHqScopeRow(safeKey);
