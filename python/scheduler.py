@@ -76,7 +76,7 @@ class ShiftScheduler:
         PREFERENCE_CLOSE    = -7_000      # ±1時間以内の一致
         PREFERENCE_EXACT    = -10_000     # 完全一致
 
-    def __init__(self, staff_list, config, dates, requests=None):
+    def __init__(self, staff_list, config, dates, requests=None, existing_shifts=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
         raw_staff = staff_list or []
         self.staff_list = [s for s in raw_staff if isinstance(s, dict) and s.get("id")]
@@ -94,6 +94,13 @@ class ShiftScheduler:
         self.dates = sorted(valid_dates)
         raw_req = requests or []
         self.requests = [r for r in raw_req if isinstance(r, dict) and r.get("staff_id")]
+        # 既存シフト (empty_only モード時に固定として扱う) - id 不要、staff_id/date/start_time/end_time のみ参照
+        raw_existing = existing_shifts or []
+        self.existing_shifts = [
+            s for s in raw_existing
+            if isinstance(s, dict) and s.get("staff_id") and s.get("date")
+               and s.get("start_time") and s.get("end_time")
+        ]
 
         # ジッターの再現性制御 (config.random_seed が None なら従来通り非決定的)
         seed = self.config.get("random_seed") if isinstance(self.config, dict) else None
@@ -782,6 +789,35 @@ class ShiftScheduler:
                     logger.info("[WorkReq] Fixed: staff={} date={}".format(wsid, wd))
 
             logger.info("[Requests] {} work requests applied".format(len(work_requests)))
+
+            # ========== 既存シフトを固定 (empty_only モードで空きだけ埋める) ==========
+            # フロントが既存シフトを payload に含めて送ってきた場合、それを固定して
+            # MILP は空白スロットだけを最適化する。
+            existing_fixed = 0
+            for es in self.existing_shifts:
+                esid = es["staff_id"]
+                ed = es["date"]
+                if ed not in self.dates:
+                    continue
+                if (esid, ed) in fixed_assignments:
+                    continue  # work_request で既に固定済み
+                opts = staff_opts.get((esid, ed), [])
+                if not opts:
+                    continue
+                es_start = self._to_minutes(es["start_time"])
+                es_end = self._normalize_end_time(es_start, self._to_minutes(es["end_time"]))
+                best_oi = 0
+                best_diff = float("inf")
+                for oi, opt in enumerate(opts):
+                    diff = abs(opt["start_min"] - es_start) + abs(opt["end_min"] - es_end)
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_oi = oi
+                if (esid, ed, best_oi) in x:
+                    prob += x[(esid, ed, best_oi)] == 1
+                    fixed_assignments.add((esid, ed))
+                    existing_fixed += 1
+            logger.info("[Existing] {} existing shifts fixed (empty_only mode)".format(existing_fixed))
 
             # ====================================================
             # TIER 1: 法的制約 (ハード制約)

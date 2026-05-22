@@ -5105,11 +5105,26 @@ const app = {
                 config: this.state.config,
                 dates: dates,
                 requests: this.state.requests || [],
-                mode: 'auto'
+                mode: 'auto',
+                existing_shifts: []
             };
 
+            // empty_only モード: 期間内の既存シフトを「固定」として Python に渡し、
+            // 空きスロットのみ最適化される。これがないとサーバはゼロから組み直すため
+            // 「空きを埋めるをクリックすると人数が減る」現象が発生する。
+            if (targetType === 'empty_only') {
+                payload.existing_shifts = (this.state.shifts || [])
+                    .filter(s => s && s.date && dates.includes(s.date) && s.staff_id && s.start_time && s.end_time)
+                    .map(s => ({
+                        staff_id: s.staff_id,
+                        date: s.date,
+                        start_time: (s.start_time || '').substr(0, 5),
+                        end_time: (s.end_time || '').substr(0, 5)
+                    }));
+            }
+
             // デバッグ: 送信スタッフ数を確認
-            console.log(`[AutoFill] Sending ${payload.staff_list.length} staff, ${dates.length} dates, ${payload.requests.length} requests`);
+            console.log(`[AutoFill] Sending ${payload.staff_list.length} staff, ${dates.length} dates, ${payload.requests.length} requests, ${payload.existing_shifts.length} fixed-existing`);
             console.log('[AutoFill] Staff IDs:', payload.staff_list.map(s => s.name || s.id).join(', '));
 
             // === STEP 2: 事前チェック ===

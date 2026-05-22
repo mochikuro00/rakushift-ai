@@ -2,6 +2,8 @@ import os
 import json
 import hmac
 import hashlib
+import asyncio
+import logging
 import httpx
 import stripe
 from fastapi import FastAPI, Request, Header
@@ -14,6 +16,13 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from scheduler import ShiftScheduler
 
+# 構造化ログ。本番では INFO 以上、DEBUG/PII は出さない
+logging.basicConfig(
+    level=logging.INFO if os.environ.get("RAILWAY_ENVIRONMENT", "") == "production" else logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("rakushift")
+
 # 本番環境フラグ（ログの個人情報マスク等に使用）
 IS_PRODUCTION = os.environ.get("RAILWAY_ENVIRONMENT", "") == "production" or os.environ.get("IS_PRODUCTION", "") == "1"
 
@@ -25,19 +34,23 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS設定: 本番ドメインのみ許可
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
-if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == [""]:
-    ALLOWED_ORIGINS = [
-        "https://rakushift-ai.pages.dev",
-        "https://*.rakushift-ai.pages.dev",
-        "http://localhost:3000",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-    ]
+# 環境変数で固定オリジン (CSV) を上書き可。それと別に Cloudflare Pages の preview
+# (xxx.rakushift-ai.pages.dev) 等のワイルドカードドメインは allow_origin_regex で対応
+# (CORSMiddleware の allow_origins は完全一致のみ。glob は機能しない)
+_env_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+ALLOWED_ORIGINS = _env_origins or [
+    "https://rakushift-ai.pages.dev",
+    "http://localhost:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+]
+# Cloudflare Pages のプレビュー / 本番、Railway デプロイ URL を regex で許可
+ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)*rakushift-ai\.pages\.dev$"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -103,13 +116,13 @@ def _load_platform_settings():
             if isinstance(data, dict):
                 _platform_settings = data
                 _settings_loaded_at = now
-                print("[Settings] Loaded {} keys from DB".format(len(data)))
+                logger.info("Platform settings loaded: %d keys", len(data))
                 # Stripeキーが設定されていれば適用
                 sk = data.get("stripe_secret_key", "")
                 if sk:
                     stripe.api_key = sk
     except Exception as e:
-        print("[Settings] Load failed: {}".format(e))
+        logger.info("[Settings] Load failed: {}".format(e))
 
 
 # 起動時に設定読み込み
@@ -125,6 +138,8 @@ class ShiftRequest(BaseModel):
     requests: List[Dict[str, Any]] = []
     mode: str = "auto"
     contract_id: Optional[str] = None
+    # empty_only モードで既存シフトを固定するため、フロントから既存シフトを渡せるように
+    existing_shifts: List[Dict[str, Any]] = []
 
 
 class DiagnoseRequest(BaseModel):
@@ -142,7 +157,10 @@ class InquiryRequest(BaseModel):
     company_address: str = ""
     phone: str
     contact_name: str
+    contact_phone: str = ""  # 担当者個別連絡先 (DB スキーマと整合)
     plan_summary: str = ""
+    # フロントは <input type="number"> の文字列値を送信するため str で受け、
+    # DB INSERT 時に int に変換する。Pydantic v2 では Union/Strict が複雑なので str のまま保持。
     light_plan_count: str = "0"
     standard_plan_count: str = "0"
     premium_plan_count: str = "0"
@@ -225,7 +243,7 @@ async def supabase_query(table: str, params: str = "", method: str = "GET",
     else:
         return None
     if resp.status_code >= 400:
-        print("Supabase {} error: {}".format(method, resp.text))
+        logger.info("Supabase {} error: {}".format(method, resp.text))
         return None
     return resp.json()
 
@@ -253,11 +271,74 @@ def _validate_redirect_url(url: str) -> bool:
         return False
 
 
+async def verify_session_org_id(session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    """セッションID (x-session-id ヘッダー) から organization_id と role を取得。
+    返り値: {"organization_id": "...", "role": "shop|admin|hq_admin"} or None
+    SERVICE_KEY で auth_sessions を直接参照 (RLS バイパス)。期限切れ・不存在は None。
+    """
+    if not session_id or not SUPABASE_SERVICE_KEY or not SUPABASE_URL:
+        return None
+    try:
+        url = "{}/rest/v1/auth_sessions?id=eq.{}&select=organization_id,role,expires_at".format(
+            SUPABASE_URL, session_id)
+        client = _get_http_client()
+        resp = await client.get(url, headers={
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY),
+        }, timeout=5)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        if not data:
+            return None
+        row = data[0]
+        # 期限切れチェック
+        from datetime import datetime, timezone
+        try:
+            expires_at = datetime.fromisoformat(str(row.get("expires_at", "")).replace("Z", "+00:00"))
+            if expires_at < datetime.now(timezone.utc):
+                return None
+        except Exception:
+            return None
+        return {
+            "organization_id": row.get("organization_id"),
+            "role": row.get("role"),
+        }
+    except Exception:
+        return None
+
+
 # === ヘルスチェック ===
 
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Rakushift Engine v3.2 Ready", "build": "2026.05.19.1"}
+
+
+@app.get("/health")
+async def health_check():
+    """Railway/Cloudflare 用の本物のヘルスチェック。
+    DB 疎通が取れて初めて 200 を返す。NG なら 503 で restart を促す。"""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        # シークレット未設定は構成エラー扱い
+        return JSONResponse(status_code=503, content={"status": "error", "db": "not_configured"})
+    try:
+        client = _get_http_client()
+        resp = await client.get(
+            "{}/rest/v1/organizations".format(SUPABASE_URL),
+            params={"select": "id", "limit": "1"},
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY),
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
+        return {"status": "ok", "db": "alive"}
+    except Exception as e:
+        logger.warning("health check failed: %s", e)
+        return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
 
 
 @app.get("/keepalive")
@@ -271,11 +352,11 @@ async def keepalive():
         result = await supabase_query(
             "organizations", "select=id&limit=1", method="GET")
         row_count = len(result) if isinstance(result, list) else 0
-        print("[Keepalive] Supabase ping OK - {} rows".format(row_count))
+        logger.info("[Keepalive] Supabase ping OK - {} rows".format(row_count))
         return {"status": "ok", "db": "alive", "rows": row_count}
     except Exception as e:
         msg = repr(e)
-        print("[Keepalive] Supabase ping FAILED: {}".format(msg))
+        logger.info("[Keepalive] Supabase ping FAILED: {}".format(msg))
         return {"status": "ok", "db": "error", "message": "DB接続エラー" if IS_PRODUCTION else msg}
 
 
@@ -424,7 +505,7 @@ async def hq_get_shops(request: Request):
 
         return shops
     except Exception as e:
-        print("[HQ] Shop list error: {}".format(e))
+        logger.info("[HQ] Shop list error: {}".format(e))
         return JSONResponse(status_code=500, content={"error": "店舗一覧の取得に失敗しました"})
 
 
@@ -441,32 +522,50 @@ def check_feasibility(request: Request, req: ShiftRequest):
         result = scheduler.pre_check()
         return {"status": "success", "check": result}
     except Exception as e:
-        print("Check Error: {}".format(e))
+        logger.info("Check Error: {}".format(e))
         err_msg = "チェック中にエラーが発生しました" if IS_PRODUCTION else str(e)
         return {"status": "error", "message": err_msg}
 
 
 @app.post("/generate")
 @limiter.limit("10/minute")
-def generate_shifts(request: Request, req: ShiftRequest):
-    print("Received request: {} staff, {} dates, mode={}".format(
+async def generate_shifts(request: Request, req: ShiftRequest,
+                          x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    logger.info("Received request: {} staff, {} dates, mode={}".format(
         len(req.staff_list), len(req.dates), req.mode))
 
     try:
-        # Validate plan limits from DB to prevent bypass and DoS
-        plan = req.config.get("stripe_plan", "standard")
-        org_id = req.config.get("organization_id")
-        if org_id and SUPABASE_SERVICE_KEY:
+        # === セッション検証: 信頼できる org_id をサーバ側で確定する ===
+        session_info = await verify_session_org_id(x_session_id)
+        if not session_info or not session_info.get("organization_id"):
+            return JSONResponse(status_code=401, content={
+                "status": "error",
+                "message": "セッションが無効または期限切れです。再ログインしてください。"
+            })
+        org_id = session_info["organization_id"]
+        front_org_id = req.config.get("organization_id")
+        if front_org_id and str(front_org_id) != str(org_id):
+            return JSONResponse(status_code=403, content={
+                "status": "error",
+                "message": "セッションとリクエストの組織が一致しません。"
+            })
+
+        # 検証済み org_id で plan を取得 (DB 値を信頼)
+        plan = "standard"
+        if SUPABASE_SERVICE_KEY:
             try:
-                url = "{}/rest/v1/config_safe?organization_id=eq.{}&select=stripe_plan&limit=1".format(SUPABASE_URL, org_id)
-                headers = {"apikey": SUPABASE_SERVICE_KEY, "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY)}
-                resp = httpx.get(url, headers=headers, timeout=5)
+                client = _get_http_client()
+                resp = await client.get(
+                    "{}/rest/v1/config_safe".format(SUPABASE_URL),
+                    params={"organization_id": "eq.{}".format(org_id), "select": "stripe_plan", "limit": "1"},
+                    headers={"apikey": SUPABASE_SERVICE_KEY, "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY)},
+                    timeout=5)
                 if resp.status_code == 200:
                     data = resp.json()
                     if data and isinstance(data, list) and len(data) > 0:
-                        plan = data[0].get("stripe_plan", "standard")
+                        plan = data[0].get("stripe_plan") or "standard"
             except Exception as e:
-                print("Plan verification error: {}".format(e))
+                logger.info("Plan verification error: {}".format(e))
 
         limit = 10
         if plan == "pro": limit = 50
@@ -475,24 +574,27 @@ def generate_shifts(request: Request, req: ShiftRequest):
             return {"status": "error", "message": "スタッフ数がプラン上限({}名)を超過しています。".format(limit)}
 
         scheduler = ShiftScheduler(
-            req.staff_list, req.config, req.dates, req.requests)
+            req.staff_list, req.config, req.dates, req.requests,
+            existing_shifts=req.existing_shifts)
 
 
         force = (req.mode == "force")
-        result = scheduler.solve(force=force)
+        logger.info("[Generate] mode={} existing_shifts={}".format(req.mode, len(req.existing_shifts)))
+        # 重い MILP 計算は別スレッドへ逃してイベントループのブロックを防ぐ
+        result = await asyncio.to_thread(scheduler.solve, force=force)
 
         if not result:
             return {"status": "success", "mode": "math_failed", "shifts": []}
 
         # 生成結果のスタッフカバレッジをログ出力
         result_staff_ids = set(s["staff_id"] for s in result)
-        print("[Generate] Result: {} shifts covering {}/{} staff".format(
+        logger.info("[Generate] Result: {} shifts covering {}/{} staff".format(
             len(result), len(result_staff_ids), len(req.staff_list)))
 
         # Gemini監査 (環境変数のAPIキーを使用)
         gemini_key, gemini_model = get_gemini_key()
         if gemini_key:
-            print("Running Gemini audit (server-side)...")
+            logger.info("Running Gemini audit (server-side)...")
             audited = run_gemini_audit(gemini_key, gemini_model, req, result)
             if audited:
                 # 監査結果の品質チェック: シフト数やスタッフカバレッジが減少していないか
@@ -504,15 +606,15 @@ def generate_shifts(request: Request, req: ShiftRequest):
 
                 # シフト数が50%以下に減少した場合は破棄
                 if audited_count < original_count * 0.5:
-                    print("[Gemini Audit] REJECTED: shift count dropped too much ({} -> {})".format(
+                    logger.info("[Gemini Audit] REJECTED: shift count dropped too much ({} -> {})".format(
                         original_count, audited_count))
                 # シフト数が30%以上増加した場合も破棄（過剰配置防止）
                 elif audited_count > original_count * 1.3:
-                    print("[Gemini Audit] REJECTED: shift count increased too much ({} -> {})".format(
+                    logger.info("[Gemini Audit] REJECTED: shift count increased too much ({} -> {})".format(
                         original_count, audited_count))
                 # スタッフが1人でも消えた場合は破棄（全スタッフのシフトを保護）
                 elif len(missing_staff) > 0:
-                    print("[Gemini Audit] REJECTED: {} staff lost shifts: {}".format(
+                    logger.info("[Gemini Audit] REJECTED: {} staff lost shifts: {}".format(
                         len(missing_staff), missing_staff))
                 else:
                     result = audited
@@ -529,7 +631,7 @@ def generate_shifts(request: Request, req: ShiftRequest):
         }
 
     except Exception as e:
-        print("Error: {}".format(e))
+        logger.info("Error: {}".format(e))
         import traceback
         traceback.print_exc()
         err_msg = "シフト生成中にエラーが発生しました" if IS_PRODUCTION else str(e)
@@ -633,15 +735,24 @@ typeは重要度順: danger(労基法違反) > warning(人員不足など重大�
                     "message": "AI応答エラー ({})".format(resp.status_code),
                     "suggestions": []}
 
-        data = resp.json()
-        text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+        try:
+            data = resp.json()
+            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+        except (ValueError, AttributeError, IndexError, TypeError, KeyError) as parse_err:
+            logger.error("[Gemini Diagnose] Response structure unexpected: %s", parse_err)
+            return {"status": "error", "message": "AI応答の形式が不正です", "suggestions": []}
         if not text:
             return {"status": "error", "message": "AIからの応答がありません", "suggestions": []}
 
-        suggestions = json.loads(text)
+        try:
+            suggestions = json.loads(text)
+        except json.JSONDecodeError as je:
+            logger.error("[Gemini Diagnose] JSON parse failed: %s. Raw: %s", je, text[:300])
+            return {"status": "error", "message": "AIの返答が解釈できませんでした", "suggestions": []}
         return {"status": "success", "suggestions": suggestions}
 
     except Exception as e:
+        logger.exception("AI diagnose failed")
         err_msg = "AI診断中にエラーが発生しました" if IS_PRODUCTION else str(e)
         return {"status": "error", "message": err_msg, "suggestions": []}
 
@@ -761,15 +872,23 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
         }, timeout=90)
 
         if resp.status_code != 200:
-            print("Gemini API error: {}".format(resp.status_code))
+            logger.info("Gemini API error: {}".format(resp.status_code))
             return None
 
-        data = resp.json()
-        text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+        try:
+            data = resp.json()
+            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+        except (ValueError, AttributeError, IndexError, TypeError, KeyError) as parse_err:
+            logger.warning("[Gemini Audit] Response structure unexpected, skipping audit: %s", parse_err)
+            return None
         if not text:
             return None
 
-        fixed = json.loads(text)
+        try:
+            fixed = json.loads(text)
+        except json.JSONDecodeError as je:
+            logger.warning("[Gemini Audit] JSON parse failed, skipping audit: %s. Raw: %s", je, text[:200])
+            return None
 
         # 配列でない場合の対応
         if isinstance(fixed, dict):
@@ -804,11 +923,11 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
         if not cleaned:
             return None
 
-        print("[Gemini Audit] {} -> {} shifts".format(len(shifts), len(cleaned)))
+        logger.info("[Gemini Audit] {} -> {} shifts".format(len(shifts), len(cleaned)))
         return cleaned
 
     except Exception as e:
-        print("Gemini audit error: {}".format(e))
+        logger.info("Gemini audit error: {}".format(e))
         import traceback
         traceback.print_exc()
         return None
@@ -832,8 +951,8 @@ async def send_welcome_email(to_email: str, org_name: str, contract_id: str,
     smtp_from = _get_setting("smtp_from") or smtp_user
 
     if not smtp_host or not smtp_user or not smtp_pass:
-        print("[Email] SMTP not configured. Skipping email to {}".format(to_email))
-        print("[Email] Contract ID: {} (SMTP not configured, credentials not logged)".format(contract_id))
+        logger.info("[Email] SMTP not configured. Skipping email to {}".format(to_email))
+        logger.info("[Email] Contract ID: {} (SMTP not configured, credentials not logged)".format(contract_id))
         return
 
     plan_name = {"standard": "Standard", "pro": "Pro", "premium": "Premium"}.get(plan, plan)
@@ -884,21 +1003,31 @@ async def send_welcome_email(to_email: str, org_name: str, contract_id: str,
         contract_id=contract_id, password=password,
     )
 
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = smtp_from
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_body, "html"))
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = smtp_from
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_body, "html"))
 
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
+    def _send_sync():
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.sendmail(smtp_from, to_email, msg.as_string())
 
-        print("[Email] Sent to {}".format(to_email))
-    except Exception as e:
-        print("[Email] FAILED to {}: {}".format(to_email, e))
+    # SMTP リトライ (3回、指数バックオフ)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            await asyncio.to_thread(_send_sync)
+            logger.info("Welcome email sent to %s (attempt %d)", to_email, attempt + 1)
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            # 最終失敗: 顧客にメールが届かない致命的事象。Railway logs に ERROR で残す
+            logger.error("Welcome email PERMANENTLY FAILED to %s after %d attempts: %s. Manual resend required.", to_email, max_retries, e)
 
 
 @app.post("/stripe/new-subscription")
@@ -989,11 +1118,11 @@ async def new_subscription(request: Request, req: NewSubscriptionRequest):
         return {"url": session.url, "session_id": session.id}
 
     except stripe.error.StripeError as e:
-        print("Stripe Error: {}".format(e))
+        logger.info("Stripe Error: {}".format(e))
         err_msg = "決済処理中にエラーが発生しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=400, content={"error": err_msg})
     except Exception as e:
-        print("New Subscription Error: {}".format(e))
+        logger.info("New Subscription Error: {}".format(e))
         err_msg = "サーバーエラーが発生しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500, content={"error": err_msg})
 
@@ -1089,12 +1218,12 @@ async def create_checkout_session(request: Request, req: CheckoutRequest):
         return {"url": session.url, "session_id": session.id}
 
     except stripe.error.StripeError as e:
-        print("Stripe Error: {}".format(e))
+        logger.info("Stripe Error: {}".format(e))
         err_msg = "決済セッションの作成に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=400,
                             content={"error": err_msg})
     except Exception as e:
-        print("Checkout Error: {}".format(e))
+        logger.info("Checkout Error: {}".format(e))
         err_msg = "サーバーエラーが発生しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500,
                             content={"error": err_msg})
@@ -1141,7 +1270,7 @@ async def create_portal_session(req: PortalRequest):
         return {"url": session.url}
 
     except Exception as e:
-        print("Portal Error: {}".format(e))
+        logger.info("Portal Error: {}".format(e))
         err_msg = "ポータルの作成に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500,
                             content={"error": err_msg})
@@ -1177,7 +1306,7 @@ async def stripe_webhook(request: Request):
 
     event_type = event["type"]
     data = event["data"]["object"]
-    print("[Stripe Webhook] Event: {}".format(event_type))
+    logger.info("[Stripe Webhook] Event: {}".format(event_type))
 
     try:
         if event_type == "checkout.session.completed":
@@ -1202,7 +1331,7 @@ async def stripe_webhook(request: Request):
                     "stripe_subscription_id=eq.{}&select=id".format(subscription_id)
                 )
                 if isinstance(existing, list) and len(existing) > 0:
-                    print("[Webhook] SKIPPED: Tenant already exists for subscription {}".format(subscription_id))
+                    logger.info("[Webhook] SKIPPED: Tenant already exists for subscription {}".format(subscription_id))
                     return JSONResponse(status_code=200, content={"status": "already_processed"})
 
                 # 1. テナント作成
@@ -1244,27 +1373,44 @@ async def stripe_webhook(request: Request):
                             plan=plan,
                         )
                     else:
-                        print("[Webhook] WARNING: No email for tenant {}".format(new_contract_id))
-                    print("[Webhook] NEW TENANT created: {} email={} plan={}".format(
+                        logger.warning("No email for tenant %s", new_contract_id)
+                    logger.info("[Webhook] NEW TENANT created: {} email={} plan={}".format(
                         new_contract_id, customer_email, plan))
                 else:
-                    print("[Webhook] Tenant creation FAILED: {}".format(tenant_result))
+                    logger.info("[Webhook] Tenant creation FAILED: {}".format(tenant_result))
 
-            elif metadata.get("contract_id"):
+            else:
                 # === 既存テナントのプラン変更 ===
-                contract_id = metadata["contract_id"]
-                await supabase_query(
-                    "config",
-                    "contract_id=eq.{}".format(contract_id),
-                    method="PATCH",
-                    body={
-                        "stripe_customer_id": customer_id,
-                        "stripe_subscription_id": subscription_id,
-                        "subscription_status": "active",
-                        "payment_failed_at": None,
-                    }
-                )
-                print("[Webhook] Subscription activated for: {}".format(contract_id))
+                # metadata.contract_id が無くても subscription_id / customer_id で逆引きする
+                contract_id = metadata.get("contract_id")
+                if not contract_id and subscription_id:
+                    configs = await supabase_query(
+                        "config",
+                        "stripe_subscription_id=eq.{}&select=contract_id".format(subscription_id))
+                    if configs and len(configs) > 0:
+                        contract_id = configs[0].get("contract_id")
+                if not contract_id and customer_id:
+                    configs = await supabase_query(
+                        "config",
+                        "stripe_customer_id=eq.{}&select=contract_id".format(customer_id))
+                    if configs and len(configs) > 0:
+                        contract_id = configs[0].get("contract_id")
+
+                if contract_id:
+                    await supabase_query(
+                        "config",
+                        "contract_id=eq.{}".format(contract_id),
+                        method="PATCH",
+                        body={
+                            "stripe_customer_id": customer_id,
+                            "stripe_subscription_id": subscription_id,
+                            "subscription_status": "active",
+                            "payment_failed_at": None,
+                        }
+                    )
+                    logger.info("[Webhook] Subscription activated for: {}".format(contract_id))
+                else:
+                    logger.warning("[Webhook] checkout.session.completed: contract_id unresolved (sub=%s cust=%s)", subscription_id, customer_id)
 
         elif event_type in (
             "customer.subscription.updated",
@@ -1297,7 +1443,7 @@ async def stripe_webhook(request: Request):
                             setting_key = "stripe_price_{}".format(plan_key)
                             if _get_setting(setting_key) == price_id:
                                 update_data["stripe_plan"] = plan_key
-                                print("[Webhook] Plan changed to: {}".format(plan_key))
+                                logger.info("[Webhook] Plan changed to: {}".format(plan_key))
                                 break
 
                 # 解約された場合はライセンスも停止
@@ -1321,7 +1467,7 @@ async def stripe_webhook(request: Request):
                     method="PATCH",
                     body=update_data
                 )
-                print("[Webhook] Subscription {} -> {} for: {}".format(
+                logger.info("[Webhook] Subscription {} -> {} for: {}".format(
                     event_type, status, contract_id))
 
         elif event_type == "invoice.payment_failed":
@@ -1352,22 +1498,31 @@ async def stripe_webhook(request: Request):
                         # 3週間(21日)経過チェック → 自動ライセンス停止
                         if existing_failed_at and org_id:
                             import datetime
+                            # PostgreSQL TIMESTAMPTZ は ISO 8601 (例: 2026-05-22T12:34:56.789012+00:00 or with Z)
+                            # fromisoformat は Python 3.11+ で "Z" を受理するが、3.10 以前は不可なので明示置換
+                            raw_dt = str(existing_failed_at).strip()
+                            failed_date = None
                             try:
-                                failed_date = datetime.datetime.fromisoformat(existing_failed_at.replace("Z", "+00:00"))
+                                failed_date = datetime.datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
+                            except Exception as parse_err:
+                                logger.warning("[Webhook] payment_failed_at parse failed for %s: %s. Raw=%s",
+                                               contract_id, parse_err, raw_dt[:64])
+                            if failed_date is not None:
+                                # naive datetime なら UTC 扱い
+                                if failed_date.tzinfo is None:
+                                    failed_date = failed_date.replace(tzinfo=datetime.timezone.utc)
                                 days_since = (datetime.datetime.now(datetime.timezone.utc) - failed_date).days
                                 if days_since >= 21:
                                     await supabase_rpc("suspend_license", {
                                         "p_organization_id": org_id,
                                         "p_note": "決済未対応21日超過のため自動停止"
                                     })
-                                    print("[Webhook] Auto-suspended after 21 days: {}".format(contract_id))
-                            except Exception as date_err:
-                                print("[Webhook] Date parse error: {}".format(date_err))
+                                    logger.info("[Webhook] Auto-suspended after 21 days: %s", contract_id)
 
-                        print("[Webhook] Payment failed for: {}".format(contract_id))
+                        logger.info("[Webhook] Payment failed for: %s", contract_id)
 
     except Exception as e:
-        print("[Webhook Error] {}".format(e))
+        logger.info("[Webhook Error] {}".format(e))
         import traceback
         traceback.print_exc()
 
@@ -1414,7 +1569,7 @@ async def admin_send_welcome_email(request: Request, req: SendWelcomeEmailReques
         )
         return {"success": True, "message": "メールを送信しました: {}".format(req.email)}
     except Exception as e:
-        print("[WelcomeEmail Error] {}".format(e))
+        logger.exception("WelcomeEmail send failed")
         return JSONResponse(status_code=500,
                             content={"error": "メール送信に失敗しました。しばらく時間をおいて再度お試しください。"})
 
@@ -1457,8 +1612,9 @@ async def get_subscription_status(contract_id: str):
                         method="PATCH",
                         body={"subscription_status": sub.status}
                     )
-            except stripe.error.StripeError as e:
-                print(f"[Warning] Stripe API Error: {e}")
+            except stripe.error.StripeError:
+                # Stripe例外メッセージにキーやリクエストIDが混入し得るため詳細はマスク
+                logger.warning("Stripe API error during subscription status check")
 
         return result
 
@@ -1516,50 +1672,77 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-    print(f"[Inquiry] Received from {req.company_name} ({req.contact_name})")
-    print(body)
+    logger.info(f"[Inquiry] Received from {req.company_name} ({req.contact_name})")
+    logger.info(body)
 
     # Supabaseにも保存を試行
+    def _to_int(v):
+        try:
+            return int(v) if v else 0
+        except (ValueError, TypeError):
+            return 0
+
+    db_saved = False
     try:
         inquiry_data = {
             "company_name": req.company_name,
             "company_address": req.company_address,
             "phone": req.phone,
             "contact_name": req.contact_name,
+            "contact_phone": req.contact_phone,
             "plan_summary": req.plan_summary,
+            "light_plan_count": _to_int(req.light_plan_count),
+            "standard_plan_count": _to_int(req.standard_plan_count),
+            "premium_plan_count": _to_int(req.premium_plan_count),
             "preferred_days": req.preferred_days,
             "preferred_time": req.preferred_time,
+            "schedule_summary": req.schedule_summary,
             "message": req.message,
             "status": "new"
         }
-        await supabase_query("inquiries", method="POST", body=inquiry_data)
-        print("[Inquiry] Saved to DB")
+        result = await supabase_query("inquiries", method="POST", body=inquiry_data)
+        if result is not None:
+            db_saved = True
+            logger.info("[Inquiry] Saved to DB")
+        else:
+            logger.warning("[Inquiry] DB save returned None - check table existence / RLS")
     except Exception as db_err:
-        print(f"[Inquiry] DB save skipped: {db_err}")
+        logger.warning(f"[Inquiry] DB save failed: {db_err}")
 
     # メール送信
     if to_email and smtp_user and smtp_pass:
-        try:
-            msg = MIMEMultipart()
-            msg["From"] = smtp_user
-            msg["To"] = to_email
-            # SMTPヘッダーインジェクション防止: 改行文字を除去
-            safe_company = req.company_name.replace("\r", "").replace("\n", "")
-            msg["Subject"] = f"【ラクシフト】法人お問い合わせ - {safe_company}"
-            msg.attach(MIMEText(body, "plain", "utf-8"))
+        msg = MIMEMultipart()
+        msg["From"] = smtp_user
+        msg["To"] = to_email
+        # SMTPヘッダーインジェクション防止: 改行文字を除去
+        safe_company = req.company_name.replace("\r", "").replace("\n", "")
+        msg["Subject"] = f"【ラクシフト】法人お問い合わせ - {safe_company}"
+        msg.attach(MIMEText(body, "plain", "utf-8"))
 
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
+        def _send_inquiry_sync():
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
 
-            print(f"[Inquiry] Email sent to {to_email}")
-            return {"success": True, "message": "お問い合わせを受け付けました。メール送信完了。"}
-        except Exception as mail_err:
-            print(f"[Inquiry] Email failed: {mail_err}")
-            return {"success": True, "message": "お問い合わせを受け付けました。（メール送信に一時的な問題が発生しましたが、データは保存済みです）"}
+        # SMTP リトライ (3回、指数バックオフ)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                await asyncio.to_thread(_send_inquiry_sync)
+                logger.info("Inquiry email sent to %s (attempt %d)", to_email, attempt + 1)
+                return {"success": True, "message": "お問い合わせを受け付けました。メール送信完了。"}
+            except Exception as mail_err:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+                    continue
+                logger.error("Inquiry email failed after %d retries: %s", max_retries, mail_err)
+                if db_saved:
+                    return {"success": True, "message": "お問い合わせを受け付けました。（メール送信は失敗したためサポート対応中）"}
+                else:
+                    return JSONResponse(status_code=500, content={"success": False, "message": "お問い合わせの受付に失敗しました。時間をおいて再度お試しください。"})
     else:
-        print("[Inquiry] Email not configured. Set INQUIRY_EMAIL_TO, SMTP_USER, SMTP_PASS env vars.")
+        logger.info("Inquiry email not configured. Set INQUIRY_EMAIL_TO, SMTP_USER, SMTP_PASS env vars.")
         return {"success": True, "message": "お問い合わせを受け付けました。"}
 
 
