@@ -1060,7 +1060,7 @@
     </div>
 
     <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
-    <script src="js/config.js?v=202605222351"></script>
+    <script src="js/config.js?v=202605222356"></script>
     <script>
     // =========================================================
     // 運営管理画面 JavaScript
@@ -1601,15 +1601,20 @@
                     ? '<span class="text-[11px] text-gray-400">グローバル本部は全店舗が自動的に管轄対象です</span>'
                     : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold shadow-sm"><i class="fas fa-list-check"></i>一覧から選択して編集</button>`;
 
-                // 店舗ID + 管理者パスワードで登録するインラインフォーム (顧客本部のみ)
+                // 「+ 店舗を新規登録」ボタンと、押下で開く店舗ID/パスワード入力フォーム (顧客本部のみ)
                 const safeHqLogin = (h.login_id || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
                 const registerFormHtml = h.is_global ? '' : `
-                    <div class="mt-3 bg-white border border-amber-200 rounded-md p-3">
-                        <div class="text-xs font-bold text-amber-700 mb-2"><i class="fas fa-key mr-1"></i>店舗IDと管理者パスワードを入力して登録 <span class="text-gray-400 font-normal">(登録後はテナント一覧から👁いつでも観覧可能)</span></div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <input id="regContract-${safeKey}" type="text" inputmode="numeric" maxlength="20" placeholder="店舗ID (例: 254995332101138)" class="flex-1 min-w-[200px] px-3 py-1.5 text-sm border border-gray-300 rounded-md font-mono focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                            <input id="regPassword-${safeKey}" type="password" maxlength="64" placeholder="管理者パスワード" class="flex-1 min-w-[160px] px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                            <button onclick="submitRegisterStoreToHq('${safeHqLogin}','${safeKey}')" class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600 font-bold whitespace-nowrap shadow-sm"><i class="fas fa-plus-circle"></i>登録</button>
+                    <div class="mt-3">
+                        <button onclick="toggleRegisterForm('${safeKey}')" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-bold shadow-md transition-all">
+                            <i class="fas fa-plus-circle"></i>店舗を新規登録 (店舗ID + 管理者パスワード)
+                        </button>
+                        <div id="registerForm-${safeKey}" class="hidden mt-2 bg-white border border-amber-200 rounded-md p-3">
+                            <div class="text-xs font-bold text-amber-700 mb-2"><i class="fas fa-key mr-1"></i>店舗IDと管理者パスワードを入力して登録 <span class="text-gray-400 font-normal">(登録後はテナント一覧から👁いつでも観覧可能)</span></div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <input id="regContract-${safeKey}" type="text" inputmode="numeric" maxlength="20" placeholder="店舗ID (例: 254995332101138)" class="flex-1 min-w-[200px] px-3 py-1.5 text-sm border border-gray-300 rounded-md font-mono focus:ring-2 focus:ring-amber-300 focus:outline-none">
+                                <input id="regPassword-${safeKey}" type="password" maxlength="64" placeholder="管理者パスワード" class="flex-1 min-w-[160px] px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-300 focus:outline-none">
+                                <button onclick="submitRegisterStoreToHq('${safeHqLogin}','${safeKey}')" class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600 font-bold whitespace-nowrap shadow-sm"><i class="fas fa-plus-circle"></i>登録</button>
+                            </div>
                         </div>
                     </div>`;
 
@@ -1647,6 +1652,17 @@
         if (icon) {
             icon.classList.toggle('fa-chevron-right', !willShow);
             icon.classList.toggle('fa-chevron-down', willShow);
+        }
+    }
+
+    function toggleRegisterForm(safeKey) {
+        const form = document.getElementById('registerForm-' + safeKey);
+        if (!form) return;
+        const willShow = form.classList.contains('hidden');
+        form.classList.toggle('hidden');
+        if (willShow) {
+            // 表示時に店舗ID 入力にフォーカス
+            setTimeout(() => document.getElementById('regContract-' + safeKey)?.focus(), 50);
         }
     }
 
