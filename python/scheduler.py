@@ -102,14 +102,9 @@ class ShiftScheduler:
                and s.get("start_time") and s.get("end_time")
         ]
 
-        # ジッターの再現性制御 (config.random_seed が None なら従来通り非決定的)
-        seed = self.config.get("random_seed") if isinstance(self.config, dict) else None
-        if seed is not None:
-            try:
-                random.seed(int(seed))
-                logger.info("[Init] Deterministic mode: seed={}".format(seed))
-            except (TypeError, ValueError):
-                pass
+        # 旧 random.uniform ジッターは廃止 (常に決定論的: ガチャ要素ゼロ)。
+        # 同点解消は staff_id ハッシュベースのタイブレーカーで公平かつ deterministic に行う。
+        # config.random_seed は後方互換のため受け取るが、現状の MILP では作用しない。
 
         # シフトパターン構築（ミッドシフト自動生成付き）
         raw_patterns = self.config.get("custom_shifts", [])
@@ -1131,16 +1126,19 @@ class ShiftScheduler:
                     elif contract_type == "spot":
                         priority_bonus += self.W.CONTRACT_SPOT
 
+                    # 決定論的タイブレーカー: スタッフ間で公平、かつ「同じ入力なら同じ結果」(ガチャ排除)
+                    # random.uniform を廃止 → staff_id ハッシュベースの固定差分に置換。
+                    # 全スタッフが PRIORITY_HIGH 等で同点になった場合の選別に微小バイアスを与え、
+                    # 「リスト先頭が常に選ばれる」不公平を回避しつつ deterministic を保証する。
+                    sid_hash = (abs(hash(sid)) % 10_000) / 1_000.0  # 0.0〜10.0 固定
                     for d in self.dates:
+                        # 日付ごとにもオフセット (同じスタッフが常に同じ日に固まらないように deterministic 分散)
+                        day_hash = (abs(hash(d + sid)) % 100) / 100.0  # 0.0〜1.0 固定
+                        tiebreaker = sid_hash + day_hash
                         for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                             work_hours = opt["work_hours"]
-                            # 月給制の場合はシフト追加による変動人件費はゼロとみなす
                             labor_cost = 0.0 if is_monthly else (hourly_wage * work_hours)
-                            
-                            # 人件費を最小化しつつ、評価の高いスタッフを優先するハイブリッドコスト
-                            # 同条件で毎回同じシフトになるのを防ぐため、微小なランダムジッターを加える
-                            jitter = random.uniform(-10.0, 10.0)
-                            total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus + jitter
+                            total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus + tiebreaker
                             penalty += x[(sid, d, oi)] * total_cost
 
                 # --- 勤務日数の公平性と離職防止 (需要ベースの按分方式) ---

@@ -518,7 +518,8 @@ async def hq_get_shops(request: Request):
 def check_feasibility(request: Request, req: ShiftRequest):
     try:
         scheduler = ShiftScheduler(
-            req.staff_list, req.config, req.dates, req.requests)
+            req.staff_list, req.config, req.dates, req.requests,
+            existing_shifts=req.existing_shifts)
         result = scheduler.pre_check()
         return {"status": "success", "check": result}
     except Exception as e:
