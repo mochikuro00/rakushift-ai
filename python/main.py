@@ -618,6 +618,13 @@ async def generate_shifts(request: Request, req: ShiftRequest,
                     logger.info("[Gemini Audit] REJECTED: {} staff lost shifts: {}".format(
                         len(missing_staff), missing_staff))
                 else:
+                    # Gemini audit が reason フィールドを返さないことが多いため、
+                    # 元の result から (staff_id, date) キーで reason を引き戻す。
+                    # これでフロントのプレビューに「配置理由」が確実に表示される。
+                    original_reasons = {(s.get("staff_id"), s.get("date")): s.get("reason") for s in result}
+                    for c in audited:
+                        if not c.get("reason"):
+                            c["reason"] = original_reasons.get((c.get("staff_id"), c.get("date")), "Geminiが微調整")
                     result = audited
                     return {
                         "status": "success",

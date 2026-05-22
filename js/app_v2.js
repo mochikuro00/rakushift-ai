@@ -5112,9 +5112,12 @@ const app = {
             // empty_only モード: 期間内の既存シフトを「固定」として Python に渡し、
             // 空きスロットのみ最適化される。これがないとサーバはゼロから組み直すため
             // 「空きを埋めるをクリックすると人数が減る」現象が発生する。
+            // 注意: id が無いシフト (=未保存のローカルプレビュー残骸) は除外する。
+            //       これがないと、前回の生成試行で残った仮データを「既存」として固定して
+            //       しまい、本当の DB データと矛盾する。
             if (targetType === 'empty_only') {
                 payload.existing_shifts = (this.state.shifts || [])
-                    .filter(s => s && s.date && dates.includes(s.date) && s.staff_id && s.start_time && s.end_time)
+                    .filter(s => s && s.id && s.date && dates.includes(s.date) && s.staff_id && s.start_time && s.end_time)
                     .map(s => ({
                         staff_id: s.staff_id,
                         date: s.date,
