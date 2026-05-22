@@ -43,7 +43,7 @@ const app = {
         currentDate: null, // Initialized in init()
         view: 'dashboard', // 現在のビュー
         shiftViewMode: 'table', // 'table' or 'calendar'
-        shiftTablePeriod: 'month', // 'month', 'week', '2weeks'
+        shiftTablePeriod: 'month', // 'month' | 'week' | 'day'
         dashboardMode: 'month', // 'month', '2week-1', '2week-2'
         isShopLoggedIn: false, // 店舗ログイン状態
         isAdmin: false, // 管理者ログイン状態
@@ -1989,8 +1989,8 @@ const app = {
             periodControls = `
                 <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg ml-4">
                     <button onclick="app.switchShiftTablePeriod('month')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='month')}">月間</button>
-                    <button onclick="app.switchShiftTablePeriod('2weeks')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='2weeks')}">2週間</button>
                     <button onclick="app.switchShiftTablePeriod('week')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='week')}">1週間</button>
+                    <button onclick="app.switchShiftTablePeriod('day')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='day')}">1日</button>
                 </div>
             `;
         }
@@ -1998,7 +1998,7 @@ const app = {
         // Navigation arrows for Week/2Weeks
         let navControls = '';
         if (isTable && p !== 'month') {
-            const label = p === 'week' ? '1週間' : '2週間';
+            const label = p === 'week' ? '1週間' : '1日';
             navControls = `
                 <div class="flex items-center gap-1 ml-2">
                     <button onclick="app.changeTablePeriod(-1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
@@ -2067,19 +2067,17 @@ const app = {
 
     switchShiftTablePeriod(period) {
         this.state.shiftTablePeriod = period;
-        // Align date if switching to week modes
-        if (period !== 'month') {
-            // Align to nearest past Sunday or today if Sunday
-            const d = new Date(this.state.currentDate);
-            const day = d.getDay();
-            d.setDate(d.getDate() - day);
-            this.state.currentDate = d;
-        } else {
-            // Align to 1st of month
+        if (period === 'month') {
             const d = new Date(this.state.currentDate);
             d.setDate(1);
             this.state.currentDate = d;
+        } else if (period === 'week') {
+            // 直近の日曜に揃える
+            const d = new Date(this.state.currentDate);
+            d.setDate(d.getDate() - d.getDay());
+            this.state.currentDate = d;
         }
+        // day モードは currentDate をそのまま使う (揃え不要)
         this.updateHeader();
         this.renderShiftView(document.getElementById('viewContainer'));
     },
@@ -2088,8 +2086,8 @@ const app = {
         const d = new Date(this.state.currentDate);
         if (this.state.shiftTablePeriod === 'week') {
             d.setDate(d.getDate() + (delta * 7));
-        } else if (this.state.shiftTablePeriod === '2weeks') {
-            d.setDate(d.getDate() + (delta * 14));
+        } else if (this.state.shiftTablePeriod === 'day') {
+            d.setDate(d.getDate() + delta);
         }
         this.state.currentDate = d;
         this.updateHeader();
@@ -2110,14 +2108,17 @@ const app = {
             days = Array.from({length: lastDay}, (_, i) => {
                 return new Date(year, month, i + 1);
             });
+        } else if (period === 'day') {
+            // 1日表示: ガント大幅 (15分目盛りが見やすい幅) + メモ列付き
+            colWidthClass = 'min-w-[1600px]';
+            isGanttMode = true;
+            days = [new Date(this.state.currentDate)];
         } else {
-            const range = period === 'week' ? 7 : 14;
-            // 1週間ならさらに幅を広げて15分単位を見やすくする (1200px = 1h50px = 15m12.5px)
-            colWidthClass = period === 'week' ? 'min-w-[1200px]' : 'min-w-[600px]';
-            isGanttMode = true; 
-            
+            // 1週間ガント (15分目盛り視認のため広く)
+            colWidthClass = 'min-w-[1200px]';
+            isGanttMode = true;
             const start = new Date(this.state.currentDate);
-            days = Array.from({length: range}, (_, i) => {
+            days = Array.from({length: 7}, (_, i) => {
                 const d = new Date(start);
                 d.setDate(start.getDate() + i);
                 return d;
@@ -2146,13 +2147,10 @@ const app = {
                 let scaleHtml = '';
                 for (let i = 0; i <= 24; i++) {
                     const left = (i / 24) * 100;
-                    // 数字の間引き: 幅が狭い場合は偶数のみ
-                    if (period === '2weeks' && i % 2 !== 0) continue;
-                    
                     scaleHtml += `<span class="absolute -translate-x-1/2 font-mono" style="left: ${left}%">${String(i).padStart(2,'0')}</span>`;
-                    
-                    // 15分刻みの目盛り (Weekモードのみ)
-                    if (period === 'week' && i < 24) {
+
+                    // 15分刻みの目盛り (week / day モード)
+                    if ((period === 'week' || period === 'day') && i < 24) {
                         for(let m=1; m<4; m++) {
                             const mLeft = ((i + m/4) / 24) * 100;
                             scaleHtml += `<span class="absolute -translate-x-1/2 text-[8px] text-gray-300 top-1" style="left: ${mLeft}%">|</span>`;
@@ -2483,6 +2481,61 @@ const app = {
             alertRowHtml += `</tr>`;
         }
 
+        // 日毎モード: ガント下に「本日のシフト一覧 (時刻順 + メモ)」を追加表示
+        let dayDetailHtml = '';
+        if (period === 'day') {
+            const targetDate = days[0];
+            const y = targetDate.getFullYear();
+            const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(targetDate.getDate()).padStart(2, '0');
+            const ds = `${y}-${m}-${dd}`;
+            const todays = (this.state.shifts || [])
+                .filter(s => s.date === ds)
+                .slice()
+                .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+            const rowsHtml = todays.length === 0
+                ? `<tr><td colspan="5" class="py-6 text-center text-sm text-gray-400">この日のシフトはありません</td></tr>`
+                : todays.map(s => {
+                    const staff = this.getStaff(s.staff_id);
+                    const name = staff ? this._sanitize(staff.name) : '不明';
+                    const st = (s.start_time || '').substr(0, 5);
+                    const et = (s.end_time || '').substr(0, 5);
+                    const memo = this._sanitize(s.memo || '');
+                    const editBtn = this.state.isAdmin
+                        ? `<button onclick="app.openEditShift('${s.id}')" class="px-2.5 py-1 text-xs bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 border border-blue-100"><i class="fa-solid fa-pen"></i></button>`
+                        : '';
+                    return `<tr class="border-b border-gray-100 hover:bg-amber-50/30">
+                        <td class="py-2 px-3 text-sm font-mono font-bold text-gray-700 whitespace-nowrap">${st} - ${et}</td>
+                        <td class="py-2 px-3 text-sm font-bold text-gray-900">${name}</td>
+                        <td class="py-2 px-3 text-xs text-gray-500 whitespace-nowrap">休憩 ${s.break_minutes || 0}分</td>
+                        <td class="py-2 px-3 text-sm text-gray-700">${memo ? `<span class="inline-flex items-start gap-1"><i class="fa-regular fa-note-sticky text-amber-500 mt-0.5"></i><span class="whitespace-pre-wrap">${memo}</span></span>` : '<span class="text-gray-300">—</span>'}</td>
+                        <td class="py-2 px-3 text-center">${editBtn}</td>
+                    </tr>`;
+                }).join('');
+            const dateLabel = `${y}年${parseInt(m,10)}月${parseInt(dd,10)}日 (${'日月火水木金土'[targetDate.getDay()]})`;
+            dayDetailHtml = `
+                <div class="mt-4 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="px-4 py-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-gray-200 flex items-center justify-between">
+                        <div class="text-sm font-bold text-gray-800"><i class="fa-regular fa-note-sticky text-amber-600 mr-2"></i>${dateLabel} のシフト詳細・メモ</div>
+                        <div class="text-xs text-gray-500">合計 ${todays.length}件</div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="py-2 px-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">時間</th>
+                                    <th class="py-2 px-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>
+                                    <th class="py-2 px-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">休憩</th>
+                                    <th class="py-2 px-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">メモ</th>
+                                    <th class="py-2 px-3 text-center text-[11px] font-bold text-gray-500 uppercase tracking-wider">編集</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+
         container.innerHTML = `
             <div class="h-full overflow-auto custom-scrollbar">
                 <table class="w-full border-collapse">
@@ -2492,6 +2545,7 @@ const app = {
                         ${bodyHtml}
                     </tbody>
                 </table>
+                ${dayDetailHtml}
             </div>
         `;
     },
@@ -3799,10 +3853,12 @@ const app = {
         if (period === 'month') {
             const lastDay = new Date(year, month + 1, 0).getDate();
             allDays = Array.from({length: lastDay}, (_, i) => new Date(year, month, i + 1));
+        } else if (period === 'day') {
+            allDays = [new Date(this.state.currentDate)];
         } else {
-            const range = period === 'week' ? 7 : 14;
+            // week モード
             const start = new Date(this.state.currentDate);
-            allDays = Array.from({length: range}, (_, i) => {
+            allDays = Array.from({length: 7}, (_, i) => {
                 const d = new Date(start);
                 d.setDate(start.getDate() + i);
                 return d;
@@ -4101,6 +4157,8 @@ const app = {
         endEl.value = defEnd;
 
         document.getElementById('editShiftBreak').value = 60;
+        const memoEl = document.getElementById('editShiftMemo');
+        if (memoEl) memoEl.value = '';
 
         this.openModal('editShiftModal');
         const saveBtn = document.getElementById('saveShiftBtn');
@@ -4172,6 +4230,8 @@ const app = {
         endEl.value = endTime;
         
         document.getElementById('editShiftBreak').value = shift.break_minutes;
+        const memoEl = document.getElementById('editShiftMemo');
+        if (memoEl) memoEl.value = shift.memo || '';
         document.getElementById('deleteShiftBtn').classList.remove('hidden');
 
         const deleteBtn = document.getElementById('deleteShiftBtn');
@@ -4197,7 +4257,8 @@ const app = {
         if (start === end) { app.showToast('開始時間と終了時間が同じです', 'error'); return; }
         if (document.getElementById('editShiftHoliday').checked && id) { await this.deleteShift(id); this.closeModal('editShiftModal'); return; }
 
-        const data = { staff_id: staffId, date, start_time: start, end_time: end, break_minutes: breakMins };
+        const memo = (document.getElementById('editShiftMemo')?.value || '').trim();
+        const data = { staff_id: staffId, date, start_time: start, end_time: end, break_minutes: breakMins, memo };
         if (!id) data.organization_id = this.state.organization_id;
         
         this.showLoading(true);
