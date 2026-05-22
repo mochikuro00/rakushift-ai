@@ -8,7 +8,22 @@
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta http-equiv="X-Frame-Options" content="DENY">
-    
+    <!-- Content Security Policy: XSS 被害を構造的に縮小する。
+         tailwindcss CDN は inline-style を生成するため style-src に 'unsafe-inline' は許可。
+         script-src の 'unsafe-inline' は admin.html 等の inline script で必要。
+         将来 inline script を撤去できれば script-src から 'unsafe-inline' を外せる。-->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
+        style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:;
+        img-src 'self' data: blob: https:;
+        connect-src 'self' https://*.supabase.co https://*.up.railway.app https://*.railway.app https://api.stripe.com;
+        frame-ancestors 'none';
+        base-uri 'self';
+        form-action 'self';
+    ">
+
     <!-- Frontend Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -285,11 +300,11 @@
                         <h3 class="text-xl font-bold text-gray-800 text-center mb-4">店舗管理者ログイン</h3>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
-                            <input type="text" id="adminLoginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="例: demo">
+                            <input type="text" id="adminLoginContractId" maxlength="32" pattern="[A-Za-z0-9_\-]+" autocomplete="username" inputmode="text" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="例: demo">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード</label>
-                            <input type="password" id="adminLoginPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.adminLogin()">
+                            <input type="password" id="adminLoginPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.adminLogin()">
                         </div>
                         <button onclick="app.adminLogin()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
                     </div>
@@ -299,11 +314,11 @@
                         <h3 class="text-xl font-bold text-gray-800 text-center mb-4">店舗ログイン</h3>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
-                            <input type="text" id="loginContractId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="例: demo (または 15桁の契約ID)">
+                            <input type="text" id="loginContractId" maxlength="32" pattern="[A-Za-z0-9_\-]+" autocomplete="username" inputmode="text" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="例: demo (または 15桁の契約ID)">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
-                            <input type="password" id="loginShopPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.login()">
+                            <input type="password" id="loginShopPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.login()">
                         </div>
                         <button onclick="app.login()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
                     </div>
@@ -313,11 +328,11 @@
                         <h3 class="text-xl font-bold text-gray-800 text-center mb-4">本部ログイン</h3>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">本部ID</label>
-                            <input type="text" id="loginHqId" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="例: demo (または 本部ID)">
+                            <input type="text" id="loginHqId" maxlength="32" pattern="[A-Za-z0-9_\-]+" autocomplete="username" inputmode="text" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="例: demo (または 本部ID)">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
-                            <input type="password" id="loginHqPass" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.hqLogin()">
+                            <input type="password" id="loginHqPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.hqLogin()">
                         </div>
                         <button onclick="app.hqLogin()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
                     </div>
@@ -568,7 +583,18 @@
             </div>
             <!-- フッター -->
             <div class="flex-shrink-0 p-5 border-t border-gray-100 bg-gray-50">
-                <button onclick="app.submitMultiStoreInquiry()" 
+                <!-- 個人情報取扱に関する同意 (個人情報保護法 第17条 利用目的の明示) -->
+                <div class="mb-3 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-3">
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" id="inquiryConsent" class="mt-0.5 flex-shrink-0">
+                        <span>
+                            <a href="#" onclick="app.openPrivacyPolicy(); return false;" class="text-blue-600 underline">プライバシーポリシー</a>
+                            を確認し、ご入力内容（会社情報・担当者連絡先）をお問い合わせ対応・営業連絡の目的で利用することに同意します。
+                            取得した個人情報は対応完了後に適切に管理・削除します。
+                        </span>
+                    </label>
+                </div>
+                <button onclick="app.submitMultiStoreInquiry()"
                     class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2">
                     <i class="fa-solid fa-paper-plane"></i>
                     お問い合わせを送信
@@ -1276,7 +1302,7 @@
                     <!-- JS で挿入 -->
                 </div>
                 <div id="announcementAction" class="mt-5 hidden">
-                    <a id="announcementLink" href="#" target="_blank"
+                    <a id="announcementLink" href="#" target="_blank" rel="noopener noreferrer"
                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:scale-[1.02] transition-all">
                         <i class="fa-solid fa-external-link-alt"></i>
                         <span id="announcementBtnText">詳しく見る</span>
@@ -1301,11 +1327,12 @@
         </div>
     </div>
 
-    <script src="js/holidays.js?v=20260511"></script>
-    <script src="js/config.js?v=20260511"></script>
-    <script src="js/api.js?v=20260511"></script>
-    <script src="js/app_v2.js?v=20260517"></script>
-    <script src="js/gantt_drag.js?v=20260511"></script>
+    <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
+    <script src="js/holidays.js?v=202605222212"></script>
+    <script src="js/config.js?v=202605222212"></script>
+    <script src="js/api.js?v=202605222212"></script>
+    <script src="js/app_v2.js?v=202605222212"></script>
+    <script src="js/gantt_drag.js?v=202605222212"></script>
     
 </body>
 </html>

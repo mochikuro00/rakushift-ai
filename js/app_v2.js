@@ -182,6 +182,19 @@ const app = {
                 setTimeout(() => this.showToast('決済がキャンセルされました。', 'info'), 1000);
                 window.history.replaceState({}, '', window.location.pathname);
             }
+
+            // 本部観覧モード: admin.html から ?as_hq=<contract_id> で開かれた場合、
+            // 該当テナントに自動的に「閲覧専用」として入る
+            const asHq = urlParams.get('as_hq');
+            if (asHq) {
+                try {
+                    await this._enterHQViewMode(asHq);
+                } catch (e) {
+                    console.error('[HQ View] failed:', e);
+                    this.showToast('本部観覧モードの初期化に失敗しました', 'error');
+                }
+                window.history.replaceState({}, '', window.location.pathname);
+            }
             
             // セッションチェック
             if (API.session) {
@@ -282,6 +295,34 @@ const app = {
         // Dynamic buttons (autoFill, aiAdvice) are bound in updateAuthUI()
 
         document.getElementById('authBtn')?.addEventListener('click', () => this.handleAuth());
+
+        // ヘッダの期間ナビゲーション (← 月/期間 → / 今日)
+        document.getElementById('prevPeriod')?.addEventListener('click', () => this.navigatePeriod(-1));
+        document.getElementById('nextPeriod')?.addEventListener('click', () => this.navigatePeriod(1));
+        document.getElementById('todayBtn')?.addEventListener('click', () => this.goToToday());
+    },
+
+    // 表示中ビュー/期間モードに応じた前後送り
+    navigatePeriod(delta) {
+        if (this.state.view === 'manual-shift' && this.state.shiftTablePeriod && this.state.shiftTablePeriod !== 'month') {
+            this.changeTablePeriod(delta);
+        } else {
+            this.changeMonth(delta);
+        }
+    },
+
+    goToToday() {
+        const today = new Date();
+        if (this.state.view === 'manual-shift' && this.state.shiftTablePeriod && this.state.shiftTablePeriod !== 'month') {
+            // 週/2週モードは今日を含む週の日曜揃え
+            const d = new Date(today);
+            d.setDate(d.getDate() - d.getDay());
+            this.state.currentDate = d;
+        } else {
+            this.state.currentDate = today;
+        }
+        this.updateHeader();
+        this.renderCurrentView();
     },
 
     /**
@@ -456,7 +497,17 @@ const app = {
                 console.warn('[ShopLogin] Subscription check skipped:', licenseErr.message);
             }
 
-            // 2. bcrypt認証 (RPC経由)
+            // 2a. サーバ側レート制限チェック (RPC が無い古いDBでも壊れないように try)
+            try {
+                const rl = await API.rpc('can_attempt_login', { p_identifier: 'shop:' + contractId });
+                if (rl && rl.allowed === false) {
+                    const sec = rl.retry_after_seconds || 300;
+                    this.showToast('ログイン試行回数の上限に達しました。' + sec + '秒後に再度お試しください。', 'error');
+                    return;
+                }
+            } catch (_) { /* RPC 未デプロイ環境では握りつぶす */ }
+
+            // 2b. bcrypt認証 (RPC経由)
             const authResult = await API.rpc('verify_shop_login', {
                 p_contract_id: contractId,
                 p_password: password
@@ -466,6 +517,7 @@ const app = {
 
             if (authResult && authResult.success) {
                 this._recordLoginAttempt('shop_' + contractId, true);
+                try { await API.rpc('clear_login_failures', { p_identifier: 'shop:' + contractId }); } catch (_) {}
                 this.state.isShopLoggedIn = true;
                 this.state.isAdmin = false;
                 this.state.organization_id = authResult.organization_id;
@@ -503,6 +555,7 @@ const app = {
                 this.updateAnnouncementBadge();
             } else {
                 this._recordLoginAttempt('shop_' + contractId, false);
+                try { await API.rpc('record_login_failure', { p_identifier: 'shop:' + contractId }); } catch (_) {}
                 this.showToast(authResult?.message || 'ログインに失敗しました', 'error');
             }
 
@@ -537,6 +590,16 @@ const app = {
 
         this.showLoading(true);
         try {
+            // サーバ側レート制限チェック
+            try {
+                const rl = await API.rpc('can_attempt_login', { p_identifier: 'admin:' + inputContractId });
+                if (rl && rl.allowed === false) {
+                    const sec = rl.retry_after_seconds || 300;
+                    this.showToast('ログイン試行回数の上限に達しました。' + sec + '秒後に再度お試しください。', 'error');
+                    return;
+                }
+            } catch (_) {}
+
             let authResult = null;
             let authMethod = 'none';
             let orgId = null;
@@ -579,6 +642,7 @@ const app = {
 
             if (authResult && authResult.success) {
                 this._recordLoginAttempt('admin_' + inputContractId, true);
+                try { await API.rpc('clear_login_failures', { p_identifier: 'admin:' + inputContractId }); } catch (_) {}
                 this.state.isAdmin = true;
                 this.state.isShopLoggedIn = true;
                 this.state.organization_id = orgId;
@@ -600,6 +664,7 @@ const app = {
                 this.updateAnnouncementBadge();
             } else {
                 this._recordLoginAttempt('admin_' + inputContractId, false);
+                try { await API.rpc('record_login_failure', { p_identifier: 'admin:' + inputContractId }); } catch (_) {}
                 this.showToast(authResult?.message || '契約IDまたはパスワードが正しくありません', 'error');
             }
 
@@ -615,7 +680,19 @@ const app = {
     // =========================================================
     // 3店舗以上お問い合わせフォーム送信
     // =========================================================
+    openPrivacyPolicy() {
+        // 完全版プライバシーポリシーページを別タブで開く
+        window.open('privacy.html', '_blank', 'noopener,noreferrer');
+    },
+
     async submitMultiStoreInquiry() {
+        // 個人情報取得の同意確認 (個人情報保護法 第17条)
+        const consent = document.getElementById('inquiryConsent');
+        if (consent && !consent.checked) {
+            this.showToast('個人情報の取扱いについて同意が必要です', 'warning');
+            consent.focus();
+            return;
+        }
         const company = document.getElementById('inquiryCompany')?.value.trim() || '';
         const address = document.getElementById('inquiryAddress')?.value.trim() || '';
         const phone = document.getElementById('inquiryPhone')?.value.trim() || '';
@@ -761,6 +838,16 @@ const app = {
 
         this.showLoading(true);
         try {
+            // サーバ側レート制限
+            try {
+                const rl = await API.rpc('can_attempt_login', { p_identifier: 'hq:' + loginId });
+                if (rl && rl.allowed === false) {
+                    const sec = rl.retry_after_seconds || 300;
+                    this.showToast('ログイン試行回数の上限に達しました。' + sec + '秒後に再度お試しください。', 'error');
+                    return;
+                }
+            } catch (_) {}
+
             let result = null;
 
             // RPC経由の認証を試行
@@ -786,6 +873,7 @@ const app = {
 
             if (result && result.status === 'success') {
                 this._recordLoginAttempt('hq_' + loginId, true);
+                try { await API.rpc('clear_login_failures', { p_identifier: 'hq:' + loginId }); } catch (_) {}
                 this.state.isHQ = true;
                 this.state.isAdmin = false;
                 this.state.isShopLoggedIn = false;
@@ -793,8 +881,12 @@ const app = {
                 
                 API.setSession({
                     session_id: result.session_id || ('hq_' + Date.now()),
-                    name: 'HQ Admin',
-                    role: 'hq_admin'
+                    name: result.company_name || 'HQ Admin',
+                    role: 'hq_admin',
+                    login_id: result.login_id || loginId,           // get_hq_scope() で必要
+                    is_global: !!result.is_global,
+                    company_name: result.company_name || null,
+                    scope_org_ids: result.scope_org_ids || []
                 });
 
                 this.closeModal('loginModal');
@@ -804,6 +896,7 @@ const app = {
                 this.updateHeader();
             } else {
                 this._recordLoginAttempt('hq_' + loginId, false);
+                try { await API.rpc('record_login_failure', { p_identifier: 'hq:' + loginId }); } catch (_) {}
                 this.showToast(result?.message || 'ログインに失敗しました', 'error');
             }
         } catch (e) {
@@ -828,8 +921,8 @@ const app = {
         this.state.shifts = [];
         this.state.requests = [];
         // セキュリティ: セッション関連のlocalStorageを全消去
-        localStorage.removeItem('rakushift_user');
-        localStorage.removeItem('supabase.auth.token');
+        sessionStorage.removeItem('rakushift_user');
+        sessionStorage.removeItem('supabase.auth.token');
         localStorage.removeItem('rakushift_org_id');
         this.showToast('ログアウトしました', 'info');
         this.updateAuthUI();
@@ -1177,7 +1270,7 @@ const app = {
         try {
             // バックエンド(Railway)経由で取得（サービスキーでRLSバイパス）
             const backendUrl = RAKUSHIFT_CONFIG?.CALC_SERVER_URL || 'https://rakushift-ai-production.up.railway.app';
-            const sessionData = JSON.parse(localStorage.getItem('rakushift_user') || '{}');
+            const sessionData = JSON.parse(sessionStorage.getItem('rakushift_user') || '{}');
             const res = await fetch(`${backendUrl}/hq/shops`, {
                 headers: {
                     'x-session-id': sessionData.session_id || '',
@@ -1266,9 +1359,12 @@ const app = {
                         <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダッシュボード</h2>
                         <p class="text-indigo-100 text-sm md:text-base">店舗にアクセスするには、下記の入力フォームから契約IDとパスワードを入力してください。</p>
                     </div>
-                    <div class="relative z-10 flex gap-2 md:gap-3">
+                    <div class="relative z-10 flex flex-wrap gap-2 md:gap-3">
                         <button onclick="app.changeView('hq_manual')" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
                             <i class="fa-solid fa-book"></i> 本部マニュアル
+                        </button>
+                        <button onclick="app.openHQPasswordChange()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-key"></i> パスワード変更
                         </button>
                         <button onclick="app.hqLogout()" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
                             <i class="fa-solid fa-right-from-bracket"></i> ログアウト
@@ -1437,6 +1533,62 @@ const app = {
         }
     },
 
+    // admin.html → openTenantView(contract_id) → index.html?as_hq=<contract_id> から呼ばれる。
+    // ローカルの本部セッション (rakushift_user.role='hq_admin') を確認し、
+    // 該当 contract_id が本部の scope_org_ids に含まれるかチェックしてから閲覧モードに入る。
+    async _enterHQViewMode(contractId) {
+        // 既に本部としてセッションがあるか確認
+        let sess = null;
+        try {
+            const raw = sessionStorage.getItem('rakushift_user') || localStorage.getItem('rakushift_user');
+            if (raw) sess = JSON.parse(raw);
+        } catch (_) {}
+
+        if (!sess || sess.role !== 'hq_admin') {
+            this.showToast('本部観覧モードには本部ログインが必要です。本部ログインしてからご利用ください。', 'warning');
+            return;
+        }
+
+        // login_id undefined の古いセッションは強制再ログイン
+        if (!sess.login_id) {
+            this.showToast('セッションが古いため再ログインしてください', 'warning');
+            sessionStorage.removeItem('rakushift_user');
+            localStorage.removeItem('rakushift_user');
+            return;
+        }
+
+        this.state.isHQ = true;
+        API.setSession(sess);
+
+        // contract_id → organization_id 解決
+        let orgId = null;
+        try {
+            const rows = await API.list('config_safe', { contract_id: `eq.${contractId}`, select: 'organization_id', limit: 1 });
+            if (Array.isArray(rows) && rows[0]) orgId = rows[0].organization_id;
+        } catch (e) {
+            console.error('[HQ View] resolve org_id failed:', e);
+        }
+
+        if (!orgId) {
+            this.showToast('指定されたテナントが見つかりません', 'error');
+            return;
+        }
+
+        // スコープチェック: グローバル本部以外は scope_org_ids に含まれる店舗のみ可
+        // (サーバ側 RLS でも弾かれるが、フロント側でも明示)
+        if (sess.is_global !== true) {
+            const scope = Array.isArray(sess.scope_org_ids) ? sess.scope_org_ids : [];
+            if (!scope.includes(orgId)) {
+                this.showToast('この店舗は貴社の管轄外のため閲覧できません', 'error');
+                return;
+            }
+        }
+
+        await this.switchToHQShop(orgId);
+        // ヘッダーに本部観覧モードのバナー表示
+        setTimeout(() => this.showToast('🔍 本部観覧モード — 編集操作はサーバ側でも遮断されます', 'info'), 800);
+    },
+
     // 本部ログアウト（confirmなしで即時実行）
     hqLogout() {
         this.state.isHQ = false;
@@ -1448,7 +1600,7 @@ const app = {
         this.state.shifts = [];
         this.state.requests = [];
         API.setSession(null);
-        localStorage.removeItem('rakushift_user');
+        sessionStorage.removeItem('rakushift_user');
         localStorage.removeItem('rakushift_org_id');
         localStorage.removeItem('hq_saved_shops');
         window.location.reload();
@@ -1928,6 +2080,7 @@ const app = {
             d.setDate(1);
             this.state.currentDate = d;
         }
+        this.updateHeader();
         this.renderShiftView(document.getElementById('viewContainer'));
     },
 
@@ -1939,6 +2092,7 @@ const app = {
             d.setDate(d.getDate() + (delta * 14));
         }
         this.state.currentDate = d;
+        this.updateHeader();
         this.renderShiftView(document.getElementById('viewContainer'));
     },
 
@@ -2739,7 +2893,7 @@ const app = {
                                     </td>
                                     <td class="p-4 whitespace-nowrap">
                                         <span class="px-2.5 py-1 text-xs font-bold rounded-full border shadow-sm ${badgeClass}">
-                                            ${role.name}
+                                            ${this._sanitize(role.name)}
                                         </span>
                                     </td>
                                     <td class="p-4 whitespace-nowrap">
@@ -2970,9 +3124,9 @@ const app = {
                                     ${Object.entries(specialDays).map(([date, conf]) => `
                                         <div class="flex items-center justify-between bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm">
                                             <div class="flex items-center gap-3">
-                                                <span class="font-bold text-gray-800">${date}</span>
-                                                <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs font-mono">${conf.start} - ${conf.end}</span>
-                                                <span class="text-gray-500 text-xs">${conf.note || ''}</span>
+                                                <span class="font-bold text-gray-800">${this._sanitize(date)}</span>
+                                                <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs font-mono">${this._sanitize(conf.start)} - ${this._sanitize(conf.end)}</span>
+                                                <span class="text-gray-500 text-xs">${this._sanitize(conf.note || '')}</span>
                                             </div>
                                             <button onclick="app.removeSpecialDay('${date}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
                                         </div>
@@ -3162,11 +3316,14 @@ const app = {
                             </div>
                         </div>
                         
-                        <div class="border-t border-gray-100 pt-4">
+                        <div class="border-t border-gray-100 pt-4 flex flex-wrap gap-3">
                             <button onclick="app.openModal('changePasswordModal')" class="flex items-center gap-2 text-sm font-bold text-amber-600 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-lg hover:bg-amber-100 transition">
                                 <i class="fa-solid fa-key"></i> 店舗ログインパスワードを変更
                             </button>
-                            <p class="text-xs text-gray-400 mt-1">※ 店舗ログイン時に使用するパスワードを変更できます</p>
+                            <button onclick="app.openAdminPasswordChange()" class="flex items-center gap-2 text-sm font-bold text-purple-600 bg-purple-50 border border-purple-200 px-4 py-2.5 rounded-lg hover:bg-purple-100 transition">
+                                <i class="fa-solid fa-user-shield"></i> 管理者パスワードを変更
+                            </button>
+                            <p class="text-xs text-gray-400 mt-1 w-full">※ 店舗パスワード=日常閲覧用 / 管理者パスワード=編集権限用</p>
                         </div>
 
                         <!-- AI設定 (運営管理のため非表示) -->
@@ -3660,7 +3817,15 @@ const app = {
         }
 
         // 3. 印刷用ウィンドウ作成
+        // 印刷ウィンドウの opener 参照を切断し tabnabbing を防止。
+        // (noopener フラグ付き open は戻り値が null になるため、開いた後で opener を nullify する)
         const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            try { printWindow.opener = null; } catch (_) { /* same-origin restriction で失敗しても無害 */ }
+        } else {
+            this.showToast('ポップアップがブロックされました。ブラウザの設定を確認してください。', 'error');
+            return;
+        }
         if (!printWindow) {
             alert('ポップアップがブロックされました。「許可」してください。');
             return;
@@ -6091,9 +6256,9 @@ const app = {
                 <div class="bg-white border ${style.border} rounded-lg p-4 flex gap-4">
                     <div class="mt-1">${style.icon}</div>
                     <div>
-                        <h4 class="font-bold text-gray-800 mb-1">${s.title}</h4>
-                        <p class="text-sm text-gray-600 mb-3">${s.desc}</p>
-                        <p class="text-xs font-bold text-gray-500">${s.action}</p>
+                        <h4 class="font-bold text-gray-800 mb-1">${this._sanitize(s.title || '')}</h4>
+                        <p class="text-sm text-gray-600 mb-3">${this._sanitize(s.desc || '')}</p>
+                        <p class="text-xs font-bold text-gray-500">${this._sanitize(s.action || '')}</p>
                     </div>
                 </div>`;
             }).join('');
@@ -6197,19 +6362,9 @@ const app = {
         }
         const code = raw.toUpperCase();
         try {
-            const SUPA_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_URL) || '';
-            const SUPA_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_ANON_KEY) || '';
-            const res = await fetch(`${SUPA_URL}/rest/v1/rpc/validate_referrer_code`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': SUPA_KEY,
-                    'Authorization': 'Bearer ' + SUPA_KEY,
-                },
-                body: JSON.stringify({ p_code: code })
-            });
-            const result = await res.json();
-            if (result.valid) {
+            // 統一の API.rpc() 経由で呼ぶ (エラーハンドリング・リトライ機構の恩恵)
+            const result = await API.rpc('validate_referrer_code', { p_code: code });
+            if (result && result.valid) {
                 status.innerHTML = `<span class="text-green-600"><i class="fa-solid fa-circle-check mr-1"></i>有効: ${this._sanitize(result.name)}</span>`;
                 this._markFieldError('newSubReferrerCode', false);
             } else {
@@ -6256,21 +6411,11 @@ const app = {
         if (!this._isReferrerNone(referrerInput)) {
             referrerCode = referrerInput.toUpperCase();
             try {
-                const SUPA_URL = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_URL) || '';
-                const SUPA_KEY = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.SUPABASE_ANON_KEY) || '';
-                const vres = await fetch(`${SUPA_URL}/rest/v1/rpc/validate_referrer_code`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': SUPA_KEY,
-                        'Authorization': 'Bearer ' + SUPA_KEY,
-                    },
-                    body: JSON.stringify({ p_code: referrerCode })
-                });
-                const vresult = await vres.json();
-                if (!vresult.valid) {
+                // 統一の API.rpc() 経由で呼ぶ
+                const vresult = await API.rpc('validate_referrer_code', { p_code: referrerCode });
+                if (!vresult || !vresult.valid) {
                     this._markFieldError('newSubReferrerCode', true);
-                    this.showToast(`紹介者コード: ${vresult.message || '無効'}（紹介者がいない場合は「なし」と入力）`, 'error');
+                    this.showToast(`紹介者コード: ${this._sanitize(vresult?.message || '無効')}（紹介者がいない場合は「なし」と入力）`, 'error');
                     return;
                 }
             } catch (e) {
@@ -6597,7 +6742,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
                     <i class="fa-solid fa-exclamation-triangle text-4xl text-amber-400 mb-4"></i>
                     <p class="text-gray-600 font-bold">お知らせの取得に失敗しました</p>
-                    <p class="text-xs text-gray-400 mt-2">${e.message}</p>
+                    <p class="text-xs text-gray-400 mt-2">${this._sanitize(e.message || '')}</p>
                     <button onclick="app._loadAnnouncementsAdmin()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition">再試行</button>
                 </div>
             `;
@@ -7060,6 +7205,69 @@ const app = {
         } catch (e) {
             console.error('Password change error:', e);
             this.showToast('パスワード変更に失敗しました: ' + e.message, 'error');
+        }
+    },
+
+    // --- 管理者パスワード変更 (店舗管理者) ---
+    openAdminPasswordChange() {
+        // 簡易ダイアログ (現在/新規/確認)
+        const cur = prompt('現在の管理者パスワードを入力してください\n(初期値: rakushift1234)', '');
+        if (cur === null) return;
+        const np1 = prompt('新しい管理者パスワード (6文字以上):', '');
+        if (np1 === null) return;
+        if (!np1 || np1.length < 6) { this.showToast('6文字以上で入力してください', 'error'); return; }
+        const np2 = prompt('もう一度入力してください:', '');
+        if (np1 !== np2) { this.showToast('新しいパスワードが一致しません', 'error'); return; }
+        this._submitAdminPasswordChange(cur, np1);
+    },
+
+    async _submitAdminPasswordChange(oldPw, newPw) {
+        const contractId = this.state.config?.contract_id || API.session?.user?.contract_id;
+        if (!contractId) { this.showToast('セッションエラー: 再ログインしてください', 'error'); return; }
+        try {
+            const result = await API.rpc('update_admin_password_by_contract', {
+                p_contract_id: contractId,
+                p_old_password: oldPw,
+                p_new_password: newPw,
+            });
+            if (result && result.success) {
+                this.showToast('管理者パスワードを変更しました。次回管理者ログイン時から有効です。', 'success');
+            } else {
+                this.showToast(result?.message || '変更に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('Admin password change error:', e);
+            this.showToast('変更に失敗しました', 'error');
+        }
+    },
+
+    // --- 本部管理者パスワード変更 ---
+    async openHQPasswordChange() {
+        if (!this.state.isHQ) { this.showToast('本部としてログインしている必要があります', 'error'); return; }
+        const loginId = (API.session?.user?.login_id) || prompt('本部ログインID:', 'hq_master');
+        if (!loginId) return;
+        const cur = prompt('現在の本部パスワード:', '');
+        if (cur === null) return;
+        const np1 = prompt('新しい本部パスワード (8文字以上):', '');
+        if (!np1 || np1.length < 8) { this.showToast('8文字以上で入力してください', 'error'); return; }
+        const np2 = prompt('もう一度入力してください:', '');
+        if (np1 !== np2) { this.showToast('新しいパスワードが一致しません', 'error'); return; }
+
+        try {
+            const result = await API.rpc('update_hq_admin_password', {
+                p_login_id: loginId,
+                p_old_password: cur,
+                p_new_password: np1,
+            });
+            if (result && result.success) {
+                this.showToast('本部パスワードを変更しました。一度ログアウトされます。', 'success');
+                setTimeout(() => this.logout(), 2000);
+            } else {
+                this.showToast(result?.message || '変更に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('HQ password change error:', e);
+            this.showToast('変更に失敗しました', 'error');
         }
     },
 
