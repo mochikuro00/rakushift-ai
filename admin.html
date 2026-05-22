@@ -1060,7 +1060,7 @@
     </div>
 
     <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
-    <script src="js/config.js?v=202605222320"></script>
+    <script src="js/config.js?v=202605222332"></script>
     <script>
     // =========================================================
     // 運営管理画面 JavaScript
@@ -1596,6 +1596,11 @@
                             </div>`).join('')
                     }</div>`;
 
+                // 管轄編集ボタン: 展開エリア内に目立つ位置で配置 (グローバル本部は不要)
+                const addScopeBtnHtml = h.is_global
+                    ? '<span class="text-[11px] text-gray-400">グローバル本部は全店舗が自動的に管轄対象です</span>'
+                    : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold shadow-sm"><i class="fas fa-plus"></i>管轄店舗を追加 / 編集</button>`;
+
                 return `<tr class="border-b border-gray-100">
                     <td class="py-3 px-3">${typeLabel}</td>
                     <td class="py-3 px-3 font-mono text-sm font-bold text-gray-900">${escapeHtml(h.login_id)}</td>
@@ -1607,7 +1612,10 @@
                 </tr>
                 <tr id="hqScopeRow-${safeKey}" class="hidden bg-indigo-50/30 border-b border-gray-100">
                     <td colspan="7" class="py-3 px-4">
-                        <div class="text-xs font-bold text-indigo-700 mb-2"><i class="fas fa-building mr-1"></i>管轄テナント一覧</div>
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-xs font-bold text-indigo-700"><i class="fas fa-building mr-1"></i>管轄テナント一覧 <span class="text-gray-400 font-normal">(登録した店舗はここからいつでも観覧できます)</span></div>
+                            ${addScopeBtnHtml}
+                        </div>
                         ${scopeDetailHtml}
                     </td>
                 </tr>`;
