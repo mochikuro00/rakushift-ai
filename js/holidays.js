@@ -22,13 +22,16 @@ const JapaneseHolidays = {
         return 23; // フォールバック
     },
 
-    // 第N月曜日を取得するユーティリティ
+    // 第N月曜日を取得するユーティリティ (月末バウンド付き)
     _getNthMonday(year, month, n) {
         const d = new Date(year, month - 1, 1);
         const dayOfWeek = d.getDay(); // 0=日曜
         // 最初の月曜日の日付
         const firstMonday = dayOfWeek <= 1 ? (2 - dayOfWeek) : (9 - dayOfWeek);
         const targetDay = firstMonday + (n - 1) * 7;
+        // 月末超過チェック (例: 第6月曜などを指定すると次月にはみ出す)
+        const lastDay = new Date(year, month, 0).getDate(); // 当月末日
+        if (targetDay < 1 || targetDay > lastDay) return null;
         return targetDay;
     },
 
@@ -40,17 +43,23 @@ const JapaneseHolidays = {
             const d = new Date(date + "T00:00:00");
             if (d.getDay() === 0) { // 日曜日
                 // 翌日以降で最初の平日（祝日でない日）を探す
+                // 最大 14日まで探索 (連続祝日の無限ループ防止)
                 let sub = new Date(d);
-                do {
+                let found = false;
+                for (let i = 0; i < 14; i++) {
                     sub.setDate(sub.getDate() + 1);
                     const subStr = sub.getFullYear() + '-' +
                         String(sub.getMonth() + 1).padStart(2, '0') + '-' +
                         String(sub.getDate()).padStart(2, '0');
                     if (!holidays[subStr]) {
                         result[subStr] = "振替休日";
+                        found = true;
                         break;
                     }
-                } while (true);
+                }
+                if (!found) {
+                    console.warn('[holidays] 振替休日の探索が 14日以内に見つかりませんでした (基準日 ' + date + ')');
+                }
             }
         }
         return result;
@@ -82,13 +91,18 @@ const JapaneseHolidays = {
     _generateYear(year) {
         const pad = (n) => String(n).padStart(2, '0');
         const fmt = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+        // 月曜祝日: null (月末越え) が返れば無視するヘルパー
+        const setM = (m, n, name) => {
+            const day = this._getNthMonday(year, m, n);
+            if (day) baseHolidays[fmt(year, m, day)] = name;
+        };
 
         // 固定祝日 + ハッピーマンデー
         const baseHolidays = {};
 
         // 1月: 元日(1日), 成人の日(第2月曜)
         baseHolidays[fmt(year, 1, 1)] = "元日";
-        baseHolidays[fmt(year, 1, this._getNthMonday(year, 1, 2))] = "成人の日";
+        setM(1, 2, "成人の日");
 
         // 2月: 建国記念の日(11日), 天皇誕生日(23日)
         baseHolidays[fmt(year, 2, 11)] = "建国記念の日";
@@ -106,17 +120,17 @@ const JapaneseHolidays = {
         baseHolidays[fmt(year, 5, 5)] = "こどもの日";
 
         // 7月: 海の日(第3月曜)
-        baseHolidays[fmt(year, 7, this._getNthMonday(year, 7, 3))] = "海の日";
+        setM(7, 3, "海の日");
 
         // 8月: 山の日(11日)
         baseHolidays[fmt(year, 8, 11)] = "山の日";
 
         // 9月: 敬老の日(第3月曜), 秋分の日
-        baseHolidays[fmt(year, 9, this._getNthMonday(year, 9, 3))] = "敬老の日";
+        setM(9, 3, "敬老の日");
         baseHolidays[fmt(year, 9, this._getAutumnalEquinox(year))] = "秋分の日";
 
         // 10月: スポーツの日(第2月曜)
-        baseHolidays[fmt(year, 10, this._getNthMonday(year, 10, 2))] = "スポーツの日";
+        setM(10, 2, "スポーツの日");
 
         // 11月: 文化の日(3日), 勤労感謝の日(23日)
         baseHolidays[fmt(year, 11, 3)] = "文化の日";
