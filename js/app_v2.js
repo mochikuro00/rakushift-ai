@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-session-fallback-v3',
+    APP_VERSION: '20260526-resolve-config-by-contract-v4',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4032,20 +4032,27 @@ const app = {
             configId = recovered;
         }
         if (!configId) {
-            // セッション無効。自動ログアウトはせず、ユーザに選択肢を提示。
-            // (自動ログアウトは fresh login 直後でも誤発火するため避ける)
-            const goLogout = confirm(
-                'セッションが切れているため設定を保存できません。\n\n' +
-                '・データは DB に保持されています (消失していません)\n' +
-                '・再ログインすれば保存可能になります\n\n' +
-                '今すぐログアウトして再ログイン画面に進みますか?\n' +
-                '(キャンセルで作業を続行できますが保存はできません)'
-            );
-            if (goLogout) {
-                this._forceReloginForSessionExpiry();
-            } else {
-                this.showToast('保存をスキップしました', 'info');
+            // セッション無効でも contract_id があれば session-less RPC で復元保存
+            const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+            if (contractId) {
+                try {
+                    const r = await API.rpc('resolve_config_id_by_contract', { p_contract_id: contractId });
+                    if (r && r.config_id) {
+                        configId = r.config_id;
+                        this.state.config.id = configId;
+                        if (r.organization_id) this.state.config.organization_id = r.organization_id;
+                    }
+                } catch (e) {
+                    console.warn('[saveSettings] resolve_config_id_by_contract failed:', e.message);
+                }
             }
+        }
+        if (!configId) {
+            // 復元できなかった時のみ控えめにトースト表示 (ダイアログは出さない)
+            this.showToast(
+                '設定の保存先が特定できません。ページを再読み込みするか、一度ログアウト→再ログインしてください',
+                'error'
+            );
             return;
         }
 
