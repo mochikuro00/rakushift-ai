@@ -155,11 +155,11 @@ BEGIN
     SELECT organization_id INTO v_org_id FROM config WHERE contract_id = p_contract_id;
     IF v_org_id IS NULL THEN RETURN; END IF;
     RETURN QUERY
-        SELECT * FROM shifts
-        WHERE organization_id = v_org_id
-          AND (p_from IS NULL OR date >= p_from)
-          AND (p_to IS NULL OR date <= p_to)
-        ORDER BY date, start_time;
+        SELECT * FROM shifts s
+        WHERE s.organization_id = v_org_id
+          AND (p_from IS NULL OR s.date >= p_from)
+          AND (p_to IS NULL OR s.date <= p_to)
+        ORDER BY s.date, s.start_time;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, extensions, pg_temp;
 GRANT EXECUTE ON FUNCTION list_shifts_by_contract(TEXT, TEXT, TEXT) TO anon;
