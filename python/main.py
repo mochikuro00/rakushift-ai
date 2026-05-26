@@ -314,7 +314,8 @@ async def verify_session_org_id(session_id: Optional[str]) -> Optional[Dict[str,
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Rakushift Engine v3.2 Ready", "build": "2026.05.23.1"}
+    return {"status": "ok", "message": "Rakushift Engine v3.2 Ready",
+            "build": "2026.05.27.1-contract-id-fallback"}
 
 
 @app.get("/health")
