@@ -386,12 +386,20 @@ const API = {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 180000);
 
+            // x-session-id ヘッダを送る (Python /generate のセッション検証用)
+            // セッション無効時は Python 側で contract_id ベースの fallback 認証
+            const headers = { 'Content-Type': 'application/json' };
+            try {
+                const saved = JSON.parse(sessionStorage.getItem('rakushift_user') || 'null');
+                if (saved?.session_id) headers['x-session-id'] = saved.session_id;
+            } catch (_) {}
+
             let res;
             try {
                 res = await fetch(CALC_API_URL, {
                     method: 'POST',
                     credentials: 'omit',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify(serverPayload),
                     signal: controller.signal
                 });

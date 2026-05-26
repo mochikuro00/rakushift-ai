@@ -538,14 +538,42 @@ async def generate_shifts(request: Request, req: ShiftRequest,
         len(req.staff_list), len(req.dates), req.mode))
 
     try:
-        # === セッション検証: 信頼できる org_id をサーバ側で確定する ===
+        # === セッション検証 (優先): 信頼できる org_id をサーバ側で確定 ===
+        org_id = None
         session_info = await verify_session_org_id(x_session_id)
-        if not session_info or not session_info.get("organization_id"):
+        if session_info and session_info.get("organization_id"):
+            org_id = session_info["organization_id"]
+
+        # === Fallback: セッション無効でも contract_id ベースで認証 ===
+        # フロントの payload.contract_id から org_id を解決。
+        # 既存 update_config_safe / *_by_contract RPC と同じ認証モデル
+        # (15桁ランダム contract_id を実質シークレットとして扱う)。
+        if not org_id:
+            payload_contract_id = req.contract_id or req.config.get("contract_id")
+            if payload_contract_id and SUPABASE_SERVICE_KEY and SUPABASE_URL:
+                try:
+                    client = _get_http_client()
+                    resp = await client.get(
+                        "{}/rest/v1/config".format(SUPABASE_URL),
+                        params={"contract_id": "eq.{}".format(payload_contract_id),
+                                "select": "organization_id", "limit": "1"},
+                        headers={"apikey": SUPABASE_SERVICE_KEY,
+                                 "Authorization": "Bearer {}".format(SUPABASE_SERVICE_KEY)},
+                        timeout=5)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data and isinstance(data, list) and len(data) > 0:
+                            org_id = data[0].get("organization_id")
+                            logger.info("Auth fallback: org_id resolved via contract_id")
+                except Exception as e:
+                    logger.info("contract_id fallback failed: {}".format(e))
+
+        if not org_id:
             return JSONResponse(status_code=401, content={
                 "status": "error",
                 "message": "セッションが無効または期限切れです。再ログインしてください。"
             })
-        org_id = session_info["organization_id"]
+
         front_org_id = req.config.get("organization_id")
         if front_org_id and str(front_org_id) != str(org_id):
             return JSONResponse(status_code=403, content={
