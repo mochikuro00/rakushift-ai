@@ -1333,12 +1333,21 @@
         </div>
     </div>
 
-    <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
-    <script src="js/holidays.js?v=202605231526"></script>
-    <script src="js/config.js?v=202605231526"></script>
-    <script src="js/api.js?v=202605231526"></script>
-    <script src="js/app_v2.js?v=202605231526"></script>
-    <script src="js/gantt_drag.js?v=202605231526"></script>
+    <!-- キャッシュ自動破棄: HTML 読込時刻を ?v= に付与して常に最新JSを取得
+         (_headers で /js/* を no-cache, must-revalidate 指定済。
+          ETag/Last-Modified による条件付きリクエストで実体的な負荷は最小化される) -->
+    <script>
+        (function () {
+            // HTML はサーバ側 Cache-Control: no-cache で常に最新なので、
+            // この時刻は実質「リロードのたびに更新される」。
+            // 15 分単位に丸めて同一セッション内の連続リロードでブラウザキャッシュも効くようにする。
+            var v = Math.floor(Date.now() / (15 * 60 * 1000));
+            ['js/holidays.js', 'js/config.js', 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js']
+                .forEach(function (src) {
+                    document.write('<script src="' + src + '?v=' + v + '"><\/script>');
+                });
+        })();
+    </script>
     
 </body>
 </html>

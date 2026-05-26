@@ -204,11 +204,40 @@ const app = {
         }
     },
 
+    // JS のビルドバージョン (デプロイの度に bump)。
+    // 旧バージョンの JS でロードされた古いタブが残っている場合、
+    // checkAppVersion() がそれを検知して自動リロードする。
+    APP_VERSION: '20260526-cache-autobust-v1',
+
+    // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
+    checkAppVersion() {
+        try {
+            const KEY = 'rakushift_app_version';
+            const saved = localStorage.getItem(KEY);
+            if (saved && saved !== this.APP_VERSION) {
+                console.warn('[Version] App updated', saved, '→', this.APP_VERSION, '— forcing reload');
+                localStorage.setItem(KEY, this.APP_VERSION);
+                // 二重リロードを防ぐためフラグでガード
+                if (!sessionStorage.getItem('__just_reloaded_for_version')) {
+                    sessionStorage.setItem('__just_reloaded_for_version', '1');
+                    location.reload();
+                    return true;
+                }
+            }
+            localStorage.setItem(KEY, this.APP_VERSION);
+            sessionStorage.removeItem('__just_reloaded_for_version');
+        } catch (_) {}
+        return false;
+    },
+
     /**
      * 初期化処理
      */
     async init() {
-        console.log("App initializing...");
+        // バージョン不一致なら自動リロード (古いキャッシュ破棄)
+        if (this.checkAppVersion()) return;
+
+        console.log("App initializing... (v" + this.APP_VERSION + ")");
         try {
             await API.init();
 
@@ -506,6 +535,35 @@ const app = {
             this.state.requests = requestsRes.data || [];
 
             console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts.`);
+
+            // 4.5 セッション失効の検知
+            // config が読めない & staff も 0 件 & shifts も 0 件 → ほぼ確実に
+            // x-session-id が auth_sessions に存在しない (= 期限切れ or migration 43 で
+            // 旧セッション無効化) ことで RLS が全行を弾いている。
+            // データは DB に残っているので「消失」ではなく「読めない」状態である旨を
+            // 明示し、自動的に再ログインフローへ誘導する。空 DB との誤認を防ぐガード。
+            const configMissing = !this.state.config.id;
+            const looksLikeSessionFailure =
+                configMissing
+                && (staffRes.data || []).length === 0
+                && (shiftsRes.data || []).length === 0
+                && API.session?.user?.contract_id;
+            if (looksLikeSessionFailure) {
+                console.warn('[loadData] All reads empty + config missing → session likely invalid, forcing re-login');
+                // 古いセッションを破棄してログインモーダルへ
+                API.setSession(null);
+                this.state.isShopLoggedIn = false;
+                this.state.isAdmin = false;
+                this.state.organization_id = null;
+                this.showToast(
+                    'セッションが切れたため自動ログアウトしました。データは DB に保持されています。再ログインしてください',
+                    'warning'
+                );
+                this.openModal('loginModal');
+                if (!this._shiftGenInProgress) this.showLoading(false);
+                return;
+            }
+
             this.updateRequestBadge();
 
             // スタッフ数がプラン上限を超えていたら警告
@@ -3204,7 +3262,7 @@ const app = {
                                                 </select>
                                             </td>
                                             <td class="p-2 text-right">
-                                                <button onclick="app.deleteRole(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition" ${role.id==='manager'||role.id==='staff'?'disabled title="基本役職は削除できません" style="opacity:0.3"':''}>
+                                                <button onclick="app.deleteRole(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition" ${role.id==='manager'||role.id==='staff'?'title="基本役職 (AIシフト生成で内部参照されます)。削除には確認が必要"':''}>
                                                     <i class="fa-solid fa-trash"></i>
                                                 </button>
                                             </td>
@@ -3707,10 +3765,22 @@ const app = {
     deleteRole(index) {
         this.state.config = this.readSettingsFromDOM();
         const role = this.state.config.roles[index];
-        if(role.id === 'manager' || role.id === 'staff') {
-            this.showToast('この役職は削除できません', 'error');
-            return;
+        if (!role) return;
+
+        if (role.id === 'manager' || role.id === 'staff') {
+            const label = role.id === 'manager' ? '店長 (manager)' : 'アルバイト (staff)';
+            const msg =
+                `【警告】「${label}」は AI シフト生成ロジックで内部参照される基本役職です。\n\n` +
+                `削除すると以下の動作が破綻する可能性があります:\n` +
+                (role.id === 'manager'
+                    ? `・「営業中の最低管理者数」制約が機能しなくなる\n・メンター必須配置 (新人とのペア配置) が機能しなくなる\n`
+                    : `・新規スタッフの既定役職として参照される箇所が無効化\n`) +
+                `・既にこの役職が割り当てられているスタッフは「役職なし」扱いになる\n\n` +
+                `通常は「役職名」だけを変更すれば十分です (例: 店長 → MGR)。\n` +
+                `それでも削除しますか?`;
+            if (!confirm(msg)) return;
         }
+
         this.state.config.roles.splice(index, 1);
         this.renderSettings(document.getElementById('viewContainer'));
     },
@@ -3908,12 +3978,68 @@ const app = {
         return config;
     },
 
+    // セッション失効時に呼ぶ。ローカルセッション破棄 → ログインモーダルへ
+    _forceReloginForSessionExpiry() {
+        try {
+            API.setSession(null);
+            this.state.isShopLoggedIn = false;
+            this.state.isAdmin = false;
+            this.state.isHQ = false;
+            this.state.organization_id = null;
+            this.state.config = {};
+            this.state.staff = [];
+            this.state.shifts = [];
+            this.state.requests = [];
+        } catch (_) {}
+        try { this.openModal('loginModal'); } catch (_) {}
+        try { this.showLoading(false); } catch (_) {}
+    },
+
+    // config.id が欠落している時に config_safe から再取得を試みる。
+    // 取得に成功したら state.config をマージして id を返す。失敗時は null。
+    async _recoverConfigId() {
+        try {
+            const orgId = this.state.organization_id
+                || API.session?.user?.organization_id
+                || localStorage.getItem('rakushift_org_id');
+            const contractId = this.state.config?.contract_id
+                || API.session?.user?.contract_id;
+
+            let filter = null;
+            if (orgId) filter = { organization_id: `eq.${orgId}` };
+            else if (contractId) filter = { contract_id: `eq.${contractId}` };
+            else return null;
+
+            const res = await API.list('config_safe', { ...filter, limit: 1 });
+            const row = res?.data?.[0];
+            if (row && row.id) {
+                this.state.config = { ...this.state.defaultConfig, ...row };
+                if (row.organization_id) this.state.organization_id = row.organization_id;
+                console.log('[Recovery] config.id restored:', row.id);
+                return row.id;
+            }
+        } catch (e) {
+            console.warn('[Recovery] config_safe lookup failed:', e.message);
+        }
+        return null;
+    },
+
     async saveSettings() {
         const newConfig = this.readSettingsFromDOM();
 
-        const configId = this.state.config.id;
+        let configId = this.state.config.id;
         if (!configId) {
-            this.showToast('設定IDが見つかりません。再ログインしてください。', 'error');
+            const recovered = await this._recoverConfigId();
+            configId = recovered;
+        }
+        if (!configId) {
+            // セッション無効 → 自動ログアウトしてログインモーダル表示
+            // データは DB に残っているが、現在のセッションでは RLS により読めない
+            this.showToast(
+                'セッションが切れています。自動ログアウトしました。再ログインしてください (データは保持されています)',
+                'error'
+            );
+            this._forceReloginForSessionExpiry();
             return;
         }
 
@@ -4588,12 +4714,18 @@ const app = {
     async saveStaff() {
         const id = (document.getElementById('staffId')?.value || '');
 
-        // テナント情報を確実に取得
-        const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
-        const orgId = this.state.config.organization_id || this.state.organization_id || API.session?.user?.organization_id;
+        // テナント情報を確実に取得 (欠落時は config_safe から自動復旧)
+        let contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+        let orgId = this.state.config.organization_id || this.state.organization_id || API.session?.user?.organization_id;
 
         if (!contractId || !orgId) {
-            this.showToast('テナント情報が取得できません。再ログインしてください。', 'error');
+            await this._recoverConfigId();
+            contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+            orgId = this.state.config.organization_id || this.state.organization_id || API.session?.user?.organization_id;
+        }
+
+        if (!contractId || !orgId) {
+            this.showToast('テナント情報が取得できません。一度ログアウト→再ログインしてください', 'error');
             return;
         }
 

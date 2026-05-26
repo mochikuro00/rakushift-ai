@@ -1091,8 +1091,13 @@
         </div>
     </div>
 
-    <!-- ?v= はキャッシュ破棄用バージョン。リリース時に scripts/bump-version.ps1 で一括更新 -->
-    <script src="js/config.js?v=202605231526"></script>
+    <!-- キャッシュ自動破棄: 詳細は index.html 末尾のローダー参照 -->
+    <script>
+        (function () {
+            var v = Math.floor(Date.now() / (15 * 60 * 1000));
+            document.write('<script src="js/config.js?v=' + v + '"><\/script>');
+        })();
+    </script>
     <script>
     // =========================================================
     // 運営管理画面 JavaScript
@@ -1369,14 +1374,38 @@
                 <div>
                     <p class="text-sm font-bold text-red-900">この操作は取り消せません</p>
                     <p class="text-xs text-gray-700 mt-1.5"><strong>${orgName}</strong> の全データ（スタッフ・シフト・リクエスト・設定）を完全に削除します。</p>
+                    <p class="text-xs text-red-700 mt-2">確認のため、下の入力欄にテナント名を正確に入力してください:</p>
+                    <p class="text-xs text-gray-500 mt-1">テナント名: <code class="bg-gray-100 px-1.5 py-0.5 rounded">${orgName}</code></p>
+                    <input type="text" id="deleteConfirmName" class="mt-2 w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm" placeholder="テナント名を入力" autocomplete="off">
                 </div>
             </div>
         `;
         document.getElementById('licenseNote').value = '';
         const btn = document.getElementById('licenseConfirmBtn');
         btn.innerHTML = '<i class="fas fa-trash mr-1"></i>完全削除する';
-        btn.className = 'flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition justify-center text-sm';
-        btn.onclick = () => executeDelete(orgId);
+        btn.className = 'flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition justify-center text-sm opacity-50 cursor-not-allowed';
+        btn.disabled = true;
+        btn.onclick = () => {
+            const typed = (document.getElementById('deleteConfirmName')?.value || '').trim();
+            if (typed !== orgName) {
+                showToast('テナント名が一致しません', 'error');
+                return;
+            }
+            executeDelete(orgId);
+        };
+        // 入力欄が一致したらボタンを有効化
+        setTimeout(() => {
+            const input = document.getElementById('deleteConfirmName');
+            if (input) {
+                input.addEventListener('input', () => {
+                    const match = input.value.trim() === orgName;
+                    btn.disabled = !match;
+                    btn.classList.toggle('opacity-50', !match);
+                    btn.classList.toggle('cursor-not-allowed', !match);
+                });
+                input.focus();
+            }
+        }, 50);
         openModal('licenseConfirmModal');
     }
 
@@ -2520,8 +2549,8 @@
                         <label class="block text-xs font-medium text-gray-700 mb-1">タイプ</label>
                         <select id="annType" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
                             <option value="info">ℹ️ お知らせ</option>
-                            <option value="promotion">�� キャンペーン</option>
-                            <option value="update">�� アップデート</option>
+                            <option value="promotion">🎉 キャンペーン</option>
+                            <option value="update">🔄 アップデート</option>
                             <option value="warning">⚠️ 注意</option>
                         </select>
                     </div>
@@ -2579,7 +2608,7 @@
             container.innerHTML = `<div class="card p-12 text-center"><div class="text-gray-300 text-5xl mb-4"><i class="fas fa-bullhorn"></i></div><p class="text-gray-500 font-medium">お知らせがありません</p><p class="text-sm text-gray-400 mt-1">「新規お知らせ作成」ボタンから作成してください</p></div>`;
             return;
         }
-        const typeLabels = { info: '�� お知らせ', promotion: '�� キャンペーン', update: '�� アップデート', warning: '⚠️ 注意' };
+        const typeLabels = { info: 'ℹ️ お知らせ', promotion: '🎉 キャンペーン', update: '🔄 アップデート', warning: '⚠️ 注意' };
         const typeBadges = { info: 'badge-info', promotion: 'badge-success', update: 'badge-purple', warning: 'badge-warning' };
         container.innerHTML = allAnnouncements.map(a => {
             const isActive = a.is_active && (!a.expires_at || new Date(a.expires_at) > new Date());
