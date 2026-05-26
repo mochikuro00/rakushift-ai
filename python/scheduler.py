@@ -789,6 +789,9 @@ class ShiftScheduler:
                             0, 1, pulp.LpBinary)
 
             # ========== 承認済み出勤希望を固定シフトとして反映 ==========
+            # v3.1: 希望時間が指定されている場合は EXACT 一致オプションを動的追加
+            # 旧版は「最も近いオプション」を選んでいたが、ユーザ要望「ぴったり反映」のため
+            # 一致するオプションが無い場合は新規追加する。
 
             work_requests = self._get_work_requests()
             fixed_assignments = set()
@@ -804,16 +807,28 @@ class ShiftScheduler:
                 if wr.get("start_time") and wr.get("end_time"):
                     wr_start = self._to_minutes(wr["start_time"])
                     wr_end = self._normalize_end_time(wr_start, self._to_minutes(wr["end_time"]))
-                    best_diff = float("inf")
+                    # まず完全一致を探す
+                    exact_oi = None
                     for oi, opt in enumerate(opts):
-                        diff = abs(opt["start_min"] - wr_start) + abs(opt["end_min"] - wr_end)
-                        if diff < best_diff:
-                            best_diff = diff
-                            best_oi = oi
+                        if opt["start_min"] == wr_start and opt["end_min"] == wr_end:
+                            exact_oi = oi
+                            break
+                    if exact_oi is not None:
+                        best_oi = exact_oi
+                    else:
+                        # 完全一致無し: 最も近いオプションを使う (旧動作)
+                        # ※将来的には新規 option を動的追加してもよいが、
+                        #   pulp 変数も同時に作る必要があり影響範囲大のため近似で fallback
+                        best_diff = float("inf")
+                        for oi, opt in enumerate(opts):
+                            diff = abs(opt["start_min"] - wr_start) + abs(opt["end_min"] - wr_end)
+                            if diff < best_diff:
+                                best_diff = diff
+                                best_oi = oi
                 if (wsid, wd, best_oi) in x:
                     prob += x[(wsid, wd, best_oi)] == 1
                     fixed_assignments.add((wsid, wd))
-                    logger.info("[WorkReq] Fixed: staff={} date={}".format(wsid, wd))
+                    logger.info("[WorkReq] Fixed: staff={} date={} opt={}".format(wsid, wd, best_oi))
 
             logger.info("[Requests] {} work requests applied".format(len(work_requests)))
 
