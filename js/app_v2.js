@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-no-auto-logout-v2',
+    APP_VERSION: '20260526-session-fallback-v3',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -524,8 +524,20 @@ const app = {
             if (configRes.data && configRes.data.length > 0) {
                 this.state.config = { ...this.state.defaultConfig, ...configRes.data[0] };
             } else {
+                // config_safe が空 (RLS 拒否 等) でも、セッションから contract_id / org_id を
+                // 拾って最低限の表示を成立させる。これが無いと「契約ID: -」表示になる。
+                this.state.config = {
+                    ...this.state.defaultConfig,
+                    ...(this.state.config || {}),
+                    contract_id: this.state.config.contract_id
+                        || API.session?.user?.contract_id
+                        || this.state.config.contract_id,
+                    organization_id: this.state.config.organization_id
+                        || API.session?.user?.organization_id
+                        || orgId
+                };
                 if (!this.state.config.id) {
-                    console.log("No config in DB for this org, keeping defaults.");
+                    console.warn("No config in DB for this org (RLS reject likely). Session fallback applied.");
                 }
             }
 
@@ -3607,7 +3619,7 @@ const app = {
                     <div class="p-6 space-y-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
-                            <p class="font-mono text-lg font-bold text-gray-800">${config.contract_id || '-'}</p>
+                            <p class="font-mono text-lg font-bold text-gray-800">${config.contract_id || API.session?.user?.contract_id || '-'}</p>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">登録メールアドレス</label>
