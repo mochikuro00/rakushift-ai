@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-full-sessionless-v7',
+    APP_VERSION: '20260526-rpc-first-loadData-v8',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -494,123 +494,51 @@ const app = {
             };
             this.state.loadedShiftRange = shiftRange;
 
-            // staffは全カラム取得（存在しないカラム指定エラーを防ぐ）
-            const staffSelect = '*';
-            // Promise.allSettled で1つの API 失敗で全体が崩れないように
-            // (例: requests テーブルに一時的な障害があっても shifts/staff は読める)
-            const settled = await Promise.allSettled([
-                API.list('config_safe', orgFilter),
-                API.list('staff', { ...orgFilter, select: staffSelect }),
-                API.list('shifts', shiftFilter),
-                API.list('requests', orgFilter)
-            ]);
-            const _emptyRes = { data: [] };
-            const _getResult = (idx, label) => {
-                const r = settled[idx];
-                if (r.status === 'fulfilled') return r.value;
-                console.warn(`[loadData] ${label} fetch failed:`, r.reason);
-                return _emptyRes;
-            };
-            const configRes   = _getResult(0, 'config_safe');
-            const staffRes    = _getResult(1, 'staff');
-            const shiftsRes   = _getResult(2, 'shifts');
-            const requestsRes = _getResult(3, 'requests');
-            const failedCount = settled.filter(s => s.status === 'rejected').length;
-            if (failedCount > 0) {
-                this.showToast(`一部のデータ読み込みに失敗しました (${failedCount}件)。表示が不完全な可能性があります`, 'warning');
-            }
-
-            // 3. configをマージ (DBの値を優先、足りない項目はデフォルトで補完)
-            if (configRes.data && configRes.data.length > 0) {
-                this.state.config = { ...this.state.defaultConfig, ...configRes.data[0] };
-            } else {
-                // config_safe が空 (RLS 拒否 等) でも、セッションから contract_id / org_id を
-                // 拾って最低限の表示を成立させる。これが無いと「契約ID: -」表示になる。
-                this.state.config = {
-                    ...this.state.defaultConfig,
-                    ...(this.state.config || {}),
-                    contract_id: this.state.config.contract_id
-                        || API.session?.user?.contract_id
-                        || this.state.config.contract_id,
-                    organization_id: this.state.config.organization_id
-                        || API.session?.user?.organization_id
-                        || orgId
-                };
-                if (!this.state.config.id) {
-                    console.warn("No config in DB for this org (RLS reject likely). Session fallback applied.");
-                }
-            }
-
-            // 4. データをStateに保存
-            this.state.staff = staffRes.data || [];
-            this.state.shifts = shiftsRes.data || [];
-            this.state.requests = requestsRes.data || [];
-
-            // 4.1 staff / shifts / requests が RLS で 0 件返った場合、session-less RPC でリカバリ
-            // (登録したのに見えない問題を解消)
-            const contractIdForFallback = this.state.config.contract_id
+            // 全データを session-less RPC で取得 (RLS 配下の REST は使わない)
+            // セッション状態に関係なく常に安定動作。contract_id があれば必ず読める。
+            const contractId = this.state.config.contract_id
                 || API.session?.user?.contract_id;
 
-            if (contractIdForFallback) {
-                if (this.state.staff.length === 0) {
-                    try {
-                        const rpcStaff = await API.rpc('list_staff_by_contract', {
-                            p_contract_id: contractIdForFallback
-                        });
-                        if (Array.isArray(rpcStaff) && rpcStaff.length > 0) {
-                            this.state.staff = rpcStaff;
-                            console.log('[loadData] Recovered staff via RPC:', rpcStaff.length, 'rows');
-                        }
-                    } catch (e) {
-                        console.warn('[loadData] list_staff_by_contract RPC failed:', e.message);
-                    }
+            if (!contractId) {
+                console.warn('[loadData] contract_id 未取得。空状態で UI 描画');
+                this.state.config = { ...this.state.defaultConfig, organization_id: orgId };
+                this.state.staff = [];
+                this.state.shifts = [];
+                this.state.requests = [];
+            } else {
+                const [cfgRes, staffRes, shiftsRes, requestsRes] = await Promise.allSettled([
+                    API.rpc('get_config_by_contract', { p_contract_id: contractId }),
+                    API.rpc('list_staff_by_contract', { p_contract_id: contractId }),
+                    API.rpc('list_shifts_by_contract', {
+                        p_contract_id: contractId,
+                        p_from: shiftRange.from,
+                        p_to: shiftRange.to
+                    }),
+                    API.rpc('list_requests_by_contract', { p_contract_id: contractId })
+                ]);
+
+                const cfgRow = cfgRes.status === 'fulfilled' ? cfgRes.value : null;
+                const staffRows = staffRes.status === 'fulfilled' && Array.isArray(staffRes.value) ? staffRes.value : [];
+                const shiftRows = shiftsRes.status === 'fulfilled' && Array.isArray(shiftsRes.value) ? shiftsRes.value : [];
+                const requestRows = requestsRes.status === 'fulfilled' && Array.isArray(requestsRes.value) ? requestsRes.value : [];
+
+                if (cfgRow && typeof cfgRow === 'object') {
+                    this.state.config = { ...this.state.defaultConfig, ...cfgRow };
+                } else {
+                    // config が DB に無い (新規テナント等) — デフォルトのまま contract_id/org_id だけ補完
+                    this.state.config = {
+                        ...this.state.defaultConfig,
+                        contract_id: contractId,
+                        organization_id: orgId
+                    };
                 }
-                if (this.state.shifts.length === 0) {
-                    try {
-                        const rpcShifts = await API.rpc('list_shifts_by_contract', {
-                            p_contract_id: contractIdForFallback,
-                            p_from: shiftRange.from,
-                            p_to: shiftRange.to
-                        });
-                        if (Array.isArray(rpcShifts) && rpcShifts.length > 0) {
-                            this.state.shifts = rpcShifts;
-                            console.log('[loadData] Recovered shifts via RPC:', rpcShifts.length, 'rows');
-                        }
-                    } catch (e) {
-                        console.warn('[loadData] list_shifts_by_contract RPC failed:', e.message);
-                    }
-                }
-                if (this.state.requests.length === 0) {
-                    try {
-                        const rpcReq = await API.rpc('list_requests_by_contract', {
-                            p_contract_id: contractIdForFallback
-                        });
-                        if (Array.isArray(rpcReq) && rpcReq.length > 0) {
-                            this.state.requests = rpcReq;
-                            console.log('[loadData] Recovered requests via RPC:', rpcReq.length, 'rows');
-                        }
-                    } catch (e) {
-                        console.warn('[loadData] list_requests_by_contract RPC failed:', e.message);
-                    }
-                }
+
+                this.state.staff = staffRows;
+                this.state.shifts = shiftRows;
+                this.state.requests = requestRows;
             }
 
-            console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts.`);
-
-            // 4.5 セッション失効の検知 (警告のみ・自動ログアウトはしない)
-            // config が読めない & staff も 0 件 & shifts も 0 件 → セッション切れの可能性が高い。
-            // ただし「本当に新規テナント (初回起動でデータが何も無い)」のケースもあるため、
-            // 自動ログアウトはせずコンソール警告のみ。ユーザは作業を継続でき、本当に
-            // 必要な時 (保存時) だけ saveSettings 側でリカバリー→誘導する。
-            const configMissing = !this.state.config.id;
-            const looksLikeSessionFailure =
-                configMissing
-                && (staffRes.data || []).length === 0
-                && (shiftsRes.data || []).length === 0
-                && API.session?.user?.contract_id;
-            if (looksLikeSessionFailure) {
-                console.warn('[loadData] All reads empty + config missing → session likely invalid (no auto-logout, will recover on save)');
-            }
+            console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts, ${this.state.requests.length} requests.`);
 
             this.updateRequestBadge();
 
