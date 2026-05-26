@@ -83,7 +83,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            z-index: 25;
+            z-index: 55; /* シフト表 sticky 列 (z-40) より上、サイドバー (z-60) より下 */
             background: rgba(15, 23, 42, 0.5);
             backdrop-filter: blur(2px);
             -webkit-backdrop-filter: blur(2px);
@@ -222,7 +222,9 @@
     <div id="sidebarOverlay" onclick="document.querySelector('aside').classList.add('-translate-x-full'); this.classList.remove('active');"></div>
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-30 transition-transform duration-300 transform -translate-x-full md:translate-x-0 fixed md:relative h-full">
+    <!-- z-[60] でシフト表の sticky 左列 (z-40) より上に。これが無いと
+         モバイルでサイドバー越しに後ろの table 内容が透けて見える -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col z-[60] transition-transform duration-300 transform -translate-x-full md:translate-x-0 fixed md:relative h-full">
         <div class="h-32 flex items-center justify-center px-4 border-b border-gray-100">
             <div class="flex items-center justify-center w-full cursor-pointer hover:opacity-80 transition-opacity" onclick="app.changeView('dashboard')" title="ホーム（ダッシュボード）へ戻る">
                 <img src="images/rakushift_logo_transparent.png" alt="ラクシフトAI" class="h-24 w-auto object-contain">
