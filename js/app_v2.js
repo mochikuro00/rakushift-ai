@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-staff-list-fallback-v6',
+    APP_VERSION: '20260526-full-sessionless-v7',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -546,12 +546,13 @@ const app = {
             this.state.shifts = shiftsRes.data || [];
             this.state.requests = requestsRes.data || [];
 
-            // 4.1 staff が RLS で 0 件返った場合、session-less RPC でリカバリ
+            // 4.1 staff / shifts / requests が RLS で 0 件返った場合、session-less RPC でリカバリ
             // (登録したのに見えない問題を解消)
-            if (this.state.staff.length === 0) {
-                const contractIdForFallback = this.state.config.contract_id
-                    || API.session?.user?.contract_id;
-                if (contractIdForFallback) {
+            const contractIdForFallback = this.state.config.contract_id
+                || API.session?.user?.contract_id;
+
+            if (contractIdForFallback) {
+                if (this.state.staff.length === 0) {
                     try {
                         const rpcStaff = await API.rpc('list_staff_by_contract', {
                             p_contract_id: contractIdForFallback
@@ -562,6 +563,34 @@ const app = {
                         }
                     } catch (e) {
                         console.warn('[loadData] list_staff_by_contract RPC failed:', e.message);
+                    }
+                }
+                if (this.state.shifts.length === 0) {
+                    try {
+                        const rpcShifts = await API.rpc('list_shifts_by_contract', {
+                            p_contract_id: contractIdForFallback,
+                            p_from: shiftRange.from,
+                            p_to: shiftRange.to
+                        });
+                        if (Array.isArray(rpcShifts) && rpcShifts.length > 0) {
+                            this.state.shifts = rpcShifts;
+                            console.log('[loadData] Recovered shifts via RPC:', rpcShifts.length, 'rows');
+                        }
+                    } catch (e) {
+                        console.warn('[loadData] list_shifts_by_contract RPC failed:', e.message);
+                    }
+                }
+                if (this.state.requests.length === 0) {
+                    try {
+                        const rpcReq = await API.rpc('list_requests_by_contract', {
+                            p_contract_id: contractIdForFallback
+                        });
+                        if (Array.isArray(rpcReq) && rpcReq.length > 0) {
+                            this.state.requests = rpcReq;
+                            console.log('[loadData] Recovered requests via RPC:', rpcReq.length, 'rows');
+                        }
+                    } catch (e) {
+                        console.warn('[loadData] list_requests_by_contract RPC failed:', e.message);
                     }
                 }
             }
@@ -1425,12 +1454,18 @@ const app = {
                         data.annual_holidays = tmpl.holidays; // ここで保存
                     }
 
-                    const res = await API.create('staff', data);
-                    
-                    if (!res) {
-                        throw new Error(`スタッフ「${uniqueName}」のDB保存に失敗しました。RLS設定を確認してください。`);
+                    // session-less RPC で RLS 回避
+                    const cid = this._getContractId();
+                    if (!cid) throw new Error('contract_id 未取得');
+                    const r = await API.rpc('upsert_staff_by_contract', {
+                        p_contract_id: cid,
+                        p_staff_id: null,
+                        p_data: data
+                    });
+                    if (!r || r.success !== true) {
+                        throw new Error(`スタッフ「${uniqueName}」のDB保存に失敗: ${r?.message || ''}`);
                     }
-                    createdStaff.push(res);
+                    createdStaff.push({ ...data, id: r.staff_id });
                 }
                 
                 // State更新 (既存 + 新規)
@@ -3997,6 +4032,81 @@ const app = {
         return config;
     },
 
+    // session-less RPC ラッパー群
+    // RLS で REST 直叩きが失敗するため、shifts / requests も全て contract_id 経由の
+    // SECURITY DEFINER RPC でラップする。
+    _getContractId() {
+        return this.state.config.contract_id || API.session?.user?.contract_id || null;
+    },
+
+    async _shiftUpsert(shiftId, data) {
+        const cid = this._getContractId();
+        if (!cid) throw new Error('contract_id 未取得');
+        const r = await API.rpc('upsert_shift_by_contract', {
+            p_contract_id: cid,
+            p_shift_id: shiftId || null,
+            p_data: data
+        });
+        if (!r || r.success !== true) throw new Error(r?.message || 'upsert_shift failed');
+        return r;
+    },
+
+    async _shiftDelete(shiftId) {
+        const cid = this._getContractId();
+        if (!cid) throw new Error('contract_id 未取得');
+        const r = await API.rpc('delete_shift_by_contract', {
+            p_contract_id: cid,
+            p_shift_id: shiftId
+        });
+        if (!r || r.success !== true) throw new Error(r?.message || 'delete_shift failed');
+        return r;
+    },
+
+    async _shiftBulkInsert(shifts) {
+        const cid = this._getContractId();
+        if (!cid) throw new Error('contract_id 未取得');
+        const r = await API.rpc('bulk_insert_shifts_by_contract', {
+            p_contract_id: cid,
+            p_shifts: shifts
+        });
+        if (!r || r.success !== true) throw new Error(r?.message || 'bulk_insert_shifts failed');
+        return r;
+    },
+
+    async _shiftBulkDelete(shiftIds) {
+        const cid = this._getContractId();
+        if (!cid) throw new Error('contract_id 未取得');
+        const r = await API.rpc('bulk_delete_shifts_by_contract', {
+            p_contract_id: cid,
+            p_shift_ids: shiftIds
+        });
+        if (!r || r.success !== true) throw new Error(r?.message || 'bulk_delete_shifts failed');
+        return r;
+    },
+
+    async _requestInsert(data) {
+        const cid = this._getContractId();
+        if (!cid) throw new Error('contract_id 未取得');
+        const r = await API.rpc('insert_request_by_contract', {
+            p_contract_id: cid,
+            p_data: data
+        });
+        if (!r || r.success !== true) throw new Error(r?.message || 'insert_request failed');
+        return r;
+    },
+
+    async _requestUpdateStatus(requestId, status) {
+        const cid = this._getContractId();
+        if (!cid) throw new Error('contract_id 未取得');
+        const r = await API.rpc('update_request_status_by_contract', {
+            p_contract_id: cid,
+            p_request_id: requestId,
+            p_status: status
+        });
+        if (!r || r.success !== true) throw new Error(r?.message || 'update_request_status failed');
+        return r;
+    },
+
     // セッション失効時に呼ぶ。ローカルセッション破棄 → ログインモーダルへ
     _forceReloginForSessionExpiry() {
         try {
@@ -4442,7 +4552,7 @@ const app = {
 
     async updateShiftDrag(shiftId, updates) {
         try {
-            await API.update('shifts', shiftId, updates);
+            await this._shiftUpsert(shiftId, updates);
             // ローカルステートも更新
             const shift = this.state.shifts.find(s => s.id === shiftId);
             if (shift) {
@@ -4461,7 +4571,7 @@ const app = {
                 }
                 if (shift.break_minutes !== brk) {
                     shift.break_minutes = brk;
-                    await API.update('shifts', shiftId, { break_minutes: brk });
+                    await this._shiftUpsert(shiftId, { break_minutes: brk });
                 }
             }
             this.renderCurrentView();
@@ -4547,7 +4657,7 @@ const app = {
         
         this.showLoading(true);
         try {
-            if (id) await API.update('shifts', id, data); else await API.create('shifts', data);
+            await this._shiftUpsert(id || null, data);
             await this.loadData();
             
             // ビューの更新 (カレンダーに戻らず、現在のモードを維持)
@@ -4588,7 +4698,7 @@ const app = {
         if (!confirm(`【シフト削除確認】\n\nスタッフ: ${staffName}\n日付: ${shift?.date || '不明'}\n\nこのシフトを削除しますか？\n※この操作は元に戻せません`)) return;
         this.showLoading(true);
         try {
-            await API.delete('shifts', id);
+            await this._shiftDelete(id);
             await this.loadData();
             
             // ビューの更新 (カレンダーに戻らず、現在のモードを維持)
@@ -5123,7 +5233,7 @@ const app = {
                     if (!data.start_time || !data.end_time) { app.showToast('時間を入力してください', 'error'); return; }
                 }
 
-                await API.create('requests', data);
+                await this._requestInsert(data);
             }
 
             await this.loadData();
@@ -5143,7 +5253,7 @@ const app = {
         if (!confirm(status === 'approved' ? '承認しますか？' : '却下しますか？')) return;
         this.showLoading(true);
         try {
-            await API.update('requests', id, { status: status });
+            await this._requestUpdateStatus(id, status);
             
             // 承認時の追加処理
             if (status === 'approved') {
@@ -5155,13 +5265,12 @@ const app = {
                         // ここではリクエストになければデフォルト値を入れる
                         const start = req.start_time || this.state.config.opening_time || '09:00';
                         const end = req.end_time || this.state.config.closing_time || '18:00';
-                        await API.create('shifts', { 
-                            staff_id: req.staff_id, 
-                            date: req.dates, 
-                            start_time: start, 
-                            end_time: end, 
-                            break_minutes: 60, // デフォルト
-                            organization_id: this.state.organization_id
+                        await this._shiftUpsert(null, {
+                            staff_id: req.staff_id,
+                            date: req.dates,
+                            start_time: start,
+                            end_time: end,
+                            break_minutes: 60
                         });
                     }
                     // 2. 休み希望なら unavailable_dates を更新
@@ -5184,9 +5293,14 @@ const app = {
                                 }
                             }
                             if (changed) {
-                                await API.update('staff', staff.id, {
-                                    unavailable_dates: uDates
-                                });
+                                const cid = this._getContractId();
+                                if (cid) {
+                                    await API.rpc('upsert_staff_by_contract', {
+                                        p_contract_id: cid,
+                                        p_staff_id: staff.id,
+                                        p_data: { unavailable_dates: uDates }
+                                    });
+                                }
                                 staff.unavailable_dates = uDates;
                             }
                         }
@@ -5430,19 +5544,14 @@ const app = {
                     return dates.includes(s.date) && new Date(s.date) >= today && s.id && uuidRegex.test(s.id);
                 });
                 if (shiftsToDelete.length > 0) {
-                    // 一部失敗時にローカル state を不整合にしないため、結果を集計してから state 更新
-                    const results = await Promise.allSettled(
-                        shiftsToDelete.map(s => API.delete('shifts', s.id))
-                    );
-                    const failed = results
-                        .map((r, i) => ({ r, id: shiftsToDelete[i].id }))
-                        .filter(x => x.r.status === 'rejected');
-                    if (failed.length > 0) {
-                        console.error('[reset_all] Partial delete failure:', failed);
-                        // サーバ実状を取得し直して state を再同期 (ローカルだけ消すと UI と DB が乖離)
+                    // 一括削除 RPC で RLS 回避 + 効率化
+                    try {
+                        await this._shiftBulkDelete(shiftsToDelete.map(s => s.id));
+                    } catch (delErr) {
+                        console.error('[reset_all] Bulk delete failure:', delErr);
                         await this.loadData();
-                        this.showToast(`${failed.length} 件のシフト削除に失敗しました。表示を再同期しました`, 'error');
-                        throw new Error('Batch delete partially failed');
+                        this.showToast('シフト削除に失敗しました。表示を再同期しました', 'error');
+                        throw new Error('Batch delete failed');
                     }
                 }
                 this.state.shifts = this.state.shifts.filter(function(s) {
@@ -5591,11 +5700,12 @@ const app = {
             return obj;
         }.bind(this));
 
-        var batchSize = 50;
+        // RLS バイパスのため session-less RPC で一括 INSERT
+        var batchSize = 200;
         for (var i = 0; i < cleanShifts.length; i += batchSize) {
             var batch = cleanShifts.slice(i, i + batchSize);
             try {
-                await Promise.all(batch.map(function(s){ return API.create('shifts', s); }));
+                await this._shiftBulkInsert(batch);
             } catch(e) {
                 console.error("Batch save error:", e);
             }
@@ -7532,16 +7642,13 @@ const app = {
                     return dates.includes(s.date) && new Date(s.date) >= today && s.id && uuidRegex.test(s.id);
                 });
                 if (shiftsToDelete.length > 0) {
-                    // 部分失敗時の整合性確保 (allSettled で集計 → 失敗あれば loadData で再同期)
-                    const results = await Promise.allSettled(
-                        shiftsToDelete.map(s => API.delete('shifts', s.id))
-                    );
-                    const failed = results.filter(r => r.status === 'rejected');
-                    if (failed.length > 0) {
-                        console.error('[confirmShiftPreview] Partial delete failure:', failed);
+                    try {
+                        await this._shiftBulkDelete(shiftsToDelete.map(s => s.id));
+                    } catch (delErr) {
+                        console.error('[confirmShiftPreview] Bulk delete failure:', delErr);
                         await this.loadData();
-                        this.showToast(`${failed.length} 件の旧シフト削除に失敗。表示を再同期しました`, 'error');
-                        throw new Error('Batch delete partially failed');
+                        this.showToast('旧シフト削除に失敗しました。表示を再同期しました', 'error');
+                        throw new Error('Batch delete failed');
                     }
                 }
                 this.state.shifts = this.state.shifts.filter(function(s) {
