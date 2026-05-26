@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-comprehensive-rpc-v9',
+    APP_VERSION: '20260526-allow-admin-delete-v10',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4989,13 +4989,28 @@ const app = {
             return;
         }
 
-        // 管理者アカウントは絶対に削除不可
-        if (staff.login_id === 'admin' || staff.role === 'manager' || staff.role === 'admin') {
-            this.showToast('管理者・店長アカウントは削除できません。', 'error');
-            return;
+        // 管理者・店長アカウントは強い警告ダイアログを出して、ユーザが明示的に
+        // OK を押した場合のみ削除可能。完全ブロックではなく「自己責任で削除可」。
+        const isProtected = staff.login_id === 'admin' || staff.role === 'manager' || staff.role === 'admin';
+        if (isProtected) {
+            const role = staff.login_id === 'admin' ? '管理者 (admin)'
+                : staff.role === 'manager' ? '店長 (manager)'
+                : '管理者 (admin)';
+            const warning =
+                `【警告】「${staff.name}」は ${role} アカウントです。\n\n` +
+                `削除すると以下の動作影響があります:\n` +
+                (staff.login_id === 'admin'
+                    ? `・管理者ログインができなくなる (店舗用 PW のみ残る)\n`
+                    : ``) +
+                (staff.role === 'manager'
+                    ? `・AI シフト生成の「最低管理者数」制約が満たせなくなる可能性\n・新人スタッフのメンター必須配置が機能しなくなる可能性\n`
+                    : ``) +
+                `・関連するシフト/申請データも全て削除されます\n\n` +
+                `この操作は元に戻せません。本当に削除しますか?`;
+            if (!confirm(warning)) return;
+        } else {
+            if (!confirm(`「${staff.name}」を削除しますか？\n\n※関連するシフト・申請データも全て削除されます。\nこの操作は元に戻せません。`)) return;
         }
-
-        if (!confirm(`「${staff.name}」を削除しますか？\n\n※関連するシフト・申請データも全て削除されます。\nこの操作は元に戻せません。`)) return;
 
         this.showLoading(true);
         try {
