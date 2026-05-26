@@ -47,21 +47,22 @@ class ShiftScheduler:
     #   - 順序関係 (重要): EMPTY_SLOT > OPEN_CLOSE_NO_EMP > COVERAGE_UNDER > ...
     # ===========================================================
     class W:
+        # v3.1: ユーザ要望「ぴったり反映」のため全体的にカバレッジ系を強化
         # カバレッジ (店舗運営の根幹)
-        EMPTY_SLOT          = 1_000_000   # 任意スロット 0名 (絶対回避)
-        OPEN_CLOSE_NO_EMP   = 5_000_000   # 開け締めに社員/管理者不在 (絶対回避)
-        COVERAGE_UNDER      = 500_000     # スロット必要人数不足
-        COVERAGE_OVER_DAY   = 400_000     # 日次過剰人員
-        COVERAGE_OVER_SLOT  = 200_000     # スロット過剰人員
-        MIN_MANAGER         = 500_000     # 管理者数不足
+        EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避) -- v3.1で 10x
+        OPEN_CLOSE_NO_EMP   = 50_000_000  # 開け締めに社員/管理者不在 -- v3.1で 10x
+        COVERAGE_UNDER      = 5_000_000   # スロット必要人数不足 -- v3.1で 10x
+        COVERAGE_OVER_DAY   = 4_000_000   # 日次過剰人員 -- v3.1で 10x
+        COVERAGE_OVER_SLOT  = 2_000_000   # スロット過剰人員 -- v3.1で 10x
+        MIN_MANAGER         = 5_000_000   # 管理者数不足 -- v3.1で 10x
         # 品質
-        OJT_NO_MENTOR       = 200_000     # 新人×メンター不在
-        FAIRNESS_DRIFT      = 80_000      # 公平性偏差 (需要按分との差)
+        OJT_NO_MENTOR       = 2_000_000   # 新人×メンター不在 -- v3.1で 10x
+        FAIRNESS_DRIFT      = 80_000      # 公平性偏差
         PEAK_SKILL          = 50_000      # ピーク帯スキルミックス不足
-        POSITION_SHORT      = 200_000     # ポジション (レジ等) 不足
+        POSITION_SHORT      = 2_000_000   # ポジション (レジ等) 不足 -- v3.1で 10x
         WEEKEND_FAIR        = 50_000      # 土日出勤バランス偏差
         POWER_BALANCE       = 10_000      # 戦力バランス
-        TIMEBAND_IMBALANCE  = 20_000      # 時間帯分散 (朝/昼/夕)
+        TIMEBAND_IMBALANCE  = 20_000      # 時間帯分散
         CONSEC_DAYS_FATIGUE = 30_000      # 連続勤務後の疲労インセンティブ
         MENTOR_MATCH_BONUS  = -8_000      # 主担当メンターとのペアリング
         # スタッフ属性ベース調整
@@ -69,11 +70,11 @@ class ShiftScheduler:
         PRIORITY_LOW        = 20_000      # 優先度 Low スタッフは穴埋め
         CONTRACT_REGULAR    = -10_000     # レギュラー契約優先
         CONTRACT_SPOT       = 5_000       # スポット契約は後回し
-        MIN_DAYS_WEEK_BONUS = -5_000      # min_days_week>0 スタッフ配置補助
-        # 希望シフト (旧 -500/-700/-1000 → 10倍化、他ペナルティと釣り合う水準に)
-        PREFERENCE_BASE     = -5_000      # 希望日に何らかのシフト
-        PREFERENCE_CLOSE    = -7_000      # ±1時間以内の一致
-        PREFERENCE_EXACT    = -10_000     # 完全一致
+        MIN_DAYS_WEEK_BONUS = -500_000    # v3.1: min_days_week 厳守のため強化
+        # 希望シフト (v3.1で人数不足と同等水準まで強化)
+        PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト
+        PREFERENCE_CLOSE    = -700_000    # ±1時間以内の一致
+        PREFERENCE_EXACT    = -1_000_000  # 完全一致 (人数不足ペナルティと拮抗)
 
     def __init__(self, staff_list, config, dates, requests=None, existing_shifts=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
@@ -485,12 +486,11 @@ class ShiftScheduler:
         
         if pref_start and pref_end:
             pref_pat = {"start": pref_start, "end": pref_end, "name": "pref"}
-            if is_employee:
-                # 社員はフルタイム候補に加えて、希望時間帯の候補も追加（ソフト制約として評価）
-                patterns_to_use.append(pref_pat)
-            else:
-                # バイトは希望時間帯のみ
-                patterns_to_use = [pref_pat]
+            # v3.1: 希望時間帯指定があるスタッフは、社員/バイトに関わらず
+            # 希望時間帯のみを候補とする (ユーザ要望: ぴったり反映)
+            # 社員でも MILP が別パターンを選ぶ余地を残すと、希望が無視される事象が
+            # 発生していたため、希望指定時は強制的に pref パターンに固定。
+            patterns_to_use = [pref_pat]
 
         def _add_option(ps, pe, is_pref=False):
             """オプションを追加するヘルパー（重複チェック含む）"""
