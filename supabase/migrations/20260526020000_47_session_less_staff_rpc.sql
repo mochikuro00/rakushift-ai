@@ -150,7 +150,7 @@ BEGIN
         RETURN;
     END IF;
 
-    RETURN QUERY SELECT * FROM staff WHERE organization_id = v_org_id ORDER BY created_at;
+    RETURN QUERY SELECT * FROM staff WHERE organization_id = v_org_id ORDER BY name;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, public, extensions, pg_temp;
