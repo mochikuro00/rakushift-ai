@@ -49,13 +49,17 @@ BEGIN
             role = COALESCE(p_data->>'role', role),
             evaluation = COALESCE(p_data->>'evaluation', evaluation),
             salary_type = COALESCE(p_data->>'salary_type', salary_type),
-            hourly_wage = COALESCE((p_data->>'hourly_wage')::NUMERIC, hourly_wage),
-            monthly_salary = COALESCE((p_data->>'monthly_salary')::NUMERIC, monthly_salary),
+            hourly_wage = COALESCE((p_data->>'hourly_wage')::INTEGER, hourly_wage),
+            monthly_salary = COALESCE((p_data->>'monthly_salary')::INTEGER, monthly_salary),
             max_days_week = COALESCE((p_data->>'max_days_week')::INTEGER, max_days_week),
             max_hours_day = COALESCE((p_data->>'max_hours_day')::INTEGER, max_hours_day),
             min_days_week = COALESCE((p_data->>'min_days_week')::INTEGER, min_days_week),
             min_days_month = COALESCE((p_data->>'min_days_month')::INTEGER, min_days_month),
-            unavailable_dates = COALESCE(p_data->'unavailable_dates', unavailable_dates)
+            unavailable_dates = CASE
+                WHEN p_data ? 'unavailable_dates'
+                    THEN ARRAY(SELECT jsonb_array_elements_text(p_data->'unavailable_dates'))::TEXT[]
+                ELSE unavailable_dates
+            END
         WHERE id = p_staff_id AND organization_id = v_org_id;
 
         IF NOT FOUND THEN
@@ -74,15 +78,19 @@ BEGIN
             p_contract_id,
             COALESCE(p_data->>'name', ''),
             COALESCE(p_data->>'role', 'staff'),
-            p_data->>'evaluation',
-            p_data->>'salary_type',
-            COALESCE((p_data->>'hourly_wage')::NUMERIC, 0),
-            COALESCE((p_data->>'monthly_salary')::NUMERIC, 0),
-            COALESCE((p_data->>'max_days_week')::INTEGER, 0),
-            COALESCE((p_data->>'max_hours_day')::INTEGER, 0),
+            COALESCE(p_data->>'evaluation', 'B'),
+            COALESCE(p_data->>'salary_type', 'hourly'),
+            COALESCE((p_data->>'hourly_wage')::INTEGER, 1100),
+            COALESCE((p_data->>'monthly_salary')::INTEGER, 0),
+            COALESCE((p_data->>'max_days_week')::INTEGER, 5),
+            COALESCE((p_data->>'max_hours_day')::INTEGER, 8),
             COALESCE((p_data->>'min_days_week')::INTEGER, 0),
             COALESCE((p_data->>'min_days_month')::INTEGER, 0),
-            COALESCE(p_data->'unavailable_dates', '[]'::jsonb)
+            CASE
+                WHEN p_data ? 'unavailable_dates'
+                    THEN ARRAY(SELECT jsonb_array_elements_text(p_data->'unavailable_dates'))::TEXT[]
+                ELSE '{}'::TEXT[]
+            END
         ) RETURNING id INTO v_new_id;
 
         RETURN jsonb_build_object('success', true, 'staff_id', v_new_id, 'mode', 'insert');
