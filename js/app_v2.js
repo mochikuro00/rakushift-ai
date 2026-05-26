@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-resolve-config-by-contract-v4',
+    APP_VERSION: '20260526-sessionless-rpc-v5',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4026,31 +4026,12 @@ const app = {
     async saveSettings() {
         const newConfig = this.readSettingsFromDOM();
 
-        let configId = this.state.config.id;
-        if (!configId) {
-            const recovered = await this._recoverConfigId();
-            configId = recovered;
-        }
-        if (!configId) {
-            // セッション無効でも contract_id があれば session-less RPC で復元保存
-            const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
-            if (contractId) {
-                try {
-                    const r = await API.rpc('resolve_config_id_by_contract', { p_contract_id: contractId });
-                    if (r && r.config_id) {
-                        configId = r.config_id;
-                        this.state.config.id = configId;
-                        if (r.organization_id) this.state.config.organization_id = r.organization_id;
-                    }
-                } catch (e) {
-                    console.warn('[saveSettings] resolve_config_id_by_contract failed:', e.message);
-                }
-            }
-        }
-        if (!configId) {
-            // 復元できなかった時のみ控えめにトースト表示 (ダイアログは出さない)
+        // contract_id があれば session-less RPC (update_config_by_contract) で
+        // 完全にセッション独立で保存する。state.config.id は不要。
+        const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+        if (!contractId) {
             this.showToast(
-                '設定の保存先が特定できません。ページを再読み込みするか、一度ログアウト→再ログインしてください',
+                '契約IDが取得できません。一度ログアウト→再ログインしてください',
                 'error'
             );
             return;
@@ -4058,7 +4039,6 @@ const app = {
 
         this.showLoading(true);
         try {
-            // RPC経由で安全に設定を更新 (機密フィールドは個別関数で更新)
             const updateData = {
                 opening_time: newConfig.opening_time,
                 closing_time: newConfig.closing_time,
@@ -4077,10 +4057,15 @@ const app = {
                 custom_shifts: newConfig.custom_shifts,
             };
 
-            await API.rpc('update_config_safe', {
-                p_config_id: configId,
+            const rpcRes = await API.rpc('update_config_by_contract', {
+                p_contract_id: contractId,
                 p_data: updateData
             });
+            if (!rpcRes || rpcRes.success !== true) {
+                throw new Error(rpcRes?.message || 'update_config_by_contract failed');
+            }
+            // 戻り値の config_id を state に反映 (次回以降の最適化のため)
+            if (rpcRes.config_id) this.state.config.id = rpcRes.config_id;
 
             // 管理者パスワード変更は専用モーダル + update_admin_password_by_contract RPC のみ
             // (このブロックの旧 staff/config 平文保存ロジックは migration 40 で view 除外後は無効化)
@@ -4815,36 +4800,41 @@ const app = {
 
         this.showLoading(true);
         try {
-            let result;
+            // RLS でブロックされないよう session-less RPC で操作。
+            // upsert_staff_by_contract は SECURITY DEFINER で contract_id 認証。
+            const rpcRes = await API.rpc('upsert_staff_by_contract', {
+                p_contract_id: contractId,
+                p_staff_id: id || null,
+                p_data: data
+            });
+            if (!rpcRes || rpcRes.success !== true) {
+                throw new Error(rpcRes?.message || 'upsert_staff_by_contract failed');
+            }
+            const savedId = rpcRes.staff_id;
+
             if (id) {
-                // 更新: 先にAPIに送信し、成功後にStateを更新
-                await API.update('staff', id, data);
+                // 更新: ローカル state を反映
                 const index = this.state.staff.findIndex(s => s.id === id);
                 if (index !== -1) {
                     this.state.staff[index] = { ...this.state.staff[index], ...data };
                 }
             } else {
-                // 新規作成
-                result = await API.create('staff', data);
-                if (!result) {
-                    data.id = 'temp_' + Date.now();
-                    this.state.staff.push(data);
-                } else {
-                    this.state.staff.push(result);
-                }
+                // 新規作成: 返却された id を採用
+                data.id = savedId;
+                this.state.staff.push(data);
             }
-            
+
             this.renderStaffList(document.getElementById('viewContainer'));
             this.closeModal('staffModal');
             this.showToast('保存しました', 'success');
-        } catch (e) { 
+        } catch (e) {
             console.error('[SaveStaff] 保存失敗:', e);
             // 保存失敗時はDBから最新データを再取得してStateを復元
             try { await this.loadData(); } catch(reloadErr) { console.error(reloadErr); }
             this.renderStaffList(document.getElementById('viewContainer'));
             this.showToast('保存に失敗しました: ' + e.message, 'error');
-        } finally { 
-            this.showLoading(false); 
+        } finally {
+            this.showLoading(false);
         }
     },
     editStaff(id) {
@@ -4941,13 +4931,20 @@ const app = {
 
         this.showLoading(true);
         try {
-            await API.delete('staff', id);
+            // session-less RPC で RLS 制約をバイパス (contract_id 認証)
+            const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+            if (!contractId) throw new Error('contract_id 未取得');
+            const r = await API.rpc('delete_staff_by_contract', {
+                p_contract_id: contractId,
+                p_staff_id: id
+            });
+            if (!r || r.success !== true) throw new Error(r?.message || 'delete failed');
             this.state.staff = this.state.staff.filter(s => s.id !== id);
             this.renderStaffList(document.getElementById('viewContainer'));
             this.showToast(`${staff.name} を削除しました`, 'success');
         } catch (e) {
             console.error(e);
-            this.showToast('削除に失敗しました', 'error');
+            this.showToast('削除に失敗しました: ' + e.message, 'error');
         } finally {
             this.showLoading(false);
         }
