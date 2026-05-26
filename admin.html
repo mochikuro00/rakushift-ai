@@ -262,11 +262,37 @@
             /* ボタンのタッチ最適化 */
             button { min-height: 38px; }
             .btn-primary, .btn-secondary, .btn-danger { padding: 10px 14px; }
+
+            /* === 文字被り防止 === */
+            button { word-break: keep-all; }
+            .modal-content h2, .modal-content h3 {
+                word-break: break-word;
+                overflow-wrap: anywhere;
+            }
+            /* タブ・ピル状の長文ラベル対応 */
+            .tab-btn, .badge {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
+            }
+            /* ステータスバッジ等の Flex 横並び */
+            .flex.items-center.gap-2 > *,
+            .flex.items-center.gap-3 > * {
+                min-width: 0;
+            }
+            /* 設定 grid の label/value 重なり防止 */
+            .grid > div > label,
+            .grid > div > p { word-break: break-word; }
         }
 
         @media (max-width: 375px) {
             .stat-card { padding: 10px; }
             .section-title { font-size: 15px; }
+            .modal-content h2 { font-size: 16px !important; }
+            .modal-content h3 { font-size: 14px !important; }
+            .tab-btn { font-size: 10px !important; padding: 6px 8px !important; }
+            .badge { font-size: 10px !important; padding: 2px 5px !important; }
         }
     </style>
 </head>

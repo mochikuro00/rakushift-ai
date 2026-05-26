@@ -121,12 +121,70 @@
                 right: 12px !important;
                 bottom: 16px !important;
             }
+
+            /* ===== 文字被り防止 (汎用) ===== */
+            /* 長い日本語名がボタン外にはみ出るのを防ぐ */
+            button { word-break: keep-all; }
+            /* ログインタブの 4 つ並びを折り返し可能に */
+            #loginModal .flex.border-b > button {
+                padding: 10px 4px !important;
+                font-size: 11px !important;
+                line-height: 1.2 !important;
+                word-break: keep-all;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            /* モーダルタイトル長文対応 */
+            .modal-content h2, .modal-content h3 {
+                word-break: break-word;
+                overflow-wrap: anywhere;
+            }
+            /* 設定画面の row 内 label/input が同列で被るのを防ぐ */
+            label + input, label + select, label + textarea {
+                margin-top: 4px;
+            }
+            /* テーブルセルが幅狭で被るのを防ぐ */
+            table td, table th {
+                white-space: nowrap;
+                max-width: none;
+            }
+            /* バッジ・ピル状要素の余白確保 */
+            .badge, span[class*='rounded-full'] {
+                white-space: nowrap;
+            }
+            /* スタッフカード等の Flex 横並び要素 */
+            .flex.items-center.gap-2 > *,
+            .flex.items-center.gap-3 > * {
+                min-width: 0;
+            }
+            /* ヘッダー内 select の年/月の幅縮小 */
+            #jumpYear, #jumpMonth {
+                padding-left: 4px !important;
+                padding-right: 4px !important;
+                font-size: 12px !important;
+                min-width: 0;
+            }
+            /* ヘッダー右側コントロールを下段にラップ */
+            #adminHeaderControls {
+                margin-left: 0 !important;
+            }
         }
 
         /* 小さいスマホ (375px以下) */
         @media (max-width: 375px) {
             .modal-content { margin: 4px; }
             #viewContainer { padding: 8px !important; }
+            /* ログインタブをさらにコンパクトに */
+            #loginModal .flex.border-b > button {
+                padding: 8px 2px !important;
+                font-size: 10px !important;
+            }
+            /* モーダルヘッダ全般 */
+            .modal-content h2 { font-size: 16px !important; }
+            .modal-content h3 { font-size: 14px !important; }
+            /* バッジ縮小 */
+            .badge { font-size: 10px !important; padding: 2px 5px !important; }
         }
 
         /* 斜線パターン（特別休日・イレギュラーシフト表示用） */
