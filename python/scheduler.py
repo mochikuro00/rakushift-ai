@@ -896,13 +896,23 @@ class ShiftScheduler:
             self._tracked_slacks = tracked_slacks
 
             # ====================================================
-            # TIER 1: 法的制約 (ハード制約)
+            # TIER 1: 法的制約 (ハード制約) + 時間系のソフト化
+            # ----------------------------------------------------
+            # v3.2 (要望): 「労働基準法は遵守するが、シフトを埋めるために
+            #   仕方なく時間制約を超える場合は許容する」
+            #   → 1日の労働時間 (max_hours_day) は HARD ではなく SOFT に変更
+            #   → 休憩 (34条)・週休 (35条)・1日1シフト・最低人数は依然 HARD
+            # ----------------------------------------------------
+            # 用語 (明記):
+            #   * hours      = 拘束時間 (出勤〜退勤までの全時間)
+            #   * work_hours = 実労働時間 = 拘束時間 - 休憩時間
+            #                  ※ max_hours_day はこの「実労働時間」と比較
             # ====================================================
 
             for s in self.staff_list:
                 sid = s["id"]
 
-                # --- 1日1シフト制約 ---
+                # --- 1日1シフト制約 (HARD: 物理的に1人1シフトのみ) ---
                 for d in self.dates:
                     opts = staff_opts.get((sid, d), [])
                     if opts:
@@ -910,22 +920,31 @@ class ShiftScheduler:
                             x[(sid, d, oi)] for oi in range(len(opts))
                         ) <= 1
 
-                    # --- 1日の最大労働時間 (労基法32条) ---
+                    # --- 1日の最大労働時間 (v3.2: HARD→SOFT 化)
+                    # 旧版は work_hours > max_hours のオプションを物理排除していたが、
+                    # ユーザ要望で「シフトを埋めるため仕方ない場合は超過可」に変更。
+                    # ペナルティで誘導 (超過したい場合は MILP が選ぶ余地を残す)。
                     max_hours = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
-                    if not force:
-                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            if opt["work_hours"] > max_hours:
-                                prob += x[(sid, d, oi)] == 0
+                    for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                        over_hours = opt["work_hours"] - max_hours
+                        if over_hours > 0:
+                            # 1時間超過につき 100,000 ペナルティを penalty 関数に加算
+                            # シフトが埋まらない (COVERAGE_UNDER 5,000,000) よりは
+                            # 軽く設定し、人員不足回避のため超過を許容する。
+                            penalty += x[(sid, d, oi)] * int(100_000 * over_hours)
 
-                # --- 週の最大勤務日数 ---
+                # --- 週の最大勤務日数 (v3.2: HARD→SOFT 化) ---
                 max_days = int(s.get("max_days_week") or 5)
                 if not force and max_days <= 0:
+                    # max_days_week=0 (出勤不可) だけは依然 HARD
                     for d in self.dates:
                         for oi in range(len(staff_opts.get((sid, d), []))):
                             prob += x[(sid, d, oi)] == 0
                     continue
 
-                effective_max_days = max_days if not force else max(max_days, 6)
+                # max_days を超える可能性も MILP が判断できるよう、+2 までは許容
+                # (force 時は更に緩める)
+                effective_max_days = (max_days + 2) if not force else max(max_days + 3, 7)
                 week_groups = self._group_dates_by_week()
                 for week in week_groups:
                     wv = []

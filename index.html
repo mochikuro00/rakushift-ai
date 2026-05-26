@@ -1017,12 +1017,13 @@
                     <h4 class="text-sm font-bold text-blue-600 mb-3">勤務制約 (AI自動作成用)</h4>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">週の最大勤務日数</label>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">週の最大勤務日数 <span class="text-[10px] text-gray-400 font-normal">(目安・人員不足時は超過可)</span></label>
                             <input type="number" id="staffMaxDaysPerWeek" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="5">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-600 mb-1">1日の最大勤務時間</label>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">1日の最大勤務時間 <span class="text-[10px] text-gray-400 font-normal">(実労働=休憩除く・目安)</span></label>
                             <input type="number" id="staffMaxHoursPerDay" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="8">
+                            <p class="text-[10px] text-gray-400 mt-1">※ 拘束時間ではなく実労働時間。休憩込みではない (例: 9〜18 で休憩 1h なら 8h)</p>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
