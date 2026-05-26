@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-sessionless-rpc-v5',
+    APP_VERSION: '20260526-staff-list-fallback-v6',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -545,6 +545,26 @@ const app = {
             this.state.staff = staffRes.data || [];
             this.state.shifts = shiftsRes.data || [];
             this.state.requests = requestsRes.data || [];
+
+            // 4.1 staff が RLS で 0 件返った場合、session-less RPC でリカバリ
+            // (登録したのに見えない問題を解消)
+            if (this.state.staff.length === 0) {
+                const contractIdForFallback = this.state.config.contract_id
+                    || API.session?.user?.contract_id;
+                if (contractIdForFallback) {
+                    try {
+                        const rpcStaff = await API.rpc('list_staff_by_contract', {
+                            p_contract_id: contractIdForFallback
+                        });
+                        if (Array.isArray(rpcStaff) && rpcStaff.length > 0) {
+                            this.state.staff = rpcStaff;
+                            console.log('[loadData] Recovered staff via RPC:', rpcStaff.length, 'rows');
+                        }
+                    } catch (e) {
+                        console.warn('[loadData] list_staff_by_contract RPC failed:', e.message);
+                    }
+                }
+            }
 
             console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts.`);
 
