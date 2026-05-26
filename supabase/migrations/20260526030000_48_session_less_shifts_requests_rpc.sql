@@ -23,12 +23,13 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'contract not found');
     END IF;
 
+    -- shifts: date は DATE 型 / start_time, end_time は TIME 型 (要明示キャスト)
     IF p_shift_id IS NOT NULL THEN
         UPDATE shifts SET
             staff_id = COALESCE((p_data->>'staff_id')::UUID, staff_id),
-            date = COALESCE(p_data->>'date', date),
-            start_time = COALESCE(p_data->>'start_time', start_time),
-            end_time = COALESCE(p_data->>'end_time', end_time),
+            date = COALESCE((p_data->>'date')::DATE, date),
+            start_time = COALESCE((p_data->>'start_time')::TIME, start_time),
+            end_time = COALESCE((p_data->>'end_time')::TIME, end_time),
             break_minutes = COALESCE((p_data->>'break_minutes')::INTEGER, break_minutes),
             memo = COALESCE(p_data->>'memo', memo),
             is_irregular = COALESCE((p_data->>'is_irregular')::BOOLEAN, is_irregular)
@@ -44,9 +45,9 @@ BEGIN
         ) VALUES (
             v_org_id,
             (p_data->>'staff_id')::UUID,
-            p_data->>'date',
-            p_data->>'start_time',
-            p_data->>'end_time',
+            (p_data->>'date')::DATE,
+            (p_data->>'start_time')::TIME,
+            (p_data->>'end_time')::TIME,
             COALESCE((p_data->>'break_minutes')::INTEGER, 60),
             p_data->>'memo',
             COALESCE((p_data->>'is_irregular')::BOOLEAN, FALSE)
@@ -101,9 +102,9 @@ BEGIN
         ) VALUES (
             v_org_id,
             (v_row->>'staff_id')::UUID,
-            v_row->>'date',
-            v_row->>'start_time',
-            v_row->>'end_time',
+            (v_row->>'date')::DATE,
+            (v_row->>'start_time')::TIME,
+            (v_row->>'end_time')::TIME,
             COALESCE((v_row->>'break_minutes')::INTEGER, 60),
             v_row->>'memo',
             COALESCE((v_row->>'is_irregular')::BOOLEAN, FALSE)
@@ -157,8 +158,8 @@ BEGIN
     RETURN QUERY
         SELECT * FROM shifts s
         WHERE s.organization_id = v_org_id
-          AND (p_from IS NULL OR s.date >= p_from)
-          AND (p_to IS NULL OR s.date <= p_to)
+          AND (p_from IS NULL OR s.date >= p_from::DATE)
+          AND (p_to IS NULL OR s.date <= p_to::DATE)
         ORDER BY s.date, s.start_time;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, extensions, pg_temp;
