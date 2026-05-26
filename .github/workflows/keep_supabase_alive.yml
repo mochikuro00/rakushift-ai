@@ -33,6 +33,21 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          curl -f -X GET "$SUPABASE_URL/rest/v1/staff?limit=1" \
-            -H "apikey: $SUPABASE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_KEY"
+          # 防御: gate を通っていても変数が空なら curl が malformed URL で死ぬので再チェック
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "::warning::SUPABASE_URL or SUPABASE_KEY is empty at ping step — skipping"
+            exit 0
+          fi
+          # URL 末尾の / を削って二重 // を防ぐ
+          URL="${SUPABASE_URL%/}/rest/v1/config?select=id&limit=1"
+          echo "Pinging: $URL"
+          # -f で 4xx/5xx をエラーにする / -sS で進捗なし+エラー表示 / 失敗時はステータス出力
+          if ! curl -fsS -X GET "$URL" \
+              -H "apikey: $SUPABASE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_KEY" \
+              -o /tmp/ping_resp.txt -w "HTTP %{http_code}\n"; then
+            echo "::warning::Supabase ping failed. Response:"
+            cat /tmp/ping_resp.txt || true
+            exit 0
+          fi
+          echo "Ping OK"
