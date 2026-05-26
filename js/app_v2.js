@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-allow-admin-delete-v10',
+    APP_VERSION: '20260527-unified-delete-confirm-v11',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4989,44 +4989,45 @@ const app = {
             return;
         }
 
-        // 管理者・店長アカウントは強い警告ダイアログを出して、ユーザが明示的に
-        // OK を押した場合のみ削除可能。完全ブロックではなく「自己責任で削除可」。
-        const isProtected = staff.login_id === 'admin' || staff.role === 'manager' || staff.role === 'admin';
-        if (isProtected) {
-            const role = staff.login_id === 'admin' ? '管理者 (admin)'
-                : staff.role === 'manager' ? '店長 (manager)'
-                : '管理者 (admin)';
-            const warning =
-                `【警告】「${staff.name}」は ${role} アカウントです。\n\n` +
-                `削除すると以下の動作影響があります:\n` +
-                (staff.login_id === 'admin'
-                    ? `・管理者ログインができなくなる (店舗用 PW のみ残る)\n`
-                    : ``) +
-                (staff.role === 'manager'
-                    ? `・AI シフト生成の「最低管理者数」制約が満たせなくなる可能性\n・新人スタッフのメンター必須配置が機能しなくなる可能性\n`
-                    : ``) +
-                `・関連するシフト/申請データも全て削除されます\n\n` +
-                `この操作は元に戻せません。本当に削除しますか?`;
-            if (!confirm(warning)) return;
-        } else {
-            if (!confirm(`「${staff.name}」を削除しますか？\n\n※関連するシフト・申請データも全て削除されます。\nこの操作は元に戻せません。`)) return;
+        // 全スタッフ統一の確認ダイアログ (管理者・店長も含む。区別なし)
+        if (!confirm(
+            `「${staff.name}」を削除しますか？\n\n` +
+            `※関連するシフト・申請データも全て削除されます。\n` +
+            `この操作は元に戻せません。`
+        )) return;
+
+        console.log('[deleteStaff] start', { id, name: staff.name, role: staff.role, login_id: staff.login_id });
+
+        // UUID 形式チェック (temp_xxx 等の DB 未保存 ID を弾く)
+        const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRe.test(String(id))) {
+            // ローカルのみの仮 ID → state からだけ消す
+            this.state.staff = this.state.staff.filter(s => s.id !== id);
+            this.renderStaffList(document.getElementById('viewContainer'));
+            this.showToast(`${staff.name} を削除しました (ローカルのみ)`, 'success');
+            return;
         }
 
         this.showLoading(true);
         try {
-            // session-less RPC で RLS 制約をバイパス (contract_id 認証)
             const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
-            if (!contractId) throw new Error('contract_id 未取得');
+            if (!contractId) throw new Error('contract_id 未取得 — 再ログインしてください');
+
+            console.log('[deleteStaff] calling delete_staff_by_contract', { contractId, p_staff_id: id });
             const r = await API.rpc('delete_staff_by_contract', {
                 p_contract_id: contractId,
                 p_staff_id: id
             });
-            if (!r || r.success !== true) throw new Error(r?.message || 'delete failed');
+            console.log('[deleteStaff] RPC response:', r);
+
+            if (!r || r.success !== true) {
+                throw new Error(r?.message || 'delete failed (no response)');
+            }
             this.state.staff = this.state.staff.filter(s => s.id !== id);
             this.renderStaffList(document.getElementById('viewContainer'));
             this.showToast(`${staff.name} を削除しました`, 'success');
         } catch (e) {
-            console.error(e);
+            console.error('[deleteStaff] error:', e);
             this.showToast('削除に失敗しました: ' + e.message, 'error');
         } finally {
             this.showLoading(false);
