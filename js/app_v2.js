@@ -207,7 +207,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-cache-autobust-v1',
+    APP_VERSION: '20260526-no-auto-logout-v2',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -536,12 +536,11 @@ const app = {
 
             console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts.`);
 
-            // 4.5 セッション失効の検知
-            // config が読めない & staff も 0 件 & shifts も 0 件 → ほぼ確実に
-            // x-session-id が auth_sessions に存在しない (= 期限切れ or migration 43 で
-            // 旧セッション無効化) ことで RLS が全行を弾いている。
-            // データは DB に残っているので「消失」ではなく「読めない」状態である旨を
-            // 明示し、自動的に再ログインフローへ誘導する。空 DB との誤認を防ぐガード。
+            // 4.5 セッション失効の検知 (警告のみ・自動ログアウトはしない)
+            // config が読めない & staff も 0 件 & shifts も 0 件 → セッション切れの可能性が高い。
+            // ただし「本当に新規テナント (初回起動でデータが何も無い)」のケースもあるため、
+            // 自動ログアウトはせずコンソール警告のみ。ユーザは作業を継続でき、本当に
+            // 必要な時 (保存時) だけ saveSettings 側でリカバリー→誘導する。
             const configMissing = !this.state.config.id;
             const looksLikeSessionFailure =
                 configMissing
@@ -549,19 +548,7 @@ const app = {
                 && (shiftsRes.data || []).length === 0
                 && API.session?.user?.contract_id;
             if (looksLikeSessionFailure) {
-                console.warn('[loadData] All reads empty + config missing → session likely invalid, forcing re-login');
-                // 古いセッションを破棄してログインモーダルへ
-                API.setSession(null);
-                this.state.isShopLoggedIn = false;
-                this.state.isAdmin = false;
-                this.state.organization_id = null;
-                this.showToast(
-                    'セッションが切れたため自動ログアウトしました。データは DB に保持されています。再ログインしてください',
-                    'warning'
-                );
-                this.openModal('loginModal');
-                if (!this._shiftGenInProgress) this.showLoading(false);
-                return;
+                console.warn('[loadData] All reads empty + config missing → session likely invalid (no auto-logout, will recover on save)');
             }
 
             this.updateRequestBadge();
@@ -4033,13 +4020,20 @@ const app = {
             configId = recovered;
         }
         if (!configId) {
-            // セッション無効 → 自動ログアウトしてログインモーダル表示
-            // データは DB に残っているが、現在のセッションでは RLS により読めない
-            this.showToast(
-                'セッションが切れています。自動ログアウトしました。再ログインしてください (データは保持されています)',
-                'error'
+            // セッション無効。自動ログアウトはせず、ユーザに選択肢を提示。
+            // (自動ログアウトは fresh login 直後でも誤発火するため避ける)
+            const goLogout = confirm(
+                'セッションが切れているため設定を保存できません。\n\n' +
+                '・データは DB に保持されています (消失していません)\n' +
+                '・再ログインすれば保存可能になります\n\n' +
+                '今すぐログアウトして再ログイン画面に進みますか?\n' +
+                '(キャンセルで作業を続行できますが保存はできません)'
             );
-            this._forceReloginForSessionExpiry();
+            if (goLogout) {
+                this._forceReloginForSessionExpiry();
+            } else {
+                this.showToast('保存をスキップしました', 'info');
+            }
             return;
         }
 
