@@ -51,10 +51,13 @@ BEGIN
             salary_type = COALESCE(p_data->>'salary_type', salary_type),
             hourly_wage = COALESCE((p_data->>'hourly_wage')::INTEGER, hourly_wage),
             monthly_salary = COALESCE((p_data->>'monthly_salary')::INTEGER, monthly_salary),
+            annual_holidays = COALESCE((p_data->>'annual_holidays')::INTEGER, annual_holidays),
             max_days_week = COALESCE((p_data->>'max_days_week')::INTEGER, max_days_week),
             max_hours_day = COALESCE((p_data->>'max_hours_day')::INTEGER, max_hours_day),
             min_days_week = COALESCE((p_data->>'min_days_week')::INTEGER, min_days_week),
             min_days_month = COALESCE((p_data->>'min_days_month')::INTEGER, min_days_month),
+            shift_priority = COALESCE(p_data->>'shift_priority', shift_priority),
+            contract_type = COALESCE(p_data->>'contract_type', contract_type),
             unavailable_dates = CASE
                 WHEN p_data ? 'unavailable_dates'
                     THEN ARRAY(SELECT jsonb_array_elements_text(p_data->'unavailable_dates'))::TEXT[]
@@ -70,9 +73,9 @@ BEGIN
         -- 新規作成
         INSERT INTO staff (
             organization_id, contract_id, name, role, evaluation,
-            salary_type, hourly_wage, monthly_salary,
+            salary_type, hourly_wage, monthly_salary, annual_holidays,
             max_days_week, max_hours_day, min_days_week, min_days_month,
-            unavailable_dates
+            shift_priority, contract_type, unavailable_dates
         ) VALUES (
             v_org_id,
             p_contract_id,
@@ -82,10 +85,13 @@ BEGIN
             COALESCE(p_data->>'salary_type', 'hourly'),
             COALESCE((p_data->>'hourly_wage')::INTEGER, 1100),
             COALESCE((p_data->>'monthly_salary')::INTEGER, 0),
+            COALESCE((p_data->>'annual_holidays')::INTEGER, 105),
             COALESCE((p_data->>'max_days_week')::INTEGER, 5),
             COALESCE((p_data->>'max_hours_day')::INTEGER, 8),
             COALESCE((p_data->>'min_days_week')::INTEGER, 0),
             COALESCE((p_data->>'min_days_month')::INTEGER, 0),
+            p_data->>'shift_priority',
+            p_data->>'contract_type',
             CASE
                 WHEN p_data ? 'unavailable_dates'
                     THEN ARRAY(SELECT jsonb_array_elements_text(p_data->'unavailable_dates'))::TEXT[]

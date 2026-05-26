@@ -29,7 +29,9 @@ BEGIN
             date = COALESCE(p_data->>'date', date),
             start_time = COALESCE(p_data->>'start_time', start_time),
             end_time = COALESCE(p_data->>'end_time', end_time),
-            break_minutes = COALESCE((p_data->>'break_minutes')::INTEGER, break_minutes)
+            break_minutes = COALESCE((p_data->>'break_minutes')::INTEGER, break_minutes),
+            memo = COALESCE(p_data->>'memo', memo),
+            is_irregular = COALESCE((p_data->>'is_irregular')::BOOLEAN, is_irregular)
         WHERE id = p_shift_id AND organization_id = v_org_id;
 
         IF NOT FOUND THEN
@@ -38,14 +40,16 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'shift_id', p_shift_id, 'mode', 'update');
     ELSE
         INSERT INTO shifts (
-            organization_id, staff_id, date, start_time, end_time, break_minutes
+            organization_id, staff_id, date, start_time, end_time, break_minutes, memo, is_irregular
         ) VALUES (
             v_org_id,
             (p_data->>'staff_id')::UUID,
             p_data->>'date',
             p_data->>'start_time',
             p_data->>'end_time',
-            COALESCE((p_data->>'break_minutes')::INTEGER, 60)
+            COALESCE((p_data->>'break_minutes')::INTEGER, 60),
+            p_data->>'memo',
+            COALESCE((p_data->>'is_irregular')::BOOLEAN, FALSE)
         ) RETURNING id INTO v_new_id;
         RETURN jsonb_build_object('success', true, 'shift_id', v_new_id, 'mode', 'insert');
     END IF;
@@ -93,14 +97,16 @@ BEGIN
 
     FOR v_row IN SELECT * FROM jsonb_array_elements(p_shifts) LOOP
         INSERT INTO shifts (
-            organization_id, staff_id, date, start_time, end_time, break_minutes
+            organization_id, staff_id, date, start_time, end_time, break_minutes, memo, is_irregular
         ) VALUES (
             v_org_id,
             (v_row->>'staff_id')::UUID,
             v_row->>'date',
             v_row->>'start_time',
             v_row->>'end_time',
-            COALESCE((v_row->>'break_minutes')::INTEGER, 60)
+            COALESCE((v_row->>'break_minutes')::INTEGER, 60),
+            v_row->>'memo',
+            COALESCE((v_row->>'is_irregular')::BOOLEAN, FALSE)
         );
         v_inserted := v_inserted + 1;
     END LOOP;

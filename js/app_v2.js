@@ -40,11 +40,15 @@ const app = {
             return; // 既にロード済み範囲内
         }
         try {
-            const res = await API.list('shifts', {
-                organization_id: `eq.${this.state.organization_id}`,
-                and: `(date.gte.${target.from},date.lte.${target.to})`
+            // session-less RPC 経由で RLS を回避 (REST + RLS は壊れる可能性あり)
+            const cid = this.state.config?.contract_id || API.session?.user?.contract_id;
+            if (!cid) return;
+            const rows = await API.rpc('list_shifts_by_contract', {
+                p_contract_id: cid,
+                p_from: target.from,
+                p_to: target.to
             });
-            this.state.shifts = res.data || [];
+            this.state.shifts = Array.isArray(rows) ? rows : [];
             this.state.loadedShiftRange = target;
             console.log(`[Shifts] Reloaded ${this.state.shifts.length} for ${target.from}〜${target.to}`);
         } catch (e) {
@@ -207,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260526-rpc-first-loadData-v8',
+    APP_VERSION: '20260526-comprehensive-rpc-v9',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -457,11 +461,13 @@ const app = {
                 orgId = API.session.user.organization_id;
             }
             if (!orgId && API.session?.user?.contract_id) {
-                // contract_id からconfig_safeビューを引いてorganization_idを取得
+                // contract_id から session-less RPC で organization_id を取得
                 try {
-                    const cRes = await API.list('config_safe', { contract_id: `eq.${API.session.user.contract_id}`, select: 'organization_id' });
-                    if (cRes.data?.[0]?.organization_id) {
-                        orgId = cRes.data[0].organization_id;
+                    const r = await API.rpc('resolve_config_id_by_contract', {
+                        p_contract_id: API.session.user.contract_id
+                    });
+                    if (r && r.organization_id) {
+                        orgId = r.organization_id;
                     }
                 } catch(e) { console.warn("Config lookup failed:", e); }
             }
@@ -1325,9 +1331,15 @@ const app = {
                 }
             }
 
-            // 3. 既存データの確認 (全削除はしない)
-            const allStaffRes = await API.list('staff', { organization_id: `eq.${orgId}` });
-            const currentStaff = allStaffRes.data || [];
+            // 3. 既存データの確認 (全削除はしない) — session-less RPC で取得
+            let currentStaff = [];
+            try {
+                const cid = this.state.config?.contract_id || API.session?.user?.contract_id;
+                if (cid) {
+                    const rows = await API.rpc('list_staff_by_contract', { p_contract_id: cid });
+                    if (Array.isArray(rows)) currentStaff = rows;
+                }
+            } catch (_) {}
             
             // 4. 不足分の補充
             // 少なくとも10名は確保したい
@@ -1408,11 +1420,17 @@ const app = {
                 this.state.staff = currentStaff;
             }
 
-            // 5. 設定データの修復 (空の場合のみ)
+            // 5. 設定データの修復 (空の場合のみ) — session-less RPC
             if (!this.state.config.id) {
-                // configはcreate_tenant RPCで作成されるため、ここでは再読み込みのみ
-                const confRes = await API.list('config_safe', { organization_id: `eq.${orgId}` });
-                if(confRes.data?.[0]) this.state.config = { ...this.state.defaultConfig, ...confRes.data[0] };
+                try {
+                    const cid = this.state.config?.contract_id || API.session?.user?.contract_id;
+                    if (cid) {
+                        const row = await API.rpc('get_config_by_contract', { p_contract_id: cid });
+                        if (row && typeof row === 'object') {
+                            this.state.config = { ...this.state.defaultConfig, ...row };
+                        }
+                    }
+                } catch (_) {}
             }
 
             this.renderCurrentView();
@@ -1728,11 +1746,11 @@ const app = {
         this.state.isHQ = true;
         API.setSession(sess);
 
-        // contract_id → organization_id 解決
+        // contract_id → organization_id 解決 (session-less RPC)
         let orgId = null;
         try {
-            const rows = await API.list('config_safe', { contract_id: `eq.${contractId}`, select: 'organization_id', limit: 1 });
-            if (Array.isArray(rows) && rows[0]) orgId = rows[0].organization_id;
+            const r = await API.rpc('resolve_config_id_by_contract', { p_contract_id: contractId });
+            if (r && r.organization_id) orgId = r.organization_id;
         } catch (e) {
             console.error('[HQ View] resolve org_id failed:', e);
         }
@@ -4052,31 +4070,23 @@ const app = {
         try { this.showLoading(false); } catch (_) {}
     },
 
-    // config.id が欠落している時に config_safe から再取得を試みる。
+    // config.id が欠落している時に session-less RPC で再取得を試みる。
     // 取得に成功したら state.config をマージして id を返す。失敗時は null。
     async _recoverConfigId() {
         try {
-            const orgId = this.state.organization_id
-                || API.session?.user?.organization_id
-                || localStorage.getItem('rakushift_org_id');
             const contractId = this.state.config?.contract_id
                 || API.session?.user?.contract_id;
+            if (!contractId) return null;
 
-            let filter = null;
-            if (orgId) filter = { organization_id: `eq.${orgId}` };
-            else if (contractId) filter = { contract_id: `eq.${contractId}` };
-            else return null;
-
-            const res = await API.list('config_safe', { ...filter, limit: 1 });
-            const row = res?.data?.[0];
-            if (row && row.id) {
+            const row = await API.rpc('get_config_by_contract', { p_contract_id: contractId });
+            if (row && typeof row === 'object' && row.id) {
                 this.state.config = { ...this.state.defaultConfig, ...row };
                 if (row.organization_id) this.state.organization_id = row.organization_id;
                 console.log('[Recovery] config.id restored:', row.id);
                 return row.id;
             }
         } catch (e) {
-            console.warn('[Recovery] config_safe lookup failed:', e.message);
+            console.warn('[Recovery] get_config_by_contract failed:', e.message);
         }
         return null;
     },
