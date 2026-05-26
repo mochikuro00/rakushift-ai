@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-sidebar-zindex-v13',
+    APP_VERSION: '20260527-detailed-failure-msg-v14',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5308,6 +5308,70 @@ const app = {
         ],
         _tipTimer: null,
 
+    // AI 生成失敗時に /check API で原因を取得し、詳細メッセージを表示
+    async _showDetailedGenerationFailure(payload, headline) {
+        try {
+            const checkUrl = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG.CALC_SERVER_URL)
+                + '/check';
+            const sid = JSON.parse(sessionStorage.getItem('rakushift_user') || 'null')?.session_id;
+            const res = await fetch(checkUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(sid ? {'x-session-id': sid} : {})
+                },
+                body: JSON.stringify({
+                    staff_list: payload.staff_list,
+                    config: payload.config,
+                    dates: payload.dates,
+                    requests: payload.requests || [],
+                    contract_id: payload.contract_id || null
+                })
+            });
+            if (!res.ok) {
+                this.showToast(headline + ' (詳細取得失敗)', 'warning');
+                return;
+            }
+            const j = await res.json();
+            const check = j.check || j || {};
+            const warnings = check.warnings || [];
+            const details = check.daily_details || [];
+            const summary = check.summary || {};
+
+            // ===== モーダル風の詳細表示 =====
+            const lines = [];
+            lines.push(`📊 サマリ: スタッフ ${summary.total_staff || 0}名 (利用可 ${summary.usable_staff || 0}名) / 営業日 ${summary.work_dates || 0}日`);
+            if (summary.total_shortage_hours > 0) {
+                lines.push(`⚠️ 合計人員不足: ${summary.total_shortage_hours} 人時 (${summary.affected_days} 日)`);
+            }
+            warnings.forEach(w => {
+                const icon = w.severity === 'critical' ? '🔴' : (w.severity === 'warning' ? '🟡' : 'ℹ️');
+                lines.push(`${icon} ${w.message}`);
+            });
+            if (details.length > 0) {
+                lines.push('');
+                lines.push('— 日別不足詳細 (上位 10日) —');
+                details.slice(0, 10).forEach(d => {
+                    const ranges = (d.shortage_ranges || []).map(r => `${r.start}-${r.end}: ${r.gap}名不足`).join(', ');
+                    lines.push(`・${d.date} (${d.day_type}): 利用可能 ${d.available_staff}名 → ${d.shortage_hours} 人時不足${ranges ? ' [' + ranges + ']' : ''}`);
+                });
+                if (details.length > 10) lines.push(`... 他 ${details.length - 10} 日`);
+            }
+            lines.push('');
+            lines.push('💡 解決ヒント:');
+            lines.push('・スタッフを追加する');
+            lines.push('・スタッフの max_days_week / max_hours_day を増やす');
+            lines.push('・店舗設定の「最低管理者数」「時間帯別必要人数」を見直す');
+            lines.push('・希望休 (休暇申請) を一部却下する');
+
+            // alert() で全文表示 (toast は短文用なので)
+            alert('【シフト生成 不能診断】 ' + headline + '\n\n' + lines.join('\n'));
+        } catch (e) {
+            console.warn('[Generation Diagnostics] /check failed:', e);
+            this.showToast(headline + '。スタッフ条件を緩和するかスタッフを追加してください。', 'warning');
+        }
+    },
+
        async runAutoFill() {
         if (this._shiftGenInProgress) return;
         if (!this.state.isShopLoggedIn || !this.state.organization_id) {
@@ -5551,15 +5615,16 @@ const app = {
                 this._pendingPreviewReport = result.report || null;
 
             } else if (result.status === 'success' && result.mode === 'math_failed') {
-                // 数理最適化が解を見つけられなかった
-                console.warn('Math optimization failed - no feasible solution');
-                this.showToast('最適化エンジンが解を見つけられませんでした。スタッフの勤務条件を緩和するか、スタッフを追加してください。', 'warning');
+                // 数理最適化が解を見つけられなかった → /check API で具体的な不足条件を取得
+                console.warn('Math optimization failed - calling /check for diagnostics');
+                await this._showDetailedGenerationFailure(payload, '最適化エンジンが解を見つけられませんでした');
                 this._generationSuccess = false;
+                this._failureDetailShown = true;
             } else if (result.status === 'success' && (!result.shifts || result.shifts.length === 0)) {
-                // シフトが0件
-                console.warn('No shifts generated');
-                this.showToast('生成可能なシフトがありませんでした。スタッフの設定や休暇申請を確認してください。', 'warning');
+                console.warn('No shifts generated - calling /check for diagnostics');
+                await this._showDetailedGenerationFailure(payload, '生成可能なシフトがありませんでした');
                 this._generationSuccess = false;
+                this._failureDetailShown = true;
             } else {
                 this._generationSuccess = false;
             }
@@ -5614,9 +5679,11 @@ const app = {
                     this._pendingPreviewDates = null;
                     this._pendingPreviewReport = null;
                 }, 300);
-            } else if (!this._generationSuccess) {
-                this.showToast('シフト作成に問題がありました。条件を見直してください。', 'warning');
+            } else if (!this._generationSuccess && !this._failureDetailShown) {
+                // _showDetailedGenerationFailure で既に詳細表示済の場合は二重表示しない
+                this.showToast('シフト作成に問題がありました。詳細はコンソールを確認してください。', 'warning');
             }
+            this._failureDetailShown = false;
         }
     },
 
