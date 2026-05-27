@@ -1,0 +1,34 @@
+# Render Blueprint - Python AI Scheduler
+# 用途: Railway 自動デプロイが復旧できない場合の代替プラットフォーム
+# 使い方:
+#   1. https://dashboard.render.com → New → Blueprint
+#   2. リポジトリ mochikuro00/rakushift-ai を選択
+#   3. このファイルが検知され、自動でサービス作成
+#   4. 必要な環境変数 (SUPABASE_URL, SUPABASE_SERVICE_KEY, GEMINI_API_KEY 等) を設定
+#   5. デプロイ完了 → URL が払い出される (xxx.onrender.com)
+#   6. js/config.js の CALC_SERVER_URL を新 URL に更新
+
+services:
+  - type: web
+    name: rakushift-ai-calc
+    runtime: docker
+    plan: free                       # 月750時間まで無料
+    region: singapore                # 日本に最も近い
+    dockerfilePath: python/Dockerfile
+    dockerContext: python
+    healthCheckPath: /health
+    autoDeploy: true                 # main ブランチ push で自動デプロイ
+    envVars:
+      # 自動で値が引き継がれる secrets (Render Dashboard で個別設定が必要)
+      - key: SUPABASE_URL
+        sync: false                  # 個別設定必須
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://rakushift-ai.pages.dev,https://*.rakushift-ai.pages.dev
+      - key: PYTHONUNBUFFERED
+        value: "1"
