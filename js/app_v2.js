@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-clear-rules-and-pattern-v19',
+    APP_VERSION: '20260527-immediate-save-delete-v20',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -3799,10 +3799,24 @@ const app = {
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
-    removeBreakRule(index) {
+    async removeBreakRule(index) {
         this.state.config = this.readSettingsFromDOM();
+        if (!Array.isArray(this.state.config.break_rules)) this.state.config.break_rules = [];
+        if (index < 0 || index >= this.state.config.break_rules.length) return;
         this.state.config.break_rules.splice(index, 1);
         this.renderSettings(document.getElementById('viewContainer'));
+        try {
+            const cid = this._getContractId();
+            if (cid) {
+                await API.rpc('update_config_by_contract', {
+                    p_contract_id: cid,
+                    p_data: { break_rules: this.state.config.break_rules }
+                });
+                this.showToast('休憩ルールを削除しました', 'success');
+            }
+        } catch (e) {
+            this.showToast('削除の保存に失敗: ' + e.message, 'error');
+        }
     },
 
     addSpecialHoliday() {
@@ -3819,12 +3833,21 @@ const app = {
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
-    removeSpecialHoliday(index) {
-        this.state.config = this.readSettingsFromDOM(); // 現在の入力を保存
-        if(this.state.config.special_holidays) {
+    async removeSpecialHoliday(index) {
+        this.state.config = this.readSettingsFromDOM();
+        if (this.state.config.special_holidays) {
             this.state.config.special_holidays.splice(index, 1);
         }
         this.renderSettings(document.getElementById('viewContainer'));
+        try {
+            const cid = this._getContractId();
+            if (cid) {
+                await API.rpc('update_config_by_contract', {
+                    p_contract_id: cid,
+                    p_data: { special_holidays: this.state.config.special_holidays || [] }
+                });
+            }
+        } catch (e) { console.warn('save failed:', e); }
     },
 
     addSpecialDay() {
@@ -3842,12 +3865,21 @@ const app = {
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
-    removeSpecialDay(date) {
-        this.state.config = this.readSettingsFromDOM(); // 現在の入力を保存
-        if(this.state.config.special_days) {
+    async removeSpecialDay(date) {
+        this.state.config = this.readSettingsFromDOM();
+        if (this.state.config.special_days) {
             delete this.state.config.special_days[date];
         }
         this.renderSettings(document.getElementById('viewContainer'));
+        try {
+            const cid = this._getContractId();
+            if (cid) {
+                await API.rpc('update_config_by_contract', {
+                    p_contract_id: cid,
+                    p_data: { special_days: this.state.config.special_days || {} }
+                });
+            }
+        } catch (e) { console.warn('save failed:', e); }
     },
 
     addTimeStaffReq() {
@@ -3857,10 +3889,39 @@ const app = {
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
-    removeTimeStaffReq(index) {
+    async removeTimeStaffReq(index) {
+        // v20: 削除を確実にするため readSettingsFromDOM の DOM 経由を回避。
+        // state.config.time_staff_req を直接スプライス。
+        if (!Array.isArray(this.state.config.time_staff_req)) {
+            this.state.config.time_staff_req = [];
+        }
+        // 念のため現在の入力値を取り込んでから削除
         this.state.config = this.readSettingsFromDOM();
+        if (!Array.isArray(this.state.config.time_staff_req)) {
+            this.state.config.time_staff_req = [];
+        }
+        if (index < 0 || index >= this.state.config.time_staff_req.length) {
+            console.warn('[removeTimeStaffReq] index out of range:', index);
+            return;
+        }
         this.state.config.time_staff_req.splice(index, 1);
+        console.log('[removeTimeStaffReq] after splice:', this.state.config.time_staff_req);
         this.renderSettings(document.getElementById('viewContainer'));
+
+        // 即時 DB 保存 (ユーザが SAVE 押し忘れて消えてないように見えるのを防止)
+        try {
+            const cid = this._getContractId();
+            if (cid) {
+                await API.rpc('update_config_by_contract', {
+                    p_contract_id: cid,
+                    p_data: { time_staff_req: this.state.config.time_staff_req }
+                });
+                this.showToast('時間帯ルールを削除しました', 'success');
+            }
+        } catch (e) {
+            console.error('[removeTimeStaffReq] save failed:', e);
+            this.showToast('削除の保存に失敗: ' + e.message, 'error');
+        }
     },
 
     addShiftPattern() {
@@ -3873,13 +3934,24 @@ const app = {
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
-    deleteShiftPattern(index) {
-        // 現在の入力を一時保存
+    async deleteShiftPattern(index) {
         this.state.config = this.readSettingsFromDOM();
-        // 削除
+        if (!Array.isArray(this.state.config.custom_shifts)) this.state.config.custom_shifts = [];
+        if (index < 0 || index >= this.state.config.custom_shifts.length) return;
         this.state.config.custom_shifts.splice(index, 1);
-        // 再描画
         this.renderSettings(document.getElementById('viewContainer'));
+        try {
+            const cid = this._getContractId();
+            if (cid) {
+                await API.rpc('update_config_by_contract', {
+                    p_contract_id: cid,
+                    p_data: { custom_shifts: this.state.config.custom_shifts }
+                });
+                this.showToast('シフトパターンを削除しました', 'success');
+            }
+        } catch (e) {
+            this.showToast('削除の保存に失敗: ' + e.message, 'error');
+        }
     },
 
     readSettingsFromDOM() {
