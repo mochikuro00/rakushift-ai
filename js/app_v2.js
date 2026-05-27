@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-shortage-field-fix-v17',
+    APP_VERSION: '20260527-duplicate-shifts-fix-v18',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5701,15 +5701,23 @@ const app = {
 
         var targetDates = [...new Set(shifts.map(function(s){ return s.date; }))];
 
-        console.log("Deleting existing shifts for " + targetDates.length + " days...");
-        for (var di = 0; di < targetDates.length; di++) {
-            try {
-                await API._request('shifts?organization_id=eq.' + this.state.organization_id + '&date=eq.' + targetDates[di], {
-                    method: 'DELETE'
+        // v17 重複シフト累積バグ修正:
+        // 旧版: REST 直接 DELETE → RLS で無音失敗 → 既存削除されず → INSERT で累積
+        // 新版: session-less RPC で日付指定削除
+        console.log("Deleting existing shifts for " + targetDates.length + " days (session-less RPC)...");
+        try {
+            const cid = this._getContractId();
+            if (cid) {
+                const r = await API.rpc('delete_shifts_by_dates_by_contract', {
+                    p_contract_id: cid,
+                    p_dates: targetDates
                 });
-            } catch(e) {
-                console.error("Delete error for " + targetDates[di] + ":", e);
+                console.log('[saveAllShifts] bulk delete result:', r);
+            } else {
+                console.warn('[saveAllShifts] contract_id 未取得 → 既存削除スキップ (重複の恐れ)');
             }
+        } catch(e) {
+            console.error("Bulk delete error:", e);
         }
 
         this.state.shifts = this.state.shifts.filter(function(s){ return targetDates.indexOf(s.date) === -1; });
