@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-peak-concurrent-display-v16',
+    APP_VERSION: '20260527-shortage-field-fix-v17',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5359,7 +5359,7 @@ const app = {
                 lines.push('');
                 lines.push('— 日別不足詳細 (上位 10日) —');
                 details.slice(0, 10).forEach(d => {
-                    const ranges = (d.shortage_ranges || []).map(r => `${r.start}-${r.end}: ${r.gap}名不足`).join(', ');
+                    const ranges = (d.shortage_ranges || []).map(r => `${r.start}-${r.end}: ${r.shortage || r.gap}名不足`).join(', ');
                     lines.push(`・${d.date} (${d.day_type}): 利用可能 ${d.available_staff}名 → ${d.shortage_hours} 人時不足${ranges ? ' [' + ranges + ']' : ''}`);
                 });
                 if (details.length > 10) lines.push(`... 他 ${details.length - 10} 日`);
