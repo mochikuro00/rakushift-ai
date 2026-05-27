@@ -75,6 +75,10 @@ class ShiftScheduler:
         PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト
         PREFERENCE_CLOSE    = -700_000    # ±1時間以内の一致
         PREFERENCE_EXACT    = -1_000_000  # 完全一致 (人数不足ペナルティと拮抗)
+        # v3.5: シフト 1 件あたりの「コスト」(小さめ) を追加し、
+        # 不要なシフト追加を抑制。OVER ペナルティ + これで合計が UNDER より大きくなり、
+        # MILP が「不足なら追加」「過剰なら削減」のバランスを取りやすくする。
+        SHIFT_COST          = 50_000      # シフト 1 件追加するごとに +50,000
 
     def __init__(self, staff_list, config, dates, requests=None, existing_shifts=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
@@ -1655,6 +1659,16 @@ class ShiftScheduler:
                 for d in self.dates:
                     for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                         penalty += x[(sid, d, oi)] * wage * opt["hours"] * 0.01
+
+            # v3.5: シフト 1 件あたりの基本コスト (小)
+            # 不要なシフト追加を抑制。COVERAGE_UNDER (5M) より小さく、
+            # COVERAGE_OVER_DAY (4M) と合算で UNDER を上回るよう設計。
+            # → MILP は「不足を埋める」より「過剰を削る」を選ぶようになる
+            for s in self.staff_list:
+                sid = s["id"]
+                for d in self.dates:
+                    for oi in range(len(staff_opts.get((sid, d), []))):
+                        penalty += x[(sid, d, oi)] * self.W.SHIFT_COST
 
             # 強行モード時: 超過時間へのペナルティ
             if force:
