@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-time-soft-constraint-v15',
+    APP_VERSION: '20260527-peak-concurrent-display-v16',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2644,28 +2644,35 @@ const app = {
                     if (concurrent > slotReq + 1) surplusSlots++;
                 }
 
-                // 表示用: スロットごとの分析結果から判定（±1の実態表示）
-                const assigned = shiftsForDay.length;
+                // 表示用: ピーク同時在籍人数 vs 最大要件で判定
+                // (旧来 assigned = shiftsForDay.length は「総シフト本数」で、
+                //  早番+遅番なら 2 件カウント → 同時 1 名でも「2 名」と誤表示していた。
+                //  正しくは maxConcurrent = ピーク同時在籍数を表示する。
+                //  ユニークスタッフ数も併せて出して二重シフトを検知可能に)
+                const uniqueStaffIds = new Set(shiftsForDay.map(s => s.staff_id));
+                const uniqueStaffCount = uniqueStaffIds.size;
+                const duplicateShifts = shiftsForDay.length - uniqueStaffCount;
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
+                // 表示は「同時ピーク / 要件」をメインに (ユニーク人数も補助表示)
+                const peakDisplay = `ピーク${maxConcurrent}名(要${maxSlotReq})`;
+                const dupNote = duplicateShifts > 0 ? `<span class="text-red-500 text-[8px] ml-1">⚠重複${duplicateShifts}</span>` : '';
+
                 if (shortageSlots > 0) {
-                    // 不足スロットがある
                     cellBg = 'bg-red-50';
                     const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
                     cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                        <span class="text-red-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter animate-pulse">${label} <span class="opacity-80 ml-0.5">${assigned}名(要${maxSlotReq})</span></span>
+                        <span class="text-red-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter animate-pulse">${label} <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
                     </div>`;
                 } else if (surplusSlots > totalSlots / 3) {
-                    // 過剰スロットが多い（±1超え）
                     cellBg = 'bg-amber-50';
                     cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                        <span class="text-amber-500 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">過剰 <span class="opacity-80 ml-0.5">${assigned}名(要${maxSlotReq})</span></span>
+                        <span class="text-amber-500 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">過剰 <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
                     </div>`;
                 } else {
-                    // ±1以内で適正
                     cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                        <span class="text-green-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">ぴったり <span class="opacity-80 ml-0.5">${assigned}名(要${maxSlotReq})</span></span>
+                        <span class="text-green-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">ぴったり <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
                     </div>`;
                 }
 
