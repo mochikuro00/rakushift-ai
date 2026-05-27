@@ -218,6 +218,39 @@ class ShiftScheduler:
         self._eval_rank = {}
         self._staff_map = {}  # id -> staff dict
 
+        # v3.3 改修7: カスタム役職 ID を level/color で判定するため
+        # config.roles から動的に role 分類セットを構築
+        # 旧版: MENTOR_ROLES = {"manager","leader"} (ハードコード) しか認識せず、
+        #       UI で「新規役職」追加した役職 (role_v6lei... 等) はメンター扱いされなかった。
+        # 新版: config.roles から level >= 4 ならメンター、>= 3 なら社員/管理者扱い
+        custom_mentor_ids = set(self.MENTOR_ROLES)  # default
+        custom_employee_role_ids = {"manager", "sub_manager", "employee"}  # default
+        custom_rookie_ids = set(self.ROOKIE_ROLES)
+        roles_cfg = self.config.get("roles") or []
+        if isinstance(roles_cfg, list):
+            for r in roles_cfg:
+                if not isinstance(r, dict):
+                    continue
+                rid = str(r.get("id", "")).lower()
+                level = r.get("level")
+                color = str(r.get("color", "")).lower()
+                if not rid:
+                    continue
+                # level >= 4 (店長級) または color=purple/red はメンター扱い
+                if (isinstance(level, (int, float)) and level >= 4) or color in ("purple", "red"):
+                    custom_mentor_ids.add(rid)
+                # level >= 3 (社員/管理者級) または color=purple/red/green は employee 扱い
+                if (isinstance(level, (int, float)) and level >= 3) or color in ("purple", "red", "green"):
+                    custom_employee_role_ids.add(rid)
+                # level == 1 (新人級) または color=yellow は rookie 候補
+                if (isinstance(level, (int, float)) and level <= 1) or color == "yellow":
+                    custom_rookie_ids.add(rid)
+        self._mentor_role_ids = custom_mentor_ids
+        self._employee_role_ids = custom_employee_role_ids
+        self._rookie_role_ids = custom_rookie_ids
+        logger.info("[Role] mentor={}, employee={}, rookie={}".format(
+            self._mentor_role_ids, self._employee_role_ids, self._rookie_role_ids))
+
         for s in self.staff_list:
             sid = s["id"]
             self._staff_map[sid] = s
@@ -225,11 +258,12 @@ class ShiftScheduler:
             evaluation = str(s.get("evaluation", "B")).upper()
             salary = str(s.get("salary_type", "hourly")).lower()
 
-            if role in self.MENTOR_ROLES:
+            # v3.3: 動的セットで判定 (カスタム役職も含む)
+            if role in self._mentor_role_ids:
                 self._mentor_ids.add(sid)
-            if role in self.ROOKIE_ROLES or evaluation == "D":
+            if role in self._rookie_role_ids or evaluation == "D":
                 self._rookie_ids.add(sid)
-            if role in ["manager", "sub_manager", "employee"]:
+            if role in self._employee_role_ids:
                 self._manager_ids.add(sid)
             if salary == "monthly":
                 self._monthly_ids.add(sid)
@@ -476,7 +510,8 @@ class ShiftScheduler:
         
         patterns_to_use = self.shift_patterns.copy()
         
-        is_employee = staff.get("salary_type") == "monthly" or staff.get("role") in ["manager", "sub_manager", "employee"]
+        # v3.3: カスタム role も含めて社員判定 (level >= 3 or color=purple/red/green)
+        is_employee = staff.get("salary_type") == "monthly" or str(staff.get("role", "")).lower() in self._employee_role_ids
         day_type = self._get_day_type(date_str)
         pref_start = staff.get("pref_start_we") if day_type in ("weekend", "holiday") else staff.get("pref_start_wd")
         pref_end = staff.get("pref_end_we") if day_type in ("weekend", "holiday") else staff.get("pref_end_wd")
@@ -627,18 +662,64 @@ class ShiftScheduler:
         daily_details = []
         total_shortage = 0.0
 
-        usable = [s for s in self.staff_list
-                   if int(s.get("max_days_week") or 5) > 0]
-        unusable = [s for s in self.staff_list
-                    if int(s.get("max_days_week") or 5) <= 0]
+        # v3.3 改修8: max_days_week=0/None は「未設定」とみなしデフォルト 5 で扱う
+        # (旧 pre_check は 0 を「出勤不可」と表示していたが、scheduler 本体では
+        #  既に or 5 で defaulting しており、表示と実挙動が乖離していたため統一)
+        def _eff_max_days(staff):
+            v = staff.get("max_days_week")
+            if v is None or int(v or 0) <= 0:
+                return 5  # default
+            return int(v)
 
-        if unusable:
-            names = [s.get("name", s["id"]) for s in unusable]
+        usable = list(self.staff_list)  # 全員 usable (defaulting で救済)
+        unconfigured = [s for s in self.staff_list
+                        if s.get("max_days_week") in (None, 0, "0", "")]
+
+        if unconfigured:
+            names = [s.get("name", s["id"]) for s in unconfigured]
             warnings.append({
-                "type": "unusable_staff",
-                "message": "{}名が出勤不可(max_days=0): {}".format(
+                "type": "unconfigured_max_days",
+                "message": "{}名の max_days_week 未設定 (デフォルト 5 で扱います): {}".format(
                     len(names), ", ".join(names)),
-                "severity": "info",
+                "severity": "warning",
+            })
+
+        # v3.3 改修4: フィージビリティ事前判定
+        # 利用可能スタッフの総労働時間 vs 必要総人時 を比較し、
+        # 構造的に不可能なケースを生成前に検知する。
+        total_available_hours = 0.0
+        for s in usable:
+            md = _eff_max_days(s)
+            mh = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
+            weeks_in_period = max(1, len(self.dates) / 7.0)
+            total_available_hours += md * mh * weeks_in_period
+
+        # 必要総人時 (週ベース) = Σ (min_weekday × 平日数 + min_weekend × 休日数) × 営業時間
+        try:
+            day_open, day_close = self._get_opening_hours(self.dates[0]) if self.dates else ("09:00", "18:00")
+            op = self._to_minutes(day_open)
+            cl = self._normalize_end_time(op, self._to_minutes(day_close))
+            biz_hours = max(1, (cl - op) / 60.0)
+        except Exception:
+            biz_hours = 9.0
+        total_required_hours = 0.0
+        for d in self.dates:
+            dt = self._get_day_type(d)
+            if dt == "closed":
+                continue
+            req = self._get_required_staff(d)
+            total_required_hours += req * biz_hours
+
+        coverage_ratio = (total_available_hours / total_required_hours) if total_required_hours > 0 else 1.0
+        if coverage_ratio < 0.9:
+            warnings.append({
+                "type": "infeasible_capacity",
+                "message": "スタッフ供給力 {:.1f} 人時 < 必要 {:.1f} 人時 (充足率 {:.0%})。物理的にカバー不能なため、スタッフ追加 or 必要人数削減が必要".format(
+                    total_available_hours, total_required_hours, coverage_ratio),
+                "severity": "critical",
+                "supply_hours": round(total_available_hours, 1),
+                "demand_hours": round(total_required_hours, 1),
+                "coverage_ratio": round(coverage_ratio, 2),
             })
 
         # 管理者不足チェック
@@ -924,7 +1005,12 @@ class ShiftScheduler:
                     # 旧版は work_hours > max_hours のオプションを物理排除していたが、
                     # ユーザ要望で「シフトを埋めるため仕方ない場合は超過可」に変更。
                     # ペナルティで誘導 (超過したい場合は MILP が選ぶ余地を残す)。
-                    max_hours = float(s.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
+                    # v3.3 改修8: max_hours_day=0/None は「未設定」とみなしデフォルト 8
+                    raw_max_hours = s.get("max_hours_day")
+                    if raw_max_hours is None or float(raw_max_hours or 0) <= 0:
+                        max_hours = float(self.LEGAL_MAX_HOURS_DAY)  # 8
+                    else:
+                        max_hours = float(raw_max_hours)
                     for oi, opt in enumerate(staff_opts.get((sid, d), [])):
                         over_hours = opt["work_hours"] - max_hours
                         if over_hours > 0:
@@ -933,14 +1019,17 @@ class ShiftScheduler:
                             # 軽く設定し、人員不足回避のため超過を許容する。
                             penalty += x[(sid, d, oi)] * int(100_000 * over_hours)
 
-                # --- 週の最大勤務日数 (v3.2: HARD→SOFT 化) ---
-                max_days = int(s.get("max_days_week") or 5)
-                if not force and max_days <= 0:
-                    # max_days_week=0 (出勤不可) だけは依然 HARD
-                    for d in self.dates:
-                        for oi in range(len(staff_opts.get((sid, d), []))):
-                            prob += x[(sid, d, oi)] == 0
-                    continue
+                # --- 週の最大勤務日数 (v3.2: HARD→SOFT 化)
+                # v3.3 改修8: max_days_week=0 や未設定 (None) は「未設定」とみなし
+                # デフォルト 5 で扱う (旧来の挙動と同じだが意図を明示)。
+                # 「絶対出勤不可」を表現したい場合は negative value or 明示的フラグが必要。
+                raw_max_days = s.get("max_days_week")
+                if raw_max_days is None or int(raw_max_days or 0) <= 0:
+                    max_days = 5
+                    logger.info("[Rescue] Staff {} max_days_week missing/0 → default 5".format(
+                        s.get("name", sid)))
+                else:
+                    max_days = int(raw_max_days)
 
                 # max_days を超える可能性も MILP が判断できるよう、+2 までは許容
                 # (force 時は更に緩める)
