@@ -494,20 +494,29 @@ class ShiftScheduler:
         return weeks
 
     def _build_shift_options(self, staff, date_str, force=False):
-        """スタッフが指定日に入れるシフトパターンの候補を構築"""
+        """スタッフが指定日に入れるシフトパターンの候補を構築
+
+        v3.4: シフトパターンは営業時間でクランプしない。
+        理由: 営業時間 = 客対応時間 / シフトパターン = 実労働時間 で異なる。
+        例: 開店 10:00 でも、開店前作業のため 9:00 開始のシフトを許容する。
+        time_staff_req (時間帯別必要人数) で別途客対応時間帯の必要人員を指定可能。
+        """
+        # 営業時間は「fallback パターン (custom_shifts 未設定時)」と
+        # 「time_staff_req のクランプ」に使う。シフトパターン自体はクランプしない。
         day_open, day_close = self._get_opening_hours(date_str)
         open_min = self._to_minutes(day_open)
         close_min = self._normalize_end_time(open_min, self._to_minutes(day_close))
 
-        max_hours = float(staff.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
-        if not force and max_hours <= 0:
-            return []
-        if force and max_hours <= 0:
-            max_hours = self.LEGAL_MAX_HOURS_DAY
+        # v3.3 改修8: max_hours_day=0/None は default 8
+        raw_max_hours = staff.get("max_hours_day")
+        if raw_max_hours is None or float(raw_max_hours or 0) <= 0:
+            max_hours = float(self.LEGAL_MAX_HOURS_DAY)
+        else:
+            max_hours = float(raw_max_hours)
 
         options = []
         seen = set()
-        
+
         patterns_to_use = self.shift_patterns.copy()
         
         # v3.3: カスタム role も含めて社員判定 (level >= 3 or color=purple/red/green)
@@ -553,10 +562,10 @@ class ShiftScheduler:
             })
 
         for pat in patterns_to_use:
-            raw_ps = self._to_minutes(pat["start"])
-            raw_pe = self._normalize_end_time(raw_ps, self._to_minutes(pat["end"]))
-            ps = max(raw_ps, open_min)
-            pe = min(raw_pe, close_min)
+            # v3.4: シフトパターンの開始/終了をそのまま使用 (営業時間でクランプしない)
+            # 例: 早番 9-15 (開店 10:00 でも) を尊重 → 開店前作業の 1h を含む
+            ps = self._to_minutes(pat["start"])
+            pe = self._normalize_end_time(ps, self._to_minutes(pat["end"]))
             if ps >= pe:
                 continue
 

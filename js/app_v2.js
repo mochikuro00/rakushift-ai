@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-duplicate-shifts-fix-v18',
+    APP_VERSION: '20260527-clear-rules-and-pattern-v19',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -3963,7 +3963,8 @@ const app = {
             if (h > 0) breakRules.push({ min_hours: h, break_minutes: m });
         });
         breakRules.sort((a, b) => a.min_hours - b.min_hours);
-        config.break_rules = breakRules.length > 0 ? breakRules : config.break_rules;
+        // v18 修正: 空配列でも上書き (旧版は length=0 で既存維持 → 削除できないバグ)
+        config.break_rules = breakRules;
 
         // 時間帯別ルール
         config.time_staff_req = [];
