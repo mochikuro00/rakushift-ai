@@ -2045,6 +2045,13 @@ class ShiftScheduler:
         consecutive = {}      # {staff_id: current_consecutive_days}
         last_work_date = {}   # {staff_id: last_date_str}
 
+        # v3.6: NG ペア制約を O(1) で照合するためのセット (双方向)
+        # 旧版は greedy で NG ペアを無視 → トラブルメーカー同士の同日配置の可能性
+        ng_pair_set = set()
+        for (a, b) in getattr(self, '_ng_pair_constraints', []):
+            ng_pair_set.add((a, b))
+            ng_pair_set.add((b, a))
+
         # まず承認済み出勤希望を固定シフトとして配置
         work_requests = self._get_work_requests()
         assigned_days = {}
@@ -2110,6 +2117,9 @@ class ShiftScheduler:
                         continue
                     if d in self._get_staff_ng_dates(mgr):
                         continue
+                    # v3.6: 管理者配置でも NG ペア制約を遵守
+                    if any((mid, other_sid) in ng_pair_set for other_sid in assigned):
+                        continue
                     if self._greedy_check_limits(mid, wk, weekly_count, weekly_hours, consecutive, mgr):
                         continue
                     opts = self._build_shift_options(mgr, d, force=False)
@@ -2168,6 +2178,16 @@ class ShiftScheduler:
                         continue
                     if d in self._get_staff_ng_dates(s):
                         continue
+                    # v3.6: NG ペア制約を greedy でも遵守。
+                    # 既に配置済みのスタッフに NG パートナーがいたらスキップ
+                    if any((sid, other_sid) in ng_pair_set for other_sid in assigned):
+                        continue
+                    # v3.6: 新人 (rookie) はメンターが同日に居る場合のみ配置可。
+                    # OJT 制約を greedy でも守ることで「新人だけのシフト」を防ぐ
+                    if sid in self._rookie_ids:
+                        has_mentor = any(other_sid in self._mentor_ids for other_sid in assigned)
+                        if not has_mentor:
+                            continue
                     if self._greedy_check_limits(sid, wk, weekly_count,
                                                  weekly_hours, consecutive, s):
                         continue
@@ -2178,6 +2198,11 @@ class ShiftScheduler:
                         if opt["start_min"] <= worst < opt["end_min"]:
                             c = sum(1 for sm in deficit
                                     if opt["start_min"] <= sm < opt["end_min"])
+                            # v3.6: 希望時間帯 (is_pref) にタイブレーカーボーナス。
+                            # _build_shift_options が pref_pat を先頭に追加してくれるので、
+                            # 同点カバレッジなら希望時間帯を優先する
+                            if opt.get("is_pref"):
+                                c += 0.5
                             if c > best_cov:
                                 best_cov = c
                                 best_s = s
@@ -2206,6 +2231,52 @@ class ShiftScheduler:
                     break
 
             assigned_days[d] = assigned
+
+        # v3.6: min_days_week 後処理
+        # 旧版は greedy で min_days_week を完全に無視 → 「最低出勤日数を
+        # 守る」と契約したスタッフが週0日になる可能性。週ごとに不足を補う。
+        week_groups = self._group_dates_by_week()
+        for s in self.staff_list:
+            sid = s["id"]
+            min_dw = int(s.get("min_days_week") or 0)
+            if min_dw <= 0:
+                continue
+            ng_set = self._get_staff_ng_dates(s)
+            max_dw = int(s.get("max_days_week") or 5)
+            for week in week_groups:
+                if not week:
+                    continue
+                wk_key = "{}-W{}".format(
+                    datetime.strptime(week[0], "%Y-%m-%d").year,
+                    datetime.strptime(week[0], "%Y-%m-%d").isocalendar()[1]
+                )
+                current = weekly_count.get(sid, {}).get(wk_key, 0)
+                if current >= min_dw or current >= max_dw:
+                    continue
+                # この週で出勤可能な日を探して追加
+                for d in week:
+                    if current >= min_dw:
+                        break
+                    if d in ng_set or self._get_day_type(d) == "closed":
+                        continue
+                    if any(sh["staff_id"] == sid and sh["date"] == d for sh in shifts):
+                        continue
+                    day_assigned = set(sh["staff_id"] for sh in shifts if sh["date"] == d)
+                    if any((sid, other) in ng_pair_set for other in day_assigned):
+                        continue
+                    opts = self._build_shift_options(s, d, force=False)
+                    if not opts:
+                        continue
+                    opt = opts[0]
+                    brk = self._get_break_minutes(opt["hours"])
+                    shifts.append({
+                        "staff_id": sid, "date": d,
+                        "start_time": opt["start"], "end_time": opt["end"],
+                        "break_minutes": brk,
+                    })
+                    weekly_count.setdefault(sid, {})
+                    weekly_count[sid][wk_key] = current + 1
+                    current += 1
 
         logger.info("[Greedy] {} shifts".format(len(shifts)))
         self._validate(shifts)
