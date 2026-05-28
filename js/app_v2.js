@@ -3052,38 +3052,76 @@ const app = {
         const dailyLabels = Array.from({length: daysInMonth}, (_, i) => `${i+1}日`);
         const staffMap = {};
 
+        // v3.6.3: 深夜手当 (22:00-翌05:00 = +25%) を正しく計算するヘルパ
+        // 旧版は祝日割増のみで、UI ラベル「祝日割増・深夜手当を含む概算」と実装が乖離していた。
+        const _toMin = (timeStr) => {
+            const [h, m] = (timeStr || '00:00').split(':').map(Number);
+            return h * 60 + m;
+        };
+        const _nightHoursForShift = (startMin, endMin) => {
+            // [startMin, endMin] のうち、各日 [00:00-05:00] ∪ [22:00-24:00] に
+            // 重なる時間を分単位で集計し時間に変換 (cross-midnight 対応)
+            let night = 0;
+            let cur = startMin;
+            while (cur < endMin) {
+                const dayBase = Math.floor(cur / 1440) * 1440;
+                const localStart = cur - dayBase;
+                const localEnd = Math.min(1440, endMin - dayBase);
+                night += Math.max(0, Math.min(300, localEnd) - localStart);       // 00:00-05:00
+                night += Math.max(0, localEnd - Math.max(1320, localStart));      // 22:00-24:00
+                cur = dayBase + 1440;
+            }
+            return night / 60;
+        };
+        // null セーフな祝日判定 (他箇所と同じパターン)
+        const _jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
+        const _isHoliday = (dateStr) => _jh ? _jh.isHoliday(dateStr) : false;
+
         monthShifts.forEach(shift => {
             const staff = this.getStaff(shift.staff_id);
             if (!staff) return;
-            const start = new Date(`${shift.date}T${shift.start_time}`);
-            const end = new Date(`${shift.date}T${shift.end_time}`);
-            if (end < start) end.setDate(end.getDate() + 1);
-            let hours = (end - start) / (1000 * 60 * 60) - ((shift.break_minutes || 0) / 60);
-            if (hours < 0) hours = 0;
+            const startMin = _toMin(shift.start_time);
+            let endMin = _toMin(shift.end_time);
+            if (endMin <= startMin) endMin += 24 * 60;
+            const breakMin = shift.break_minutes || 0;
+            const totalShiftHours = (endMin - startMin) / 60;
+            const workHours = Math.max(0, totalShiftHours - breakMin / 60);
 
             let cost = 0;
             if (staff.salary_type === 'hourly') {
-                let wage = staff.hourly_wage;
-                if (JapaneseHolidays.isHoliday(shift.date)) wage *= 1.25;
-                cost = Math.floor(hours * wage);
+                const baseWage = staff.hourly_wage || 0;
+                // 祝日割増は1日全体に適用
+                const dayWage = _isHoliday(shift.date) ? baseWage * 1.25 : baseWage;
+                // 深夜時間帯の割増 (休憩は日中に割り当てる前提で深夜時間から引かない)
+                const nightHrs = Math.min(workHours, _nightHoursForShift(startMin, endMin));
+                const dayHrs = Math.max(0, workHours - nightHrs);
+                cost = Math.floor(dayHrs * dayWage + nightHrs * dayWage * 1.25);
             }
 
             totalCost += cost;
-            totalHours += hours;
+            totalHours += workHours;
             const dayIndex = parseInt(shift.date.split('-')[2]) - 1;
-            dailyCosts[dayIndex] += cost;
+            if (dayIndex >= 0 && dayIndex < dailyCosts.length) dailyCosts[dayIndex] += cost;
 
             if (!staffMap[staff.id]) staffMap[staff.id] = { name: staff.name, cost: 0, hours: 0, days: new Set() };
             staffMap[staff.id].cost += cost;
-            staffMap[staff.id].hours += hours;
+            staffMap[staff.id].hours += workHours;
             staffMap[staff.id].days.add(shift.date);
         });
 
         this.state.staff.forEach(s => {
             if (s.salary_type === 'monthly') {
-                totalCost += (s.monthly_salary || 0);
+                const salary = s.monthly_salary || 0;
+                totalCost += salary;
                 if (!staffMap[s.id]) staffMap[s.id] = { name: s.name, cost: 0, hours: 0, days: new Set() };
-                staffMap[s.id].cost += (s.monthly_salary || 0);
+                staffMap[s.id].cost += salary;
+                // v3.6.3: 月給を日次コストに分散 (旧版は日次グラフから完全脱落していた)
+                if (daysInMonth > 0) {
+                    const dailyShare = salary / daysInMonth;
+                    for (let i = 0; i < daysInMonth; i++) {
+                        dailyCosts[i] += dailyShare;
+                    }
+                }
             }
         });
 
