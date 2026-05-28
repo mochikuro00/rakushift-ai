@@ -147,8 +147,10 @@ class ShiftScheduler:
             cl = self.config.get("closing_time", "22:00")
             self.shift_patterns = [{"start": op, "end": cl, "name": "full"}]
 
-        # ミッドシフト自動生成：早番と遅番の間を埋めるパターンを自動追加
-        if len(self.shift_patterns) >= 2:
+        # ミッドシフト自動生成：店舗設定 mid_shift_auto_generate=true のときだけ動作
+        # (UI のチェックボックスでユーザーが明示的に有効化する。未設定/false なら
+        # ユーザーが登録したパターンだけを使う)
+        if self.config.get("mid_shift_auto_generate") and len(self.shift_patterns) >= 2:
             starts = sorted(set(p["start"] for p in self.shift_patterns))
             ends = sorted(set(p["end"] for p in self.shift_patterns))
             op_time = self.config.get("opening_time", "09:00")

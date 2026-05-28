@@ -3455,6 +3455,15 @@ const app = {
                                 </button>
                             </div>
                         </div>
+                        <div class="mt-4 pt-4 border-t border-gray-100">
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input type="checkbox" id="settingMidShiftAuto" class="mt-0.5 h-4 w-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500" ${this.state.config.mid_shift_auto_generate ? 'checked' : ''}>
+                                <div>
+                                    <p class="text-sm font-bold text-gray-700">中間シフトを自動生成する</p>
+                                    <p class="text-xs text-gray-400 mt-0.5">ONにすると、登録したパターン (早番/遅番など) を +2h/+3h ずらした中間シフト (例: 11:00-17:00) を AI が自動候補に加えます。ランチ帯・夕方ピークの人員確保がしやすくなりますが、ユーザー未定義の時間帯にシフトが出ることがあります。</p>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -4056,6 +4065,9 @@ const app = {
                 config.time_staff_req.push({ days, start, end, count, position });
             }
         });
+
+        // 中間シフト自動生成フラグ (default: false)
+        config.mid_shift_auto_generate = !!document.getElementById('settingMidShiftAuto')?.checked;
 
         return config;
     },
