@@ -5859,6 +5859,7 @@ const app = {
             if (result.status === 'error') {
                 this.showToast('生成エラー: ' + (result.message || '不明なエラーが発生しました'), 'error');
                 this._generationSuccess = false;
+                this._failureDetailShown = true;  // v3.7.4: finally の汎用トーストで上書きされないように
                 return;
             }
 

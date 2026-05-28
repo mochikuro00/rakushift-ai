@@ -413,7 +413,24 @@ const API = {
             }
 
             if (!res.ok) {
-                throw new Error(`Python Server Error: ${res.statusText}`);
+                // v3.7.4: サーバが日本語エラーを返すので、レスポンスボディから取り出す
+                let bodyMsg = '';
+                try {
+                    const errBody = await res.json();
+                    bodyMsg = errBody?.message || errBody?.detail || '';
+                } catch (_) {
+                    try { bodyMsg = await res.text(); } catch (_) {}
+                }
+                if (res.status === 401) {
+                    throw new Error(bodyMsg || 'セッションが切れました。一度ログアウト → 再ログインしてください');
+                }
+                if (res.status === 403) {
+                    throw new Error(bodyMsg || 'アクセス権限がありません');
+                }
+                if (res.status >= 500) {
+                    throw new Error(bodyMsg || `サーバエラー (${res.status})。時間を置いて再試行してください`);
+                }
+                throw new Error(bodyMsg || `Python Server Error: ${res.statusText} (${res.status})`);
             }
 
             const result = await res.json();
