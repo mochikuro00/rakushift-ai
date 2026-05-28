@@ -139,7 +139,12 @@ class ShiftScheduler:
         # 生成サマリレポート (制約違反・不足の可視化用) を main.py が取得する
         self._last_report = None
 
-        # シフトパターン構築（ミッドシフト自動生成付き）
+        # シフトパターン構築：UI で登録された custom_shifts のみ使用
+        # v3.6.1: ミッドシフト自動生成は完全撤廃。
+        # ピーク時の人員確保は「時間帯別・曜日別 人員増強」(time_staff_req) ルールで
+        # 明示的に管理する設計に統一。ユーザーが定義していない時間帯のシフトパターンを
+        # システムが勝手に作らないようにした。中間時間帯のシフトが必要なら、
+        # UI で明示的にシフトパターンを追加する。
         raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
         for p in raw_patterns:
@@ -152,33 +157,6 @@ class ShiftScheduler:
             op = self.config.get("opening_time", "09:00")
             cl = self.config.get("closing_time", "22:00")
             self.shift_patterns = [{"start": op, "end": cl, "name": "full"}]
-
-        # ミッドシフト自動生成：店舗設定 mid_shift_auto_generate=true のときだけ動作
-        # (UI のチェックボックスでユーザーが明示的に有効化する。未設定/false なら
-        # ユーザーが登録したパターンだけを使う)
-        if self.config.get("mid_shift_auto_generate") and len(self.shift_patterns) >= 2:
-            starts = sorted(set(p["start"] for p in self.shift_patterns))
-            ends = sorted(set(p["end"] for p in self.shift_patterns))
-            op_time = self.config.get("opening_time", "09:00")
-            cl_time = self.config.get("closing_time", "22:00")
-            existing_keys = set((p["start"], p["end"]) for p in self.shift_patterns)
-            # 2時間ずらしのミッドシフト候補を生成
-            for offset_h in [2, 3]:
-                for pat in list(self.shift_patterns):
-                    ps = self._to_minutes(pat["start"])
-                    pe = self._to_minutes(pat["end"])
-                    mid_s = ps + offset_h * 60
-                    mid_e = pe + offset_h * 60
-                    # 営業時間内に収まるか確認
-                    op_m = self._to_minutes(op_time)
-                    cl_m = self._to_minutes(cl_time)
-                    if mid_s >= op_m and mid_e <= cl_m:
-                        ms_str = self._from_minutes(mid_s)
-                        me_str = self._from_minutes(mid_e)
-                        if (ms_str, me_str) not in existing_keys:
-                            self.shift_patterns.append(
-                                {"start": ms_str, "end": me_str, "name": "mid"})
-                            existing_keys.add((ms_str, me_str))
 
         # 営業時間
         self.op_limit = self.config.get("opening_time", "09:00")

@@ -32,48 +32,48 @@ class TestPeakSkillRulesNoDefault:
 
 
 # ========================================
-# v3.6: ミッドシフト自動生成は opt-in 化
+# v3.6.1: ミッドシフト自動生成を完全撤廃
 # ========================================
 
-class TestMidShiftOptIn:
-    """旧版は 2 パターン以上登録すると自動で +2h/+3h オフセットの
-    中間シフトを追加していた。v3.6 で config.mid_shift_auto_generate=true
-    のときだけ動作するように変更。
+class TestMidShiftRemoved:
+    """v3.6.1 でミッドシフト自動生成は完全撤廃された。
+    ピーク管理は time_staff_req (時間帯別ルール) に統一。
+    config.mid_shift_auto_generate フラグは無視される (UI 設定も削除済み)。
     """
 
-    def test_disabled_by_default(self):
+    def test_no_mid_shift_generated_by_default(self):
         config = make_config()
         config["custom_shifts"] = [
             {"name": "早番", "start": "09:00", "end": "15:00"},
             {"name": "遅番", "start": "15:00", "end": "22:00"},
         ]
-        # mid_shift_auto_generate を明示しなければデフォルト OFF
         sch = ShiftScheduler(
             staff_list=[],
             config=config,
             dates=["2026-06-01"],
         )
-        # 自動追加されていない: 2 パターンのまま
         assert len(sch.shift_patterns) == 2
         names = {p["name"] for p in sch.shift_patterns}
         assert "mid" not in names
 
-    def test_enabled_when_flag_true(self):
+    def test_legacy_flag_is_ignored(self):
+        """旧 config に mid_shift_auto_generate=True が残っていても、
+        v3.6.1 では完全に無視される (ミッドシフト生成されない)。"""
         config = make_config()
         config["custom_shifts"] = [
             {"name": "早番", "start": "09:00", "end": "15:00"},
             {"name": "遅番", "start": "15:00", "end": "22:00"},
         ]
-        config["mid_shift_auto_generate"] = True
+        config["mid_shift_auto_generate"] = True  # 旧 config 残骸
         sch = ShiftScheduler(
             staff_list=[],
             config=config,
             dates=["2026-06-01"],
         )
-        # ミッドシフトが自動追加される
-        assert len(sch.shift_patterns) > 2
+        # フラグが残っていても、ミッドシフトは追加されない
+        assert len(sch.shift_patterns) == 2
         names = {p["name"] for p in sch.shift_patterns}
-        assert "mid" in names
+        assert "mid" not in names
 
 
 # ========================================

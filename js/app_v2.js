@@ -2612,6 +2612,8 @@ const app = {
                 let shortageSlots = 0;
                 let worstDeficit = 0; // 最悪の不足数（正値=不足あり）
                 let maxConcurrent = 0;
+                let minConcurrent = Number.POSITIVE_INFINITY;  // v3.6.1: 最少同時数を追跡 (不足箇所の特定用)
+                let worstSlotReq = required;                   // v3.6.1: 不足が発生したスロットでの要件
                 let maxSlotReq = required;
                 let surplusSlots = 0;
 
@@ -2637,12 +2639,19 @@ const app = {
 
                     totalSlots++;
                     const slotDeficit = slotReq - concurrent;
-                    if (slotDeficit > 0) shortageSlots++;
-                    if (slotDeficit > worstDeficit) worstDeficit = slotDeficit;
+                    if (slotDeficit > 0) {
+                        shortageSlots++;
+                        if (slotDeficit > worstDeficit) {
+                            worstDeficit = slotDeficit;
+                            worstSlotReq = slotReq;  // 最悪の不足が起きたスロットの要件を記録
+                        }
+                    }
                     if (slotReq > maxSlotReq) maxSlotReq = slotReq;
                     if (concurrent > maxConcurrent) maxConcurrent = concurrent;
+                    if (concurrent < minConcurrent) minConcurrent = concurrent;
                     if (concurrent > slotReq + 1) surplusSlots++;
                 }
+                if (minConcurrent === Number.POSITIVE_INFINITY) minConcurrent = 0;
 
                 // 表示用: ピーク同時在籍人数 vs 最大要件で判定
                 // (旧来 assigned = shiftsForDay.length は「総シフト本数」で、
@@ -2655,28 +2664,37 @@ const app = {
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
-                // 「ピーク◯名(要◯名)」は時間帯別ルール(time_staff_req)がその日に適用される場合のみ表示する。
-                // 未設定の日はベース必要人数しか無いので「ピーク」概念を表示しない。
-                const hasTimeRule = timeRules.length > 0;
-                const peakDisplay = hasTimeRule ? `ピーク${maxConcurrent}名(要${maxSlotReq})` : `${maxConcurrent}名配置`;
+                // v3.6.1: ラベル別に「意味のある数字」を表示
+                //   - 一部不足: 最少同時数 / 要件 (どこで何名足りないかが分かる)
+                //   - 過剰:     ピーク同時数 / 要件 (どこで何名過剰かが分かる)
+                //   - ぴったり: 配置人数のみ
+                // 旧版は常に maxConcurrent (ピーク) だけ表示していたため、「一部不足
+                // 7名配置」のように一見矛盾する表示になっていた (= ピークは7だが、
+                // 最少スロットでは要件を満たしていない)。
                 const dupNote = duplicateShifts > 0 ? `<span class="text-red-500 text-[8px] ml-1">⚠重複${duplicateShifts}</span>` : '';
 
+                let label, peakDisplay, textColor;
                 if (shortageSlots > 0) {
                     cellBg = 'bg-red-50';
-                    const label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
-                    cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                        <span class="text-red-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter animate-pulse">${label} <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
-                    </div>`;
+                    textColor = 'text-red-600';
+                    label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
+                    // 不足箇所の同時数と要件を表示
+                    peakDisplay = `最少${minConcurrent}名(要${worstSlotReq})`;
                 } else if (surplusSlots > totalSlots / 3) {
                     cellBg = 'bg-amber-50';
-                    cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                        <span class="text-amber-500 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">過剰 <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
-                    </div>`;
+                    textColor = 'text-amber-500';
+                    label = '過剰';
+                    peakDisplay = `ピーク${maxConcurrent}名(要${maxSlotReq})`;
                 } else {
-                    cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                        <span class="text-green-600 font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter">ぴったり <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
-                    </div>`;
+                    textColor = 'text-green-600';
+                    label = 'ぴったり';
+                    peakDisplay = `${maxConcurrent}名配置`;
                 }
+
+                const animateCls = shortageSlots > 0 ? 'animate-pulse' : '';
+                cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
+                    <span class="${textColor} font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter ${animateCls}">${label} <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
+                </div>`;
 
                 alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 ${cellBg} text-center">${cellContent}</td>`;
             });
@@ -3454,15 +3472,7 @@ const app = {
                                     <i class="fa-solid fa-hospital mr-1"></i>医療・介護向け
                                 </button>
                             </div>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-gray-100">
-                            <label class="flex items-start gap-3 cursor-pointer">
-                                <input type="checkbox" id="settingMidShiftAuto" class="mt-0.5 h-4 w-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500" ${this.state.config.mid_shift_auto_generate ? 'checked' : ''}>
-                                <div>
-                                    <p class="text-sm font-bold text-gray-700">中間シフトを自動生成する</p>
-                                    <p class="text-xs text-gray-400 mt-0.5">ONにすると、登録したパターン (早番/遅番など) を +2h/+3h ずらした中間シフト (例: 11:00-17:00) を AI が自動候補に加えます。ランチ帯・夕方ピークの人員確保がしやすくなりますが、ユーザー未定義の時間帯にシフトが出ることがあります。</p>
-                                </div>
-                            </label>
+                            <p class="text-xs text-gray-400 mt-3">💡 ピーク時 (ランチ帯等) の人員確保は、下記「<b>人員配置要件 → 時間帯別・曜日別 人員増強</b>」で個別ルールを追加してください。</p>
                         </div>
                     </div>
                 </div>
@@ -4074,8 +4084,10 @@ const app = {
             }
         });
 
-        // 中間シフト自動生成フラグ (default: false)
-        config.mid_shift_auto_generate = !!document.getElementById('settingMidShiftAuto')?.checked;
+        // v3.6.1: mid_shift_auto_generate は撤廃。
+        // ピーク管理は time_staff_req (時間帯別ルール) に統一されたため、
+        // 既存の config に残っていた値はクリアして将来的な誤解を防ぐ。
+        delete config.mid_shift_auto_generate;
 
         return config;
     },
