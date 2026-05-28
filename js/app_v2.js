@@ -2655,8 +2655,10 @@ const app = {
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
-                // 表示は「同時ピーク / 要件」をメインに (ユニーク人数も補助表示)
-                const peakDisplay = `ピーク${maxConcurrent}名(要${maxSlotReq})`;
+                // 「ピーク◯名(要◯名)」は時間帯別ルール(time_staff_req)がその日に適用される場合のみ表示する。
+                // 未設定の日はベース必要人数しか無いので「ピーク」概念を表示しない。
+                const hasTimeRule = timeRules.length > 0;
+                const peakDisplay = hasTimeRule ? `ピーク${maxConcurrent}名(要${maxSlotReq})` : `${maxConcurrent}名配置`;
                 const dupNote = duplicateShifts > 0 ? `<span class="text-red-500 text-[8px] ml-1">⚠重複${duplicateShifts}</span>` : '';
 
                 if (shortageSlots > 0) {
