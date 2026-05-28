@@ -2664,13 +2664,12 @@ const app = {
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
-                // v3.6.1: ラベル別に「意味のある数字」を表示
-                //   - 一部不足: 最少同時数 / 要件 (どこで何名足りないかが分かる)
-                //   - 過剰:     ピーク同時数 / 要件 (どこで何名過剰かが分かる)
-                //   - ぴったり: 配置人数のみ
-                // 旧版は常に maxConcurrent (ピーク) だけ表示していたため、「一部不足
-                // 7名配置」のように一見矛盾する表示になっていた (= ピークは7だが、
-                // 最少スロットでは要件を満たしていない)。
+                // v3.6.2: ラベル別 + 時間帯別ルール有無で表示分岐
+                //   - 時間帯別ルール (time_staff_req) を設定した日のみ「ピーク」「(要◯)」を表示
+                //   - ルール未設定の日はシンプルに人数のみ
+                //   旧版は常に maxConcurrent (ピーク) と要件を表示していたため、
+                //   ユーザーがルールを設定していないのに「ピーク」「(要◯)」が出ていた。
+                const hasTimeRule = timeRules.length > 0;
                 const dupNote = duplicateShifts > 0 ? `<span class="text-red-500 text-[8px] ml-1">⚠重複${duplicateShifts}</span>` : '';
 
                 let label, peakDisplay, textColor;
@@ -2678,13 +2677,17 @@ const app = {
                     cellBg = 'bg-red-50';
                     textColor = 'text-red-600';
                     label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
-                    // 不足箇所の同時数と要件を表示
-                    peakDisplay = `最少${minConcurrent}名(要${worstSlotReq})`;
+                    // 不足の場合は最少同時数を表示 (どこが少ないかが分かる)
+                    peakDisplay = hasTimeRule
+                        ? `最少${minConcurrent}名(要${worstSlotReq})`
+                        : `最少${minConcurrent}名`;
                 } else if (surplusSlots > totalSlots / 3) {
                     cellBg = 'bg-amber-50';
                     textColor = 'text-amber-500';
                     label = '過剰';
-                    peakDisplay = `ピーク${maxConcurrent}名(要${maxSlotReq})`;
+                    peakDisplay = hasTimeRule
+                        ? `ピーク${maxConcurrent}名(要${maxSlotReq})`
+                        : `${maxConcurrent}名`;
                 } else {
                     textColor = 'text-green-600';
                     label = 'ぴったり';
