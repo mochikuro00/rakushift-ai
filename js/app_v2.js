@@ -3491,11 +3491,11 @@ const app = {
                                         <input type="number" id="req_min_weekday" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekday || reqs.min_total || 2}">
                                     </div>
                                     <div class="grid grid-cols-3 gap-2 items-center">
-                                        <label class="text-xs font-bold text-blue-600">土日</label>
+                                        <label class="text-xs font-bold text-blue-600">土曜日</label>
                                         <input type="number" id="req_min_weekend" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekend || reqs.min_total || 3}">
                                     </div>
                                     <div class="grid grid-cols-3 gap-2 items-center">
-                                        <label class="text-xs font-bold text-red-600">祝日</label>
+                                        <label class="text-xs font-bold text-red-600">日祝日</label>
                                         <input type="number" id="req_min_holiday" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_holiday || reqs.min_total || 3}">
                                     </div>
                                 </div>

@@ -1145,6 +1145,12 @@ class ShiftScheduler:
                             prob += pulp.lpSum(sv) <= max_consec
 
                 # --- 勤務間インターバル制約 (前日退勤→翌日出勤まで10時間以上) ---
+                # v3.6: 日付ギャップ対応。
+                # 旧版は (opt2.start + 1440) - opt1.end で「常に翌日」前提で計算していたが、
+                # sorted_d に日付ギャップ (定休日や非連続な希望期間) があると d2 が d1+2日
+                # 以降のケースが発生し、間隔が実際より短く計算されて過剰制約になっていた。
+                # 例: 金曜22:00終 → 月曜6:00開 (土日定休) の実間隔は 56h だが、
+                #     旧版は 8h と計算し配置禁止 → 「月曜出れないバグ」
                 if not force:
                     for i in range(len(sorted_d) - 1):
                         d1 = sorted_d[i]
@@ -1153,9 +1159,16 @@ class ShiftScheduler:
                         opts2 = staff_opts.get((sid, d2), [])
                         if not opts1 or not opts2:
                             continue
+                        # d1 と d2 の実際のカレンダー日数差を分換算
+                        d1_dt = datetime.strptime(d1, "%Y-%m-%d")
+                        d2_dt = datetime.strptime(d2, "%Y-%m-%d")
+                        day_gap_mins = (d2_dt - d1_dt).days * 1440
+                        if day_gap_mins >= 1440 * 2:
+                            # 2日以上開いていればインターバル 10h 制約は自明に充足
+                            continue
                         for oi1, opt1 in enumerate(opts1):
                             for oi2, opt2 in enumerate(opts2):
-                                interval = (opt2["start_min"] + 1440) - opt1["end_min"]
+                                interval = (opt2["start_min"] + day_gap_mins) - opt1["end_min"]
                                 if interval < 600:
                                     prob += x[(sid, d1, oi1)] + x[(sid, d2, oi2)] <= 1
 
