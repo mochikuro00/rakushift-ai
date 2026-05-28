@@ -269,28 +269,31 @@ class ShiftScheduler:
             if ud:
                 if isinstance(ud, str):
                     ud = [d.strip() for d in ud.split(",") if d.strip()]
+                # v3.7.3: 「新カラム優先、旧タグは新カラムが None のときだけ補完」を厳密化。
+                # 旧版 `not s.get("...")` は空文字列 "" でも True になり、明示的に
+                # 空に設定された値を旧タグで上書きするバグがあった (agent #1 指摘)。
                 for d in ud:
-                    if d.startswith("prefStart:") and not s.get("pref_start"):
+                    if d.startswith("prefStart:") and s.get("pref_start") is None:
                         s["pref_start"] = d.replace("prefStart:", "")
-                    if d.startswith("prefEnd:") and not s.get("pref_end"):
+                    if d.startswith("prefEnd:") and s.get("pref_end") is None:
                         s["pref_end"] = d.replace("prefEnd:", "")
-                    if d.startswith("prefStartWd:") and not s.get("pref_start_wd"):
+                    if d.startswith("prefStartWd:") and s.get("pref_start_wd") is None:
                         s["pref_start_wd"] = d.replace("prefStartWd:", "")
-                    if d.startswith("prefEndWd:") and not s.get("pref_end_wd"):
+                    if d.startswith("prefEndWd:") and s.get("pref_end_wd") is None:
                         s["pref_end_wd"] = d.replace("prefEndWd:", "")
-                    if d.startswith("prefStartWe:") and not s.get("pref_start_we"):
+                    if d.startswith("prefStartWe:") and s.get("pref_start_we") is None:
                         s["pref_start_we"] = d.replace("prefStartWe:", "")
-                    if d.startswith("prefEndWe:") and not s.get("pref_end_we"):
+                    if d.startswith("prefEndWe:") and s.get("pref_end_we") is None:
                         s["pref_end_we"] = d.replace("prefEndWe:", "")
-                    if d.startswith("ngPair:") and not s.get("ng_pairs"):
+                    if d.startswith("ngPair:") and s.get("ng_pairs") is None:
                         s["ng_pairs"] = d.replace("ngPair:", "")
-                    if d.startswith("reqPair:") and not s.get("req_pairs"):
+                    if d.startswith("reqPair:") and s.get("req_pairs") is None:
                         s["req_pairs"] = d.replace("reqPair:", "")
-                    if d.startswith("position:") and (not s.get("position") or s.get("position") == "any"):
+                    if d.startswith("position:") and s.get("position") in (None, "any"):
                         s["position"] = d.replace("position:", "")
-                    if d.startswith("priority:") and not s.get("shift_priority"):
+                    if d.startswith("priority:") and s.get("shift_priority") is None:
                         s["shift_priority"] = d.replace("priority:", "")
-                    if d.startswith("contract:") and not s.get("contract_type"):
+                    if d.startswith("contract:") and s.get("contract_type") is None:
                         s["contract_type"] = d.replace("contract:", "")
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
@@ -2334,10 +2337,71 @@ class ShiftScheduler:
                     day_assigned = set(sh["staff_id"] for sh in shifts if sh["date"] == d)
                     if any((sid, other) in ng_pair_set for other in day_assigned):
                         continue
+
+                    # v3.7.3: 連勤6日上限 / 10時間インターバル / 週40h を遵守
+                    # 旧版は post-pass で min_days_week を満たすだけのために法令違反シフトを
+                    # 作る可能性があった (agent #1 指摘の HIGH バグ)
+                    d_dt = datetime.strptime(d, "%Y-%m-%d")
+
+                    # 連勤6日チェック: d を含む 7日窓内の出勤数が 7 にならないか
+                    consec_violation = False
+                    for offset in range(-6, 1):
+                        win_start = d_dt + timedelta(days=offset)
+                        win_dates = set((win_start + timedelta(days=k)).strftime("%Y-%m-%d") for k in range(7))
+                        in_win = sum(1 for sh in shifts if sh["staff_id"] == sid and sh["date"] in win_dates) + 1
+                        if in_win > self.LEGAL_MAX_CONSECUTIVE_DAYS:
+                            consec_violation = True
+                            break
+                    if consec_violation:
+                        continue
+
+                    # 10時間インターバルチェック: 前日/翌日の既存シフトとの間隔
+                    interval_violation = False
+                    for sh in shifts:
+                        if sh["staff_id"] != sid:
+                            continue
+                        try:
+                            sh_dt = datetime.strptime(sh["date"], "%Y-%m-%d")
+                        except ValueError:
+                            continue
+                        diff_days = (sh_dt - d_dt).days
+                        if abs(diff_days) > 1:
+                            continue
+                        # opts[0] を試す前提で、その範囲で interval を確認
+                        opt0 = self._build_shift_options(s, d, force=False)
+                        if not opt0:
+                            continue
+                        cand_start = opt0[0]["start_min"]
+                        cand_end = opt0[0]["end_min"]
+                        sh_start = self._to_minutes(sh["start_time"])
+                        sh_end = self._normalize_end_time(sh_start, self._to_minutes(sh["end_time"]))
+                        if diff_days == 1:  # sh が翌日
+                            iv = (sh_start + 1440) - cand_end
+                        elif diff_days == -1:  # sh が前日
+                            iv = (cand_start + 1440) - sh_end
+                        else:
+                            continue
+                        if iv < 600:
+                            interval_violation = True
+                            break
+                    if interval_violation:
+                        continue
+
+                    # 週40時間チェック (簡易): 既存シフトの週内合計 + 候補シフト work_hours
                     opts = self._build_shift_options(s, d, force=False)
                     if not opts:
                         continue
                     opt = opts[0]
+                    week_set = set(week)
+                    existing_hours = 0.0
+                    for sh in shifts:
+                        if sh["staff_id"] == sid and sh["date"] in week_set:
+                            sh_start = self._to_minutes(sh["start_time"])
+                            sh_end = self._normalize_end_time(sh_start, self._to_minutes(sh["end_time"]))
+                            existing_hours += (sh_end - sh_start) / 60.0 - (sh.get("break_minutes", 0) / 60.0)
+                    if existing_hours + opt["work_hours"] > self.LEGAL_MAX_HOURS_WEEK:
+                        continue
+
                     brk = self._get_break_minutes(opt["hours"])
                     shifts.append({
                         "staff_id": sid, "date": d,
