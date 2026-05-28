@@ -5906,6 +5906,10 @@ const app = {
         } catch (e) {
             console.error('AutoFill Error:', e);
             this._generationSuccess = false;
+            // v3.7.4: 例外時に具体エラーをトーストに表示 (旧版は「コンソールを確認」のみ)
+            const errMsg = (e && e.message) ? e.message : String(e || '不明なエラー');
+            this.showToast('生成エラー: ' + errMsg, 'error');
+            this._failureDetailShown = true;  // finally の汎用トーストを抑制
         } finally {
             // タイマー全クリア
             clearInterval(progressTimer);
@@ -5955,7 +5959,8 @@ const app = {
                 }, 300);
             } else if (!this._generationSuccess && !this._failureDetailShown) {
                 // _showDetailedGenerationFailure で既に詳細表示済の場合は二重表示しない
-                this.showToast('シフト作成に問題がありました。詳細はコンソールを確認してください。', 'warning');
+                // v3.7.4: 「コンソールを確認」は不親切なため改善 (catch ブロックで具体エラー表示済の場合は到達しない)
+                this.showToast('シフト作成に失敗しました。設定を見直すか時間を置いて再度お試しください', 'warning');
             }
             this._failureDetailShown = false;
         }
