@@ -5823,9 +5823,36 @@ const app = {
                     }
                 }
 
-                alertMsg += '\n【OK】労働条件を緩和して強行生成\n【キャンセル】中止して人員を調整';
-
-                const forceGenerate = confirm(alertMsg);
+                // v3.7.6: confirm() はブラウザ抑制されることがあるため画面内モーダルで質問
+                const forceGenerate = await new Promise((resolve) => {
+                    const html = `
+                        <div class="fixed inset-0 z-[10001] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5)">
+                            <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                                <div class="p-5 border-b border-gray-200 bg-amber-50">
+                                    <h3 class="text-lg font-bold text-amber-700"><i class="fa-solid fa-triangle-exclamation mr-2"></i>人員不足の警告</h3>
+                                </div>
+                                <div class="p-5">
+                                    <pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans">${this._sanitize(alertMsg)}</pre>
+                                </div>
+                                <div class="p-4 border-t border-gray-200 flex justify-end gap-2 bg-gray-50">
+                                    <button data-action="cancel" class="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold">中止して人員調整</button>
+                                    <button data-action="force" class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">緩和して強行生成</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    const wrap = document.createElement('div');
+                    wrap.innerHTML = html;
+                    const modal = wrap.firstElementChild;
+                    document.body.appendChild(modal);
+                    modal.addEventListener('click', (ev) => {
+                        const action = ev.target.dataset?.action;
+                        if (action) {
+                            modal.remove();
+                            resolve(action === 'force');
+                        }
+                    });
+                });
 
                 if (!forceGenerate) {
                     if (this._tipTimer) { clearInterval(this._tipTimer); this._tipTimer = null; }
