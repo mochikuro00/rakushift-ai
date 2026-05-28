@@ -7334,14 +7334,24 @@ const app = {
     showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
-        let colorClass = type === 'success' ? 'border-green-200 text-green-600' : type === 'error' ? 'border-red-200 text-red-600' : 'border-gray-200 text-gray-600';
-        let icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-circle-xmark' : 'fa-info-circle';
-        toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 min-w-[300px] ${colorClass}`;
+        let colorClass = type === 'success' ? 'border-green-200 text-green-600' : type === 'error' ? 'border-red-300 text-red-700 bg-red-50' : type === 'warning' ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-gray-200 text-gray-600';
+        let icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-circle-xmark' : type === 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle';
+        // v3.7.5: error と warning は永続表示 + 閉じるボタン (旧版は3秒で消えて読めなかった)
+        const persistent = (type === 'error' || type === 'warning');
+        toast.className = `flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 min-w-[320px] max-w-[480px] ${colorClass}`;
         const safeMsg = this._sanitize(message);
-        toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="text-sm font-medium text-gray-700">${safeMsg}</span>`;
+        const closeBtn = persistent
+            ? `<button onclick="this.closest('div.flex').remove()" class="ml-auto -mr-1 -mt-1 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded" aria-label="閉じる"><i class="fa-solid fa-xmark"></i></button>`
+            : '';
+        toast.innerHTML = `<i class="fa-solid ${icon} mt-0.5 flex-shrink-0"></i><span class="text-sm font-medium text-gray-800 leading-relaxed flex-1">${safeMsg}</span>${closeBtn}`;
         container.appendChild(toast);
         requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
-        setTimeout(() => { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); }, 3000);
+        if (!persistent) {
+            setTimeout(() => { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); }, 3000);
+        } else {
+            // error/warning は長めに残す: 自動消去は 12秒、ユーザーが閉じるまでも可
+            setTimeout(() => { if (toast.parentNode) { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); } }, 12000);
+        }
     },
     showUpgradeModal() {
         const currentPlan = this.state.config.stripe_plan || 'standard';
