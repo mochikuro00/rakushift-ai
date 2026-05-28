@@ -5670,6 +5670,25 @@ const app = {
 
         this._shiftGenInProgress = true;
 
+        // v3.7.7: 診断バナー (画面上部にステータスを常時表示) — エラーが見えない問題対策
+        this._debugBanner = (() => {
+            const old = document.getElementById('_debugStatusBanner');
+            if (old) old.remove();
+            const banner = document.createElement('div');
+            banner.id = '_debugStatusBanner';
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#1e40af;color:white;padding:8px 16px;font-size:13px;font-family:monospace;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+            banner.innerHTML = '<span id="_dbgText">📋 [シフト生成 診断モード] 開始...</span><button onclick="this.parentNode.remove()" style="background:rgba(255,255,255,.2);border:0;color:white;padding:2px 10px;border-radius:4px;cursor:pointer;">×</button>';
+            document.body.appendChild(banner);
+            return {
+                log: (msg) => {
+                    const el = document.getElementById('_dbgText');
+                    if (el) el.textContent = '📋 ' + msg;
+                    console.log('[ShiftGen]', msg);
+                }
+            };
+        })();
+        this._debugBanner.log('生成フロー開始');
+
         if (loadingDefault) loadingDefault.style.display = 'none';
         if (loadingShiftGen) loadingShiftGen.style.display = 'flex';
         if (loadingEl) loadingEl.classList.remove('hidden');
@@ -5798,7 +5817,9 @@ const app = {
 
             // === STEP 2: 事前チェック ===
 
+            if (this._debugBanner) this._debugBanner.log('事前チェック実行中 (POST /check)...');
             const checkResult = await API.checkFeasibility(payload);
+            if (this._debugBanner) this._debugBanner.log(`事前チェック完了: feasible=${checkResult?.feasible} warnings=${checkResult?.warnings?.length || 0}`);
 
             if (checkResult && !checkResult.feasible) {
                 if (loadingEl) loadingEl.classList.add('hidden');
@@ -5898,7 +5919,9 @@ const app = {
             // === STEP 4: シフト生成 ===
 
             console.log("Sending request to Calculation Engine...");
+            if (this._debugBanner) this._debugBanner.log(`シフト生成リクエスト送信 (staff=${payload.staff_list.length} dates=${payload.dates.length})`);
             const result = await API.generateShifts(payload);
+            if (this._debugBanner) this._debugBanner.log(`レスポンス受信: status=${result.status} mode=${result.mode||'-'} shifts=${result.shifts?.length||0}`);
 
             if (result.status === 'error') {
                 this.showToast('生成エラー: ' + (result.message || '不明なエラーが発生しました'), 'error');
@@ -5955,6 +5978,7 @@ const app = {
             const errMsg = (e && e.message) ? e.message : String(e || '不明なエラー');
             this.showToast('生成エラー: ' + errMsg, 'error');
             this._failureDetailShown = true;  // finally の汎用トーストを抑制
+            if (this._debugBanner) this._debugBanner.log('❌ 例外発生: ' + errMsg);
         } finally {
             // タイマー全クリア
             clearInterval(progressTimer);
