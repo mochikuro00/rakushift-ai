@@ -353,7 +353,14 @@ class ShiftScheduler:
     # ===========================================================
 
     def _normalize_end_time(self, start_min, end_min):
-        if end_min <= start_min:
+        """
+        end_min < start_min なら翌日跨ぎとして +1440 (例: 22:00→02:00 を 22:00→26:00)。
+        end_min == start_min は「同時刻」= 0時間シフトとして扱う (24時間勤務と誤判定しない)。
+        v3.6 修正: 旧版は `end <= start` で +1440 していたため、設定ミスで end==start
+        になった場合に 24時間勤務扱いされていた。深夜営業 (22:00-02:00 等) は
+        end < start で正しく検出される。
+        """
+        if end_min < start_min:
             return end_min + 1440
         return end_min
 
@@ -542,11 +549,12 @@ class ShiftScheduler:
         
         if pref_start and pref_end:
             pref_pat = {"start": pref_start, "end": pref_end, "name": "pref"}
-            # v3.1: 希望時間帯指定があるスタッフは、社員/バイトに関わらず
-            # 希望時間帯のみを候補とする (ユーザ要望: ぴったり反映)
-            # 社員でも MILP が別パターンを選ぶ余地を残すと、希望が無視される事象が
-            # 発生していたため、希望指定時は強制的に pref パターンに固定。
-            patterns_to_use = [pref_pat]
+            # v3.6: pref_pat を「強い候補」として先頭に追加するが、他のパターンも残す。
+            # 旧版 (v3.1) は patterns_to_use = [pref_pat] で他を完全に削除していたが、
+            # 希望時間帯が営業時間外/シフト外のとき infeasible (配置不可能) になっていた。
+            # 強化された PREFERENCE_EXACT/CLOSE (v3.6 で -3M/-2M) のボーナスで
+            # MILP は十分に希望を尊重するため、強制排他は不要。
+            patterns_to_use.insert(0, pref_pat)
 
         def _add_option(ps, pe, is_pref=False):
             """オプションを追加するヘルパー（重複チェック含む）"""
@@ -845,11 +853,16 @@ class ShiftScheduler:
         estimated_vars = n_staff * n_days * 5
         logger.info("[Solve] staff=%d days=%d est_vars=%d", n_staff, n_days, estimated_vars)
 
+        # v3.6: Tier 自動降格の閾値を引き上げ。
+        # 旧版は staff>=50 で Tier2 (品質最適化スキップ) に落ちていたが、
+        # timeLimit 引き上げ (Tier3 60s→120s) と合わせて中規模店でも品質最適化を維持。
+        # 旧: staff>=50→T2, staff>=100→T1
+        # 新: staff>=80→T2, staff>=150→T1
         start_tier = 3
-        if n_staff >= 100 or estimated_vars > 30000:
+        if n_staff >= 150 or estimated_vars > 60000:
             start_tier = 1
             logger.warning("[Solve] Large scale (staff=%d) → starting from Tier 1 (legal only) to avoid timeout", n_staff)
-        elif n_staff >= 50 or estimated_vars > 15000:
+        elif n_staff >= 80 or estimated_vars > 30000:
             start_tier = 2
             logger.warning("[Solve] Medium-large scale (staff=%d) → starting from Tier 2 (skip quality opt)", n_staff)
 
@@ -1752,8 +1765,17 @@ class ShiftScheduler:
                             penalty += shortage * self.W.POSITION_SHORT
 
             prob += penalty
-            # Tierごとにタイムリミットを段階化（合計最大110秒でRailway制限内に収める）
-            tier_time_limits = {3: 60, 2: 30, 1: 20}
+            # v3.6: Tierごとのタイムリミットを config で上書き可能に。
+            # デフォルトを引き上げ (60/30/20 → 120/60/30) — 中規模店 (30-50名×1ヶ月) で
+            # Tier3 が timeout して品質劣化する事態を防ぐ。
+            # Railway/Render の HTTP timeout は 300s なので、3 tier 合計 210s で収まる。
+            default_limits = {3: 120, 2: 60, 1: 30}
+            cfg_limits = self.config.get("milp_time_limits") or {}
+            tier_time_limits = {
+                3: int(cfg_limits.get("tier3") or default_limits[3]),
+                2: int(cfg_limits.get("tier2") or default_limits[2]),
+                1: int(cfg_limits.get("tier1") or default_limits[1]),
+            }
             # MILP 規模をログ出力 (運用監視・スケーラビリティ判断用)
             logger.info("[MILP] tier=%d vars=%d constraints=%d timeLimit=%ds",
                         tier, len(x), len(prob.constraints), tier_time_limits.get(tier, 60))
