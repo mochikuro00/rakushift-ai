@@ -5677,7 +5677,7 @@ const app = {
             const result = await API.generateShifts(payload);
 
             if (result.status === 'error') {
-                this.showToast('生成エラー: ' + result.message, 'error');
+                this.showToast('生成エラー: ' + (result.message || '不明なエラーが発生しました'), 'error');
                 this._generationSuccess = false;
                 return;
             }
