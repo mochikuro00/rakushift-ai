@@ -314,8 +314,8 @@ async def verify_session_org_id(session_id: Optional[str]) -> Optional[Dict[str,
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Rakushift Engine v3.7.3 Ready",
-            "build": "2026.05.28-v3.7.3-greedy-legal-checks"}
+    return {"status": "ok", "message": "Rakushift Engine v3.7.8 Ready",
+            "build": "2026.05.28-v3.7.8-detailed-errors"}
 
 
 @app.get("/health")
@@ -672,11 +672,14 @@ async def generate_shifts(request: Request, req: ShiftRequest,
         }
 
     except Exception as e:
-        logger.info("Error: {}".format(e))
+        logger.error("Error in /generate: {}".format(e))
         import traceback
+        tb_str = traceback.format_exc()
         traceback.print_exc()
-        err_msg = "シフト生成中にエラーが発生しました" if IS_PRODUCTION else str(e)
-        return {"status": "error", "message": err_msg}
+        # v3.7.8: ユーザーが「エラーが見えない」問題を診断するため、本番でも詳細を返す。
+        # (生成エラーは内部実装詳細であり、認証情報やシークレットは含まれないため許容)
+        err_msg = "{}: {}".format(type(e).__name__, str(e))
+        return {"status": "error", "message": err_msg, "trace_tail": tb_str.splitlines()[-5:] if not IS_PRODUCTION else None}
 
 
 # =============================================================
