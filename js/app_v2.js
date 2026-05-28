@@ -5676,13 +5676,17 @@ const app = {
             if (old) old.remove();
             const banner = document.createElement('div');
             banner.id = '_debugStatusBanner';
-            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#1e40af;color:white;padding:8px 16px;font-size:13px;font-family:monospace;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.3);';
-            banner.innerHTML = '<span id="_dbgText">📋 [シフト生成 診断モード] 開始...</span><button onclick="this.parentNode.remove()" style="background:rgba(255,255,255,.2);border:0;color:white;padding:2px 10px;border-radius:4px;cursor:pointer;">×</button>';
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#1e40af;color:white;padding:10px 16px;font-size:13px;font-family:monospace;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.3);max-height:50vh;overflow-y:auto;';
+            banner.innerHTML = '<div id="_dbgText" style="flex:1;line-height:1.5;white-space:pre-wrap;word-break:break-all;">📋 [シフト生成 診断モード] 開始...</div><button onclick="this.parentNode.remove()" style="background:rgba(255,255,255,.2);border:0;color:white;padding:4px 12px;border-radius:4px;cursor:pointer;flex-shrink:0;">閉じる</button>';
             document.body.appendChild(banner);
+            const lines = [];
             return {
                 log: (msg) => {
+                    const ts = new Date().toLocaleTimeString('ja-JP');
+                    lines.push(`[${ts}] ${msg}`);
+                    if (lines.length > 20) lines.shift();
                     const el = document.getElementById('_dbgText');
-                    if (el) el.textContent = '📋 ' + msg;
+                    if (el) el.textContent = '📋 シフト生成 診断ログ:\n' + lines.join('\n');
                     console.log('[ShiftGen]', msg);
                 }
             };
@@ -5921,7 +5925,10 @@ const app = {
             console.log("Sending request to Calculation Engine...");
             if (this._debugBanner) this._debugBanner.log(`シフト生成リクエスト送信 (staff=${payload.staff_list.length} dates=${payload.dates.length})`);
             const result = await API.generateShifts(payload);
-            if (this._debugBanner) this._debugBanner.log(`レスポンス受信: status=${result.status} mode=${result.mode||'-'} shifts=${result.shifts?.length||0}`);
+            if (this._debugBanner) {
+                const msgPart = result.message ? ` | message="${result.message}"` : '';
+                this._debugBanner.log(`レスポンス受信: status=${result.status} mode=${result.mode||'-'} shifts=${result.shifts?.length||0}${msgPart}`);
+            }
 
             if (result.status === 'error') {
                 this.showToast('生成エラー: ' + (result.message || '不明なエラーが発生しました'), 'error');
