@@ -593,7 +593,12 @@ class ShiftScheduler:
         return options
 
     def _build_slot_requirements(self, date_str):
-        """15分スロットごとの必要人数マップを構築"""
+        """15分スロットごとの必要人数マップを構築
+
+        「常時 N 名」(per-slot) 解釈:
+          ベース必要人数 (min_weekday 等) は「各時刻に必要な同時在籍数」。
+          time_staff_req ルールは「特定時間帯の追加増強」(max でベースを上書き)。
+        """
         req_num = self._get_required_staff(date_str)
         if req_num <= 0:
             return {}
@@ -614,7 +619,7 @@ class ShiftScheduler:
             re_min = self._normalize_end_time(rs, self._to_minutes(rule.get("end", "24:00")))
             rc = int(rule.get("count", 0))
             pos = rule.get("position", "any")
-            
+
             for t in range(op, cl, 15):
                 in_range = (rs <= t < re_min) if rs <= re_min else (t >= rs or t < re_min)
                 if in_range and t in slots:
@@ -624,7 +629,7 @@ class ShiftScheduler:
                         slots[t]["kitchen"] = max(slots[t]["kitchen"], rc)
                     else:
                         slots[t]["any"] = max(slots[t]["any"], rc)
-                        
+
         final_slots = {}
         for t, counts in slots.items():
             final_slots[t] = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
