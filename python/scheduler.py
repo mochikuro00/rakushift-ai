@@ -133,7 +133,7 @@ class ShiftScheduler:
         # 生成サマリレポート (制約違反・不足の可視化用) を main.py が取得する
         self._last_report = None
 
-        # シフトパターン構築（UI で登録されたものだけを使用）
+        # シフトパターン構築（ミッドシフト自動生成付き）
         raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
         for p in raw_patterns:
@@ -147,10 +147,30 @@ class ShiftScheduler:
             cl = self.config.get("closing_time", "22:00")
             self.shift_patterns = [{"start": op, "end": cl, "name": "full"}]
 
-        # 注: 以前ここで「ミッドシフト自動生成」(+2h/+3h オフセットで中間パターンを
-        # 勝手に追加) を行っていたが、ユーザーが定義していない時間帯のシフトが
-        # 生成結果に紛れ込む原因となるため削除。シフトパターンは UI で登録された
-        # ものだけを使用する。
+        # ミッドシフト自動生成：早番と遅番の間を埋めるパターンを自動追加
+        if len(self.shift_patterns) >= 2:
+            starts = sorted(set(p["start"] for p in self.shift_patterns))
+            ends = sorted(set(p["end"] for p in self.shift_patterns))
+            op_time = self.config.get("opening_time", "09:00")
+            cl_time = self.config.get("closing_time", "22:00")
+            existing_keys = set((p["start"], p["end"]) for p in self.shift_patterns)
+            # 2時間ずらしのミッドシフト候補を生成
+            for offset_h in [2, 3]:
+                for pat in list(self.shift_patterns):
+                    ps = self._to_minutes(pat["start"])
+                    pe = self._to_minutes(pat["end"])
+                    mid_s = ps + offset_h * 60
+                    mid_e = pe + offset_h * 60
+                    # 営業時間内に収まるか確認
+                    op_m = self._to_minutes(op_time)
+                    cl_m = self._to_minutes(cl_time)
+                    if mid_s >= op_m and mid_e <= cl_m:
+                        ms_str = self._from_minutes(mid_s)
+                        me_str = self._from_minutes(mid_e)
+                        if (ms_str, me_str) not in existing_keys:
+                            self.shift_patterns.append(
+                                {"start": ms_str, "end": me_str, "name": "mid"})
+                            existing_keys.add((ms_str, me_str))
 
         # 営業時間
         self.op_limit = self.config.get("opening_time", "09:00")
