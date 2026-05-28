@@ -47,44 +47,47 @@ class ShiftScheduler:
     #   - 順序関係 (重要): EMPTY_SLOT > OPEN_CLOSE_NO_EMP > COVERAGE_UNDER > ...
     # ===========================================================
     class W:
-        # v3.6: ペナルティ重みリバランス
-        #   旧版の問題点:
-        #   - OPEN_CLOSE_NO_EMP=50M が突出して他制約の10倍。開け締めを埋めるためなら
-        #     希望シフト50件分を犠牲にする計算で、シフト品質が偏った。
-        #   - PREFERENCE_EXACT=-1M が COVERAGE_UNDER=5M に対して1/5しかなく、
-        #     不足を埋めるためなら希望は常に無視される構造だった。
-        #   v3.6 方針: 同階層内の重みを揃え、希望系を強化して双方拮抗させる。
+        # v3.7: 「ぴったり合わせる」を最優先に再リバランス
+        #   v3.6 の問題点:
+        #   - COVERAGE_OVER_DAY (2M) + OVER_SLOT (1M) = 3M で希望ボーナス (3M) と
+        #     breakeven。最適化が「過剰でも希望優先」に傾き、過剰配置の温床に。
+        #   - SHIFT_COST = 30k で「人数が多い場合は考えて」が効かず、可能なだけ
+        #     スタッフを追加していた。
+        #   v3.7 方針: 過不足を対称化 (UNDER=OVER) + シフト追加コスト引き上げ。
+        #             希望はあくまで「同じ人数の中での選別」用に弱める。
         #
         # --- カバレッジ (店舗運営の根幹) — 10M階層 ---
         EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避)
-        OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在 (旧50M→10M, EMPTY_SLOT と同階層)
-        MIN_MANAGER         = 8_000_000   # 管理者数不足 (旧5M→8M, 開閉業務に次ぐ重要度)
-        # --- 不足/過剰 — 1-5M階層 ---
+        OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在
+        MIN_MANAGER         = 8_000_000   # 管理者数不足
+        # --- 不足/過剰 — 対称化して「ぴったり」を真の最適解に ---
         COVERAGE_UNDER      = 5_000_000   # スロット必要人数不足
-        OJT_NO_MENTOR       = 3_000_000   # 新人×メンター不在 (旧2M→3M)
-        POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足 (旧2M→3M)
-        COVERAGE_OVER_DAY   = 2_000_000   # 日次過剰人員 (旧4M→2M, 不足優先)
-        COVERAGE_OVER_SLOT  = 1_000_000   # スロット過剰人員 (旧2M→1M)
-        # --- 希望シフト — カバレッジに拮抗させる ---
-        PREFERENCE_EXACT    = -3_000_000  # 完全一致 (旧-1M→-3M, COVERAGE_UNDER の60%相当)
-        PREFERENCE_CLOSE    = -2_000_000  # ±1時間以内 (旧-700k→-2M)
-        PREFERENCE_BASE     = -1_000_000  # 希望日に何らかのシフト (旧-500k→-1M)
-        MIN_DAYS_WEEK_BONUS = -1_000_000  # min_days_week 厳守 (旧-500k→-1M)
+        COVERAGE_OVER_DAY   = 5_000_000   # 日次過剰人員 (旧2M→5M, UNDER と対称)
+        COVERAGE_OVER_SLOT  = 4_000_000   # スロット過剰人員 (旧1M→4M, 過剰追加を抑制)
+        OJT_NO_MENTOR       = 3_000_000   # 新人×メンター不在
+        POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
+        # --- 希望シフト — カバレッジ過剰より弱く ---
+        PREFERENCE_EXACT    = -2_000_000  # 完全一致 (旧-3M→-2M, OVER_SLOT=4M より弱い)
+        PREFERENCE_CLOSE    = -1_000_000  # ±1時間以内 (旧-2M→-1M)
+        PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト (旧-1M→-500k)
+        MIN_DAYS_WEEK_BONUS = -500_000    # min_days_week 厳守 (旧-1M→-500k, 過剰追加防止)
         # --- スタッフ属性ベース調整 ---
-        PRIORITY_HIGH       = -200_000    # 優先度 High スタッフを最優先 (旧-50k→-200k)
+        PRIORITY_HIGH       = -100_000    # 優先度 High スタッフを最優先 (旧-200k→-100k)
         PRIORITY_LOW        = 20_000      # 優先度 Low スタッフは穴埋め
-        CONTRACT_REGULAR    = -20_000     # レギュラー契約優先 (旧-10k→-20k)
-        CONTRACT_SPOT       = 10_000      # スポット契約は後回し (旧5k→10k)
+        CONTRACT_REGULAR    = -20_000     # レギュラー契約優先
+        CONTRACT_SPOT       = 10_000      # スポット契約は後回し
         # --- 品質 — 10k-100k階層 ---
-        FAIRNESS_DRIFT      = 100_000     # 公平性偏差 (旧80k→100k)
-        WEEKEND_FAIR        = 80_000      # 土日出勤バランス偏差 (旧50k→80k)
+        FAIRNESS_DRIFT      = 100_000     # 公平性偏差
+        WEEKEND_FAIR        = 80_000      # 土日出勤バランス偏差
         PEAK_SKILL          = 50_000      # ピーク帯スキルミックス不足
-        CONSEC_DAYS_FATIGUE = 40_000      # 連続勤務後の疲労 (旧30k→40k)
+        CONSEC_DAYS_FATIGUE = 40_000      # 連続勤務後の疲労
         TIMEBAND_IMBALANCE  = 20_000      # 時間帯分散
         POWER_BALANCE       = 10_000      # 戦力バランス
-        MENTOR_MATCH_BONUS  = -10_000     # 主担当メンターとのペアリング (旧-8k→-10k)
-        # --- v3.5: シフト追加コスト (希望尊重のため緩めに) ---
-        SHIFT_COST          = 30_000      # シフト 1 件追加 (旧50k→30k)
+        MENTOR_MATCH_BONUS  = -10_000     # 主担当メンターとのペアリング
+        # --- シフト追加コスト — 「人数が多い場合は考えて」 ---
+        # v3.7: 30k → 100k に引き上げ、不要なシフト追加に強い摩擦をかける。
+        # 例: 必要 4 名 + 5 人目追加 → SHIFT_COST 100k + OVER_DAY 5M = 強く抑制
+        SHIFT_COST          = 100_000     # シフト 1 件追加 (旧30k→100k)
 
     def __init__(self, staff_list, config, dates, requests=None, existing_shifts=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
