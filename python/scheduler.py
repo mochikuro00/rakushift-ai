@@ -317,7 +317,11 @@ class ShiftScheduler:
             self._ng_cache[s["id"]] = self._compute_staff_ng_dates(s)
             
             sid1 = s["id"]
-            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', s.get("ng_pairs", "")) if n.strip()]:
+            # v3.7.9: s.get("ng_pairs", "") は KEY 不在時は "" を返すが、
+            # 値が None (migration 50 後の DB NULL) のときは None を返してしまい
+            # re.split(pattern, None) で TypeError。明示的に None ガード。
+            ng_pairs_str = s.get("ng_pairs") or ""
+            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', ng_pairs_str) if n.strip()]:
                 sid2 = name_to_id.get(target_name)
                 if not sid2:
                     for n, _sid in name_to_id.items():
@@ -325,8 +329,9 @@ class ShiftScheduler:
                             sid2 = _sid; break
                 if sid2 and sid1 != sid2:
                     self._ng_pair_constraints.append((sid1, sid2))
-            
-            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', s.get("req_pairs", "")) if n.strip()]:
+
+            req_pairs_str = s.get("req_pairs") or ""
+            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', req_pairs_str) if n.strip()]:
                 sid2 = name_to_id.get(target_name)
                 if not sid2:
                     for n, _sid in name_to_id.items():
