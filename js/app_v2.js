@@ -5715,22 +5715,34 @@ const app = {
                 endDate.setDate(startDate.getDate() + 6);
             }
 
-            const dates = [];
+            let dates = [];
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
                 const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
                 dates.push(dateStr);
             }
 
-            // v3.6: 過去日付のフロント側ガード
-            // RLS (DB側) が過去日付をブロックするため、サーバー到達前に検出してわかりやすいエラーを返す
+            // v3.7.2: 過去日付の扱い
+            //   reset_all/next_week モードでは、過去日は生成対象から除外して
+            //   未来日のみ再生成する (過去のシフトは触らない)。
+            //   旧版 (v3.6) は過去日が1日でも含まれると全体を中止していたため、
+            //   「現在の月をリセットして再構築」ができなかった。
             const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
             const pastDates = dates.filter(d => d < todayStr);
-            if (pastDates.length > 0 && targetType !== 'empty_only') {
-                if (loadingEl) loadingEl.classList.add('hidden');
-                this.showToast(`過去日 ${pastDates.length}日 が含まれています (${pastDates[0]}...)。今月のシフトを再生成する場合は「空きを埋める」をご利用ください`, 'error');
-                stepTimers.forEach(clearTimeout);
-                this._generationSuccess = false;
-                return;
+            if (pastDates.length > 0) {
+                if (targetType === 'empty_only') {
+                    // empty_only モードは過去日も含めて再評価可 (既存シフトは固定)
+                } else {
+                    // dates から過去日を除外
+                    dates = dates.filter(d => d >= todayStr);
+                    if (dates.length === 0) {
+                        if (loadingEl) loadingEl.classList.add('hidden');
+                        this.showToast('対象期間が全て過去日のため生成できません。未来の月を選択してください', 'error');
+                        stepTimers.forEach(clearTimeout);
+                        this._generationSuccess = false;
+                        return;
+                    }
+                    this.showToast(`過去日 ${pastDates.length}日 は変更されません。${dates.length}日分 (${dates[0]}〜${dates[dates.length-1]}) を生成します`, 'warning');
+                }
             }
 
             if (!this.state.config.organization_id) {
