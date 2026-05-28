@@ -1132,11 +1132,27 @@ class ShiftScheduler:
                             prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
 
                 # --- 連続勤務6日上限 (労基法35条: 週1日の休日) ---
+                # v3.6: 日付ギャップ考慮。
+                # 旧版は sorted_d[i:i+7] を「7日間ローリングウィンドウ」として扱い
+                # 「<= 6 of 7」制約を貼っていたが、sorted_d にギャップ (定休日や非連続日付)
+                # があると 7要素が10日以上のスパンを覆うことになり、制約が緩くなる方向で
+                # 正確性を欠いていた。
+                # 修正: 実カレンダー連続性を確認し、連続する 7日間 (= 6日+休日1日) のみに
+                #       制約を貼る。ギャップを跨ぐスパンはスキップ。
                 sorted_d = sorted(self.dates)
                 max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS if not force else 7
                 if len(sorted_d) > max_consec:
                     for i in range(len(sorted_d) - max_consec):
                         span = sorted_d[i:i + max_consec + 1]
+                        # span が実カレンダーで連続している (= max_consec日連続) か確認
+                        try:
+                            d_start = datetime.strptime(span[0], "%Y-%m-%d")
+                            d_end = datetime.strptime(span[-1], "%Y-%m-%d")
+                        except ValueError:
+                            continue
+                        if (d_end - d_start).days != max_consec:
+                            # ギャップを含むスパンは制約対象外 (休日を挟むので連勤超過にならない)
+                            continue
                         sv = []
                         for d in span:
                             for oi in range(len(staff_opts.get((sid, d), []))):

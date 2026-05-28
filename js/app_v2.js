@@ -3479,7 +3479,7 @@ const app = {
                                 <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">管理者要件</h4>
                                 <div>
                                     <label class="block text-xs font-bold text-gray-500 mb-1">最低管理者数 (店長/リーダー)</label>
-                                    <input type="number" id="req_min_manager" class="w-full border-gray-300 rounded-lg px-3 py-2" value="${reqs.min_manager || 1}">
+                                    <input type="number" id="req_min_manager" min="0" max="50" step="1" class="w-full border-gray-300 rounded-lg px-3 py-2" value="${reqs.min_manager || 1}">
                                     <p class="text-xs text-gray-400 mt-1">営業中に常に最低1名の管理者(店長/リーダー)がいるように制御します</p>
                                 </div>
                             </div>
@@ -3488,15 +3488,15 @@ const app = {
                                 <div class="space-y-4">
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-gray-600">平日</label>
-                                        <input type="number" id="req_min_weekday" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekday || reqs.min_total || 2}">
+                                        <input type="number" id="req_min_weekday" min="0" max="50" step="1" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekday || reqs.min_total || 2}">
                                     </div>
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-blue-600">土曜日</label>
-                                        <input type="number" id="req_min_weekend" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekend || reqs.min_total || 3}">
+                                        <input type="number" id="req_min_weekend" min="0" max="50" step="1" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekend || reqs.min_total || 3}">
                                     </div>
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-red-600">日祝日</label>
-                                        <input type="number" id="req_min_holiday" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_holiday || reqs.min_total || 3}">
+                                        <input type="number" id="req_min_holiday" min="0" max="50" step="1" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_holiday || reqs.min_total || 3}">
                                     </div>
                                 </div>
                             </div>
@@ -3968,8 +3968,9 @@ const app = {
     readSettingsFromDOM() {
         const config = { ...this.state.config }; // 既存の設定をコピー
 
-        // 基本設定
-        config.hourly_wage_default = Number(document.getElementById('settingHourlyWage')?.value || 1100);
+        // 基本設定 (v3.6: 負数/NaN ガード)
+        const _wageRaw = Number(document.getElementById('settingHourlyWage')?.value);
+        config.hourly_wage_default = (Number.isFinite(_wageRaw) && _wageRaw > 0) ? Math.min(_wageRaw, 10000) : 1100;
         // admin_password は専用モーダル + update_admin_password_by_contract RPC でのみ変更可
         // (config_safe view から除外され、ここで読んでも空文字なので参照しない)
         config.shop_rules_text = document.getElementById('settingShopRules')?.value || '';
@@ -4029,12 +4030,17 @@ const app = {
             }
         });
 
-        // 人員配置ルール
+        // 人員配置ルール (v3.6: 負数/NaN を防止して MILP クラッシュを回避)
+        const _clampStaff = (v, def) => {
+            const n = Number(v);
+            if (!Number.isFinite(n) || n < 0) return def;
+            return Math.min(n, 50);  // 50名以上の要件は現実的でなく上限化
+        };
         config.staff_req = {
-            min_manager: Number(document.getElementById('req_min_manager')?.value || 1),
-            min_weekday: Number(document.getElementById('req_min_weekday')?.value || 2),
-            min_weekend: Number(document.getElementById('req_min_weekend')?.value || 3),
-            min_holiday: Number(document.getElementById('req_min_holiday')?.value || 3)
+            min_manager: _clampStaff(document.getElementById('req_min_manager')?.value, 1),
+            min_weekday: _clampStaff(document.getElementById('req_min_weekday')?.value, 2),
+            min_weekend: _clampStaff(document.getElementById('req_min_weekend')?.value, 3),
+            min_holiday: _clampStaff(document.getElementById('req_min_holiday')?.value, 3)
         };
 
         // 休憩ルール
@@ -4049,18 +4055,20 @@ const app = {
         // v18 修正: 空配列でも上書き (旧版は length=0 で既存維持 → 削除できないバグ)
         config.break_rules = breakRules;
 
-        // 時間帯別ルール
+        // 時間帯別ルール (v3.6: 不正な値はスキップ)
         config.time_staff_req = [];
         const timeReqRows = document.querySelectorAll('#timeStaffReqBody tr');
         timeReqRows.forEach((row, idx) => {
             const start = row.querySelector('.setting-time-req-start')?.value;
             const end = row.querySelector('.setting-time-req-end')?.value;
-            const count = Number(row.querySelector('.setting-time-req-count')?.value || 0);
+            const countRaw = Number(row.querySelector('.setting-time-req-count')?.value);
             const position = row.querySelector('.setting-time-req-position')?.value || 'any';
 
             const daysChecks = document.querySelectorAll(`.setting-time-req-day-${idx}:checked`);
             const days = Array.from(daysChecks).map(c => Number(c.value));
 
+            // 数値検証: 有限な正の整数のみ、上限50で clamp
+            const count = (Number.isFinite(countRaw) && countRaw > 0) ? Math.min(Math.floor(countRaw), 50) : 0;
             if (days.length > 0 && start && end && count > 0) {
                 config.time_staff_req.push({ days, start, end, count, position });
             }
@@ -5563,6 +5571,18 @@ const app = {
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
                 const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
                 dates.push(dateStr);
+            }
+
+            // v3.6: 過去日付のフロント側ガード
+            // RLS (DB側) が過去日付をブロックするため、サーバー到達前に検出してわかりやすいエラーを返す
+            const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            const pastDates = dates.filter(d => d < todayStr);
+            if (pastDates.length > 0 && targetType !== 'empty_only') {
+                if (loadingEl) loadingEl.classList.add('hidden');
+                this.showToast(`過去日 ${pastDates.length}日 が含まれています (${pastDates[0]}...)。今月のシフトを再生成する場合は「空きを埋める」をご利用ください`, 'error');
+                stepTimers.forEach(clearTimeout);
+                this._generationSuccess = false;
+                return;
             }
 
             if (!this.state.config.organization_id) {
