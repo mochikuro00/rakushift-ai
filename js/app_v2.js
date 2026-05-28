@@ -5614,8 +5614,25 @@ const app = {
             lines.push('・店舗設定の「最低管理者数」「時間帯別必要人数」を見直す');
             lines.push('・希望休 (休暇申請) を一部却下する');
 
-            // alert() で全文表示 (toast は短文用なので)
-            alert('【シフト生成 不能診断】 ' + headline + '\n\n' + lines.join('\n'));
+            // v3.7.5: alert() はブラウザ抑制されることがあるため、画面内モーダルで表示
+            const html = `
+                <div class="fixed inset-0 z-[10000] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.5)">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                        <div class="p-5 border-b border-gray-200 bg-red-50">
+                            <h3 class="text-lg font-bold text-red-700"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${this._sanitize(headline)}</h3>
+                        </div>
+                        <div class="p-5">
+                            <pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans">${this._sanitize(lines.join('\n'))}</pre>
+                        </div>
+                        <div class="p-4 border-t border-gray-200 text-right bg-gray-50">
+                            <button onclick="this.closest('.fixed').remove()" class="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-bold">閉じる</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const wrap = document.createElement('div');
+            wrap.innerHTML = html;
+            document.body.appendChild(wrap.firstElementChild);
         } catch (e) {
             console.warn('[Generation Diagnostics] /check failed:', e);
             this.showToast(headline + '。スタッフ条件を緩和するかスタッフを追加してください。', 'warning');
