@@ -5035,6 +5035,25 @@ const app = {
             }
         }
 
+        // v3.7.1: スタッフ属性を専用カラムに保存 (旧版は unavailable_dates タグに詰め込んでいた)
+        const contractType = document.getElementById('staffContractType')?.value || 'general';
+        const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
+        const usePref = document.getElementById('staffUsePrefHours')?.checked;
+        const prefStartWd = usePref ? (document.getElementById('staffPrefStartWeekday')?.value || '') : '';
+        const prefEndWd = usePref ? (document.getElementById('staffPrefEndWeekday')?.value || '') : '';
+        const prefStartWe = usePref ? (document.getElementById('staffPrefStartWeekend')?.value || '') : '';
+        const prefEndWe = usePref ? (document.getElementById('staffPrefEndWeekend')?.value || '') : '';
+        const ngPairs = document.getElementById('staffNgPairs')?.value || '';
+        const reqPairs = document.getElementById('staffReqPairs')?.value || '';
+        const position = document.getElementById('staffPosition')?.value || 'any';
+
+        // NG曜日を収集
+        const ngWeekdays = [];
+        for (let i = 0; i <= 6; i++) {
+            const cb = document.getElementById('prefDay' + i);
+            if (cb && !cb.checked) ngWeekdays.push(i);
+        }
+
         const data = {
             name: (document.getElementById('staffName')?.value || ''),
             role: (document.getElementById('staffRole')?.value || ''),
@@ -5046,6 +5065,17 @@ const app = {
             max_hours_day: Number((document.getElementById('staffMaxHoursPerDay')?.value || '')),
             min_days_week: Number((document.getElementById('staffMinDaysPerWeek')?.value || '')) || 0,
             min_days_month: Number((document.getElementById('staffMinDaysPerMonth')?.value || '')) || 0,
+            // 専用カラム (migration 50/51 で追加)
+            shift_priority: shiftPriority,
+            contract_type: contractType,
+            pref_start_wd: prefStartWd || null,
+            pref_end_wd: prefEndWd || null,
+            pref_start_we: prefStartWe || null,
+            pref_end_we: prefEndWe || null,
+            ng_pairs: ngPairs || null,
+            req_pairs: reqPairs || null,
+            position: position,
+            ng_weekdays: ngWeekdays,
             contract_id: contractId
         };
 
@@ -5058,42 +5088,16 @@ const app = {
             data.organization_id = orgId;
         }
 
-        // DBマイグレーション不要で保存するためのハック：unavailable_datesにメタデータを埋め込む
+        // unavailable_dates は実日付のみ保持 (旧タグデータは migration 50 で削除済み)
         const existingStaff = this.state.staff.find(st => st.id === id);
         let uDates = [];
         if (existingStaff && existingStaff.unavailable_dates) {
-            uDates = Array.isArray(existingStaff.unavailable_dates) 
-                ? [...existingStaff.unavailable_dates] 
-                : String(existingStaff.unavailable_dates).split(',').map(d=>d.trim()).filter(d=>d);
+            uDates = Array.isArray(existingStaff.unavailable_dates)
+                ? [...existingStaff.unavailable_dates]
+                : String(existingStaff.unavailable_dates).split(',').map(d => d.trim()).filter(d => d);
         }
-        // 既存のタグを削除
-        uDates = uDates.filter(d => !d.startsWith('priority:') && !d.startsWith('contract:') && !d.startsWith('prefStart') && !d.startsWith('prefEnd') && !d.startsWith('ngDay:') && !d.startsWith('ngPair:') && !d.startsWith('reqPair:') && !d.startsWith('position:'));
-        
-        const contractType = document.getElementById('staffContractType')?.value || 'general';
-        const shiftPriority = document.getElementById('staffShiftPriority')?.value || 'medium';
-        const usePref = document.getElementById('staffUsePrefHours')?.checked;
-        const prefStartWd = usePref ? (document.getElementById('staffPrefStartWeekday')?.value || '') : '';
-        const prefEndWd = usePref ? (document.getElementById('staffPrefEndWeekday')?.value || '') : '';
-        const prefStartWe = usePref ? (document.getElementById('staffPrefStartWeekend')?.value || '') : '';
-        const prefEndWe = usePref ? (document.getElementById('staffPrefEndWeekend')?.value || '') : '';
-        const ngPairs = document.getElementById('staffNgPairs')?.value || '';
-        const reqPairs = document.getElementById('staffReqPairs')?.value || '';
-        const position = document.getElementById('staffPosition')?.value || 'any';
-        
-        uDates.push(`priority:${shiftPriority}`);
-        uDates.push(`contract:${contractType}`);
-        if (prefStartWd) uDates.push(`prefStartWd:${prefStartWd}`);
-        if (prefEndWd) uDates.push(`prefEndWd:${prefEndWd}`);
-        if (prefStartWe) uDates.push(`prefStartWe:${prefStartWe}`);
-        if (prefEndWe) uDates.push(`prefEndWe:${prefEndWe}`);
-        if (ngPairs) uDates.push(`ngPair:${ngPairs}`);
-        if (reqPairs) uDates.push(`reqPair:${reqPairs}`);
-        if (position !== 'any') uDates.push(`position:${position}`);
-        for(let i=0; i<=6; i++) {
-            const cb = document.getElementById('prefDay'+i);
-            if(cb && !cb.checked) uDates.push(`ngDay:${i}`);
-        }
-        
+        // 念のため YYYY-MM-DD 形式の日付のみを残す
+        uDates = uDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
         data.unavailable_dates = uDates;
 
         this.showLoading(true);
@@ -5157,23 +5161,39 @@ const app = {
         let position = 'any';
         let ngDays = [];
         let hasPref = false;
+
+        // v3.7.1: 新カラムから直接読み取り (migration 50/51 で導入)
+        if (s.shift_priority) shiftPriority = s.shift_priority;
+        if (s.contract_type) contractType = s.contract_type;
+        if (s.pref_start_wd) { prefStartWd = s.pref_start_wd; hasPref = true; }
+        if (s.pref_end_wd) { prefEndWd = s.pref_end_wd; hasPref = true; }
+        if (s.pref_start_we) { prefStartWe = s.pref_start_we; hasPref = true; }
+        if (s.pref_end_we) { prefEndWe = s.pref_end_we; hasPref = true; }
+        if (s.ng_pairs) ngPairs = s.ng_pairs;
+        if (s.req_pairs) reqPairs = s.req_pairs;
+        if (s.position) position = s.position;
+        if (Array.isArray(s.ng_weekdays)) ngDays = s.ng_weekdays.map(String);
+
+        // 旧データ (unavailable_dates タグ) フォールバック
+        // 注: migration 50 でタグはクリーン済みだが、新規生成された古いデータが
+        // 残っている可能性に備えて互換読み取りを継続
         if (s.unavailable_dates) {
             const uDates = Array.isArray(s.unavailable_dates) ? s.unavailable_dates : String(s.unavailable_dates).split(',');
             uDates.forEach(d => {
                 const txt = d.trim();
-                if (txt.startsWith('priority:')) shiftPriority = txt.replace('priority:', '');
-                if (txt.startsWith('contract:')) contractType = txt.replace('contract:', '');
-                if (txt.startsWith('prefStartWd:')) { prefStartWd = txt.replace('prefStartWd:', ''); hasPref = true; }
-                if (txt.startsWith('prefEndWd:')) { prefEndWd = txt.replace('prefEndWd:', ''); hasPref = true; }
-                if (txt.startsWith('prefStartWe:')) { prefStartWe = txt.replace('prefStartWe:', ''); hasPref = true; }
-                if (txt.startsWith('prefEndWe:')) { prefEndWe = txt.replace('prefEndWe:', ''); hasPref = true; }
-                if (txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
-                if (txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
-                if (txt.startsWith('position:')) position = txt.replace('position:', '');
-                // 互換性のため古いタグもサポート
-                if (txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); hasPref = true; }
-                if (txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); hasPref = true; }
-                if (txt.startsWith('ngDay:')) ngDays.push(txt.replace('ngDay:', ''));
+                if (!s.shift_priority && txt.startsWith('priority:')) shiftPriority = txt.replace('priority:', '');
+                if (!s.contract_type && txt.startsWith('contract:')) contractType = txt.replace('contract:', '');
+                if (!s.pref_start_wd && txt.startsWith('prefStartWd:')) { prefStartWd = txt.replace('prefStartWd:', ''); hasPref = true; }
+                if (!s.pref_end_wd && txt.startsWith('prefEndWd:')) { prefEndWd = txt.replace('prefEndWd:', ''); hasPref = true; }
+                if (!s.pref_start_we && txt.startsWith('prefStartWe:')) { prefStartWe = txt.replace('prefStartWe:', ''); hasPref = true; }
+                if (!s.pref_end_we && txt.startsWith('prefEndWe:')) { prefEndWe = txt.replace('prefEndWe:', ''); hasPref = true; }
+                if (!s.ng_pairs && txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
+                if (!s.req_pairs && txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
+                if ((!s.position || s.position === 'any') && txt.startsWith('position:')) position = txt.replace('position:', '');
+                // 互換: 古い prefStart/End (曜日区分なし)
+                if (!s.pref_start_wd && txt.startsWith('prefStart:')) { prefStartWd = txt.replace('prefStart:', ''); prefStartWe = txt.replace('prefStart:', ''); hasPref = true; }
+                if (!s.pref_end_wd && txt.startsWith('prefEnd:')) { prefEndWd = txt.replace('prefEnd:', ''); prefEndWe = txt.replace('prefEnd:', ''); hasPref = true; }
+                if (!Array.isArray(s.ng_weekdays) && txt.startsWith('ngDay:')) ngDays.push(txt.replace('ngDay:', ''));
             });
         }
         if (document.getElementById('staffContractType')) document.getElementById('staffContractType').value = contractType;

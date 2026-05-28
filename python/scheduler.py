@@ -262,24 +262,36 @@ class ShiftScheduler:
                 self._monthly_ids.add(sid)
             self._eval_rank[sid] = evaluation if evaluation in self.POWER_SCORE else "B"
 
-            # Parse prefStart and prefEnd
+            # v3.7.1: 新カラム (migration 50/51) を優先し、旧 unavailable_dates タグは
+            # フォールバックとして使用する。新カラムに値があればそちらを採用。
+            # 既に s.get("shift_priority") 等で値が入っていれば、タグ解析は補完のみ。
             ud = s.get("unavailable_dates")
             if ud:
                 if isinstance(ud, str):
                     ud = [d.strip() for d in ud.split(",") if d.strip()]
                 for d in ud:
-                    if d.startswith("prefStart:"): s["pref_start"] = d.replace("prefStart:", "")
-                    if d.startswith("prefEnd:"): s["pref_end"] = d.replace("prefEnd:", "")
-                    if d.startswith("prefStartWd:"): s["pref_start_wd"] = d.replace("prefStartWd:", "")
-                    if d.startswith("prefEndWd:"): s["pref_end_wd"] = d.replace("prefEndWd:", "")
-                    if d.startswith("prefStartWe:"): s["pref_start_we"] = d.replace("prefStartWe:", "")
-                    if d.startswith("prefEndWe:"): s["pref_end_we"] = d.replace("prefEndWe:", "")
-                    if d.startswith("ngPair:"): s["ng_pairs"] = d.replace("ngPair:", "")
-                    if d.startswith("reqPair:"): s["req_pairs"] = d.replace("reqPair:", "")
-                    if d.startswith("position:"): s["position"] = d.replace("position:", "")
-                    # シフト優先度と契約区分のタグ解析（フロントエンドがunavailable_datesに埋め込む）
-                    if d.startswith("priority:"): s["shift_priority"] = d.replace("priority:", "")
-                    if d.startswith("contract:"): s["contract_type"] = d.replace("contract:", "")
+                    if d.startswith("prefStart:") and not s.get("pref_start"):
+                        s["pref_start"] = d.replace("prefStart:", "")
+                    if d.startswith("prefEnd:") and not s.get("pref_end"):
+                        s["pref_end"] = d.replace("prefEnd:", "")
+                    if d.startswith("prefStartWd:") and not s.get("pref_start_wd"):
+                        s["pref_start_wd"] = d.replace("prefStartWd:", "")
+                    if d.startswith("prefEndWd:") and not s.get("pref_end_wd"):
+                        s["pref_end_wd"] = d.replace("prefEndWd:", "")
+                    if d.startswith("prefStartWe:") and not s.get("pref_start_we"):
+                        s["pref_start_we"] = d.replace("prefStartWe:", "")
+                    if d.startswith("prefEndWe:") and not s.get("pref_end_we"):
+                        s["pref_end_we"] = d.replace("prefEndWe:", "")
+                    if d.startswith("ngPair:") and not s.get("ng_pairs"):
+                        s["ng_pairs"] = d.replace("ngPair:", "")
+                    if d.startswith("reqPair:") and not s.get("req_pairs"):
+                        s["req_pairs"] = d.replace("reqPair:", "")
+                    if d.startswith("position:") and (not s.get("position") or s.get("position") == "any"):
+                        s["position"] = d.replace("position:", "")
+                    if d.startswith("priority:") and not s.get("shift_priority"):
+                        s["shift_priority"] = d.replace("priority:", "")
+                    if d.startswith("contract:") and not s.get("contract_type"):
+                        s["contract_type"] = d.replace("contract:", "")
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
         
@@ -422,14 +434,57 @@ class ShiftScheduler:
         return brk
 
     def _compute_staff_ng_dates(self, staff):
-        """スタッフのNG日を計算 (unavailable_dates + 承認済み休暇)"""
+        """スタッフのNG日を計算 (unavailable_dates 実日付 + ng_weekdays 曜日 + 承認済み休暇)
+
+        v3.7.1: ng_weekdays カラム (migration 50 で追加) に対応。
+        対象期間 (self.dates) 内で、指定曜日に該当する日付をすべて NG セットに追加。
+        旧 unavailable_dates タグ "ngDay:0" は実は機能していなかった (日付比較で
+        ヒットしないため) が、v3.7.1 で正しく機能するように修正。
+        """
         raw = staff.get("unavailable_dates")
         ng = set()
         if raw:
             if isinstance(raw, list):
-                ng = {str(d).strip() for d in raw if str(d).strip()}
+                # 実日付のみを採用 (タグ形式は除外)
+                for d in raw:
+                    s = str(d).strip()
+                    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                        ng.add(s)
             else:
-                ng = {str(d).strip() for d in str(raw).split(",") if str(d).strip()}
+                for d in str(raw).split(","):
+                    s = d.strip()
+                    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                        ng.add(s)
+
+        # v3.7.1: ng_weekdays (新カラム) または旧 ngDay タグから曜日 NG を展開
+        ng_weekdays = set()
+        ngwd_col = staff.get("ng_weekdays")
+        if isinstance(ngwd_col, list):
+            for w in ngwd_col:
+                try:
+                    ng_weekdays.add(int(w))
+                except (ValueError, TypeError):
+                    pass
+        # 旧 ngDay タグ フォールバック
+        if raw and isinstance(raw, list):
+            for d in raw:
+                s = str(d).strip()
+                if s.startswith("ngDay:"):
+                    try:
+                        ng_weekdays.add(int(s.replace("ngDay:", "")))
+                    except (ValueError, TypeError):
+                        pass
+        # 対象期間内で該当曜日を NG に追加 (JavaScript互換: 0=日, 1=月, ..., 6=土)
+        if ng_weekdays:
+            for date_str in self.dates:
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    js_dow = (dt.weekday() + 1) % 7  # Python: Mon=0 → JS: Sun=0
+                    if js_dow in ng_weekdays:
+                        ng.add(date_str)
+                except ValueError:
+                    pass
+
         for req in self.requests:
             if (req.get("staff_id") == staff["id"]
                     and req.get("type") in ("off", "holiday")
