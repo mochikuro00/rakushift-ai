@@ -5670,8 +5670,17 @@ const app = {
 
         this._shiftGenInProgress = true;
 
-        // v3.7.7: 診断バナー (画面上部にステータスを常時表示) — エラーが見えない問題対策
-        this._debugBanner = (() => {
+        // v3.7.10: 診断バナーをデバッグモード限定に。
+        // 有効化: URL に ?debug=1 を付けるか、コンソールで localStorage.setItem('rakushift_debug','1')
+        // 通常運用ではバナー非表示。何か起きたときだけ有効化して詳細ログを取れる。
+        const _debugMode = (() => {
+            try {
+                if (new URLSearchParams(location.search).has('debug')) return true;
+                if (localStorage.getItem('rakushift_debug') === '1') return true;
+            } catch (_) {}
+            return false;
+        })();
+        this._debugBanner = _debugMode ? (() => {
             const old = document.getElementById('_debugStatusBanner');
             if (old) old.remove();
             const banner = document.createElement('div');
@@ -5690,7 +5699,7 @@ const app = {
                     console.log('[ShiftGen]', msg);
                 }
             };
-        })();
+        })() : { log: (msg) => console.log('[ShiftGen]', msg) };
         this._debugBanner.log('生成フロー開始');
 
         if (loadingDefault) loadingDefault.style.display = 'none';

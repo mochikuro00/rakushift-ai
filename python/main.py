@@ -314,8 +314,8 @@ async def verify_session_org_id(session_id: Optional[str]) -> Optional[Dict[str,
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Rakushift Engine v3.7.9 Ready",
-            "build": "2026.05.28-v3.7.9-ng-pairs-null-fix"}
+    return {"status": "ok", "message": "Rakushift Engine v3.7.10 Ready",
+            "build": "2026.05.29-v3.7.10-production-cleanup"}
 
 
 @app.get("/health")
@@ -674,12 +674,11 @@ async def generate_shifts(request: Request, req: ShiftRequest,
     except Exception as e:
         logger.error("Error in /generate: {}".format(e))
         import traceback
-        tb_str = traceback.format_exc()
         traceback.print_exc()
-        # v3.7.8: ユーザーが「エラーが見えない」問題を診断するため、本番でも詳細を返す。
-        # (生成エラーは内部実装詳細であり、認証情報やシークレットは含まれないため許容)
-        err_msg = "{}: {}".format(type(e).__name__, str(e))
-        return {"status": "error", "message": err_msg, "trace_tail": tb_str.splitlines()[-5:] if not IS_PRODUCTION else None}
+        # v3.7.10: 本番モードに復帰 — 詳細はサーバログに、ユーザーには汎用メッセージ。
+        # デバッグ時は IS_PRODUCTION=0 を設定するか、Railway ログを参照。
+        err_msg = "シフト生成中にエラーが発生しました" if IS_PRODUCTION else "{}: {}".format(type(e).__name__, str(e))
+        return {"status": "error", "message": err_msg}
 
 
 # =============================================================
