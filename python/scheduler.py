@@ -2260,11 +2260,27 @@ class ShiftScheduler:
                     # 既に配置済みのスタッフに NG パートナーがいたらスキップ
                     if any((sid, other_sid) in ng_pair_set for other_sid in assigned):
                         continue
-                    # v3.6: 新人 (rookie) はメンターが同日に居る場合のみ配置可。
-                    # OJT 制約を greedy でも守ることで「新人だけのシフト」を防ぐ
+                    # v3.7.11: OJT メンター制約 — 旧版は「メンター同日在席」のみ
+                    # チェックしていたが、時間帯が重ならない (例: メンター早番 / 新人遅番)
+                    # と実質的にメンター不在になるバグ。
+                    # 修正: その日に既に配置されたメンターのシフト時間範囲を集めて、
+                    # 後で新人シフト候補ごとに時間重複を確認する。
+                    mentor_ranges_on_day = []
                     if sid in self._rookie_ids:
                         has_mentor = any(other_sid in self._mentor_ids for other_sid in assigned)
                         if not has_mentor:
+                            continue
+                        # day_shifts は最新の day_shifts (このループの上にあるはず)
+                        for sh in day_shifts:
+                            if sh.get("staff_id") in self._mentor_ids:
+                                try:
+                                    mstart = self._to_minutes(sh["start_time"])
+                                    mend = self._normalize_end_time(mstart, self._to_minutes(sh["end_time"]))
+                                    mentor_ranges_on_day.append((mstart, mend))
+                                except (ValueError, KeyError):
+                                    pass
+                        if not mentor_ranges_on_day:
+                            # メンターは居るが時間データが取れない → 配置スキップ (安全側)
                             continue
                     if self._greedy_check_limits(sid, wk, weekly_count,
                                                  weekly_hours, consecutive, s):
@@ -2273,6 +2289,14 @@ class ShiftScheduler:
                     for opt in self._build_shift_options(s, d, force=False):
                         if opt["hours"] > max_hours:
                             continue
+                        # v3.7.11: 新人候補シフトとメンターシフトの時間重複チェック
+                        if mentor_ranges_on_day:
+                            opt_overlaps_mentor = any(
+                                opt["start_min"] < mend and opt["end_min"] > mstart
+                                for mstart, mend in mentor_ranges_on_day
+                            )
+                            if not opt_overlaps_mentor:
+                                continue
                         if opt["start_min"] <= worst < opt["end_min"]:
                             c = sum(1 for sm in deficit
                                     if opt["start_min"] <= sm < opt["end_min"])

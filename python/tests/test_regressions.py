@@ -213,6 +213,57 @@ class TestGreedyNgPair:
         assert ("s1", "s2") in pairs or ("s2", "s1") in pairs
 
 
+class TestNullableStaffAttributes:
+    """v3.7.9 で修正: ng_pairs/req_pairs カラムが DB NULL のとき
+    re.split(pattern, None) で TypeError になっていたバグの再発防止。
+    migration 50/51 で NULLABLE 専用カラムを追加後、旧データに NULL が残り
+    再現していた。
+    """
+
+    def test_ng_pairs_null_does_not_crash(self):
+        """ng_pairs=None で ShiftScheduler.__init__ がクラッシュしない。"""
+        staff = [
+            make_staff("s1", "山田", ng_pairs=None),
+            make_staff("s2", "佐藤", ng_pairs=None),
+        ]
+        # クラッシュしないこと
+        sch = ShiftScheduler(staff_list=staff, config=make_config(), dates=["2026-06-01"])
+        # NG ペアは登録されない (None なので空文字列扱い)
+        assert len(sch._ng_pair_constraints) == 0
+
+    def test_req_pairs_null_does_not_crash(self):
+        """req_pairs=None も同様。"""
+        staff = [
+            make_staff("s1", "山田", req_pairs=None),
+        ]
+        sch = ShiftScheduler(staff_list=staff, config=make_config(), dates=["2026-06-01"])
+        assert len(sch._req_pair_constraints) == 0
+
+    def test_ng_pairs_empty_string_works(self):
+        """ng_pairs="" (空文字列) でも問題ない。"""
+        staff = [make_staff("s1", "山田", ng_pairs="")]
+        sch = ShiftScheduler(staff_list=staff, config=make_config(), dates=["2026-06-01"])
+        assert len(sch._ng_pair_constraints) == 0
+
+    def test_ng_weekdays_null_does_not_crash(self):
+        """ng_weekdays=None でも NG 日計算がクラッシュしない。"""
+        staff = [make_staff("s1", "山田", ng_weekdays=None)]
+        sch = ShiftScheduler(staff_list=staff, config=make_config(), dates=["2026-06-01"])
+        ng = sch._compute_staff_ng_dates(staff[0])
+        # ng_weekdays が None なので何も NG にならない
+        assert isinstance(ng, set)
+
+    def test_pref_columns_null_does_not_crash(self):
+        """全 pref_* 新カラムが None でクラッシュしない。"""
+        staff = [make_staff("s1", "テスト",
+                          pref_start_wd=None, pref_end_wd=None,
+                          pref_start_we=None, pref_end_we=None)]
+        sch = ShiftScheduler(staff_list=staff, config=make_config(), dates=["2026-06-01"])
+        # _build_shift_options が動作する
+        opts = sch._build_shift_options(staff[0], "2026-06-01", force=False)
+        assert isinstance(opts, list)
+
+
 # ========================================
 # v3.6: ペナルティ重みの階層整合性
 # ========================================
