@@ -5879,9 +5879,15 @@ const app = {
                     wrap.innerHTML = html;
                     const modal = wrap.firstElementChild;
                     document.body.appendChild(modal);
+                    // v3.7.12: ev.target は子要素 (i タグ等) の可能性があるため
+                    // closest('[data-action]') で確実にボタンを特定。旧版は
+                    // ev.target.dataset?.action だけで判定し、ボタン内 i タグや
+                    // テキスト領域クリックで Promise が永久 await になるバグ
+                    // (agent #2 指摘 CRITICAL)。
                     modal.addEventListener('click', (ev) => {
-                        const action = ev.target.dataset?.action;
-                        if (action) {
+                        const btn = ev.target.closest && ev.target.closest('[data-action]');
+                        if (btn) {
+                            const action = btn.dataset.action;
                             modal.remove();
                             resolve(action === 'force');
                         }
@@ -5908,10 +5914,14 @@ const app = {
 
             // === STEP 3: 削除処理 ===
             if (targetType === 'reset_all') {
-
+                // v3.7.12: タイムゾーン依存の new Date(s.date) >= today 比較を撤廃。
+                // 旧版は s.date="2026-05-30" を JST 00:00 と解釈する一方、today は
+                // 現在時刻 15:30 等。同じ日でも 15:30 を超えると過去判定され、
+                // 本日のシフトが削除対象から外れていた (agent #2 指摘 CRITICAL)。
+                // todayStr (YYYY-MM-DD) との文字列比較に統一。
                 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 const shiftsToDelete = this.state.shifts.filter(function(s) {
-                    return dates.includes(s.date) && new Date(s.date) >= today && s.id && uuidRegex.test(s.id);
+                    return dates.includes(s.date) && s.date >= todayStr && s.id && uuidRegex.test(s.id);
                 });
                 if (shiftsToDelete.length > 0) {
                     // 一括削除 RPC で RLS 回避 + 効率化
@@ -5925,7 +5935,7 @@ const app = {
                     }
                 }
                 this.state.shifts = this.state.shifts.filter(function(s) {
-                    return !(dates.includes(s.date) && new Date(s.date) >= today);
+                    return !(dates.includes(s.date) && s.date >= todayStr);
                 });
             }
 

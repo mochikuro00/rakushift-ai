@@ -902,16 +902,16 @@ class ShiftScheduler:
         estimated_vars = n_staff * n_days * 5
         logger.info("[Solve] staff=%d days=%d est_vars=%d", n_staff, n_days, estimated_vars)
 
-        # v3.6: Tier 自動降格の閾値を引き上げ。
-        # 旧版は staff>=50 で Tier2 (品質最適化スキップ) に落ちていたが、
-        # timeLimit 引き上げ (Tier3 60s→120s) と合わせて中規模店でも品質最適化を維持。
-        # 旧: staff>=50→T2, staff>=100→T1
-        # 新: staff>=80→T2, staff>=150→T1
+        # v3.7.12: Tier 自動降格をさらに緩和。
+        # 旧版 (v3.6) は staff>=80 で Tier2 だったが、Tier3 timeLimit 120s 化と
+        # 合わせて n_staff=100 程度までは Tier3 で耐える (agent #1 指摘)。
+        # estimated_vars 係数も実態に近づける (旧 ×5 → ×8、NG/REQペア・OJT 制約等含む)。
         start_tier = 3
-        if n_staff >= 150 or estimated_vars > 60000:
+        estimated_vars_realistic = n_staff * n_days * 8  # NG/OJT 制約等で +60%
+        if n_staff >= 150 or estimated_vars_realistic > 80000:
             start_tier = 1
             logger.warning("[Solve] Large scale (staff=%d) → starting from Tier 1 (legal only) to avoid timeout", n_staff)
-        elif n_staff >= 80 or estimated_vars > 30000:
+        elif n_staff >= 100 or estimated_vars_realistic > 40000:
             start_tier = 2
             logger.warning("[Solve] Medium-large scale (staff=%d) → starting from Tier 2 (skip quality opt)", n_staff)
 
@@ -1155,10 +1155,17 @@ class ShiftScheduler:
                     available_total = len([d for d in self.dates
                                           if d not in ng_set and self._get_day_type(d) != "closed"])
                     target_min_month = min(target_min_month, available_total)
+                    # v3.7.12: max_possible 計算で NG/休業を考慮 (agent #1 指摘 HIGH)。
+                    # 旧版は週内全日 (len(week)) を分母にしており、NG/閉店日が含まれていたため
+                    # max_possible が過大評価され、target_min_month が達成不能になるケースがあった。
                     max_possible = 0
                     mdw = int(s.get("max_days_week") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
                     for week in week_groups:
-                        max_possible += min(mdw, len(week))
+                        week_available = sum(
+                            1 for d in week
+                            if d not in ng_set and self._get_day_type(d) != "closed"
+                        )
+                        max_possible += min(mdw, week_available)
                     target_min_month = min(target_min_month, max_possible)
                     if target_min_month > 0:
                         all_wv = []
@@ -1610,6 +1617,13 @@ class ShiftScheduler:
                                         bonus = self.W.PREFERENCE_EXACT
                                     elif diff <= 60:
                                         bonus = self.W.PREFERENCE_CLOSE
+                                # v3.7.12: 常時希望時間帯 (pref_start_wd/we) と一致する opt にも
+                                # EXACT ボーナスを付与 (agent #1 指摘の is_pref デッドコード解消)。
+                                # 旧版は work request の req_start/end の diff のみで判定していたが、
+                                # 常時希望と work request の req_start が必ずしも一致するとは限らないため、
+                                # is_pref フラグがある opt は強制的に EXACT に格上げ。
+                                if opt.get("is_pref") and bonus > self.W.PREFERENCE_EXACT:
+                                    bonus = self.W.PREFERENCE_EXACT
                                 penalty += x[(rsid, rd, oi)] * bonus
                                 preference_count += 1
 
@@ -2300,12 +2314,14 @@ class ShiftScheduler:
                         if opt["start_min"] <= worst < opt["end_min"]:
                             c = sum(1 for sm in deficit
                                     if opt["start_min"] <= sm < opt["end_min"])
-                            # v3.6: 希望時間帯 (is_pref) にタイブレーカーボーナス。
-                            # _build_shift_options が pref_pat を先頭に追加してくれるので、
-                            # 同点カバレッジなら希望時間帯を優先する
-                            if opt.get("is_pref"):
-                                c += 0.5
-                            if c > best_cov:
+                            # v3.7.12: タイブレーカー判定を浮動小数点 +0.5 ではなく
+                            # (cov, is_pref) のタプル比較に変更。
+                            # 旧版は c += 0.5 で int→float 昇格があり、後の整数比較で
+                            # 精度問題のリスクがあった (agent #1 指摘 CRITICAL)。
+                            is_pref_bonus = 1 if opt.get("is_pref") else 0
+                            score = (c, is_pref_bonus)
+                            best_score = (best_cov, 1 if best_o and best_o.get("is_pref") else 0)
+                            if score > best_score:
                                 best_cov = c
                                 best_s = s
                                 best_o = opt
@@ -2384,43 +2400,46 @@ class ShiftScheduler:
                     if consec_violation:
                         continue
 
-                    # 10時間インターバルチェック: 前日/翌日の既存シフトとの間隔
-                    interval_violation = False
-                    for sh in shifts:
-                        if sh["staff_id"] != sid:
-                            continue
-                        try:
-                            sh_dt = datetime.strptime(sh["date"], "%Y-%m-%d")
-                        except ValueError:
-                            continue
-                        diff_days = (sh_dt - d_dt).days
-                        if abs(diff_days) > 1:
-                            continue
-                        # opts[0] を試す前提で、その範囲で interval を確認
-                        opt0 = self._build_shift_options(s, d, force=False)
-                        if not opt0:
-                            continue
-                        cand_start = opt0[0]["start_min"]
-                        cand_end = opt0[0]["end_min"]
-                        sh_start = self._to_minutes(sh["start_time"])
-                        sh_end = self._normalize_end_time(sh_start, self._to_minutes(sh["end_time"]))
-                        if diff_days == 1:  # sh が翌日
-                            iv = (sh_start + 1440) - cand_end
-                        elif diff_days == -1:  # sh が前日
-                            iv = (cand_start + 1440) - sh_end
-                        else:
-                            continue
-                        if iv < 600:
-                            interval_violation = True
-                            break
-                    if interval_violation:
-                        continue
-
-                    # 週40時間チェック (簡易): 既存シフトの週内合計 + 候補シフト work_hours
+                    # v3.7.12: 10時間インターバル + シフト選択を一体化
+                    # 旧版は opt0[0] でインターバル検証 → opts[0] で配置していたが、
+                    # 別オプションが返るケースがあり実質チェック無効化のリスクがあった
+                    # (agent #1 指摘 HIGH)。
+                    # 修正: 「インターバル違反しない最初の opt」を探して採用する。
                     opts = self._build_shift_options(s, d, force=False)
                     if not opts:
                         continue
-                    opt = opts[0]
+                    chosen_opt = None
+                    for cand in opts:
+                        cand_start = cand["start_min"]
+                        cand_end = cand["end_min"]
+                        violates = False
+                        for sh in shifts:
+                            if sh["staff_id"] != sid:
+                                continue
+                            try:
+                                sh_dt = datetime.strptime(sh["date"], "%Y-%m-%d")
+                            except ValueError:
+                                continue
+                            diff_days = (sh_dt - d_dt).days
+                            if abs(diff_days) > 1:
+                                continue
+                            sh_start = self._to_minutes(sh["start_time"])
+                            sh_end = self._normalize_end_time(sh_start, self._to_minutes(sh["end_time"]))
+                            if diff_days == 1:
+                                iv = (sh_start + 1440) - cand_end
+                            elif diff_days == -1:
+                                iv = (cand_start + 1440) - sh_end
+                            else:
+                                continue
+                            if iv < 600:
+                                violates = True
+                                break
+                        if not violates:
+                            chosen_opt = cand
+                            break
+                    if chosen_opt is None:
+                        continue
+                    opt = chosen_opt
                     week_set = set(week)
                     existing_hours = 0.0
                     for sh in shifts:
