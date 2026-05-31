@@ -1629,6 +1629,32 @@ class ShiftScheduler:
 
                 logger.info("[Tier3] Preference fulfillment: {} shift preferences processed".format(preference_count))
 
+                # v3.7.13: 常時希望時間帯 (pref_start_wd/we) ボーナス
+                # 上記ループは work request を持つスタッフのみに適用される。
+                # work request なしで pref_start_wd のみ設定したスタッフにも
+                # 希望時間帯ボーナス (PREFERENCE_BASE) を付与し、MILP が希望を
+                # 尊重するようにする。
+                # 実機テストで「常時希望が反映されない」現象を発見した修正。
+                standing_pref_count = 0
+                for s in self.staff_list:
+                    sid = s["id"]
+                    # work request を持つスタッフはスキップ (上で処理済)
+                    has_work_req = any(
+                        req.get("staff_id") == sid
+                        and req.get("type") == "work"
+                        and req.get("status") == "pending"
+                        for req in self.requests
+                    )
+                    if has_work_req:
+                        continue
+                    for d in self.dates:
+                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                            if opt.get("is_pref"):
+                                # 常時希望 opt のみにボーナス付与
+                                penalty += x[(sid, d, oi)] * self.W.PREFERENCE_BASE
+                                standing_pref_count += 1
+                logger.info("[Tier3] Standing preferences: {} options bonused".format(standing_pref_count))
+
                 # --- 時間帯分散制約 (朝/昼/夕の3区分でバランス) ---
                 # 朝: 開始 < 11:00 / 昼: 11:00 <= 開始 < 16:00 / 夕: 開始 >= 16:00
                 # 旧2区分 (14時境界) より細かく、変数は1スタッフ1差分のみで負荷低
