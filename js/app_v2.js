@@ -5868,7 +5868,7 @@ const app = {
                                 <div class="p-5">
                                     <pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans">${this._sanitize(alertMsg)}</pre>
                                 </div>
-                                <div class="p-4 border-t border-gray-200 flex justify-end gap-2 bg-gray-50">
+                                <div class="p-4 border-t border-gray-200 flex flex-col sm:flex-row sm:justify-end gap-2 bg-gray-50">
                                     <button data-action="cancel" class="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold">中止して人員調整</button>
                                     <button data-action="force" class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">緩和して強行生成</button>
                                 </div>
@@ -7415,7 +7415,8 @@ const app = {
         let icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-circle-xmark' : type === 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle';
         // v3.7.5: error と warning は永続表示 + 閉じるボタン (旧版は3秒で消えて読めなかった)
         const persistent = (type === 'error' || type === 'warning');
-        toast.className = `flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 min-w-[320px] max-w-[480px] ${colorClass}`;
+        // v3.7.14: モバイル幅 (iPhone SE 1st gen 320px) でもはみ出ないように w-full + max-w
+        toast.className = `flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 w-full sm:min-w-[320px] max-w-[480px] ${colorClass}`;
         const safeMsg = this._sanitize(message);
         const closeBtn = persistent
             ? `<button onclick="this.closest('div.flex').remove()" class="ml-auto -mr-1 -mt-1 p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded" aria-label="閉じる"><i class="fa-solid fa-xmark"></i></button>`
