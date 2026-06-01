@@ -1159,7 +1159,8 @@ class ShiftScheduler:
                     # 旧版は週内全日 (len(week)) を分母にしており、NG/閉店日が含まれていたため
                     # max_possible が過大評価され、target_min_month が達成不能になるケースがあった。
                     max_possible = 0
-                    mdw = int(s.get("max_days_week") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+                    # v3.7.14: デフォルトは法定上限ではなく一般的な週5日 (上段 default と一貫させる)。
+                    mdw = int(s.get("max_days_week") or 5)
                     for week in week_groups:
                         week_available = sum(
                             1 for d in week

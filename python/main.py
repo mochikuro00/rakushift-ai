@@ -26,7 +26,11 @@ logging.basicConfig(
 logger = logging.getLogger("rakushift")
 
 # 本番環境フラグ（ログの個人情報マスク等に使用）
-IS_PRODUCTION = os.environ.get("RAILWAY_ENVIRONMENT", "") == "production" or os.environ.get("IS_PRODUCTION", "") == "1"
+# v3.7.14 failsafe: 環境変数が未設定の場合は **本番扱い** (詳細エラー非露出)。
+# 明示的に "development" を設定したときだけ詳細露出を許可する。
+_env = os.environ.get("RAILWAY_ENVIRONMENT", "").strip().lower()
+_is_prod_flag = os.environ.get("IS_PRODUCTION", "").strip().lower()
+IS_PRODUCTION = not (_env == "development" or _is_prod_flag in ("0", "false", "dev"))
 
 # レート制限設定
 limiter = Limiter(key_func=get_remote_address)

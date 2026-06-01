@@ -873,7 +873,7 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード <span class="text-red-500">*</span></label>
                             <input id="regModalPassword" type="password" maxlength="64" placeholder="店舗側で設定されたパスワード" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-300 focus:outline-none">
-                            <p class="text-[11px] text-gray-400 mt-1">運営マスターパスワード (rakushift1234) でも認証可</p>
+                            <p class="text-[11px] text-gray-400 mt-1">運営マスターパスワードでも認証可</p>
                         </div>
                     </div>
                     <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
@@ -1071,7 +1071,7 @@
                 <!-- 注意 -->
                 <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs space-y-1">
                     <p class="text-gray-500"><i class="fas fa-info-circle mr-1"></i>契約IDは15桁のランダム数字で自動生成されます</p>
-                    <p class="text-gray-500"><i class="fas fa-lock mr-1"></i>初期パスワード: <span class="font-mono font-medium text-gray-700">rakushift1234</span></p>
+                    <p class="text-gray-500"><i class="fas fa-lock mr-1"></i>初期パスワードは作成完了時に表示されます</p>
                 </div>
 
                 <div id="createResult" class="hidden"></div>
@@ -1587,7 +1587,7 @@
                     <p class="text-sm font-medium text-green-800"><i class="fas fa-circle-check mr-1"></i>テナントを作成しました（${planLabel}）</p>
                     <div class="mt-2 space-y-1">
                         <p class="text-sm text-green-700">契約ID: <span class="font-mono font-bold text-lg select-all">${result.contract_id}</span></p>
-                        <p class="text-sm text-green-700">パスワード: <span class="font-mono font-medium">rakushift1234</span></p>
+                        <p class="text-sm text-green-700">パスワード: <span class="font-mono font-medium">${result.initial_password || '初期パスワード'}</span></p>
                         <p class="text-sm text-green-700">メール: <span class="font-medium">${escapeHtml(orgEmail)}</span></p>
                         ${referrerCode ? `<p class="text-sm text-green-700">紹介者コード: <span class="font-mono font-medium">${escapeHtml(referrerCode)}</span></p>` : ''}
                     </div>
