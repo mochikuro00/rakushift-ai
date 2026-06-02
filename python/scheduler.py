@@ -56,38 +56,33 @@ class ShiftScheduler:
         #   v3.7 方針: 過不足を対称化 (UNDER=OVER) + シフト追加コスト引き上げ。
         #             希望はあくまで「同じ人数の中での選別」用に弱める。
         #
+        # v3.7.20: 廃止された制約に対応する定数を削除 (MIN_MANAGER / WEEKEND_FAIR /
+        # PEAK_SKILL / CONSEC_DAYS_FATIGUE / TIMEBAND_IMBALANCE / POWER_BALANCE)
+        #
         # --- カバレッジ (店舗運営の根幹) — 10M階層 ---
         EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避)
-        OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在
-        MIN_MANAGER         = 8_000_000   # 管理者数不足
+        OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在 / 社員1名以上常駐
         # --- 不足/過剰 — 対称化して「ぴったり」を真の最適解に ---
         COVERAGE_UNDER      = 5_000_000   # スロット必要人数不足
-        COVERAGE_OVER_DAY   = 5_000_000   # 日次過剰人員 (旧2M→5M, UNDER と対称)
-        COVERAGE_OVER_SLOT  = 4_000_000   # スロット過剰人員 (旧1M→4M, 過剰追加を抑制)
-        OJT_NO_MENTOR       = 500_000     # 新人×メンター不在 (v3.7.18: 3M→500k に弱化、希望や他制約に負ける階層)
+        COVERAGE_OVER_DAY   = 5_000_000   # 日次過剰人員
+        COVERAGE_OVER_SLOT  = 4_000_000   # スロット過剰人員
         POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
         # --- 希望シフト — カバレッジ過剰より弱く ---
-        PREFERENCE_EXACT    = -2_000_000  # 完全一致 (旧-3M→-2M, OVER_SLOT=4M より弱い)
-        PREFERENCE_CLOSE    = -1_000_000  # ±1時間以内 (旧-2M→-1M)
-        PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト (旧-1M→-500k)
-        MIN_DAYS_WEEK_BONUS = -500_000    # min_days_week 厳守 (旧-1M→-500k, 過剰追加防止)
+        PREFERENCE_EXACT    = -2_000_000  # 完全一致
+        PREFERENCE_CLOSE    = -1_000_000  # ±1時間以内
+        PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト
+        MIN_DAYS_WEEK_BONUS = -500_000    # min_days_week 厳守
+        OJT_NO_MENTOR       = 500_000     # 新人×メンター不在 (希望や他制約に負ける階層)
         # --- スタッフ属性ベース調整 ---
-        PRIORITY_HIGH       = -100_000    # 優先度 High スタッフを最優先 (旧-200k→-100k)
+        PRIORITY_HIGH       = -100_000    # 優先度 High スタッフを最優先
         PRIORITY_LOW        = 20_000      # 優先度 Low スタッフは穴埋め
         CONTRACT_REGULAR    = -20_000     # レギュラー契約優先
         CONTRACT_SPOT       = 10_000      # スポット契約は後回し
-        # --- 品質 — 10k-100k階層 ---
+        # --- 品質 ---
         FAIRNESS_DRIFT      = 100_000     # 公平性偏差
-        WEEKEND_FAIR        = 80_000      # 土日出勤バランス偏差
-        PEAK_SKILL          = 50_000      # ピーク帯スキルミックス不足
-        CONSEC_DAYS_FATIGUE = 40_000      # 連続勤務後の疲労
-        TIMEBAND_IMBALANCE  = 20_000      # 時間帯分散
-        POWER_BALANCE       = 10_000      # 戦力バランス
         MENTOR_MATCH_BONUS  = -10_000     # 主担当メンターとのペアリング
-        # --- シフト追加コスト — 「人数が多い場合は考えて」 ---
-        # v3.7: 30k → 100k に引き上げ、不要なシフト追加に強い摩擦をかける。
-        # 例: 必要 4 名 + 5 人目追加 → SHIFT_COST 100k + OVER_DAY 5M = 強く抑制
-        SHIFT_COST          = 100_000     # シフト 1 件追加 (旧30k→100k)
+        # --- シフト追加コスト ---
+        SHIFT_COST          = 100_000     # シフト 1 件追加 (不要追加に摩擦)
 
     def __init__(self, staff_list, config, dates, requests=None, existing_shifts=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
@@ -1043,14 +1038,12 @@ class ShiftScheduler:
                             }
 
             # slack 変数の追跡 (validation_report 用)
+            # v3.7.20: 廃止された制約 (manager_under / fatigue / peak_skill) を除去
             tracked_slacks = {
                 "coverage_under": [],   # スロット人員不足
-                "open_close_under": [], # 開け締め不在
-                "manager_under": [],    # 管理者不足
+                "open_close_under": [], # 開け締め不在 / 社員1名以上常駐
                 "ojt": [],              # OJT 不在
                 "fairness": [],         # 公平性偏差
-                "fatigue": [],          # 連続勤務疲労
-                "peak_skill": [],       # ピーク帯スキル不足
             }
             self._tracked_slacks = tracked_slacks
 
@@ -1815,17 +1808,7 @@ class ShiftScheduler:
                         "time": self._from_minutes(slot_min),
                     })
 
-            manager_gaps = []
-            for (d, slot_min, req, sv) in tracked_slacks.get("manager_under", []):
-                v = pulp.value(sv) or 0
-                if v >= 0.5:
-                    manager_gaps.append({
-                        "date": d,
-                        "time": self._from_minutes(slot_min),
-                        "required": int(req),
-                        "shortage": int(round(v)),
-                    })
-
+            # v3.7.20: manager_gaps はレポート出力から除外 (管理者常駐制約廃止のため)
             report = {
                 "tier": tier,
                 "mode": "force" if force else "auto",
@@ -1833,8 +1816,7 @@ class ShiftScheduler:
                 "overtime_warnings": warnings,
                 "coverage_gaps": coverage_gaps[:50],          # スロット人員不足 (top 50)
                 "open_close_gaps": open_close_gaps[:30],      # 開け締め社員不在
-                "manager_gaps": manager_gaps[:50],            # 管理者数不足
-                "has_violations": bool(warnings or coverage_gaps or open_close_gaps or manager_gaps),
+                "has_violations": bool(warnings or coverage_gaps or open_close_gaps),
             }
             self._last_report = report
 
@@ -1842,8 +1824,8 @@ class ShiftScheduler:
                 logger.info("[OVERTIME]")
                 for w in warnings:
                     logger.info("  " + w)
-            logger.info("[Report] coverage_gaps={} open_close_gaps={} manager_gaps={}".format(
-                len(coverage_gaps), len(open_close_gaps), len(manager_gaps)))
+            logger.info("[Report] coverage_gaps={} open_close_gaps={}".format(
+                len(coverage_gaps), len(open_close_gaps)))
             logger.info("[Result] {} shifts".format(len(shifts)))
             return shifts if shifts else None
 
@@ -1987,12 +1969,7 @@ class ShiftScheduler:
         consecutive = {}      # {staff_id: current_consecutive_days}
         last_work_date = {}   # {staff_id: last_date_str}
 
-        # v3.6: NG ペア制約を O(1) で照合するためのセット (双方向)
-        # 旧版は greedy で NG ペアを無視 → トラブルメーカー同士の同日配置の可能性
-        ng_pair_set = set()
-        for (a, b) in getattr(self, '_ng_pair_constraints', []):
-            ng_pair_set.add((a, b))
-            ng_pair_set.add((b, a))
+        # v3.7.20: NG ペア制約は廃止済み (v3.7.19) のため、Greedy 側のセット構築も削除
 
         # まず承認済み出勤希望を固定シフトとして配置
         work_requests = self._get_work_requests()
@@ -2059,9 +2036,6 @@ class ShiftScheduler:
                         continue
                     if d in self._get_staff_ng_dates(mgr):
                         continue
-                    # v3.6: 管理者配置でも NG ペア制約を遵守
-                    if any((mid, other_sid) in ng_pair_set for other_sid in assigned):
-                        continue
                     if self._greedy_check_limits(mid, wk, weekly_count, weekly_hours, consecutive, mgr):
                         continue
                     opts = self._build_shift_options(mgr, d, force=False)
@@ -2119,10 +2093,6 @@ class ShiftScheduler:
                     if sid in assigned:
                         continue
                     if d in self._get_staff_ng_dates(s):
-                        continue
-                    # v3.6: NG ペア制約を greedy でも遵守。
-                    # 既に配置済みのスタッフに NG パートナーがいたらスキップ
-                    if any((sid, other_sid) in ng_pair_set for other_sid in assigned):
                         continue
                     # v3.7.11: OJT メンター制約 — 旧版は「メンター同日在席」のみ
                     # チェックしていたが、時間帯が重ならない (例: メンター早番 / 新人遅番)
@@ -2228,9 +2198,6 @@ class ShiftScheduler:
                     if d in ng_set or self._get_day_type(d) == "closed":
                         continue
                     if any(sh["staff_id"] == sid and sh["date"] == d for sh in shifts):
-                        continue
-                    day_assigned = set(sh["staff_id"] for sh in shifts if sh["date"] == d)
-                    if any((sid, other) in ng_pair_set for other in day_assigned):
                         continue
 
                     # v3.7.3: 連勤6日上限 / 10時間インターバル / 週40h を遵守

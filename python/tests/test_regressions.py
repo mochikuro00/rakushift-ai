@@ -284,7 +284,6 @@ class TestPenaltyWeights:
         # 絶対値で比較 (PREFERENCE_EXACT は負値=ボーナス)
         assert abs(W.PREFERENCE_EXACT) >= W.COVERAGE_UNDER * 0.3
 
-    def test_min_manager_appropriate(self):
-        """MIN_MANAGER が COVERAGE_UNDER 以上 (管理者重視)。"""
-        W = ShiftScheduler.W
-        assert W.MIN_MANAGER >= W.COVERAGE_UNDER
+    # v3.7.20: test_min_manager_appropriate を削除。
+    # 管理者常駐制約 (MIN_MANAGER) は v3.7.16 で廃止され、
+    # v3.7.20 で W.MIN_MANAGER 定数も削除されたため検証不要。

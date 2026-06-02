@@ -7828,8 +7828,8 @@ const app = {
             const ot = (r.overtime_warnings || []).slice(0, 10);
             const cg = r.coverage_gaps || [];
             const oc = r.open_close_gaps || [];
-            const mg = r.manager_gaps || [];
-            const hasAny = ot.length || cg.length || oc.length || mg.length;
+            // v3.7.20: manager_gaps 廃止 (管理者常駐制約撤廃)
+            const hasAny = ot.length || cg.length || oc.length;
             let warnHtml = '';
             if (hasAny) {
                 warnHtml = `<div class="mt-4 mb-2 bg-amber-50 border border-amber-300 rounded-lg p-4">
@@ -7847,11 +7847,7 @@ const app = {
                         oc.slice(0, 15).map(g => `<div>・${g.date} ${g.time}: 月給/管理者ロールのスタッフが不在</div>`).join('')
                     }${oc.length > 15 ? `<div class="text-gray-400 mt-1">... 他 ${oc.length - 15} 件</div>` : ''}</div></div>`;
                 }
-                if (mg.length) {
-                    warnHtml += `<div class="mb-2"><div class="text-xs font-bold text-amber-700 mb-1">🟨 管理者不足: ${mg.length}件</div><div class="text-xs text-gray-700 max-h-24 overflow-y-auto bg-white rounded p-2 border border-amber-100">${
-                        mg.slice(0, 15).map(g => `<div>・${g.date} ${g.time}: 必要 ${g.required}名 / ${g.shortage}名不足</div>`).join('')
-                    }${mg.length > 15 ? `<div class="text-gray-400 mt-1">... 他 ${mg.length - 15} 件</div>` : ''}</div></div>`;
-                }
+                // v3.7.20: 管理者不足ブロック削除 (管理者常駐制約撤廃)
                 if (ot.length) {
                     warnHtml += `<div class="mb-1"><div class="text-xs font-bold text-amber-700 mb-1">⏰ 時間超過: ${ot.length}件</div><div class="text-xs text-gray-700 bg-white rounded p-2 border border-amber-100">${
                         ot.map(w => `<div>・${this._sanitize(w)}</div>`).join('')
