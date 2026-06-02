@@ -4627,60 +4627,17 @@ const app = {
     // =================================================================
 
     // --- シフト編集 ---
+    // v3.7.15: <select> から <input type="time"> に変更。
+    // ユーザー要望「ドロップダウンではなく打ち込み出来るように」を反映。
+    // step="60" で 1分刻み (打ち込み自由)。class 名 (setting-shift-start 等) は
+    // 呼び出し側の querySelectorAll で参照するため保持。
     get15MinTimeSelect(currentVal, id, className) {
-        let options = '';
         const normalizedVal = currentVal ? currentVal.substr(0, 5) : '';
-        for (let h = 0; h < 24; h++) {
-            for (let m = 0; m < 60; m += 15) {
-                const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                const selected = (normalizedVal === time) ? 'selected' : '';
-                options += `<option value="${time}" ${selected}>${time}</option>`;
-            }
-        }
-        // Fallback for custom values
-        if (normalizedVal && !options.includes(`value="${normalizedVal}"`)) {
-             options += `<option value="${normalizedVal}" selected>${normalizedVal}</option>`;
-        }
-        
         const idAttr = id ? `id="${id}"` : '';
-        // 既存の input が持っていたクラスを継承しつつ、appearance-none でブラウザデフォルトのスタイルを消す
-        const finalClass = `${className || ''} appearance-none cursor-pointer bg-white`;
-        
-        return `
-            <div class="relative w-full">
-                <select ${idAttr} class="${finalClass}" style="padding-right: 2rem;">
-                    ${options}
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
-                    <i class="fa-solid fa-chevron-down text-xs"></i>
-                </div>
-            </div>
-        `;
+        const finalClass = `${className || ''} bg-white`;
+        return `<input type="time" ${idAttr} value="${normalizedVal}" step="60" class="${finalClass}">`;
     },
 
-    generateTimeOptionsHTML(selectedValue) {
-        // 正規化: 秒が含まれている場合(HH:mm:ss)はHH:mmに切り詰める
-        const normalizedSelected = selectedValue ? selectedValue.substr(0, 5) : '';
-        
-        let options = [];
-        let found = false;
-        // 15分刻みの選択肢を生成
-        for (let i = 0; i < 24; i++) {
-            for (let j = 0; j < 60; j += 15) {
-                const h = String(i).padStart(2, '0');
-                const m = String(j).padStart(2, '0');
-                const time = `${h}:${m}`;
-                if (time === normalizedSelected) found = true;
-                options.push(time);
-            }
-        }
-        // 既存の値が15分刻みでない場合も、表示崩れを防ぐために選択肢に追加
-        if (normalizedSelected && !found) {
-            options.push(normalizedSelected);
-            options.sort(); 
-        }
-        return options.map(t => `<option value="${t}" ${t === normalizedSelected ? 'selected' : ''}>${t}</option>`).join('');
-    },
 
     openAddShift(dateStr) {
         document.getElementById('shiftForm')?.reset();
@@ -4693,19 +4650,12 @@ const app = {
         const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタッフを選択</option>${this.state.staff.map(s => `<option value="${s.id}">${this._sanitize(s.name)}</option>`).join('')}</select>`;
         document.getElementById('editShiftStaffName').innerHTML = staffSelectHtml;
         
-        // Selectボックスの初期化
+        // v3.7.15: <input type="time"> 化に伴い options 生成は不要。value 設定のみ
         const defStart = (this.state.config.opening_time || '09:00').substr(0, 5);
         const defEnd = (this.state.config.closing_time || '18:00').substr(0, 5);
-        
-        const startEl = document.getElementById('editShiftStart');
-        const endEl = document.getElementById('editShiftEnd');
-        
-        startEl.innerHTML = this.generateTimeOptionsHTML(defStart);
-        endEl.innerHTML = this.generateTimeOptionsHTML(defEnd);
-        
-        // 値を明示的にセットして確実にする
-        startEl.value = defStart;
-        endEl.value = defEnd;
+
+        document.getElementById('editShiftStart').value = defStart;
+        document.getElementById('editShiftEnd').value = defEnd;
 
         document.getElementById('editShiftBreak').value = 60;
         const memoEl = document.getElementById('editShiftMemo');
@@ -4769,16 +4719,9 @@ const app = {
         const startTime = shift.start_time.substr(0, 5);
         const endTime = shift.end_time.substr(0, 5);
 
-        // Selectボックスの初期化
-        const startEl = document.getElementById('editShiftStart');
-        const endEl = document.getElementById('editShiftEnd');
-        
-        startEl.innerHTML = this.generateTimeOptionsHTML(startTime);
-        endEl.innerHTML = this.generateTimeOptionsHTML(endTime);
-        
-        // 値を明示的にセットして確実にする
-        startEl.value = startTime;
-        endEl.value = endTime;
+        // v3.7.15: <input type="time"> 化に伴い options 生成は不要。value 設定のみ
+        document.getElementById('editShiftStart').value = startTime;
+        document.getElementById('editShiftEnd').value = endTime;
         
         document.getElementById('editShiftBreak').value = shift.break_minutes;
         const memoEl = document.getElementById('editShiftMemo');
