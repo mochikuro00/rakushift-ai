@@ -1250,8 +1250,8 @@ class ShiftScheduler:
             # ====================================================
 
             if tier >= 2:
-                # --- 1日の出勤人数: 必要人数±1に収束させる（ソフト制約） ---
-                # 不足も過剰も許容するが、±1の範囲に強力に誘導する
+                # --- 1日の出勤人数: 必要人数ぴったり (±0) に収束させる ---
+                # v3.7.16: ±1 許容を撤廃。必要人数と過不足ゼロを目標
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
@@ -1271,7 +1271,7 @@ class ShiftScheduler:
                             "daily_under_{}".format(d), 0, None, pulp.LpInteger)
                         prob += daily_sum + daily_slack_under >= req_daily
                         penalty += daily_slack_under * self.W.COVERAGE_UNDER
-                        # 上限: 必要人数+1以内に抑える（±1制御の核心）
+                        # 上限: 必要人数ぴったりに抑える（±0制御）
                         # ただしスロットレベルの要件が日次ベースより大きい場合は、
                         # スロット要件の最大値を基準にして矛盾を防ぐ
                         slot_reqs_for_day = self._build_slot_requirements(d)
@@ -1317,7 +1317,8 @@ class ShiftScheduler:
                             prob += workers_sum - slack_over <= req
                             penalty += slack_over * self.W.COVERAGE_OVER_SLOT
 
-                # --- 管理者常駐制約 ---
+                # --- 社員常駐制約 (v3.7.16: 管理者限定→「社員 (月給+店長) 1名以上」に変更) ---
+                # 全時間帯で月給制 or 店長のうち1名以上を出勤させる
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
@@ -1326,29 +1327,18 @@ class ShiftScheduler:
                         slot_reqs = self._build_slot_requirements(d)
                     if not slot_reqs:
                         continue
-                    # 開け作業・締め作業を含む、全スロットでの社員（月給制・店長）常駐制約
                     employee_ids = self._monthly_ids.union(self._manager_ids)
-                    first_slot = min(slot_reqs.keys())
-                    last_slot = max(slot_reqs.keys())
-                    
                     for slot_min in slot_reqs:
                         emp_vars = []
                         for eid in employee_ids:
                             for oi, opt in enumerate(staff_opts.get((eid, d), [])):
                                 if opt["start_min"] <= slot_min < opt["end_min"]:
                                     emp_vars.append(x[(eid, d, oi)])
-                        
                         if emp_vars:
-                            if slot_min == first_slot or slot_min == last_slot:
-                                slack = pulp.LpVariable("emp_openclose_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                                prob += pulp.lpSum(emp_vars) + slack >= 1
-                                penalty += slack * self.W.OPEN_CLOSE_NO_EMP
-                                tracked_slacks["open_close_under"].append((d, slot_min, slack))
-                            else:
-                                slack = pulp.LpVariable("emp_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                                prob += pulp.lpSum(emp_vars) + slack >= self.min_manager
-                                penalty += slack * self.W.MIN_MANAGER
-                                tracked_slacks["manager_under"].append((d, slot_min, self.min_manager, slack))
+                            slack = pulp.LpVariable("emp_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(emp_vars) + slack >= 1
+                            penalty += slack * self.W.OPEN_CLOSE_NO_EMP
+                            tracked_slacks["open_close_under"].append((d, slot_min, slack))
 
             # ====================================================
             # TIER 3: 品質最適化 (ソフト制約)
@@ -1391,27 +1381,7 @@ class ShiftScheduler:
                                     for rv in rookie_vars:
                                         penalty += rv * self.W.OJT_NO_MENTOR
 
-                # --- 戦力バランス ---
-                for d in self.dates:
-                    if self._get_day_type(d) == "closed":
-                        continue
-                    slot_reqs = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
-                    if slot_reqs is None:
-                        slot_reqs = self._build_slot_requirements(d)
-                    if not slot_reqs:
-                        continue
-                    power_expr = pulp.LpAffineExpression()
-                    for s in self.staff_list:
-                        sid = s["id"]
-                        rank = self._eval_rank.get(sid, "B")
-                        pw = self.POWER_SCORE.get(rank, 2.0)
-                        for oi in range(len(staff_opts.get((sid, d), []))):
-                            power_expr += x[(sid, d, oi)] * pw
-                    min_req = self._get_required_staff(d)
-                    if min_req > 0:
-                        slack = pulp.LpVariable("pw_{}".format(d), 0, None)
-                        prob += power_expr + slack >= 1.5 * min_req
-                        penalty += slack * self.W.POWER_BALANCE
+                # v3.7.16: 戦力バランス制約を廃止 (運用者判断)
 
                 # --- 人件費と評価ランクによる最適化 (コスト最小化) ---
                 for s in self.staff_list:
@@ -1549,42 +1519,7 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 penalty += x[(sid, d, oi)] * self.W.MIN_DAYS_WEEK_BONUS
 
-                # --- ピーク時スキルミックス制約 ---
-                # 店舗設定で peak_skill_rules が明示的に登録されている場合のみ適用。
-                # 未設定なら制約を追加しない（勝手にランチ帯ルールを差し込まない）。
-                peak_rules = self.config.get("peak_skill_rules", []) or []
-
-                for d in self.dates:
-                    if self._get_day_type(d) == "closed":
-                        continue
-                    for rule in peak_rules:
-                        rs = self._to_minutes(rule.get("start", "11:00"))
-                        re_peak = self._to_minutes(rule.get("end", "14:00"))
-                        min_rank = rule.get("min_rank", "B")
-                        min_rank_score = self.POWER_SCORE.get(min_rank, 2.0)
-                        req_count = int(rule.get("count", 1))
-                        
-                        # ピーク全スロットをカバーできるスタッフの変数を集める
-                        qualified = []
-                        for s in self.staff_list:
-                            sid_q = s["id"]
-                            rank = self._eval_rank.get(sid_q, "B")
-                            if self.POWER_SCORE.get(rank, 0) >= min_rank_score:
-                                for oi, opt in enumerate(staff_opts.get((sid_q, d), [])):
-                                    # ピーク帯の開始をカバーしていればOK
-                                    if opt["start_min"] <= rs and opt["end_min"] >= re_peak:
-                                        qualified.append(x[(sid_q, d, oi)])
-                                    elif opt["start_min"] <= rs and opt["end_min"] > rs:
-                                        # 部分カバーでも加点
-                                        qualified.append(x[(sid_q, d, oi)])
-                        
-                        if qualified:
-                            slack = pulp.LpVariable(
-                                "peak_{}_{}".format(d, rs), 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(qualified) + slack >= req_count
-                            penalty += slack * self.W.PEAK_SKILL
-
-                logger.info("[Tier3] Peak skill mix constraints applied ({} rules)".format(len(peak_rules)))
+                # v3.7.16: ピーク時スキルミックス制約を廃止 (運用者判断)
 
                 # --- 希望シフト充足率の最大化 (従業員満足度スコア) ---
                 # 未承認（pending）の出勤希望に対してボーナス（負のペナルティ）を付与し、
@@ -1689,26 +1624,8 @@ class ShiftScheduler:
                                 prob += sums[keys[j]] - sums[keys[i]] <= imbalance
                         penalty += imbalance * self.W.TIMEBAND_IMBALANCE
 
-                # --- 連続勤務後の疲労インセンティブ (5日連続後の翌日は休み優先) ---
-                sorted_d_fatigue = sorted(self.dates)
-                if len(sorted_d_fatigue) >= 6:
-                    for s in self.staff_list:
-                        sid = s["id"]
-                        for i in range(len(sorted_d_fatigue) - 5):
-                            window5 = sorted_d_fatigue[i:i+5]
-                            next_day = sorted_d_fatigue[i+5]
-                            w5_vars = [x[(sid, d, oi)]
-                                       for d in window5
-                                       for oi in range(len(staff_opts.get((sid, d), [])))]
-                            next_vars = [x[(sid, next_day, oi)]
-                                         for oi in range(len(staff_opts.get((sid, next_day), [])))]
-                            if not w5_vars or not next_vars:
-                                continue
-                            # 5日連続出勤 (w5_sum=5) のとき翌日出勤するとペナルティ
-                            fatigue_slack = pulp.LpVariable(
-                                "fatigue_{}_{}".format(sid, next_day), 0, None)
-                            prob += pulp.lpSum(w5_vars) + pulp.lpSum(next_vars) - 5 <= fatigue_slack
-                            penalty += fatigue_slack * self.W.CONSEC_DAYS_FATIGUE
+                # v3.7.16: 連続5日後の疲労インセンティブを廃止 (運用者判断)
+                # ※連続勤務6日の法定上限は HARD 制約として line 1191 で別途維持
 
                 # --- メンター主担当マッチング (preferred_mentor がある新人を主担当と同シフトに) ---
                 if self._rookie_ids:
@@ -1735,41 +1652,9 @@ class ShiftScheduler:
                                 prob += pair_ind <= pulp.lpSum(mentor_d)
                                 penalty += pair_ind * self.W.MENTOR_MATCH_BONUS
 
-                # --- 土日ローテーション公平性制約 ---
-                # 全スタッフが公平に土日シフトを担当するよう制約
-                weekend_dates = [d for d in self.dates
-                                 if self._get_day_type(d) in ("weekend", "holiday")]
-                if weekend_dates and len(self.staff_list) >= 2:
-                    weekend_vars = {}
-                    for s in self.staff_list:
-                        sid = s["id"]
-                        max_days = int(s.get("max_days_week") or 5)
-                        if max_days <= 0:
-                            continue
-                        wvars = []
-                        for d in weekend_dates:
-                            for oi in range(len(staff_opts.get((sid, d), []))):
-                                wvars.append(x[(sid, d, oi)])
-                        if wvars:
-                            weekend_vars[sid] = pulp.lpSum(wvars)
+                # v3.7.16: 土日ローテーション公平性制約を廃止 (運用者判断)
 
-                    if len(weekend_vars) >= 2:
-                        # 土日出勤回数の平均を計算し、各スタッフの乖離にペナルティ
-                        avg_weekends = len(weekend_dates) * self._get_required_staff(
-                            weekend_dates[0]) / max(len(weekend_vars), 1)
-                        for sid, wsum in weekend_vars.items():
-                            s = self._staff_map.get(sid, {})
-                            max_days = int(s.get("max_days_week") or 5)
-                            # スタッフの能力に応じた土日目標
-                            target = min(avg_weekends, len(weekend_dates) * max_days / 7.0)
-                            target = max(target, 1.0)  # 最低1回は土日出勤
-                            wk_slack = pulp.LpVariable("wkend_{}".format(sid), 0, None)
-                            prob += wsum - target <= wk_slack
-                            prob += target - wsum <= wk_slack
-                            weight = self.W.WEEKEND_FAIR if sid in self._monthly_ids else (self.W.WEEKEND_FAIR // 2)
-                            penalty += wk_slack * weight
-
-                logger.info("[Tier3] Time slot diversity + weekend rotation applied")
+                logger.info("[Tier3] Time slot diversity applied")
 
             # ====================================================
             # 目的関数: コスト最小化
