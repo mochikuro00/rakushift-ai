@@ -1591,38 +1591,7 @@ class ShiftScheduler:
                                 standing_pref_count += 1
                 logger.info("[Tier3] Standing preferences: {} options bonused".format(standing_pref_count))
 
-                # --- 時間帯分散制約 (朝/昼/夕の3区分でバランス) ---
-                # 朝: 開始 < 11:00 / 昼: 11:00 <= 開始 < 16:00 / 夕: 開始 >= 16:00
-                # 旧2区分 (14時境界) より細かく、変数は1スタッフ1差分のみで負荷低
-                BAND_MORNING_END = 11 * 60
-                BAND_AFTERNOON_END = 16 * 60
-                for s in self.staff_list:
-                    sid = s["id"]
-                    max_days = int(s.get("max_days_week") or 5)
-                    if max_days <= 1:
-                        continue
-                    bands = {"m": [], "a": [], "e": []}
-                    for d in self.dates:
-                        if self._get_day_type(d) == "closed":
-                            continue
-                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            sm = opt["start_min"]
-                            if sm < BAND_MORNING_END:
-                                bands["m"].append(x[(sid, d, oi)])
-                            elif sm < BAND_AFTERNOON_END:
-                                bands["a"].append(x[(sid, d, oi)])
-                            else:
-                                bands["e"].append(x[(sid, d, oi)])
-                    sums = {k: pulp.lpSum(v) for k, v in bands.items() if v}
-                    if len(sums) >= 2:
-                        # 最大バンドと最小バンドの差をペナルティ化
-                        imbalance = pulp.LpVariable("imbal_{}".format(sid), 0, None)
-                        keys = list(sums.keys())
-                        for i in range(len(keys)):
-                            for j in range(i+1, len(keys)):
-                                prob += sums[keys[i]] - sums[keys[j]] <= imbalance
-                                prob += sums[keys[j]] - sums[keys[i]] <= imbalance
-                        penalty += imbalance * self.W.TIMEBAND_IMBALANCE
+                # v3.7.17: 時間帯分散制約 (朝/昼/夕) を廃止 (運用者判断)
 
                 # v3.7.16: 連続5日後の疲労インセンティブを廃止 (運用者判断)
                 # ※連続勤務6日の法定上限は HARD 制約として line 1191 で別途維持
@@ -1654,7 +1623,7 @@ class ShiftScheduler:
 
                 # v3.7.16: 土日ローテーション公平性制約を廃止 (運用者判断)
 
-                logger.info("[Tier3] Time slot diversity applied")
+                logger.info("[Tier3] Quality optimization applied")
 
             # ====================================================
             # 目的関数: コスト最小化
