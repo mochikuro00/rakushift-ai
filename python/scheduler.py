@@ -319,20 +319,11 @@ class ShiftScheduler:
 
         for s in self.staff_list:
             self._ng_cache[s["id"]] = self._compute_staff_ng_dates(s)
-            
+
             sid1 = s["id"]
-            # v3.7.9: s.get("ng_pairs", "") は KEY 不在時は "" を返すが、
-            # 値が None (migration 50 後の DB NULL) のときは None を返してしまい
-            # re.split(pattern, None) で TypeError。明示的に None ガード。
-            ng_pairs_str = s.get("ng_pairs") or ""
-            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', ng_pairs_str) if n.strip()]:
-                sid2 = name_to_id.get(target_name)
-                if not sid2:
-                    for n, _sid in name_to_id.items():
-                        if target_name in n or n in target_name:
-                            sid2 = _sid; break
-                if sid2 and sid1 != sid2:
-                    self._ng_pair_constraints.append((sid1, sid2))
+            # v3.7.19: NG ペア制約を廃止 (運用者判断)。
+            # ng_pairs カラム自体は DB に残るが、scheduler は参照しない。
+            # _ng_pair_constraints は空のまま維持され、MILP/Greedy 双方が無視。
 
             req_pairs_str = s.get("req_pairs") or ""
             for target_name in [n.strip() for n in re.split(r'[,、\s　]+', req_pairs_str) if n.strip()]:
@@ -1387,20 +1378,15 @@ class ShiftScheduler:
 
                 # v3.7.16: 戦力バランス制約を廃止 (運用者判断)
 
-                # --- 人件費と評価ランクによる最適化 (コスト最小化) ---
+                # v3.7.19: 人件費×評価ランク最小化を廃止 (運用者判断)。
+                # 評価ランクと人件費による配分は撤廃し、
+                # shift_priority (high/low) と contract_type (regular/spot) の
+                # 属性ボーナス + 決定論タイブレーカーのみ残す
                 for s in self.staff_list:
                     sid = s["id"]
-                    rank = self._eval_rank.get(sid, "B")
-                    # ランクペナルティ (Aは優遇、Dは後回し)
-                    rank_penalty = {"A": 0, "B": 5, "C": 15, "D": 30}.get(rank, 10)
-                    
-                    hourly_wage = float(s.get("hourly_wage") or 1000)
-                    is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
-
-                    # 新機能：シフト優先度と契約区分による強力なスコア調整
                     shift_priority = str(s.get("shift_priority", "medium")).lower()
                     contract_type = str(s.get("contract_type", "general")).lower()
-                    
+
                     priority_bonus = 0
                     if shift_priority == "high":
                         priority_bonus += self.W.PRIORITY_HIGH   # 負値
@@ -1412,20 +1398,13 @@ class ShiftScheduler:
                     elif contract_type == "spot":
                         priority_bonus += self.W.CONTRACT_SPOT
 
-                    # 決定論的タイブレーカー: スタッフ間で公平、かつ「同じ入力なら同じ結果」(ガチャ排除)
-                    # random.uniform を廃止 → staff_id ハッシュベースの固定差分に置換。
-                    # 全スタッフが PRIORITY_HIGH 等で同点になった場合の選別に微小バイアスを与え、
-                    # 「リスト先頭が常に選ばれる」不公平を回避しつつ deterministic を保証する。
-                    sid_hash = (abs(hash(sid)) % 10_000) / 1_000.0  # 0.0〜10.0 固定
+                    # 決定論的タイブレーカー (同点時の「リスト先頭固定」を回避)
+                    sid_hash = (abs(hash(sid)) % 10_000) / 1_000.0
                     for d in self.dates:
-                        # 日付ごとにもオフセット (同じスタッフが常に同じ日に固まらないように deterministic 分散)
-                        day_hash = (abs(hash(d + sid)) % 100) / 100.0  # 0.0〜1.0 固定
+                        day_hash = (abs(hash(d + sid)) % 100) / 100.0
                         tiebreaker = sid_hash + day_hash
-                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                            work_hours = opt["work_hours"]
-                            labor_cost = 0.0 if is_monthly else (hourly_wage * work_hours)
-                            total_cost = (labor_cost * 0.01) + rank_penalty + priority_bonus + tiebreaker
-                            penalty += x[(sid, d, oi)] * total_cost
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            penalty += x[(sid, d, oi)] * (priority_bonus + tiebreaker)
 
                 # --- 勤務日数の公平性と離職防止 (需要ベースの按分方式) ---
                 # 店舗全体の需要人日数からスタッフごとの配分比率を計算し、±1で収束させる
@@ -1687,21 +1666,7 @@ class ShiftScheduler:
                                 # 10000のペナルティ。不足ペナルティ(500000)よりはるかに小さいが、通常パターンのコストより高い
                                 penalty += x[(eid, d, oi)] * 10000
 
-            # 人間関係（相性）制約: NGペア
-            # slot_reqs のキー（実際のスロット分単位）でイテレーションする
-            for (sid1, sid2) in getattr(self, '_ng_pair_constraints', []):
-                for d in self.dates:
-                    slot_reqs_ng = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
-                    if slot_reqs_ng is None:
-                        slot_reqs_ng = self._build_slot_requirements(d)
-                    if not slot_reqs_ng:
-                        continue
-                    for slot_min in slot_reqs_ng:
-                        sid1_w = pulp.lpSum(x[(sid1, d, oi)] for oi, opt in enumerate(staff_opts.get((sid1, d), [])) if opt["start_min"] <= slot_min < opt["end_min"])
-                        sid2_w = pulp.lpSum(x[(sid2, d, oi)] for oi, opt in enumerate(staff_opts.get((sid2, d), [])) if opt["start_min"] <= slot_min < opt["end_min"])
-                        overlap = pulp.LpVariable("NG_overlap_{}_{}_{}_{}".format(sid1[:8], sid2[:8], d, slot_min), lowBound=0)
-                        prob += (overlap >= sid1_w + sid2_w - 1)
-                        penalty += overlap * 100000
+            # v3.7.19: NG ペア制約を廃止 (運用者判断)
 
             # 人間関係（相性）制約: 必須ペア
             for (sid1, sid2) in getattr(self, '_req_pair_constraints', []):

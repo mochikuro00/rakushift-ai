@@ -191,26 +191,23 @@ class TestConsecutiveDayGap:
 # v3.6: NG ペア制約が Greedy でも有効
 # ========================================
 
-class TestGreedyNgPair:
-    """旧 Greedy fallback は NG ペア制約を完全無視していた。
-    v3.6 で双方向セットによる O(1) チェックを追加。
+class TestNgPairDisabled:
+    """v3.7.19 で NG ペア制約は完全廃止された (運用者判断)。
+    _ng_pair_constraints は構築時点で常に空。
     """
 
-    def test_ng_pair_set_built(self):
-        """NG ペアが正しくロードされる。"""
+    def test_ng_pair_constraint_always_empty(self):
+        """ng_pairs カラムに値があっても _ng_pair_constraints は空。"""
         staff = [
             make_staff("s1", "山田", ng_pairs="佐藤"),
             make_staff("s2", "佐藤"),
         ]
-        config = make_config()
         sch = ShiftScheduler(
             staff_list=staff,
-            config=config,
+            config=make_config(),
             dates=["2026-06-01"],
         )
-        # _ng_pair_constraints に登録される
-        pairs = sch._ng_pair_constraints
-        assert ("s1", "s2") in pairs or ("s2", "s1") in pairs
+        assert sch._ng_pair_constraints == []
 
 
 class TestNullableStaffAttributes:
