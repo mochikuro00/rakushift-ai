@@ -2118,8 +2118,10 @@ class ShiftScheduler:
                         max_slot_req_day = req
                 if not deficit:
                     break
-                # 過剰配置防止: 日次の総配置人数がスロット最大要件+2を超えたら停止
-                if len(day_shifts) > max_slot_req_day + 2 + len(assigned_days.get(d, set())):
+                # v3.7.31: 過剰絶対回避 (Greedy フォールバック時の過剰9名問題対応)
+                # 旧: max_slot_req_day + 2 (過剰許容)
+                # 新: max_slot_req_day ぴったりで停止
+                if len(day_shifts) >= max_slot_req_day + len(assigned_days.get(d, set())):
                     break
 
                 worst = max(deficit, key=deficit.get)
