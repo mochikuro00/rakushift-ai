@@ -63,9 +63,10 @@ class ShiftScheduler:
         EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避)
         OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在 / 社員1名以上常駐
         # --- 不足/過剰 — 対称化して「ぴったり」を真の最適解に ---
+        # v3.7.23: 「過剰9名/必要6」のような同時刻過剰を強力に抑制
         COVERAGE_UNDER      = 5_000_000   # スロット必要人数不足
-        COVERAGE_OVER_DAY   = 5_000_000   # 日次過剰人員
-        COVERAGE_OVER_SLOT  = 4_000_000   # スロット過剰人員
+        COVERAGE_OVER_DAY   = 8_000_000   # 日次過剰人員 (旧5M→8M)
+        COVERAGE_OVER_SLOT  = 8_000_000   # スロット過剰人員 (旧4M→8M, 同時刻過剰を厳格に防ぐ)
         POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
         # --- 希望シフト — カバレッジ過剰より弱く (v3.7.21: 属性弱化に合わせて強化) ---
         PREFERENCE_EXACT    = -3_000_000  # 完全一致 (旧-2M→-3M)
@@ -1134,8 +1135,15 @@ class ShiftScheduler:
                             # max_days_weekとの矛盾を防ぐ
                             effective_min = min(min_days_week, available_days_in_week, max_days)
                             if effective_min > 0:
-                                # 全週ハード制約（短い週も含めて絶対遵守）
-                                prob += pulp.lpSum(wv) >= effective_min
+                                # v3.7.23: HARD → SOFT 化
+                                # 旧: prob += pulp.lpSum(wv) >= effective_min (絶対遵守 = 過剰配置の原因)
+                                # 新: 不足分にペナルティ。スタッフ個別 min_days_week 設定が高いと
+                                #     週需要を超えた強制配置になっていた問題を解消
+                                mdw_slack = pulp.LpVariable(
+                                    "mdw_{}_{}".format(sid, week[0] if week else "x"),
+                                    0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(wv) + mdw_slack >= effective_min
+                                penalty += mdw_slack * 200_000  # COVERAGE_OVER (4M) より弱い
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
@@ -1164,7 +1172,11 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
-                            prob += pulp.lpSum(all_wv) >= target_min_month
+                            # v3.7.23: HARD → SOFT 化 (min_days_week と同様の理由)
+                            mdm_slack = pulp.LpVariable(
+                                "mdm_{}".format(sid), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
+                            penalty += mdm_slack * 200_000
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
