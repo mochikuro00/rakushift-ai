@@ -984,9 +984,14 @@ class ShiftScheduler:
                                 best_diff = diff
                                 best_oi = oi
                 if (wsid, wd, best_oi) in x:
-                    prob += x[(wsid, wd, best_oi)] == 1
+                    # v3.7.30: HARD → SOFT 化
+                    # 旧: prob += x == 1 (絶対配置 = 過剰の温床)
+                    # 新: 配置されたらボーナス -10M、配置されないとペナルティ
+                    #     COVERAGE_OVER (20M) より弱いため、過剰になる場合は希望を諦める
+                    #     PREFERENCE_EXACT (-3M) より強いため、通常時は確実に配置される
+                    penalty += -10_000_000 * x[(wsid, wd, best_oi)]
                     fixed_assignments.add((wsid, wd))
-                    logger.info("[WorkReq] Fixed: staff={} date={} opt={}".format(wsid, wd, best_oi))
+                    logger.info("[WorkReq] Soft-fixed: staff={} date={} opt={}".format(wsid, wd, best_oi))
 
             logger.info("[Requests] {} work requests applied".format(len(work_requests)))
 
