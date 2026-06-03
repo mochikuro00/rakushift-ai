@@ -71,7 +71,7 @@ class ShiftScheduler:
         PREFERENCE_EXACT    = -3_000_000  # 完全一致 (旧-2M→-3M)
         PREFERENCE_CLOSE    = -2_000_000  # ±1時間以内 (旧-1M→-2M)
         PREFERENCE_BASE     = -1_500_000  # 希望日に何らかのシフト (旧-500k→-1.5M)
-        MIN_DAYS_WEEK_BONUS = -1_000_000  # min_days_week 厳守 (旧-500k→-1M)
+        MIN_DAYS_WEEK_BONUS = -10_000     # min_days_week 厳守 (v3.7.22: -1M→-10k に弱化、累積で希望EXACTを凌駕しないように)
         OJT_NO_MENTOR       = 500_000     # 新人×メンター不在 (希望や他制約に負ける階層)
         # --- スタッフ属性ベース調整 (v3.7.21: 大幅弱化) ---
         # 旧: 属性ボーナス累積が COVERAGE_OVER_SLOT (4M) を超えて過剰配置を誘発するケースがあった
@@ -81,7 +81,7 @@ class ShiftScheduler:
         CONTRACT_REGULAR    = -2_000      # レギュラー契約優先 (旧-20k)
         CONTRACT_SPOT       = 1_000       # スポット契約は後回し (旧10k)
         # --- 品質 ---
-        FAIRNESS_DRIFT      = 100_000     # 公平性偏差
+        FAIRNESS_DRIFT      = 10_000      # 公平性偏差 (v3.7.22: 100k→10k に弱化、希望と衝突しないように)
         MENTOR_MATCH_BONUS  = -1_000      # 主担当メンターとのペアリング (旧-10k)
         # --- シフト追加コスト ---
         SHIFT_COST          = 100_000     # シフト 1 件追加 (不要追加に摩擦)
@@ -1460,33 +1460,30 @@ class ShiftScheduler:
                     logger.info("[Tier3] Fairness: demand={} days, {} staff, capacity/wk={}".format(
                         total_demand_days, len(active_staff), total_capacity_per_week))
 
-                    # === 店舗運営者視点：離職防止アルゴリズム（ゼロシフト絶対回避） ===
-                    # 全員に最低限のシフト（週1回程度）を保証する
+                    # === 離職防止アルゴリズム (v3.7.22: HARD → SOFT 化) ===
+                    # 旧: prob += tv >= guarantee_shifts (HARD 制約) で全員強制配置
+                    # 新: 不在 1 シフトごとに 50k ペナルティ。カバレッジ過剰や希望に負ける階層
                     for s in active_staff:
                         sid = s["id"]
                         tv = total_vars[sid]
-                        # 期間中に出勤可能な日数をカウント
                         submitted_days = len([d for d in self.dates if staff_opts.get((sid, d))])
                         if submitted_days > 0:
-                            # 最低保証シフト数: 安全な範囲で週1日程度を保証
                             staff_max_days = int(s.get("max_days_week") or 5)
                             min_dw = int(s.get("min_days_week") or 0)
-                            # 週1日 × 週数を候補に、出勤可能日数・max_days上限・min_days_weekとの整合を確保
                             weekly_guarantee = min(1, staff_max_days)
                             candidate = int(weekly_guarantee * weeks_in_period)
-                            # Infeasible防止: submitted_days, max_days上限, min_days_weekのいずれかで安全に抑える
                             guarantee_shifts = min(
-                                candidate,
-                                submitted_days,
+                                candidate, submitted_days,
                                 int(staff_max_days * weeks_in_period)
                             )
-                            # min_days_weekが設定されている場合はそちらのハード制約と矛盾しないよう調整
                             if min_dw > 0:
-                                # min_days_weekのハード制約が既にあるので、保証はその範囲内に
                                 min_dw_total = min(int(min_dw * weeks_in_period), submitted_days)
                                 guarantee_shifts = min(guarantee_shifts, min_dw_total)
-                            guarantee_shifts = max(guarantee_shifts, 1)  # 絶対最低1日
-                            prob += tv >= guarantee_shifts
+                            guarantee_shifts = max(guarantee_shifts, 1)
+                            # SOFT 制約: 達成しない分だけペナルティ
+                            g_slack = pulp.LpVariable("guarantee_{}".format(sid), 0, None, pulp.LpInteger)
+                            prob += tv + g_slack >= guarantee_shifts
+                            penalty += g_slack * 50_000  # COVERAGE_OVER (4M) より遥かに弱い
                 # --- min_days_week > 0 のスタッフへの配置ボーナス ---
                 # min_days_weekのハード制約で確保済みなので、ボーナスは補助的に軽めに
                 for s in self.staff_list:
