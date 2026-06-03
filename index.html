@@ -1309,7 +1309,10 @@
 
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-[90] flex flex-col gap-3 pointer-events-none"></div>
+    <!-- v3.7.24: トーストの z-index を 90→9999 に上げ、ロード画面 (z-100) や
+         モーダル (z-[10000]) より前面に出すことで、生成中のエラー通知が
+         隠れて見えなくなる問題を解消 -->
+    <div id="toastContainer" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
 
     <!-- Scripts -->
     <script>
