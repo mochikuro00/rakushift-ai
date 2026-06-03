@@ -3154,8 +3154,103 @@ const app = {
     // =================================================================
     // 5. スタッフ管理 (Staff) - Admin Only
     // =================================================================
+    // v3.7.25: 月の需給バランスを計算 (全員の min_days_month 合計 vs 月需要)
+    _computeStaffingBalance() {
+        const staff = this.state.staff || [];
+        if (staff.length === 0) return null;
+        const cfg = this.state.config || {};
+        const sr = cfg.staff_req || {};
+        const minWeekday = Number(sr.min_weekday || 0);
+        const minWeekend = Number(sr.min_weekend || 0);
+        const minHoliday = Number(sr.min_holiday || minWeekend);
+        if (minWeekday + minWeekend === 0) return null;
+
+        // 現在月の日数を集計
+        const now = new Date();
+        const y = now.getFullYear(), m = now.getMonth();
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        const closedDays = (cfg.closed_days || []).map(Number);
+        let weekdayCount = 0, weekendCount = 0, holidayCount = 0, closedCount = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+            const wd = new Date(y, m, d).getDay();
+            if (closedDays.includes(wd)) { closedCount++; continue; }
+            if (this.isHoliday && this.isHoliday(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`)) {
+                holidayCount++;
+            } else if (wd === 0 || wd === 6) {
+                weekendCount++;
+            } else {
+                weekdayCount++;
+            }
+        }
+        const demand = weekdayCount * minWeekday + weekendCount * minWeekend + holidayCount * minHoliday;
+        const supply = staff.reduce((sum, s) => sum + Number(s.min_days_month || 0), 0);
+        const supplyMax = staff.reduce((sum, s) => sum + Number(s.max_days_week || 5) * 4.3, 0);
+        const ratio = demand > 0 ? supply / demand : 0;
+        let status;
+        if (ratio <= 1.05) status = 'good';
+        else if (ratio <= 1.2) status = 'warn';
+        else status = 'bad';
+        return {
+            staffCount: staff.length,
+            weekdayCount, weekendCount, holidayCount, closedCount,
+            minWeekday, minWeekend, minHoliday,
+            demand, supply, supplyMax,
+            ratio, status,
+            overDays: Math.max(0, supply - demand)
+        };
+    },
+
+    _renderBalanceBanner(b) {
+        const palette = {
+            good: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', icon: 'fa-circle-check', label: '適正' },
+            warn: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: 'fa-triangle-exclamation', label: 'やや過剰' },
+            bad:  { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-700', icon: 'fa-circle-exclamation', label: '過剰' }
+        };
+        const p = palette[b.status];
+        const subMsg = b.status === 'good'
+            ? `現在のスタッフ数と最低出勤日数は店舗需要にちょうど良いバランスです。`
+            : `<strong>${b.overDays}人日</strong>の過剰供給が見込まれます。AIシフトは「全員のmin_days_monthを満たす」ために、需要を超えてシフトを組みます。各スタッフの<strong>月の最低出勤日数を下げる</strong>ことで解消できます。`;
+        return `
+            <div class="${p.bg} ${p.border} border-2 rounded-xl p-4 ${p.text}">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid ${p.icon} text-xl mt-0.5"></i>
+                    <div class="flex-1">
+                        <div class="font-bold text-base mb-1">需給バランス: ${p.label}</div>
+                        <div class="text-sm leading-relaxed">${subMsg}</div>
+                        <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                            <div class="bg-white/60 rounded px-3 py-2">
+                                <div class="text-gray-500">月需要</div>
+                                <div class="font-bold text-base">${b.demand} 人日</div>
+                                <div class="text-[10px] text-gray-500">平日${b.weekdayCount}日×${b.minWeekday}名 + 土日${b.weekendCount}日×${b.minWeekend}名</div>
+                            </div>
+                            <div class="bg-white/60 rounded px-3 py-2">
+                                <div class="text-gray-500">最低供給 (min_days合計)</div>
+                                <div class="font-bold text-base">${b.supply} 人日</div>
+                                <div class="text-[10px] text-gray-500">${b.staffCount}名の最低出勤合計</div>
+                            </div>
+                            <div class="bg-white/60 rounded px-3 py-2">
+                                <div class="text-gray-500">差分</div>
+                                <div class="font-bold text-base ${b.status==='bad'?'text-red-600':b.status==='warn'?'text-amber-600':'text-emerald-600'}">${b.supply >= b.demand ? '+' : ''}${b.supply - b.demand} 人日</div>
+                                <div class="text-[10px] text-gray-500">供給比 ${(b.ratio * 100).toFixed(0)}%</div>
+                            </div>
+                            <div class="bg-white/60 rounded px-3 py-2">
+                                <div class="text-gray-500">理論最大供給</div>
+                                <div class="font-bold text-base">${Math.round(b.supplyMax)} 人日</div>
+                                <div class="text-[10px] text-gray-500">max_days_week基準</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
     renderStaffList(container) {
         if (!this.state.isAdmin) return;
+
+        // v3.7.25: 需給バランス自動診断
+        const balance = this._computeStaffingBalance();
+        const balanceBanner = balance ? this._renderBalanceBanner(balance) : '';
 
         container.innerHTML = `
             <div class="max-w-6xl mx-auto space-y-6 pb-20">
@@ -3165,6 +3260,7 @@ const app = {
                         <i class="fa-solid fa-plus mr-2"></i>新規登録
                     </button>
                 </div>
+                ${balanceBanner}
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
