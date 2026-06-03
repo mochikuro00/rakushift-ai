@@ -5082,7 +5082,6 @@ const app = {
         const prefEndWd = usePref ? (document.getElementById('staffPrefEndWeekday')?.value || '') : '';
         const prefStartWe = usePref ? (document.getElementById('staffPrefStartWeekend')?.value || '') : '';
         const prefEndWe = usePref ? (document.getElementById('staffPrefEndWeekend')?.value || '') : '';
-        const ngPairs = document.getElementById('staffNgPairs')?.value || '';
         const reqPairs = document.getElementById('staffReqPairs')?.value || '';
         const position = document.getElementById('staffPosition')?.value || 'any';
 
@@ -5111,7 +5110,6 @@ const app = {
             pref_end_wd: prefEndWd || null,
             pref_start_we: prefStartWe || null,
             pref_end_we: prefEndWe || null,
-            ng_pairs: ngPairs || null,
             req_pairs: reqPairs || null,
             position: position,
             ng_weekdays: ngWeekdays,
@@ -5195,7 +5193,6 @@ const app = {
         let prefEndWd = '';
         let prefStartWe = '';
         let prefEndWe = '';
-        let ngPairs = '';
         let reqPairs = '';
         let position = 'any';
         let ngDays = [];
@@ -5208,7 +5205,6 @@ const app = {
         if (s.pref_end_wd) { prefEndWd = s.pref_end_wd; hasPref = true; }
         if (s.pref_start_we) { prefStartWe = s.pref_start_we; hasPref = true; }
         if (s.pref_end_we) { prefEndWe = s.pref_end_we; hasPref = true; }
-        if (s.ng_pairs) ngPairs = s.ng_pairs;
         if (s.req_pairs) reqPairs = s.req_pairs;
         if (s.position) position = s.position;
         if (Array.isArray(s.ng_weekdays)) ngDays = s.ng_weekdays.map(String);
@@ -5226,7 +5222,6 @@ const app = {
                 if (!s.pref_end_wd && txt.startsWith('prefEndWd:')) { prefEndWd = txt.replace('prefEndWd:', ''); hasPref = true; }
                 if (!s.pref_start_we && txt.startsWith('prefStartWe:')) { prefStartWe = txt.replace('prefStartWe:', ''); hasPref = true; }
                 if (!s.pref_end_we && txt.startsWith('prefEndWe:')) { prefEndWe = txt.replace('prefEndWe:', ''); hasPref = true; }
-                if (!s.ng_pairs && txt.startsWith('ngPair:')) ngPairs = txt.replace('ngPair:', '');
                 if (!s.req_pairs && txt.startsWith('reqPair:')) reqPairs = txt.replace('reqPair:', '');
                 if ((!s.position || s.position === 'any') && txt.startsWith('position:')) position = txt.replace('position:', '');
                 // 互換: 古い prefStart/End (曜日区分なし)
@@ -5247,7 +5242,6 @@ const app = {
         if (document.getElementById('staffPrefEndWeekday')) document.getElementById('staffPrefEndWeekday').value = prefEndWd;
         if (document.getElementById('staffPrefStartWeekend')) document.getElementById('staffPrefStartWeekend').value = prefStartWe;
         if (document.getElementById('staffPrefEndWeekend')) document.getElementById('staffPrefEndWeekend').value = prefEndWe;
-        if (document.getElementById('staffNgPairs')) document.getElementById('staffNgPairs').value = ngPairs;
         if (document.getElementById('staffReqPairs')) document.getElementById('staffReqPairs').value = reqPairs;
         if (document.getElementById('staffPosition')) document.getElementById('staffPosition').value = position;
         for(let i=0; i<=6; i++) {
