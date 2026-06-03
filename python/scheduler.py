@@ -67,20 +67,22 @@ class ShiftScheduler:
         COVERAGE_OVER_DAY   = 5_000_000   # 日次過剰人員
         COVERAGE_OVER_SLOT  = 4_000_000   # スロット過剰人員
         POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
-        # --- 希望シフト — カバレッジ過剰より弱く ---
-        PREFERENCE_EXACT    = -2_000_000  # 完全一致
-        PREFERENCE_CLOSE    = -1_000_000  # ±1時間以内
-        PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト
-        MIN_DAYS_WEEK_BONUS = -500_000    # min_days_week 厳守
+        # --- 希望シフト — カバレッジ過剰より弱く (v3.7.21: 属性弱化に合わせて強化) ---
+        PREFERENCE_EXACT    = -3_000_000  # 完全一致 (旧-2M→-3M)
+        PREFERENCE_CLOSE    = -2_000_000  # ±1時間以内 (旧-1M→-2M)
+        PREFERENCE_BASE     = -1_500_000  # 希望日に何らかのシフト (旧-500k→-1.5M)
+        MIN_DAYS_WEEK_BONUS = -1_000_000  # min_days_week 厳守 (旧-500k→-1M)
         OJT_NO_MENTOR       = 500_000     # 新人×メンター不在 (希望や他制約に負ける階層)
-        # --- スタッフ属性ベース調整 ---
-        PRIORITY_HIGH       = -100_000    # 優先度 High スタッフを最優先
-        PRIORITY_LOW        = 20_000      # 優先度 Low スタッフは穴埋め
-        CONTRACT_REGULAR    = -20_000     # レギュラー契約優先
-        CONTRACT_SPOT       = 10_000      # スポット契約は後回し
+        # --- スタッフ属性ベース調整 (v3.7.21: 大幅弱化) ---
+        # 旧: 属性ボーナス累積が COVERAGE_OVER_SLOT (4M) を超えて過剰配置を誘発するケースがあった
+        # 新: ボーナス合計でも数十k程度に抑え、カバレッジが常に勝つように設計
+        PRIORITY_HIGH       = -10_000     # 優先度 High スタッフ (旧-100k)
+        PRIORITY_LOW        = 2_000       # 優先度 Low スタッフは後回し (旧20k)
+        CONTRACT_REGULAR    = -2_000      # レギュラー契約優先 (旧-20k)
+        CONTRACT_SPOT       = 1_000       # スポット契約は後回し (旧10k)
         # --- 品質 ---
         FAIRNESS_DRIFT      = 100_000     # 公平性偏差
-        MENTOR_MATCH_BONUS  = -10_000     # 主担当メンターとのペアリング
+        MENTOR_MATCH_BONUS  = -1_000      # 主担当メンターとのペアリング (旧-10k)
         # --- シフト追加コスト ---
         SHIFT_COST          = 100_000     # シフト 1 件追加 (不要追加に摩擦)
 
@@ -1605,26 +1607,9 @@ class ShiftScheduler:
             # 目的関数: コスト最小化
             # ====================================================
 
-            # 月給スタッフは出勤させないとペナルティ (固定費なので働かせた方が得)
-            for sid in self._monthly_ids:
-                for d in self.dates:
-                    if self._get_day_type(d) == "closed":
-                        continue
-                    opts = staff_opts.get((sid, d), [])
-                    if opts:
-                        not_working = 1 - pulp.lpSum(
-                            x[(sid, d, oi)] for oi in range(len(opts)))
-                        penalty += not_working * 30000
-
-            # 時給スタッフのコスト
-            for s in self.staff_list:
-                if str(s.get("salary_type", "hourly")).lower() != "hourly":
-                    continue
-                wage = float(s.get("hourly_wage", 1100))
-                sid = s["id"]
-                for d in self.dates:
-                    for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                        penalty += x[(sid, d, oi)] * wage * opt["hours"] * 0.01
+            # v3.7.21: 月給スタッフ強制出勤・時給スタッフ人件費を完全撤廃
+            # (v3.7.19 で削除したつもりの「人件費×評価ランク最小化」の漏れを除去)
+            # 月給/時給で扱いを変えず、純粋にカバレッジと希望シフトで最適化する
 
             # v3.5: シフト 1 件あたりの基本コスト (小)
             # 不要なシフト追加を抑制。COVERAGE_UNDER (5M) より小さく、
