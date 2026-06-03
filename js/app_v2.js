@@ -3209,7 +3209,11 @@ const app = {
         const p = palette[b.status];
         const subMsg = b.status === 'good'
             ? `現在のスタッフ数と最低出勤日数は店舗需要にちょうど良いバランスです。`
-            : `<strong>${b.overDays}人日</strong>の過剰供給が見込まれます。AIシフトは「全員のmin_days_monthを満たす」ために、需要を超えてシフトを組みます。各スタッフの<strong>月の最低出勤日数を下げる</strong>ことで解消できます。`;
+            : `<strong>${b.overDays}人日</strong>の過剰供給が見込まれます。各スタッフの<strong>月の最低出勤日数を下げる</strong>ことで余裕が生まれます。`;
+        // v3.7.31: 過剰絶対回避ポリシーをユーザーに明示
+        const policyNote = b.status !== 'good'
+            ? `<div class="mt-2 p-2 bg-white/70 rounded border border-current/20 text-xs leading-relaxed"><i class="fa-solid fa-shield-halved mr-1"></i><strong>過剰絶対回避ポリシー (v3.7.31〜):</strong> 過剰になる場合、AIは<strong>最低出勤日数を犠牲にしてでも店舗必要人数ぴったりに合わせる</strong>よう設定されています。全員のmin_days_monthが満たされない場合があります。</div>`
+            : '';
         return `
             <div class="${p.bg} ${p.border} border-2 rounded-xl p-4 ${p.text}">
                 <div class="flex items-start gap-3">
@@ -3217,6 +3221,7 @@ const app = {
                     <div class="flex-1">
                         <div class="font-bold text-base mb-1">需給バランス: ${p.label}</div>
                         <div class="text-sm leading-relaxed">${subMsg}</div>
+                        ${policyNote}
                         <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                             <div class="bg-white/60 rounded px-3 py-2">
                                 <div class="text-gray-500">月需要</div>
