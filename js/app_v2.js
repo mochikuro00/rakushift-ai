@@ -5726,8 +5726,13 @@ const app = {
 
             // 診断2: min_days 合計と需要のチェック
             const totalMinMonth = (payload.staff_list || []).reduce((sum, s) => sum + Number(s.min_days_month || 0), 0);
+            // v3.7.33 [H-1]: タイムゾーン安全な日付解釈
+            const _parseDate = (d) => {
+                const [Y, M, D] = String(d).split('-').map(Number);
+                return new Date(Y, (M || 1) - 1, D || 1);
+            };
             const weekdays = (payload.dates || []).filter(d => {
-                const wd = new Date(d).getDay();
+                const wd = _parseDate(d).getDay();
                 return wd >= 1 && wd <= 5;
             }).length;
             const weekends = (payload.dates || []).length - weekdays;
@@ -8011,14 +8016,23 @@ const app = {
      * @param {Array} dates - 対象日付配列
      */
     // v3.7.32 [A]: シフト精度の自動評価 (生成後にユーザーが「過剰0/不足0」を一目で確認)
+    // v3.7.33: H-2 引数ガード, C-1 jh.isHoliday 修正, H-1 タイムゾーン安全
     _renderAccuracySummary(shifts, dates, report) {
+        shifts = shifts || [];
+        dates = dates || [];
         const config = this.state.config || {};
         const sr = config.staff_req || {};
         const minWeekday = Number(sr.min_weekday || 0);
         const minWeekend = Number(sr.min_weekend || 0);
         const minHoliday = Number(sr.min_holiday || minWeekend);
 
-        // 日別ピーク同時刻人数を計算
+        const jh = (typeof JapaneseHolidays !== 'undefined') ? JapaneseHolidays : null;
+        // タイムゾーン安全な YYYY-MM-DD → Date 変換
+        const parseLocalDate = (d) => {
+            const [Y, M, D] = String(d).split('-').map(Number);
+            return new Date(Y, (M || 1) - 1, D || 1);
+        };
+
         const byDate = {};
         for (const s of shifts) {
             (byDate[s.date] = byDate[s.date] || []).push(s);
@@ -8031,9 +8045,9 @@ const app = {
         for (const d of dates) {
             const ds = byDate[d] || [];
             if (ds.length === 0) continue;
-            const wd = new Date(d).getDay();
+            const wd = parseLocalDate(d).getDay();
             let req;
-            if (this.isHoliday && this.isHoliday(d)) req = minHoliday;
+            if (jh && jh.isHoliday(d)) req = minHoliday;
             else if (wd === 0 || wd === 6) req = minWeekend;
             else req = minWeekday;
             if (req === 0) continue;

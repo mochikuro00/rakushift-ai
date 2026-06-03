@@ -984,12 +984,21 @@ class ShiftScheduler:
                                 best_diff = diff
                                 best_oi = oi
                 if (wsid, wd, best_oi) in x:
-                    # v3.7.30: HARD → SOFT 化
-                    # 旧: prob += x == 1 (絶対配置 = 過剰の温床)
-                    # 新: 配置されたらボーナス -10M、配置されないとペナルティ
-                    #     COVERAGE_OVER (20M) より弱いため、過剰になる場合は希望を諦める
-                    #     PREFERENCE_EXACT (-3M) より強いため、通常時は確実に配置される
-                    penalty += -10_000_000 * x[(wsid, wd, best_oi)]
+                    # v3.7.33 [MED-1]: 希望時間指定があれば best_oi 限定、なければ全 oi にボーナス
+                    # 旧 v3.7.30 は best_oi のみだったため、時間指定なしの希望でも
+                    # 1 opt にしかボーナスが乗らず、他の opt が選ばれると「希望未配置」扱いになる
+                    # 修正: 時間指定なし (start_time/end_time なし) なら全 opt に -10M を分散付与
+                    if wr.get("start_time") and wr.get("end_time"):
+                        # 時間指定あり: best_oi (近似一致) に集中ボーナス
+                        penalty += -10_000_000 * x[(wsid, wd, best_oi)]
+                    else:
+                        # 時間指定なし: その日の全 opt に均等に分散 (合計 -10M)
+                        n_opts = len(opts)
+                        if n_opts > 0:
+                            per_opt_bonus = -10_000_000 // n_opts
+                            for oi_b in range(n_opts):
+                                if (wsid, wd, oi_b) in x:
+                                    penalty += per_opt_bonus * x[(wsid, wd, oi_b)]
                     fixed_assignments.add((wsid, wd))
                     logger.info("[WorkReq] Soft-fixed: staff={} date={} opt={}".format(wsid, wd, best_oi))
 
@@ -2118,10 +2127,12 @@ class ShiftScheduler:
                         max_slot_req_day = req
                 if not deficit:
                     break
-                # v3.7.31: 過剰絶対回避 (Greedy フォールバック時の過剰9名問題対応)
-                # 旧: max_slot_req_day + 2 (過剰許容)
-                # 新: max_slot_req_day ぴったりで停止
-                if len(day_shifts) >= max_slot_req_day + len(assigned_days.get(d, set())):
+                # v3.7.33 [MED-3]: ぴったり停止 (work_request 分の超過余裕を撤廃)
+                # 旧 v3.7.31: max_slot_req_day + len(assigned_days[d]) で停止
+                #   → assigned_days[d] は work_request 既配置で day_shifts にも含まれるため
+                #     k人の work_request がある日は k人分の過剰を許容してしまう
+                # 新: max_slot_req_day ぴったりで停止 (work_request 重ね分を引かない)
+                if len(day_shifts) >= max_slot_req_day:
                     break
 
                 worst = max(deficit, key=deficit.get)
