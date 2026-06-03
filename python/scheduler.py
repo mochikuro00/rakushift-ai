@@ -1144,7 +1144,10 @@ class ShiftScheduler:
                                     "mdw_{}_{}".format(sid, week[0] if week else "x"),
                                     0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(wv) + mdw_slack >= effective_min
-                                penalty += mdw_slack * 200_000  # COVERAGE_OVER (4M) より弱い
+                                # v3.7.29: 200k→30k に大幅弱化。9名×5日未達=9M で過剰回避(20M)を
+                                # 超えて過剰が発生していた問題を解消。最低出勤日数は希望事項として扱い、
+                                # 必要に応じて未達を許容する
+                                penalty += mdw_slack * 30_000
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
@@ -1177,7 +1180,8 @@ class ShiftScheduler:
                             mdm_slack = pulp.LpVariable(
                                 "mdm_{}".format(sid), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
-                            penalty += mdm_slack * 200_000
+                            # v3.7.29: 200k→30k に大幅弱化 (min_days_week と同じ)
+                            penalty += mdm_slack * 30_000
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
@@ -1660,9 +1664,11 @@ class ShiftScheduler:
                                 if opt["start_min"] <= slot_min < opt["end_min"] and req_at_slot >= 2:
                                     is_spot = True
                                     break
-                        # スポット帯: コスト 0 (積極投入)
-                        # 通常帯: 15k 追加コスト (控え目)
-                        cost = 0 if is_spot else 15_000
+                        # v3.7.29: 時給コスト 15k → 5k に弱化
+                        # 15k では希望シフトを出した時給スタッフが押し出され、希望充足が
+                        # 大幅に低下していた。5k なら月給優先は維持しつつ、希望シフト
+                        # (-3M) を持つ時給スタッフは確実に配置される
+                        cost = 0 if is_spot else 5_000
                         if cost > 0:
                             penalty += x[(sid, d, oi)] * cost
 
