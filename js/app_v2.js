@@ -2071,7 +2071,24 @@ const app = {
         const pending = this.state.requests.filter(r => r.status === 'pending');
         const history = this.state.requests.filter(r => r.status !== 'pending').sort((a, b) => b.id - a.id).slice(0, 10);
 
+        // v3.7.32 [B]: 承認希望が SOFT 化されたことを管理者に明示
+        const softPolicyBanner = `
+            <div class="mb-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-blue-800">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-circle-info text-xl mt-0.5 text-blue-600"></i>
+                    <div class="text-sm leading-relaxed">
+                        <div class="font-bold mb-1">承認した出勤希望の扱い (v3.7.30〜)</div>
+                        <div>承認した出勤希望は、シフト生成時に <strong>原則として尊重</strong> されますが、
+                        <strong>過剰配置になる場合は AI が諦めて配置しない</strong>ことがあります。
+                        これは「過剰絶対回避ポリシー」のため、店舗運営を優先する設計です。<br>
+                        <span class="text-xs text-blue-600">休み希望は引き続き 100% 反映されます。</span></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
         container.innerHTML = `
+            ${softPolicyBanner}
             <div class="grid lg:grid-cols-2 gap-8">
                 <!-- Pending -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -5131,9 +5148,40 @@ const app = {
             contract_id: contractId
         };
 
+        // v3.7.32 [D]: スタッフ設定の整合性チェック (設定ミス防止)
+        const validationErrors = [];
         if (data.min_days_week > data.max_days_week) {
-            this.showToast('最低出勤日数は、最大出勤日数以下に設定してください', 'error');
+            validationErrors.push('週の最低出勤日数 (' + data.min_days_week + ') が週の最大勤務日数 (' + data.max_days_week + ') を超えています');
+        }
+        if (data.max_days_week <= 0 || data.max_days_week > 7) {
+            validationErrors.push('週の最大勤務日数は 1〜7 の範囲で設定してください (現在: ' + data.max_days_week + ')');
+        }
+        if (data.max_hours_day <= 0 || data.max_hours_day > 24) {
+            validationErrors.push('1日の最大勤務時間は 1〜24 時間で設定してください (現在: ' + data.max_hours_day + ')');
+        }
+        if (data.min_days_month > 31) {
+            validationErrors.push('月の最低出勤日数は 31 以下に設定してください (現在: ' + data.min_days_month + ')');
+        }
+        const maxPossibleMonth = data.max_days_week * 4.3; // 1ヶ月あたり最大日数の目安
+        if (data.min_days_month > Math.ceil(maxPossibleMonth)) {
+            validationErrors.push('月の最低出勤日数 (' + data.min_days_month + ') が週の最大日数 (' + data.max_days_week + '日/週) で達成不可能です');
+        }
+        if (validationErrors.length > 0) {
+            this.showToast('設定エラー: ' + validationErrors[0], 'error');
+            console.warn('[SaveStaff] Validation errors:', validationErrors);
             return;
+        }
+
+        // v3.7.32 [E]: 社員 (月給) で「希望時間 ON」のとき警告 (推奨は OFF)
+        if (data.salary_type === 'monthly' && usePref) {
+            if (!window.confirm(
+                '【推奨されない設定】\n\n' +
+                '社員 (月給制) は希望時間 OFF にすることで、店舗状況に合わせて柔軟にシフト調整されます。\n' +
+                'ON にすると朝晩のフレキシブル配置ができなくなり、過剰配置・希望時間集中の原因になります。\n\n' +
+                'このまま保存しますか?'
+            )) {
+                return;
+            }
         }
 
         if (!id) {
@@ -5659,12 +5707,66 @@ const app = {
                 });
                 if (details.length > 10) lines.push(`... 他 ${details.length - 10} 日`);
             }
+            // v3.7.32 [C]: 具体的な原因解析と解決手順を強化
             lines.push('');
-            lines.push('💡 解決ヒント:');
-            lines.push('・スタッフを追加する');
-            lines.push('・スタッフの max_days_week / max_hours_day を増やす');
-            lines.push('・店舗設定の「最低管理者数」「時間帯別必要人数」を見直す');
-            lines.push('・希望休 (休暇申請) を一部却下する');
+            lines.push('🔍 自動診断結果:');
+
+            // 診断1: スタッフ数と必要人数のマッチング
+            const cfg = payload.config || {};
+            const sr = cfg.staff_req || {};
+            const totalStaff = summary.total_staff || (payload.staff_list || []).length;
+            const minWeekday = Number(sr.min_weekday || 0);
+            const minWeekend = Number(sr.min_weekend || 0);
+            if (totalStaff < minWeekday) {
+                lines.push(`❌ スタッフ数 ${totalStaff}名 < 平日必要人数 ${minWeekday}名 — 物理的に不足`);
+            }
+            if (totalStaff < minWeekend) {
+                lines.push(`❌ スタッフ数 ${totalStaff}名 < 土日必要人数 ${minWeekend}名`);
+            }
+
+            // 診断2: min_days 合計と需要のチェック
+            const totalMinMonth = (payload.staff_list || []).reduce((sum, s) => sum + Number(s.min_days_month || 0), 0);
+            const weekdays = (payload.dates || []).filter(d => {
+                const wd = new Date(d).getDay();
+                return wd >= 1 && wd <= 5;
+            }).length;
+            const weekends = (payload.dates || []).length - weekdays;
+            const demand = weekdays * minWeekday + weekends * minWeekend;
+            if (totalMinMonth > demand * 1.2) {
+                lines.push(`⚠️ 全員のmin_days_month合計 (${totalMinMonth}人日) が月需要 (${demand}人日) を ${Math.round((totalMinMonth/demand - 1) * 100)}% 超過 — 過剰配置の温床`);
+            }
+
+            // 診断3: シフトパターン
+            const patternCount = (cfg.custom_shifts || []).length;
+            if (patternCount <= 1) {
+                lines.push(`⚠️ シフトパターン ${patternCount}個 — 全員が同じ時間に集中する原因`);
+            }
+
+            // 診断4: 月給スタッフの希望時間 ON
+            const monthlyWithPref = (payload.staff_list || []).filter(s =>
+                s.salary_type === 'monthly' && (s.pref_start_wd || s.pref_start_we)
+            ).length;
+            if (monthlyWithPref > 0) {
+                lines.push(`⚠️ 月給スタッフ ${monthlyWithPref}名が希望時間ON — 柔軟調整不可、時間帯集中の原因`);
+            }
+
+            lines.push('');
+            lines.push('💡 解決手順 (優先順):');
+            if (totalStaff < Math.max(minWeekday, minWeekend)) {
+                lines.push('1. ⭐ スタッフを追加 (最も効果的)');
+            }
+            if (totalMinMonth > demand * 1.2) {
+                lines.push('2. 各スタッフの「月の最低出勤日数」を下げる (現状は需要超過)');
+            }
+            if (patternCount <= 1) {
+                lines.push('3. 「店舗設定」→「シフトパターン」で 早番/遅番 を追加');
+            }
+            if (monthlyWithPref > 0) {
+                lines.push('4. 社員 (月給) のシフト希望時間を OFF にする');
+            }
+            lines.push('5. スタッフの max_days_week / max_hours_day を増やす');
+            lines.push('6. 店舗設定の「時間帯別必要人数」を見直す');
+            lines.push('7. 希望休 (休暇申請) を一部却下する');
 
             // v3.7.5: alert() はブラウザ抑制されることがあるため、画面内モーダルで表示
             // v3.7.14: closest('.fixed') が他モーダル (人員不足警告 z-[10001] 等) を誤削除する
@@ -5714,6 +5816,24 @@ const app = {
         }
 
         const targetType = (document.getElementById('autoFillTarget')?.value || '');
+
+        // v3.7.32 [F]: シフトパターン未登録時の警告
+        // パターンが 1 つ以下だと全員が同じ時間帯に集中し、過剰の温床になる
+        const customShifts = (this.state.config.custom_shifts || []);
+        if (customShifts.length <= 1) {
+            const continueAnyway = window.confirm(
+                '【警告】シフトパターンが ' + customShifts.length + ' 個しか登録されていません\n\n' +
+                'シフトパターンが少ないと、全スタッフが同じ時間帯に集中し、\n' +
+                '人員のピーク重なりが発生しやすくなります。\n\n' +
+                '推奨: 「店舗設定」→「シフトパターン」で 早番/遅番/終日 など\n' +
+                '複数のパターンを登録してください。\n\n' +
+                'このまま生成を続けますか?'
+            );
+            if (!continueAnyway) {
+                return;
+            }
+        }
+
         this.closeModal('autoFillModal');
 
         const loadingEl = document.getElementById('globalLoading');
@@ -7890,6 +8010,91 @@ const app = {
      * @param {string} targetType - 'reset_all' | 'empty_only'
      * @param {Array} dates - 対象日付配列
      */
+    // v3.7.32 [A]: シフト精度の自動評価 (生成後にユーザーが「過剰0/不足0」を一目で確認)
+    _renderAccuracySummary(shifts, dates, report) {
+        const config = this.state.config || {};
+        const sr = config.staff_req || {};
+        const minWeekday = Number(sr.min_weekday || 0);
+        const minWeekend = Number(sr.min_weekend || 0);
+        const minHoliday = Number(sr.min_holiday || minWeekend);
+
+        // 日別ピーク同時刻人数を計算
+        const byDate = {};
+        for (const s of shifts) {
+            (byDate[s.date] = byDate[s.date] || []).push(s);
+        }
+        const toMin = (t) => {
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + m;
+        };
+        let exactDays = 0, underDays = 0, overDays = 0;
+        for (const d of dates) {
+            const ds = byDate[d] || [];
+            if (ds.length === 0) continue;
+            const wd = new Date(d).getDay();
+            let req;
+            if (this.isHoliday && this.isHoliday(d)) req = minHoliday;
+            else if (wd === 0 || wd === 6) req = minWeekend;
+            else req = minWeekday;
+            if (req === 0) continue;
+            const slotCounts = {};
+            for (const s of ds) {
+                const start = toMin(s.start_time);
+                let end = toMin(s.end_time);
+                if (end <= start) end += 1440;
+                for (let t = start; t < end; t += 15) {
+                    slotCounts[t % 1440] = (slotCounts[t % 1440] || 0) + 1;
+                }
+            }
+            const peak = Math.max(0, ...Object.values(slotCounts));
+            if (peak === req) exactDays++;
+            else if (peak < req) underDays++;
+            else overDays++;
+        }
+        const totalDays = exactDays + underDays + overDays;
+        const exactPct = totalDays > 0 ? Math.round(exactDays / totalDays * 100) : 0;
+
+        // 法定違反数
+        const legalIssues = (report && report.overtime_warnings) ? report.overtime_warnings.length : 0;
+
+        const exactColor = exactPct >= 90 ? 'emerald' : exactPct >= 70 ? 'amber' : 'red';
+        const overColor = overDays === 0 ? 'emerald' : overDays <= 2 ? 'amber' : 'red';
+
+        return `
+            <div class="mt-3 mb-4 bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-bullseye text-emerald-600 text-lg"></i>
+                    <span class="font-bold text-gray-800">配置精度サマリー (v3.7.31)</span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="bg-white rounded-lg p-3 text-center border border-${exactColor}-200">
+                        <div class="text-2xl font-black text-${exactColor}-600">${exactPct}%</div>
+                        <div class="text-[10px] text-gray-500 mt-1">ぴったり配置率</div>
+                        <div class="text-[9px] text-gray-400">${exactDays}/${totalDays}日</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-3 text-center border border-${overColor}-200">
+                        <div class="text-2xl font-black text-${overColor}-600">${overDays}</div>
+                        <div class="text-[10px] text-gray-500 mt-1">過剰日数</div>
+                        <div class="text-[9px] text-gray-400">${overDays === 0 ? '✓ 過剰なし' : '+' + overDays + '日'}</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-3 text-center border ${underDays === 0 ? 'border-emerald-200' : 'border-red-200'}">
+                        <div class="text-2xl font-black ${underDays === 0 ? 'text-emerald-600' : 'text-red-600'}">${underDays}</div>
+                        <div class="text-[10px] text-gray-500 mt-1">不足日数</div>
+                        <div class="text-[9px] text-gray-400">${underDays === 0 ? '✓ 不足なし' : '要確認'}</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-3 text-center border ${legalIssues === 0 ? 'border-emerald-200' : 'border-red-200'}">
+                        <div class="text-2xl font-black ${legalIssues === 0 ? 'text-emerald-600' : 'text-red-600'}">${legalIssues}</div>
+                        <div class="text-[10px] text-gray-500 mt-1">法定違反</div>
+                        <div class="text-[9px] text-gray-400">${legalIssues === 0 ? '✓ 違反なし' : '要対応'}</div>
+                    </div>
+                </div>
+                ${overDays === 0 && underDays === 0 && legalIssues === 0
+                    ? '<div class="mt-2 text-xs text-emerald-700 text-center font-bold"><i class="fa-solid fa-check-circle mr-1"></i>店舗需要に完全にマッチした最適配置です</div>'
+                    : ''}
+            </div>
+        `;
+    },
+
     showShiftPreview(shifts, targetType, dates, report) {
         this._previewShifts = shifts;
         this._previewTargetType = targetType;
@@ -7909,8 +8114,19 @@ const app = {
             return sum + (endMin - startMin) / 60;
         }, 0);
 
+        // v3.7.32 [A]: 精度サマリー (過剰0/不足0 を強調表示)
+        const accuracyHtml = this._renderAccuracySummary(shifts, dates, report);
+
         const summaryEl = document.getElementById('previewSummary');
         if (summaryEl) {
+            // v3.7.32 [A]: 精度サマリーを既存サマリーの上に挿入
+            const oldAccuracy = document.getElementById('previewAccuracy');
+            if (oldAccuracy) oldAccuracy.remove();
+            const acc = document.createElement('div');
+            acc.id = 'previewAccuracy';
+            acc.innerHTML = accuracyHtml;
+            summaryEl.parentNode.insertBefore(acc, summaryEl);
+
             summaryEl.innerHTML = `
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                     <p class="text-2xl font-bold text-emerald-600">${totalShifts}</p>
