@@ -62,11 +62,12 @@ class ShiftScheduler:
         # --- カバレッジ (店舗運営の根幹) — 10M階層 ---
         EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避)
         OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在 / 社員1名以上常駐
-        # --- 不足/過剰 — 対称化して「ぴったり」を真の最適解に ---
-        # v3.7.23: 「過剰9名/必要6」のような同時刻過剰を強力に抑制
+        # --- 不足/過剰 ---
+        # v3.7.28: 過剰絶対回避ポリシー。属性ボーナス + 希望ボーナス合計でも
+        # 覆せない 20M に設定 (PREFERENCE_EXACT -3M を超える)
         COVERAGE_UNDER      = 5_000_000   # スロット必要人数不足
-        COVERAGE_OVER_DAY   = 8_000_000   # 日次過剰人員 (旧5M→8M)
-        COVERAGE_OVER_SLOT  = 8_000_000   # スロット過剰人員 (旧4M→8M, 同時刻過剰を厳格に防ぐ)
+        COVERAGE_OVER_DAY   = 20_000_000  # 日次過剰人員 (v3.7.28: 8M→20M)
+        COVERAGE_OVER_SLOT  = 20_000_000  # スロット過剰人員 (v3.7.28: 8M→20M)
         POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
         # --- 希望シフト — カバレッジ過剰より弱く (v3.7.21: 属性弱化に合わせて強化) ---
         PREFERENCE_EXACT    = -3_000_000  # 完全一致 (旧-2M→-3M)
@@ -1616,14 +1617,56 @@ class ShiftScheduler:
             # 目的関数: コスト最小化
             # ====================================================
 
-            # v3.7.21: 月給スタッフ強制出勤・時給スタッフ人件費を完全撤廃
-            # (v3.7.19 で削除したつもりの「人件費×評価ランク最小化」の漏れを除去)
-            # 月給/時給で扱いを変えず、純粋にカバレッジと希望シフトで最適化する
+            # v3.7.28: 「過剰絶対回避 + 月給優先 + 時給はスポット投入」ポリシー
+            # 配置の優先順位を以下のように設計:
+            #   1. COVERAGE (UNDER 5M / OVER 20M) で過剰絶対回避
+            #   2. 月給スタッフを優先配置 (不在ペナルティ 30k)
+            #   3. 時給スタッフは「スポット帯 (time_staff_req で要件が高い時間)」のみ低コスト
+            #      通常時間帯では追加コスト (15k) を課して控え目に
+            #   4. PREFERENCE_EXACT (-3M) は両方の人件費を覆せる強さ
 
-            # v3.5: シフト 1 件あたりの基本コスト (小)
-            # 不要なシフト追加を抑制。COVERAGE_UNDER (5M) より小さく、
-            # COVERAGE_OVER_DAY (4M) と合算で UNDER を上回るよう設計。
-            # → MILP は「不足を埋める」より「過剰を削る」を選ぶようになる
+            # スポット帯 (time_staff_req 設定済みの時間) かどうかの判定マップを構築
+            # _slot_reqs_cache は v3.7.x で構築済 (各日のスロット必要人数 dict)
+            time_rules_cfg = self.config.get("time_staff_req") or []
+            has_time_rules = bool(time_rules_cfg)
+
+            # 月給スタッフは「働かないとペナルティ」(優先配置)
+            for sid in self._monthly_ids:
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    opts = staff_opts.get((sid, d), [])
+                    if opts:
+                        not_working = 1 - pulp.lpSum(
+                            x[(sid, d, oi)] for oi in range(len(opts)))
+                        penalty += not_working * 30_000  # 過剰回避 (20M) より遥かに弱い
+
+            # 時給スタッフは「働くと小ペナルティ」(控え目配置)。ただしスポット帯は割引
+            hourly_ids = {s["id"] for s in self.staff_list
+                          if str(s.get("salary_type", "hourly")).lower() == "hourly"}
+            for sid in hourly_ids:
+                for d in self.dates:
+                    opts = staff_opts.get((sid, d), [])
+                    if not opts:
+                        continue
+                    # その日に「スポット帯」(time_staff_req で要件が高いスロット) があるか
+                    slot_reqs = self._slot_reqs_cache.get(d, {}) if hasattr(self, '_slot_reqs_cache') else {}
+                    for oi, opt in enumerate(opts):
+                        # opt の時間範囲とスポット帯の重なりを判定
+                        is_spot = False
+                        if has_time_rules and slot_reqs:
+                            # opt 範囲内に高要件スロット (>= 2) があれば「スポット」
+                            for slot_min, req_at_slot in slot_reqs.items():
+                                if opt["start_min"] <= slot_min < opt["end_min"] and req_at_slot >= 2:
+                                    is_spot = True
+                                    break
+                        # スポット帯: コスト 0 (積極投入)
+                        # 通常帯: 15k 追加コスト (控え目)
+                        cost = 0 if is_spot else 15_000
+                        if cost > 0:
+                            penalty += x[(sid, d, oi)] * cost
+
+            # シフト 1 件あたりの基本コスト (不要シフト抑制)
             for s in self.staff_list:
                 sid = s["id"]
                 for d in self.dates:
