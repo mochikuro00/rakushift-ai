@@ -5080,8 +5080,18 @@ const app = {
         const usePref = document.getElementById('staffUsePrefHours')?.checked;
         const prefStartWd = usePref ? (document.getElementById('staffPrefStartWeekday')?.value || '') : '';
         const prefEndWd = usePref ? (document.getElementById('staffPrefEndWeekday')?.value || '') : '';
-        const prefStartWe = usePref ? (document.getElementById('staffPrefStartWeekend')?.value || '') : '';
-        const prefEndWe = usePref ? (document.getElementById('staffPrefEndWeekend')?.value || '') : '';
+        let prefStartWe = usePref ? (document.getElementById('staffPrefStartWeekend')?.value || '') : '';
+        let prefEndWe = usePref ? (document.getElementById('staffPrefEndWeekend')?.value || '') : '';
+        // v3.7.27: 土日希望時間が空欄なら平日希望時間を自動補完。
+        // 平日のみ入力すると、土日にシフト候補が作られず土日不足の原因になっていたため。
+        // 社員 (月給制) は希望時間を無視して柔軟調整される設計なので自動補完しない。
+        const _salaryRaw = (document.getElementById('staffSalaryType')?.value || '').toLowerCase();
+        const _autoFillWe = usePref && _salaryRaw !== 'monthly';
+        let _autoFilledNote = '';
+        if (_autoFillWe) {
+            if (!prefStartWe && prefStartWd) { prefStartWe = prefStartWd; _autoFilledNote = '土日希望時間を平日希望時間で自動補完しました'; }
+            if (!prefEndWe && prefEndWd) { prefEndWe = prefEndWd; _autoFilledNote = '土日希望時間を平日希望時間で自動補完しました'; }
+        }
         const reqPairs = document.getElementById('staffReqPairs')?.value || '';
         const position = document.getElementById('staffPosition')?.value || 'any';
 
@@ -5166,6 +5176,10 @@ const app = {
             this.renderStaffList(document.getElementById('viewContainer'));
             this.closeModal('staffModal');
             this.showToast('保存しました', 'success');
+            // v3.7.27: 土日希望時間を自動補完した場合は追加で通知
+            if (_autoFilledNote) {
+                setTimeout(() => this.showToast(_autoFilledNote, 'info'), 600);
+            }
         } catch (e) {
             console.error('[SaveStaff] 保存失敗:', e);
             // 保存失敗時はDBから最新データを再取得してStateを復元
