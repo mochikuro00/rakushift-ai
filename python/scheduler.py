@@ -1194,19 +1194,20 @@ class ShiftScheduler:
                             prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
                             is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
                             if is_monthly:
-                                # v3.7.51: 月給スタッフ min_days_month 50M (絶対達成)
-                                # 過剰回避 (100M) より弱いが、ほぼ確実に月達成される強度
-                                penalty += mdm_slack * 50_000_000
+                                # v3.7.54: 50M → 20M に弱化
+                                # COVERAGE_UNDER/OVER (100M) との階層差を 5倍確保
+                                # 物理的に達成可能なら確実に満たされる
+                                penalty += mdm_slack * 20_000_000
                             else:
                                 penalty += mdm_slack * 50_000
 
-                # --- v3.7.53 [CRITICAL C-1 修正]: 全スタッフ最低出勤保証 ---
-                # スコープリーク対策: target_min_month/ng_set が未定義のケース
-                # (force=True または min_days_month=0) でも安全に動作
+                # --- v3.7.54: 全スタッフ最低出勤保証 (Tier 4 500k に弱化) ---
+                # v3.7.51-53 の 5M では COVERAGE_UNDER/OVER (100M) と衝突して
+                # 52件もの制約違反を引き起こしていた
+                # 500k なら過剰回避 (100M) が確実に優先される
                 guarantee_min = 5 if str(s.get("salary_type", "hourly")).lower() == "monthly" else 3
-                # ローカルに常に初期化 (前イテレーション残骸 / 未定義回避)
                 _current_target = locals().get("target_min_month", 0)
-                _current_ng_set = self._get_staff_ng_dates(s)  # 常に再算出
+                _current_ng_set = self._get_staff_ng_dates(s)
                 if _current_target < guarantee_min:
                     all_wv_g = []
                     for d in self.dates:
@@ -1220,7 +1221,7 @@ class ShiftScheduler:
                             g_slack = pulp.LpVariable(
                                 "guarantee_min_{}".format(sid), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(all_wv_g) + g_slack >= effective_guarantee
-                            penalty += g_slack * 5_000_000  # Tier 3
+                            penalty += g_slack * 500_000  # Tier 4 (旧 5M → 500k)
                 # スコープリーク防止: 次スタッフに残骸が漏れないよう削除
                 if "target_min_month" in dir():
                     try:
@@ -1419,7 +1420,8 @@ class ShiftScheduler:
                         late_slack = pulp.LpVariable(
                             "late_{}".format(d), 0, None, pulp.LpInteger)
                         prob += pulp.lpSum(late_vars) + late_slack >= 1
-                        penalty += late_slack * 5_000_000  # Tier 3
+                        # v3.7.54: 5M → 1M に弱化 (COVERAGE 100M との階層差確保)
+                        penalty += late_slack * 1_000_000
 
             # ====================================================
             # TIER 3: 品質最適化 (ソフト制約)
