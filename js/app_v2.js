@@ -8057,6 +8057,14 @@ const app = {
             const [h, m] = t.split(':').map(Number);
             return h * 60 + m;
         };
+        // v3.7.43: バックエンド (scheduler.py) の判定結果を優先
+        // 旧: peak (同時刻最大) vs req (基本必要人数) の単純比較
+        //   → time_staff_req (時間帯別必要人数) を無視するため誤判定の可能性
+        //   → 例: ピーク時刻だけ合えば他時間が不足でも「ぴったり」判定
+        // 新: report.coverage_gaps (scheduler が正確に判定した不足箇所) を集計
+        const reportGaps = (report && Array.isArray(report.coverage_gaps)) ? report.coverage_gaps : [];
+        const underDateSet = new Set(reportGaps.map(g => g.date));
+
         let exactDays = 0, underDays = 0, overDays = 0;
         for (const d of dates) {
             const ds = byDate[d] || [];
@@ -8067,6 +8075,14 @@ const app = {
             else if (wd === 0 || wd === 6) req = minWeekend;
             else req = minWeekday;
             if (req === 0) continue;
+
+            // バックエンドが不足判定した日は under
+            if (underDateSet.has(d)) {
+                underDays++;
+                continue;
+            }
+
+            // それ以外で同時刻最大が必要人数を超えていれば over
             const slotCounts = {};
             for (const s of ds) {
                 const start = toMin(s.start_time);
@@ -8077,9 +8093,8 @@ const app = {
                 }
             }
             const peak = Math.max(0, ...Object.values(slotCounts));
-            if (peak === req) exactDays++;
-            else if (peak < req) underDays++;
-            else overDays++;
+            if (peak > req) overDays++;
+            else exactDays++;
         }
         const totalDays = exactDays + underDays + overDays;
         const exactPct = totalDays > 0 ? Math.round(exactDays / totalDays * 100) : 0;
