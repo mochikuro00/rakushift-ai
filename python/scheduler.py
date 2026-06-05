@@ -1148,21 +1148,21 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 wv.append(x[(sid, d, oi)])
                         if wv:
-                            # max_days_weekとの矛盾を防ぐ
                             effective_min = min(min_days_week, available_days_in_week, max_days)
                             if effective_min > 0:
-                                # v3.7.23: HARD → SOFT 化
-                                # 旧: prob += pulp.lpSum(wv) >= effective_min (絶対遵守 = 過剰配置の原因)
-                                # 新: 不足分にペナルティ。スタッフ個別 min_days_week 設定が高いと
-                                #     週需要を超えた強制配置になっていた問題を解消
+                                # v3.7.46: 月給スタッフは強く達成必須 (1M/日)
+                                # 時給スタッフは希望事項のまま (30k/日)
                                 mdw_slack = pulp.LpVariable(
                                     "mdw_{}_{}".format(sid, week[0] if week else "x"),
                                     0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(wv) + mdw_slack >= effective_min
-                                # v3.7.29: 200k→30k に大幅弱化。9名×5日未達=9M で過剰回避(20M)を
-                                # 超えて過剰が発生していた問題を解消。最低出勤日数は希望事項として扱い、
-                                # 必要に応じて未達を許容する
-                                penalty += mdw_slack * 30_000
+                                is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
+                                if is_monthly:
+                                    # 月給は 1M/週日不足 (社員の週出勤日を確実に確保)
+                                    penalty += mdw_slack * 1_000_000
+                                else:
+                                    # 時給は 30k のまま
+                                    penalty += mdw_slack * 30_000
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
@@ -1191,12 +1191,20 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
-                            # v3.7.23: HARD → SOFT 化 (min_days_week と同様の理由)
+                            # v3.7.46: 月給スタッフ (社員) は強く達成必須 (5M)
+                            #   時給スタッフは希望事項のまま (30k)
+                            #   ユーザー報告「坂本/名倉/岩井のシフトが少ない」を解消
                             mdm_slack = pulp.LpVariable(
                                 "mdm_{}".format(sid), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
-                            # v3.7.29: 200k→30k に大幅弱化 (min_days_week と同じ)
-                            penalty += mdm_slack * 30_000
+                            is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
+                            if is_monthly:
+                                # 月給は 5M/日不足ペナルティ (社員の出勤日数を確実に確保)
+                                # 過剰回避 50M より小さいので最終手段で未達も許容
+                                penalty += mdm_slack * 5_000_000
+                            else:
+                                # 時給は 30k のまま (希望事項)
+                                penalty += mdm_slack * 30_000
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
