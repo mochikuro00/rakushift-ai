@@ -8149,13 +8149,19 @@ const app = {
 
         const summaryEl = document.getElementById('previewSummary');
         if (summaryEl) {
-            // v3.7.32 [A]: 精度サマリーを既存サマリーの上に挿入
+            // v3.7.42: 精度サマリーを previewContent (スクロール領域) 内に移動
+            // スマホで固定ヘッダーが圧迫されて警告レポートまで届かない問題を解消
             const oldAccuracy = document.getElementById('previewAccuracy');
             if (oldAccuracy) oldAccuracy.remove();
             const acc = document.createElement('div');
             acc.id = 'previewAccuracy';
             acc.innerHTML = accuracyHtml;
-            summaryEl.parentNode.insertBefore(acc, summaryEl);
+            const contentEl0 = document.getElementById('previewContent');
+            if (contentEl0) {
+                contentEl0.insertBefore(acc, contentEl0.firstChild);
+            } else {
+                summaryEl.parentNode.insertBefore(acc, summaryEl);
+            }
 
             summaryEl.innerHTML = `
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
@@ -8213,15 +8219,22 @@ const app = {
             } else {
                 warnHtml = `<div class="mt-4 mb-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-600"></i><span class="text-sm font-bold text-emerald-700">制約違反なし: 全条件を満たした最適配置です</span></div>`;
             }
-            const summaryParent = document.getElementById('previewSummary');
-            if (summaryParent) {
-                // summaryEl の直後に挿入
+            // v3.7.42: 警告レポートをスクロール領域内 (previewContent) に移動
+            // 順序: 精度サマリー (previewAccuracy) → 警告レポート (previewReportSection) → シフト一覧
+            const contentParent = document.getElementById('previewContent');
+            if (contentParent) {
                 const existing = document.getElementById('previewReportSection');
                 if (existing) existing.remove();
                 const wrapper = document.createElement('div');
                 wrapper.id = 'previewReportSection';
                 wrapper.innerHTML = warnHtml;
-                summaryParent.parentNode.insertBefore(wrapper, summaryParent.nextSibling);
+                // 精度サマリーの直後 (あれば) or 先頭に挿入
+                const accuracyEl = document.getElementById('previewAccuracy');
+                if (accuracyEl && accuracyEl.parentNode === contentParent) {
+                    contentParent.insertBefore(wrapper, accuracyEl.nextSibling);
+                } else {
+                    contentParent.insertBefore(wrapper, contentParent.firstChild);
+                }
             }
         }
 
