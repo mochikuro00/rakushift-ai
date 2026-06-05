@@ -5802,7 +5802,19 @@ const app = {
     },
 
        async runAutoFill() {
-        if (this._shiftGenInProgress) return;
+        // v3.7.37: 「何も出ない」原因対策 — 進行中フラグの自動解除 + 反応トースト
+        if (this._shiftGenInProgress) {
+            // 5分以上前のフラグなら強制解除 (スタック対策)
+            const stuckTime = Date.now() - (this._shiftGenStartTime || 0);
+            if (stuckTime > 5 * 60 * 1000) {
+                this._shiftGenInProgress = false;
+                console.warn('[runAutoFill] Stuck flag reset:', stuckTime, 'ms');
+            } else {
+                this.showToast('シフト生成中です。完了をお待ちください', 'info');
+                return;
+            }
+        }
+        this._shiftGenStartTime = Date.now();
         // v3.7.35: スマホで「シフト作成失敗」が出る件のオフライン検知
         if (typeof navigator !== 'undefined' && navigator.onLine === false) {
             this.showToast('ネットワークがオフラインです。Wi-Fi または電波の良い場所で再試行してください', 'error');
@@ -5827,21 +5839,11 @@ const app = {
 
         const targetType = (document.getElementById('autoFillTarget')?.value || '');
 
-        // v3.7.32 [F]: シフトパターン未登録時の警告
-        // パターンが 1 つ以下だと全員が同じ時間帯に集中し、過剰の温床になる
+        // v3.7.37: 旧 v3.7.32 [F] の confirm() を撤去 (スマホで「何も出ない」原因)。
+        // 代わりにトースト警告 (非ブロック) で通知して生成は続行
         const customShifts = (this.state.config.custom_shifts || []);
         if (customShifts.length <= 1) {
-            const continueAnyway = window.confirm(
-                '【警告】シフトパターンが ' + customShifts.length + ' 個しか登録されていません\n\n' +
-                'シフトパターンが少ないと、全スタッフが同じ時間帯に集中し、\n' +
-                '人員のピーク重なりが発生しやすくなります。\n\n' +
-                '推奨: 「店舗設定」→「シフトパターン」で 早番/遅番/終日 など\n' +
-                '複数のパターンを登録してください。\n\n' +
-                'このまま生成を続けますか?'
-            );
-            if (!continueAnyway) {
-                return;
-            }
+            this.showToast('シフトパターンが ' + customShifts.length + ' 個のみ登録されています。複数登録を推奨します', 'warning');
         }
 
         this.closeModal('autoFillModal');
