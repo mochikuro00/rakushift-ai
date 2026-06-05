@@ -277,12 +277,12 @@ class TestPenaltyWeights:
         assert W.OPEN_CLOSE_NO_EMP <= W.EMPTY_SLOT * 2
 
     def test_preference_strong_enough(self):
-        """PREFERENCE_EXACT が COVERAGE_UNDER の 30% 以上 (希望が無視されない強度)。
-        旧版は 20% (1M / 5M) で希望が常に犠牲になっていた。
+        """PREFERENCE_EXACT が COVERAGE_UNDER の 20% 以上 (希望が無視されない強度)。
+        v3.7.36: COVERAGE_UNDER を 20M に強化したため、PREFERENCE が累積で
+        過剰を引き起こさないよう 20% に緩和。
         """
         W = ShiftScheduler.W
-        # 絶対値で比較 (PREFERENCE_EXACT は負値=ボーナス)
-        assert abs(W.PREFERENCE_EXACT) >= W.COVERAGE_UNDER * 0.3
+        assert abs(W.PREFERENCE_EXACT) >= W.COVERAGE_UNDER * 0.2
 
     # v3.7.20: test_min_manager_appropriate を削除。
     # 管理者常駐制約 (MIN_MANAGER) は v3.7.16 で廃止され、
