@@ -63,12 +63,12 @@ class ShiftScheduler:
         EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避)
         OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在 / 社員1名以上常駐
         # --- 不足/過剰 ---
-        # v3.7.36: 不足と過剰を **対称化** (両方とも 20M で同等に絶対回避)
-        # v3.7.34 で UNDER 5M→15M に強化したが「シフトが埋まらない」報告継続
-        # 不足 = 過剰 と同等扱いにすることで、MILP が両方を最大限避ける設計に
-        COVERAGE_UNDER      = 20_000_000  # スロット必要人数不足 (v3.7.36: 15M→20M, 対称化)
-        COVERAGE_OVER_DAY   = 20_000_000  # 日次過剰人員
-        COVERAGE_OVER_SLOT  = 20_000_000  # スロット過剰人員
+        # v3.7.45: 「ぴったりに調整」要望 - 20M → 50M に強化
+        # 希望シフト最大合計 (-5M EXACT + -2M BASE + -150k 月給) < 50M で
+        # 必要人数からの乖離を絶対許さない設計
+        COVERAGE_UNDER      = 50_000_000  # スロット必要人数不足 (v3.7.45: 20M→50M)
+        COVERAGE_OVER_DAY   = 50_000_000  # 日次過剰人員 (v3.7.45: 20M→50M)
+        COVERAGE_OVER_SLOT  = 50_000_000  # スロット過剰人員 (v3.7.45: 20M→50M)
         POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
         # --- 希望シフト — カバレッジ過剰より弱く (v3.7.34: COVERAGE_UNDER 強化に合わせ調整) ---
         PREFERENCE_EXACT    = -5_000_000  # 完全一致 (v3.7.34: -3M→-5M, UNDER 15M との階層維持)
@@ -1649,7 +1649,11 @@ class ShiftScheduler:
             time_rules_cfg = self.config.get("time_staff_req") or []
             has_time_rules = bool(time_rules_cfg)
 
-            # 月給スタッフは「働かないとペナルティ」(優先配置)
+            # v3.7.45: 月給スタッフ優先配置を強化 (30k → 150k)
+            # ユーザー報告: 名倉/坂本/岩井 (社員) のシフト回数が少ない
+            # 原因: 30k が時給コスト 5k の 6倍だが、複数日分の累積で逆転するケースあり
+            # 修正: 150k に強化、時給 5k の 30倍に。これで「月給を休ませて時給を入れる」
+            #       選択は確実に避けられる (過剰回避 20M は維持)
             for sid in self._monthly_ids:
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
@@ -1658,7 +1662,7 @@ class ShiftScheduler:
                     if opts:
                         not_working = 1 - pulp.lpSum(
                             x[(sid, d, oi)] for oi in range(len(opts)))
-                        penalty += not_working * 30_000  # 過剰回避 (20M) より遥かに弱い
+                        penalty += not_working * 150_000  # 旧 30k → 150k (時給 5k の 30倍)
 
             # 時給スタッフは「働くと小ペナルティ」(控え目配置)。ただしスポット帯は割引
             hourly_ids = {s["id"] for s in self.staff_list
