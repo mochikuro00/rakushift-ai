@@ -1367,32 +1367,32 @@ class ShiftScheduler:
                             penalty += slack * self.W.OPEN_CLOSE_NO_EMP
                             tracked_slacks["open_close_under"].append((d, slot_min, slack))
 
-                # --- v3.7.48: 遅番強制配置 ---
-                # 閉店時間 2 時間前以降から閉店時間まで、誰か (社員/時給問わず) 1名以上配置
-                # 「遅番が少ない」というユーザー報告に対応。営業時間後半の人員確保を保証
+                # --- v3.7.49: 遅番優先配置 (v3.7.48 から弱化、不足を引き起こさない範囲で) ---
+                # 旧 v3.7.48: 閉店2時間前から全スロット 10M 必須 → 他時間で不足発生
+                # 新: 閉店30分前の1スロットのみ、500k 推奨レベル
+                # 必要人数の達成 (COVERAGE_UNDER 100M) が最優先
                 for d in self.dates:
                     if self._get_day_type(d) == "closed":
                         continue
                     day_open, day_close = self._get_opening_hours(d)
                     op_min = self._to_minutes(day_open)
                     cl_min = self._normalize_end_time(op_min, self._to_minutes(day_close))
-                    # 閉店2時間前から閉店までの全スロットで「最低1名」を保証
-                    late_threshold = cl_min - 120
-                    if late_threshold <= op_min:
-                        continue  # 営業時間が 2 時間以下なら閉店帯チェックは不要
-                    for slot_min in range(late_threshold, cl_min, 15):
-                        late_vars = []
-                        for s in self.staff_list:
-                            sid = s["id"]
-                            for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                                if opt["start_min"] <= slot_min < opt["end_min"]:
-                                    late_vars.append(x[(sid, d, oi)])
-                        if late_vars:
-                            late_slack = pulp.LpVariable(
-                                "late_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(late_vars) + late_slack >= 1
-                            # Tier 2: 10M (必須レベル) - 必ず遅番に誰か配置されるよう保証
-                            penalty += late_slack * 10_000_000
+                    # 閉店30分前のみチェック (確実に遅番が入っているか)
+                    late_slot = cl_min - 30
+                    if late_slot <= op_min:
+                        continue
+                    late_vars = []
+                    for s in self.staff_list:
+                        sid = s["id"]
+                        for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                            if opt["start_min"] <= late_slot < opt["end_min"]:
+                                late_vars.append(x[(sid, d, oi)])
+                    if late_vars:
+                        late_slack = pulp.LpVariable(
+                            "late_{}".format(d), 0, None, pulp.LpInteger)
+                        prob += pulp.lpSum(late_vars) + late_slack >= 1
+                        # Tier 4: 500k (推奨レベル) - 不足回避 (100M) が最優先
+                        penalty += late_slack * 500_000
 
             # ====================================================
             # TIER 3: 品質最適化 (ソフト制約)
