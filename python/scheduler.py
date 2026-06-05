@@ -1189,19 +1189,36 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
-                            # v3.7.46: 月給スタッフ (社員) は強く達成必須 (5M)
-                            #   時給スタッフは希望事項のまま (30k)
-                            #   ユーザー報告「坂本/名倉/岩井のシフトが少ない」を解消
                             mdm_slack = pulp.LpVariable(
                                 "mdm_{}".format(sid), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
                             is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
                             if is_monthly:
-                                # v3.7.47 [Tier 2]: 月給スタッフ min_days_month 10M (必達)
-                                penalty += mdm_slack * 10_000_000
+                                # v3.7.51: 月給スタッフ min_days_month 50M (絶対達成)
+                                # 過剰回避 (100M) より弱いが、ほぼ確実に月達成される強度
+                                penalty += mdm_slack * 50_000_000
                             else:
-                                # [Tier 4]: 時給スタッフは 50k (推奨レベル)
                                 penalty += mdm_slack * 50_000
+
+                # --- v3.7.51: 全スタッフ最低出勤保証 (「入らない人ゼロ」) ---
+                # 各スタッフが月内に最低 3日 (時給) または 5日 (月給) は出勤するよう保証
+                # min_days_month が低い設定でも、最低限の出勤を確保
+                guarantee_min = 5 if str(s.get("salary_type", "hourly")).lower() == "monthly" else 3
+                # 既に target_min_month が guarantee_min 以上ならスキップ
+                if target_min_month < guarantee_min:
+                    all_wv_g = []
+                    for d in self.dates:
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            all_wv_g.append(x[(sid, d, oi)])
+                    if all_wv_g:
+                        ng_count_g = len([d for d in self.dates if d in ng_set or self._get_day_type(d) == "closed"])
+                        avail_g = len(self.dates) - ng_count_g
+                        effective_guarantee = min(guarantee_min, avail_g)
+                        if effective_guarantee > 0:
+                            g_slack = pulp.LpVariable(
+                                "guarantee_min_{}".format(sid), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(all_wv_g) + g_slack >= effective_guarantee
+                            penalty += g_slack * 5_000_000  # Tier 3
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
