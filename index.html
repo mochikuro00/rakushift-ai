@@ -92,9 +92,9 @@
 
         /* モバイルでのモーダル改善 */
         @media (max-width: 767px) {
-            /* モーダルがフルスクリーンに近い表示に */
+            /* v3.7.53 [HIGH #4 修正]: iOS Safari の vh ずれ対策で dvh 併用 */
             .modal-content {
-                max-height: 95vh !important;
+                max-height: min(95vh, 95dvh) !important;
                 margin: 8px;
                 border-radius: 16px !important;
             }

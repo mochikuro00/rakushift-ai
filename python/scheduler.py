@@ -1200,18 +1200,20 @@ class ShiftScheduler:
                             else:
                                 penalty += mdm_slack * 50_000
 
-                # --- v3.7.51: 全スタッフ最低出勤保証 (「入らない人ゼロ」) ---
-                # 各スタッフが月内に最低 3日 (時給) または 5日 (月給) は出勤するよう保証
-                # min_days_month が低い設定でも、最低限の出勤を確保
+                # --- v3.7.53 [CRITICAL C-1 修正]: 全スタッフ最低出勤保証 ---
+                # スコープリーク対策: target_min_month/ng_set が未定義のケース
+                # (force=True または min_days_month=0) でも安全に動作
                 guarantee_min = 5 if str(s.get("salary_type", "hourly")).lower() == "monthly" else 3
-                # 既に target_min_month が guarantee_min 以上ならスキップ
-                if target_min_month < guarantee_min:
+                # ローカルに常に初期化 (前イテレーション残骸 / 未定義回避)
+                _current_target = locals().get("target_min_month", 0)
+                _current_ng_set = self._get_staff_ng_dates(s)  # 常に再算出
+                if _current_target < guarantee_min:
                     all_wv_g = []
                     for d in self.dates:
                         for oi in range(len(staff_opts.get((sid, d), []))):
                             all_wv_g.append(x[(sid, d, oi)])
                     if all_wv_g:
-                        ng_count_g = len([d for d in self.dates if d in ng_set or self._get_day_type(d) == "closed"])
+                        ng_count_g = len([d for d in self.dates if d in _current_ng_set or self._get_day_type(d) == "closed"])
                         avail_g = len(self.dates) - ng_count_g
                         effective_guarantee = min(guarantee_min, avail_g)
                         if effective_guarantee > 0:
@@ -1219,6 +1221,12 @@ class ShiftScheduler:
                                 "guarantee_min_{}".format(sid), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(all_wv_g) + g_slack >= effective_guarantee
                             penalty += g_slack * 5_000_000  # Tier 3
+                # スコープリーク防止: 次スタッフに残骸が漏れないよう削除
+                if "target_min_month" in dir():
+                    try:
+                        del target_min_month
+                    except NameError:
+                        pass
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:

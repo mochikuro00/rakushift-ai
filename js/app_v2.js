@@ -8241,18 +8241,10 @@ const app = {
         const summaryEl = document.getElementById('previewSummary');
         if (summaryEl) {
             // v3.7.42: 精度サマリーを previewContent (スクロール領域) 内に移動
-            // スマホで固定ヘッダーが圧迫されて警告レポートまで届かない問題を解消
-            const oldAccuracy = document.getElementById('previewAccuracy');
-            if (oldAccuracy) oldAccuracy.remove();
-            const acc = document.createElement('div');
-            acc.id = 'previewAccuracy';
-            acc.innerHTML = accuracyHtml;
-            const contentEl0 = document.getElementById('previewContent');
-            if (contentEl0) {
-                contentEl0.insertBefore(acc, contentEl0.firstChild);
-            } else {
-                summaryEl.parentNode.insertBefore(acc, summaryEl);
-            }
+            // v3.7.53 [CRITICAL #1 修正]: contentEl.innerHTML 上書きでワイプされる問題を解消
+            // 旧: ここで previewContent に accuracy を insertBefore → 後の innerHTML=html でワイプ
+            // 新: accuracyHtml を後で innerHTML 用 html の先頭に含める (this._pendingAccuracyHtml に保持)
+            this._pendingAccuracyHtml = accuracyHtml;
 
             summaryEl.innerHTML = `
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
@@ -8310,29 +8302,23 @@ const app = {
             } else {
                 warnHtml = `<div class="mt-4 mb-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2"><i class="fa-solid fa-circle-check text-emerald-600"></i><span class="text-sm font-bold text-emerald-700">制約違反なし: 全条件を満たした最適配置です</span></div>`;
             }
-            // v3.7.42: 警告レポートをスクロール領域内 (previewContent) に移動
-            // 順序: 精度サマリー (previewAccuracy) → 警告レポート (previewReportSection) → シフト一覧
-            const contentParent = document.getElementById('previewContent');
-            if (contentParent) {
-                const existing = document.getElementById('previewReportSection');
-                if (existing) existing.remove();
-                const wrapper = document.createElement('div');
-                wrapper.id = 'previewReportSection';
-                wrapper.innerHTML = warnHtml;
-                // 精度サマリーの直後 (あれば) or 先頭に挿入
-                const accuracyEl = document.getElementById('previewAccuracy');
-                if (accuracyEl && accuracyEl.parentNode === contentParent) {
-                    contentParent.insertBefore(wrapper, accuracyEl.nextSibling);
-                } else {
-                    contentParent.insertBefore(wrapper, contentParent.firstChild);
-                }
-            }
+            // v3.7.53 [CRITICAL #1 修正]: 警告レポートも html 先頭に含めるため _pendingReportHtml に保持
+            this._pendingReportHtml = warnHtml;
+        } else {
+            this._pendingReportHtml = '';
         }
 
         // 日付ごとのテーブル生成
         const contentEl = document.getElementById('previewContent');
         if (contentEl) {
+            // v3.7.53 [CRITICAL #1 修正]: 精度サマリーと警告レポートを html 先頭に含める
             let html = '';
+            if (this._pendingAccuracyHtml) {
+                html += `<div id="previewAccuracy">${this._pendingAccuracyHtml}</div>`;
+            }
+            if (this._pendingReportHtml) {
+                html += `<div id="previewReportSection">${this._pendingReportHtml}</div>`;
+            }
             const staffMap = {};
             (this.state.staff || []).forEach(s => { staffMap[s.id] = s; });
 
