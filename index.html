@@ -1138,12 +1138,15 @@
             <div id="previewContent" class="p-4 overflow-y-auto flex-1">
                 <!-- JSで動的に挿入 -->
             </div>
-            <div class="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center shrink-0">
-                <p class="text-xs text-gray-400"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
-                <div class="flex gap-3">
-                    <button onclick="app.cancelShiftPreview()" class="px-5 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition" title="この結果を破棄して終了 (DB保存なし)"><i class="fa-solid fa-trash-can mr-1"></i>破棄 (保存しない)</button>
-                    <button onclick="app.confirmShiftPreview()" class="px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center gap-2">
-                        <i class="fa-solid fa-check"></i> 確定して保存
+            <!-- v3.7.38: モバイルでフッターボタンが見えない問題を修正 -->
+            <!-- 旧: flex justify-between でテキストとボタン横並び → モバイル画面幅超過でボタン非表示 -->
+            <!-- 新: flex-col モバイル + flex-row デスクトップ、ボタン全幅でタップしやすく -->
+            <div class="p-3 sm:p-4 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0">
+                <p class="hidden sm:block text-xs text-gray-400"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
+                <div class="flex gap-2 sm:gap-3 w-full sm:w-auto">
+                    <button onclick="app.cancelShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-5 py-3 sm:py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition" title="この結果を破棄して終了 (DB保存なし)"><i class="fa-solid fa-trash-can mr-1"></i>破棄</button>
+                    <button onclick="app.confirmShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check"></i> <span>確定して保存</span>
                     </button>
                 </div>
             </div>
