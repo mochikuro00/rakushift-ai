@@ -3172,6 +3172,7 @@ const app = {
     // 5. スタッフ管理 (Staff) - Admin Only
     // =================================================================
     // v3.7.25: 月の需給バランスを計算 (全員の min_days_month 合計 vs 月需要)
+    // v3.7.44: 平日/土日を分離して計算 (「全体は過剰だが土日は不足」の矛盾を解消)
     _computeStaffingBalance() {
         const staff = this.state.staff || [];
         if (staff.length === 0) return null;
@@ -3182,6 +3183,8 @@ const app = {
         const minHoliday = Number(sr.min_holiday || minWeekend);
         if (minWeekday + minWeekend === 0) return null;
 
+        const jh = (typeof JapaneseHolidays !== 'undefined') ? JapaneseHolidays : null;
+
         // 現在月の日数を集計
         const now = new Date();
         const y = now.getFullYear(), m = now.getMonth();
@@ -3191,7 +3194,8 @@ const app = {
         for (let d = 1; d <= daysInMonth; d++) {
             const wd = new Date(y, m, d).getDay();
             if (closedDays.includes(wd)) { closedCount++; continue; }
-            if (this.isHoliday && this.isHoliday(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`)) {
+            const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            if (jh && jh.isHoliday(dateStr)) {
                 holidayCount++;
             } else if (wd === 0 || wd === 6) {
                 weekendCount++;
@@ -3199,16 +3203,62 @@ const app = {
                 weekdayCount++;
             }
         }
-        const demand = weekdayCount * minWeekday + weekendCount * minWeekend + holidayCount * minHoliday;
-        const supply = staff.reduce((sum, s) => sum + Number(s.min_days_month || 0), 0);
+        // v3.7.44: 平日/土日別の供給を計算 (曜日 NG を考慮)
+        // 各スタッフが「平日に出れる日数」「土日祝に出れる日数」を min_days_month から按分
+        let supplyWeekday = 0, supplyWeekend = 0;
+        for (const s of staff) {
+            const ngWd = Array.isArray(s.ng_weekdays) ? s.ng_weekdays.map(Number) : [];
+            const minDays = Number(s.min_days_month || 0);
+            // 出勤可能曜日数 (NG 曜日を除外)
+            const availDays = [0,1,2,3,4,5,6].filter(w => !ngWd.includes(w));
+            const availWeekdays = availDays.filter(w => w >= 1 && w <= 5).length;  // 月-金
+            const availWeekendsHolidays = availDays.filter(w => w === 0 || w === 6).length;  // 土日
+            const availTotal = availWeekdays + availWeekendsHolidays;
+            if (availTotal === 0) continue;
+            // min_days_month を平日/土日に按分 (出勤可能曜日数の比率で)
+            const wkRatio = availWeekdays / availTotal;
+            supplyWeekday += minDays * wkRatio;
+            supplyWeekend += minDays * (1 - wkRatio);
+        }
+        supplyWeekday = Math.round(supplyWeekday);
+        supplyWeekend = Math.round(supplyWeekend);
+
+        const demandWeekday = weekdayCount * minWeekday;
+        const demandWeekend = weekendCount * minWeekend + holidayCount * minHoliday;
+        const demand = demandWeekday + demandWeekend;
+        const supply = supplyWeekday + supplyWeekend;
         const supplyMax = staff.reduce((sum, s) => sum + Number(s.max_days_week || 5) * 4.3, 0);
+
+        // 平日/土日別の比率
+        const ratioWeekday = demandWeekday > 0 ? supplyWeekday / demandWeekday : 0;
+        const ratioWeekend = demandWeekend > 0 ? supplyWeekend / demandWeekend : 0;
         const ratio = demand > 0 ? supply / demand : 0;
+
+        // ステータス判定: 平日と土日のどちらか一方でも問題があれば警告
+        const statusOf = (r) => {
+            if (r === 0) return 'good';
+            if (r < 0.95) return 'bad-under';   // 不足
+            if (r <= 1.05) return 'good';
+            if (r <= 1.2) return 'warn';
+            return 'bad-over';
+        };
+        const statusWeekday = statusOf(ratioWeekday);
+        const statusWeekend = statusOf(ratioWeekend);
+        // 全体ステータス: 最も深刻な状態を優先
+        const priority = { 'bad-under': 0, 'bad-over': 1, 'warn': 2, 'good': 3 };
+        const overallStatus = priority[statusWeekday] < priority[statusWeekend] ? statusWeekday : statusWeekend;
+        // 旧 status コードに変換 (UI 互換性)
         let status;
-        if (ratio <= 1.05) status = 'good';
-        else if (ratio <= 1.2) status = 'warn';
-        else status = 'bad';
+        if (overallStatus === 'good') status = 'good';
+        else if (overallStatus === 'warn') status = 'warn';
+        else status = 'bad';  // bad-under or bad-over
+
         return {
             staffCount: staff.length,
+            supplyWeekday, supplyWeekend,
+            demandWeekday, demandWeekend,
+            ratioWeekday, ratioWeekend,
+            statusWeekday, statusWeekend,
             weekdayCount, weekendCount, holidayCount, closedCount,
             minWeekday, minWeekend, minHoliday,
             demand, supply, supplyMax,
@@ -3218,48 +3268,76 @@ const app = {
     },
 
     _renderBalanceBanner(b) {
+        // v3.7.44: 平日/土日別バランス表示で「全体過剰だが土日不足」の矛盾を解消
         const palette = {
             good: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', icon: 'fa-circle-check', label: '適正' },
             warn: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: 'fa-triangle-exclamation', label: 'やや過剰' },
-            bad:  { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-700', icon: 'fa-circle-exclamation', label: '過剰' }
+            bad:  { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-700', icon: 'fa-circle-exclamation', label: '要注意' }
         };
         const p = palette[b.status];
-        const subMsg = b.status === 'good'
-            ? `現在のスタッフ数と最低出勤日数は店舗需要にちょうど良いバランスです。`
-            : `<strong>${b.overDays}人日</strong>の過剰供給が見込まれます。各スタッフの<strong>月の最低出勤日数を下げる</strong>ことで余裕が生まれます。`;
-        // v3.7.31: 過剰絶対回避ポリシーをユーザーに明示
-        const policyNote = b.status !== 'good'
-            ? `<div class="mt-2 p-2 bg-white/70 rounded border border-current/20 text-xs leading-relaxed"><i class="fa-solid fa-shield-halved mr-1"></i><strong>過剰絶対回避ポリシー (v3.7.31〜):</strong> 過剰になる場合、AIは<strong>最低出勤日数を犠牲にしてでも店舗必要人数ぴったりに合わせる</strong>よう設定されています。全員のmin_days_monthが満たされない場合があります。</div>`
+        const subStatusLabel = (s) => ({
+            'good': '適正', 'warn': 'やや過剰', 'bad-over': '過剰', 'bad-under': '不足'
+        }[s] || s);
+        const subStatusColor = (s) => ({
+            'good': 'text-emerald-600',
+            'warn': 'text-amber-600',
+            'bad-over': 'text-red-600',
+            'bad-under': 'text-orange-600'
+        }[s] || 'text-gray-600');
+        const subStatusBadge = (s) => ({
+            'good': 'bg-emerald-100 text-emerald-700',
+            'warn': 'bg-amber-100 text-amber-700',
+            'bad-over': 'bg-red-100 text-red-700',
+            'bad-under': 'bg-orange-100 text-orange-700'
+        }[s] || 'bg-gray-100 text-gray-600');
+
+        // 矛盾検出 (全体は過剰だが土日不足、など)
+        const mismatchMsg = (b.statusWeekday !== b.statusWeekend && (b.statusWeekday === 'bad-under' || b.statusWeekend === 'bad-under'))
+            ? `<div class="mt-2 p-2 bg-orange-50 rounded border border-orange-200 text-xs leading-relaxed text-orange-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i><strong>注意:</strong> 全体は過剰でも、${b.statusWeekday === 'bad-under' ? '<strong>平日</strong>' : '<strong>土日</strong>'}に出勤可能なスタッフが不足しています。シフト生成時に一部不足が発生する可能性があります。</div>`
             : '';
+
+        const policyNote = b.status !== 'good'
+            ? `<div class="mt-2 p-2 bg-white/70 rounded border border-current/20 text-xs leading-relaxed"><i class="fa-solid fa-shield-halved mr-1"></i><strong>過剰絶対回避ポリシー (v3.7.31〜):</strong> 過剰になる場合、AIは<strong>最低出勤日数を犠牲にしてでも店舗必要人数ぴったりに合わせる</strong>よう設定されています。</div>`
+            : '';
+
         return `
             <div class="${p.bg} ${p.border} border-2 rounded-xl p-4 ${p.text}">
                 <div class="flex items-start gap-3">
                     <i class="fa-solid ${p.icon} text-xl mt-0.5"></i>
-                    <div class="flex-1">
+                    <div class="flex-1 min-w-0">
                         <div class="font-bold text-base mb-1">需給バランス: ${p.label}</div>
-                        <div class="text-sm leading-relaxed">${subMsg}</div>
+                        ${mismatchMsg}
                         ${policyNote}
-                        <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                            <div class="bg-white/60 rounded px-3 py-2">
-                                <div class="text-gray-500">月需要</div>
-                                <div class="font-bold text-base">${b.demand} 人日</div>
-                                <div class="text-[10px] text-gray-500">平日${b.weekdayCount}日×${b.minWeekday}名 + 土日${b.weekendCount}日×${b.minWeekend}名</div>
+                        <!-- 平日/土日別パネル -->
+                        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div class="bg-white/70 rounded-lg p-3 border border-current/20">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs font-bold text-gray-600">平日 (月-金)</span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${subStatusBadge(b.statusWeekday)}">${subStatusLabel(b.statusWeekday)}</span>
+                                </div>
+                                <div class="flex items-baseline gap-2 text-xs text-gray-700">
+                                    <span>供給 <strong class="${subStatusColor(b.statusWeekday)}">${b.supplyWeekday}</strong> 人日</span>
+                                    <span class="text-gray-400">vs</span>
+                                    <span>需要 <strong>${b.demandWeekday}</strong> 人日</span>
+                                </div>
+                                <div class="text-[10px] text-gray-500 mt-0.5">${b.weekdayCount}日×${b.minWeekday}名 (比率 ${(b.ratioWeekday * 100).toFixed(0)}%)</div>
                             </div>
-                            <div class="bg-white/60 rounded px-3 py-2">
-                                <div class="text-gray-500">最低供給 (min_days合計)</div>
-                                <div class="font-bold text-base">${b.supply} 人日</div>
-                                <div class="text-[10px] text-gray-500">${b.staffCount}名の最低出勤合計</div>
+                            <div class="bg-white/70 rounded-lg p-3 border border-current/20">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs font-bold text-gray-600">土日祝</span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${subStatusBadge(b.statusWeekend)}">${subStatusLabel(b.statusWeekend)}</span>
+                                </div>
+                                <div class="flex items-baseline gap-2 text-xs text-gray-700">
+                                    <span>供給 <strong class="${subStatusColor(b.statusWeekend)}">${b.supplyWeekend}</strong> 人日</span>
+                                    <span class="text-gray-400">vs</span>
+                                    <span>需要 <strong>${b.demandWeekend}</strong> 人日</span>
+                                </div>
+                                <div class="text-[10px] text-gray-500 mt-0.5">土日${b.weekendCount}日+祝${b.holidayCount}日 (比率 ${(b.ratioWeekend * 100).toFixed(0)}%)</div>
                             </div>
-                            <div class="bg-white/60 rounded px-3 py-2">
-                                <div class="text-gray-500">差分</div>
-                                <div class="font-bold text-base ${b.status==='bad'?'text-red-600':b.status==='warn'?'text-amber-600':'text-emerald-600'}">${b.supply >= b.demand ? '+' : ''}${b.supply - b.demand} 人日</div>
-                                <div class="text-[10px] text-gray-500">供給比 ${(b.ratio * 100).toFixed(0)}%</div>
-                            </div>
-                            <div class="bg-white/60 rounded px-3 py-2">
-                                <div class="text-gray-500">理論最大供給</div>
-                                <div class="font-bold text-base">${Math.round(b.supplyMax)} 人日</div>
-                                <div class="text-[10px] text-gray-500">max_days_week基準</div>
-                            </div>
+                        </div>
+                        <!-- 合計サマリー -->
+                        <div class="mt-2 text-[11px] text-gray-600">
+                            合計: 供給 ${b.supply} 人日 / 需要 ${b.demand} 人日 / 差分 ${b.supply >= b.demand ? '+' : ''}${b.supply - b.demand} 人日 (理論最大 ${Math.round(b.supplyMax)} 人日)
                         </div>
                     </div>
                 </div>
