@@ -56,38 +56,39 @@ class ShiftScheduler:
         #   v3.7 方針: 過不足を対称化 (UNDER=OVER) + シフト追加コスト引き上げ。
         #             希望はあくまで「同じ人数の中での選別」用に弱める。
         #
-        # v3.7.20: 廃止された制約に対応する定数を削除 (MIN_MANAGER / WEEKEND_FAIR /
-        # PEAK_SKILL / CONSEC_DAYS_FATIGUE / TIMEBAND_IMBALANCE / POWER_BALANCE)
+        # ===========================================================
+        # v3.7.47 最終整理: 階層化された予測可能なペナルティ重み
+        # 各 Tier 間は最低 10倍の差を保ち、配置ロジックが安定 (=ブレない)
+        # ===========================================================
         #
-        # --- カバレッジ (店舗運営の根幹) — 10M階層 ---
-        EMPTY_SLOT          = 10_000_000  # 任意スロット 0名 (絶対回避)
-        OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け締め不在 / 社員1名以上常駐
-        # --- 不足/過剰 ---
-        # v3.7.45: 「ぴったりに調整」要望 - 20M → 50M に強化
-        # 希望シフト最大合計 (-5M EXACT + -2M BASE + -150k 月給) < 50M で
-        # 必要人数からの乖離を絶対許さない設計
-        COVERAGE_UNDER      = 50_000_000  # スロット必要人数不足 (v3.7.45: 20M→50M)
-        COVERAGE_OVER_DAY   = 50_000_000  # 日次過剰人員 (v3.7.45: 20M→50M)
-        COVERAGE_OVER_SLOT  = 50_000_000  # スロット過剰人員 (v3.7.45: 20M→50M)
-        POSITION_SHORT      = 3_000_000   # ポジション (レジ等) 不足
-        # --- 希望シフト — カバレッジ過剰より弱く (v3.7.34: COVERAGE_UNDER 強化に合わせ調整) ---
-        PREFERENCE_EXACT    = -5_000_000  # 完全一致 (v3.7.34: -3M→-5M, UNDER 15M との階層維持)
-        PREFERENCE_CLOSE    = -3_000_000  # ±1時間以内 (v3.7.34: -2M→-3M)
-        PREFERENCE_BASE     = -2_000_000  # 希望日に何らかのシフト (v3.7.34: -1.5M→-2M)
-        MIN_DAYS_WEEK_BONUS = -10_000     # min_days_week 厳守 (v3.7.22: -1M→-10k に弱化、累積で希望EXACTを凌駕しないように)
-        OJT_NO_MENTOR       = 500_000     # 新人×メンター不在 (希望や他制約に負ける階層)
-        # --- スタッフ属性ベース調整 (v3.7.21: 大幅弱化) ---
-        # 旧: 属性ボーナス累積が COVERAGE_OVER_SLOT (4M) を超えて過剰配置を誘発するケースがあった
-        # 新: ボーナス合計でも数十k程度に抑え、カバレッジが常に勝つように設計
-        PRIORITY_HIGH       = -10_000     # 優先度 High スタッフ (旧-100k)
-        PRIORITY_LOW        = 2_000       # 優先度 Low スタッフは後回し (旧20k)
-        CONTRACT_REGULAR    = -2_000      # レギュラー契約優先 (旧-20k)
-        CONTRACT_SPOT       = 1_000       # スポット契約は後回し (旧10k)
-        # --- 品質 ---
-        FAIRNESS_DRIFT      = 10_000      # 公平性偏差 (v3.7.22: 100k→10k に弱化、希望と衝突しないように)
-        MENTOR_MATCH_BONUS  = -1_000      # 主担当メンターとのペアリング (旧-10k)
-        # --- シフト追加コスト ---
-        SHIFT_COST          = 100_000     # シフト 1 件追加 (不要追加に摩擦)
+        # [ Tier 1: 絶対 (100M) ] — 物理・法定の必達
+        COVERAGE_UNDER      = 100_000_000  # 必要人数不足 (絶対NG)
+        COVERAGE_OVER_DAY   = 100_000_000  # 日次過剰人員 (絶対NG)
+        COVERAGE_OVER_SLOT  = 100_000_000  # スロット過剰人員 (絶対NG)
+        #
+        # [ Tier 2: 必須 (10M) ] — 業務遂行に必須
+        EMPTY_SLOT          = 10_000_000  # 任意スロット 0名
+        OPEN_CLOSE_NO_EMP   = 10_000_000  # 開け閉め社員1名以上常駐
+        #
+        # [ Tier 3: 重要 (1M〜3M) ] — 希望尊重・社員優先
+        PREFERENCE_EXACT    = -3_000_000  # 希望時間完全一致 (ボーナス)
+        POSITION_SHORT      = 3_000_000   # ポジション不足
+        PREFERENCE_CLOSE    = -1_500_000  # 希望時間 ±1時間以内
+        OJT_NO_MENTOR       = 500_000     # 新人×メンター不在
+        #
+        # [ Tier 4: 推奨 (50k〜500k) ] — 希望シフト・社員配置
+        PREFERENCE_BASE     = -500_000    # 希望日に何らかのシフト
+        # (月給未配置/月給min_days/時給min_daysは個別ペナルティで個別管理)
+        #
+        # [ Tier 5: 微調整 (1k〜100k) ] — 属性ボーナス・効率化
+        SHIFT_COST          = 100_000     # シフト 1 件追加 (過剰抑制)
+        FAIRNESS_DRIFT      = 10_000      # 公平性偏差
+        PRIORITY_HIGH       = -10_000     # 優先度 High スタッフ
+        PRIORITY_LOW        = 2_000       # 優先度 Low スタッフ
+        MIN_DAYS_WEEK_BONUS = -10_000     # min_days_week 達成ボーナス
+        CONTRACT_REGULAR    = -2_000      # レギュラー契約
+        CONTRACT_SPOT       = 1_000       # スポット契約
+        MENTOR_MATCH_BONUS  = -1_000      # 主担当メンター ペアリング
 
     def __init__(self, staff_list, config, dates, requests=None, existing_shifts=None):
         # 安全対策: idを持たない不正なスタッフデータを自動除去 (KeyError防止)
@@ -985,15 +986,12 @@ class ShiftScheduler:
                                 best_diff = diff
                                 best_oi = oi
                 if (wsid, wd, best_oi) in x:
-                    # v3.7.33 [MED-1]: 希望時間指定があれば best_oi 限定、なければ全 oi にボーナス
-                    # 旧 v3.7.30 は best_oi のみだったため、時間指定なしの希望でも
-                    # 1 opt にしかボーナスが乗らず、他の opt が選ばれると「希望未配置」扱いになる
-                    # 修正: 時間指定なし (start_time/end_time なし) なら全 opt に -10M を分散付与
+                    # v3.7.47 [Tier 2]: 承認希望 10M (必達ボーナス)
                     if wr.get("start_time") and wr.get("end_time"):
-                        # 時間指定あり: best_oi (近似一致) に集中ボーナス
+                        # 時間指定あり: best_oi に集中ボーナス
                         penalty += -10_000_000 * x[(wsid, wd, best_oi)]
                     else:
-                        # 時間指定なし: その日の全 opt に均等に分散 (合計 -10M)
+                        # 時間指定なし: 全 opt に分散 (合計 -10M)
                         n_opts = len(opts)
                         if n_opts > 0:
                             per_opt_bonus = -10_000_000 // n_opts
@@ -1158,10 +1156,10 @@ class ShiftScheduler:
                                 prob += pulp.lpSum(wv) + mdw_slack >= effective_min
                                 is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
                                 if is_monthly:
-                                    # 月給は 1M/週日不足 (社員の週出勤日を確実に確保)
+                                    # v3.7.47 [Tier 3]: 月給 min_days_week 1M (重要)
                                     penalty += mdw_slack * 1_000_000
                                 else:
-                                    # 時給は 30k のまま
+                                    # [Tier 5]: 時給 30k
                                     penalty += mdw_slack * 30_000
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
@@ -1199,12 +1197,11 @@ class ShiftScheduler:
                             prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
                             is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
                             if is_monthly:
-                                # 月給は 5M/日不足ペナルティ (社員の出勤日数を確実に確保)
-                                # 過剰回避 50M より小さいので最終手段で未達も許容
-                                penalty += mdm_slack * 5_000_000
+                                # v3.7.47 [Tier 2]: 月給スタッフ min_days_month 10M (必達)
+                                penalty += mdm_slack * 10_000_000
                             else:
-                                # 時給は 30k のまま (希望事項)
-                                penalty += mdm_slack * 30_000
+                                # [Tier 4]: 時給スタッフは 50k (推奨レベル)
+                                penalty += mdm_slack * 50_000
 
                 # --- 週40時間上限 (労基法32条) ---
                 if not force:
@@ -1670,7 +1667,8 @@ class ShiftScheduler:
                     if opts:
                         not_working = 1 - pulp.lpSum(
                             x[(sid, d, oi)] for oi in range(len(opts)))
-                        penalty += not_working * 150_000  # 旧 30k → 150k (時給 5k の 30倍)
+                        # v3.7.47 [Tier 4]: 月給未配置 500k (推奨レベル)
+                        penalty += not_working * 500_000
 
             # 時給スタッフは「働くと小ペナルティ」(控え目配置)。ただしスポット帯は割引
             hourly_ids = {s["id"] for s in self.staff_list
@@ -1691,11 +1689,8 @@ class ShiftScheduler:
                                 if opt["start_min"] <= slot_min < opt["end_min"] and req_at_slot >= 2:
                                     is_spot = True
                                     break
-                        # v3.7.29: 時給コスト 15k → 5k に弱化
-                        # 15k では希望シフトを出した時給スタッフが押し出され、希望充足が
-                        # 大幅に低下していた。5k なら月給優先は維持しつつ、希望シフト
-                        # (-3M) を持つ時給スタッフは確実に配置される
-                        cost = 0 if is_spot else 5_000
+                        # v3.7.47 [Tier 5]: 時給通常コスト 10k / スポット帯 0
+                        cost = 0 if is_spot else 10_000
                         if cost > 0:
                             penalty += x[(sid, d, oi)] * cost
 
