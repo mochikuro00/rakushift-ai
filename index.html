@@ -1111,8 +1111,10 @@
                     <select id="autoFillTarget" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
                         <option value="empty_only">今月の空きシフトのみ埋める</option>
                         <option value="next_week">来週分を作成</option>
-                        <option value="reset_all">現在のシフトをリセットして再構築</option>
+                        <option value="reset_all">現在のシフトをリセットして再構築 (未来日のみ)</option>
+                        <option value="reset_all_force">⚠ 過去日も含めて全削除して再構築</option>
                     </select>
+                    <p class="text-[10px] text-amber-600 mt-1"><i class="fa-solid fa-triangle-exclamation"></i> 「過去日も含めて」は実出勤として保存された過去のシフトも削除します</p>
                 </div>
 
                 <button onclick="app.runAutoFill()" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl shadow-lg transition">作成を実行</button>

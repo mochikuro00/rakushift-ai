@@ -6017,7 +6017,7 @@ const app = {
             const today = new Date();
             let startDate, endDate;
 
-            if (targetType === 'reset_all' || targetType === 'empty_only') {
+            if (targetType === 'reset_all' || targetType === 'reset_all_force' || targetType === 'empty_only') {
                 startDate = new Date(this.state.currentDate.getFullYear(), this.state.currentDate.getMonth(), 1);
                 endDate = new Date(this.state.currentDate.getFullYear(), this.state.currentDate.getMonth() + 1, 0);
             } else if (targetType === 'next_week') {
@@ -6043,8 +6043,8 @@ const app = {
             const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
             const pastDates = dates.filter(d => d < todayStr);
             if (pastDates.length > 0) {
-                if (targetType === 'empty_only') {
-                    // empty_only モードは過去日も含めて再評価可 (既存シフトは固定)
+                if (targetType === 'empty_only' || targetType === 'reset_all_force') {
+                    // empty_only / reset_all_force は過去日も含めて再評価/再生成可
                 } else {
                     // dates から過去日を除外
                     dates = dates.filter(d => d >= todayStr);
@@ -6178,15 +6178,13 @@ const app = {
             }
 
             // === STEP 3: 削除処理 ===
-            if (targetType === 'reset_all') {
-                // v3.7.12: タイムゾーン依存の new Date(s.date) >= today 比較を撤廃。
-                // 旧版は s.date="2026-05-30" を JST 00:00 と解釈する一方、today は
-                // 現在時刻 15:30 等。同じ日でも 15:30 を超えると過去判定され、
-                // 本日のシフトが削除対象から外れていた (agent #2 指摘 CRITICAL)。
-                // todayStr (YYYY-MM-DD) との文字列比較に統一。
+            if (targetType === 'reset_all' || targetType === 'reset_all_force') {
                 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                // v3.7.52: reset_all_force は過去日も含めて削除
                 const shiftsToDelete = this.state.shifts.filter(function(s) {
-                    return dates.includes(s.date) && s.date >= todayStr && s.id && uuidRegex.test(s.id);
+                    if (!(dates.includes(s.date) && s.id && uuidRegex.test(s.id))) return false;
+                    if (targetType === 'reset_all_force') return true;
+                    return s.date >= todayStr;
                 });
                 if (shiftsToDelete.length > 0) {
                     // 一括削除 RPC で RLS 回避 + 効率化
