@@ -5803,6 +5803,11 @@ const app = {
 
        async runAutoFill() {
         if (this._shiftGenInProgress) return;
+        // v3.7.35: スマホで「シフト作成失敗」が出る件のオフライン検知
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            this.showToast('ネットワークがオフラインです。Wi-Fi または電波の良い場所で再試行してください', 'error');
+            return;
+        }
         if (!this.state.isShopLoggedIn || !this.state.organization_id) {
             this.showToast('セッションエラー: 再ログインしてください', 'error');
             return;
@@ -6174,7 +6179,12 @@ const app = {
                 this._generationSuccess = false;
                 this._failureDetailShown = true;
             } else {
+                // v3.7.35: 想定外のレスポンス形式の詳細を表示 (スマホで「失敗」と出る原因究明用)
                 this._generationSuccess = false;
+                const respDebug = `status=${result?.status || 'なし'} / mode=${result?.mode || 'なし'} / shifts=${result?.shifts?.length || 0}件 / message=${result?.message || 'なし'}`;
+                console.warn('[Generate] 想定外レスポンス:', respDebug, result);
+                this.showToast('サーバー応答が想定外です: ' + respDebug, 'error');
+                this._failureDetailShown = true;
             }
 
         } catch (e) {
@@ -6233,9 +6243,13 @@ const app = {
                     this._pendingPreviewReport = null;
                 }, 300);
             } else if (!this._generationSuccess && !this._failureDetailShown) {
-                // _showDetailedGenerationFailure で既に詳細表示済の場合は二重表示しない
-                // v3.7.4: 「コンソールを確認」は不親切なため改善 (catch ブロックで具体エラー表示済の場合は到達しない)
-                this.showToast('シフト作成に失敗しました。設定を見直すか時間を置いて再度お試しください', 'warning');
+                // v3.7.35: スマホでの「失敗」原因究明用に navigator.onLine を含めた診断トースト
+                const online = (typeof navigator !== 'undefined') ? (navigator.onLine ? 'online' : 'offline') : 'unknown';
+                this.showToast(
+                    'シフト作成に失敗しました (network=' + online + ')。'
+                    + (online === 'offline' ? '電波の良い場所で再試行してください' : '時間を置いて再度お試しください'),
+                    'warning'
+                );
             }
             this._failureDetailShown = false;
         }
