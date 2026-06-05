@@ -2630,6 +2630,7 @@ const app = {
                 let worstDeficit = 0; // 最悪の不足数（正値=不足あり）
                 let maxConcurrent = 0;
                 let minConcurrent = Number.POSITIVE_INFINITY;  // v3.6.1: 最少同時数を追跡 (不足箇所の特定用)
+                let minConcurrentTime = '';  // v3.7.55: 最少が発生した時刻
                 let worstSlotReq = required;                   // v3.6.1: 不足が発生したスロットでの要件
                 let maxSlotReq = required;
                 let surplusSlots = 0;
@@ -2665,7 +2666,13 @@ const app = {
                     }
                     if (slotReq > maxSlotReq) maxSlotReq = slotReq;
                     if (concurrent > maxConcurrent) maxConcurrent = concurrent;
-                    if (concurrent < minConcurrent) minConcurrent = concurrent;
+                    if (concurrent < minConcurrent) {
+                        minConcurrent = concurrent;
+                        // v3.7.55: 最少が発生した時刻を記録
+                        const hh = String(Math.floor(t / 60) % 24).padStart(2, '0');
+                        const mm = String(t % 60).padStart(2, '0');
+                        minConcurrentTime = `${hh}:${mm}`;
+                    }
                     if (concurrent > slotReq + 1) surplusSlots++;
                 }
                 if (minConcurrent === Number.POSITIVE_INFINITY) minConcurrent = 0;
@@ -2694,10 +2701,10 @@ const app = {
                     cellBg = 'bg-red-50';
                     textColor = 'text-red-600';
                     label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
-                    // 不足の場合は最少同時数を表示 (どこが少ないかが分かる)
+                    // v3.7.55: 不足の場合は最少同時数 + 時刻 + ピーク数を表示
                     peakDisplay = hasTimeRule
-                        ? `最少${minConcurrent}名(要${worstSlotReq})`
-                        : `最少${minConcurrent}名`;
+                        ? `最少${minConcurrent}名@${minConcurrentTime}(要${worstSlotReq}/ピーク${maxConcurrent})`
+                        : `最少${minConcurrent}名@${minConcurrentTime}(ピーク${maxConcurrent})`;
                 } else if (surplusSlots > totalSlots / 3) {
                     cellBg = 'bg-amber-50';
                     textColor = 'text-amber-500';
