@@ -847,7 +847,7 @@
 
     <!-- Staff Modal -->
     <div id="staffModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" style="max-height: min(90vh, 90dvh);">
             <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-gray-800">スタッフ情報</h3>
                 <button onclick="app.closeModal('staffModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -1052,7 +1052,7 @@
 
     <!-- Request Modal -->
     <div id="requestModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" style="max-height: min(90vh, 90dvh);">
             <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-red-400 to-orange-400 flex justify-between items-center shrink-0">
                 <div>
                     <h3 class="font-bold text-white text-lg"><i class="fa-solid fa-umbrella-beach mr-2"></i>休み希望</h3>
@@ -1124,8 +1124,10 @@
     </div>
 
     <!-- シフト生成プレビューモーダル -->
-    <div id="shiftPreviewModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-        <div class="modal-content bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <!-- v3.7.40: iOS Safari のアドレスバーで vh 計算がずれてフッターが見切れる問題を修正 -->
+    <!-- モバイル: 全画面+sticky フッター / デスクトップ: 中央モーダル -->
+    <div id="shiftPreviewModal" class="modal fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm sm:p-4">
+        <div class="modal-content bg-white w-full max-w-4xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col h-full sm:h-auto sm:max-h-[90vh]" style="max-height: 100dvh;">
             <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-emerald-500 to-teal-600 flex justify-between items-center shrink-0">
                 <div>
                     <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-flask"></i> シフト生成プレビュー (シミュレーション)</h3>
@@ -1141,14 +1143,12 @@
             <div id="previewContent" class="p-4 overflow-y-auto flex-1">
                 <!-- JSで動的に挿入 -->
             </div>
-            <!-- v3.7.38: モバイルでフッターボタンが見えない問題を修正 -->
-            <!-- 旧: flex justify-between でテキストとボタン横並び → モバイル画面幅超過でボタン非表示 -->
-            <!-- 新: flex-col モバイル + flex-row デスクトップ、ボタン全幅でタップしやすく -->
-            <div class="p-3 sm:p-4 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0">
+            <!-- v3.7.40: フッターを sticky で画面下部に固定 (iOS Safari 対応 + safe-area-inset 考慮) -->
+            <div class="p-3 sm:p-4 bg-white border-t-2 border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
                 <p class="hidden sm:block text-xs text-gray-400"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
                 <div class="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                    <button onclick="app.cancelShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-5 py-3 sm:py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition" title="この結果を破棄して終了 (DB保存なし)"><i class="fa-solid fa-trash-can mr-1"></i>破棄</button>
-                    <button onclick="app.confirmShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center justify-center gap-2">
+                    <button onclick="app.cancelShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-5 py-3.5 sm:py-2.5 text-sm font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition" title="この結果を破棄して終了 (DB保存なし)"><i class="fa-solid fa-trash-can mr-1"></i>破棄</button>
+                    <button onclick="app.confirmShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-6 py-3.5 sm:py-2.5 text-base sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center justify-center gap-2">
                         <i class="fa-solid fa-check"></i> <span>確定して保存</span>
                     </button>
                 </div>
@@ -1188,7 +1188,7 @@
 
     <!-- AI Advice Modal -->
     <div id="aiAdviceModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-        <div class="modal-content bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="modal-content bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" style="max-height: min(90vh, 90dvh);">
             <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-indigo-500 to-purple-600 flex justify-between items-center shrink-0">
                 <div>
                     <h3 class="font-bold text-white text-lg flex items-center gap-2"><i class="fa-solid fa-robot"></i> AI診断レポート</h3>
