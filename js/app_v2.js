@@ -8239,6 +8239,7 @@ const app = {
                 const dow = dayNames[dt.getDay()];
                 const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
 
+                // v3.7.39: スマホ対応のため、モバイルではカード型、デスクトップではテーブル型のハイブリッド表示
                 html += `
                     <div class="mb-4">
                         <h4 class="text-sm font-bold ${isWeekend ? 'text-red-600' : 'text-gray-700'} mb-2 flex items-center gap-2">
@@ -8246,20 +8247,8 @@ const app = {
                             ${dateStr}
                             <span class="text-xs text-gray-400 font-normal">(${dayShifts.length}名配置)</span>
                         </h4>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="bg-gray-50 text-xs text-gray-500">
-                                    <tr>
-                                        <th class="px-3 py-2 text-left rounded-l-lg">スタッフ</th>
-                                        <th class="px-3 py-2 text-left">役職</th>
-                                        <th class="px-3 py-2 text-center">出勤</th>
-                                        <th class="px-3 py-2 text-center">退勤</th>
-                                        <th class="px-3 py-2 text-center">休憩</th>
-                                        <th class="px-3 py-2 text-center">実働</th>
-                                        <th class="px-3 py-2 text-left rounded-r-lg">配置理由</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
+                        <!-- モバイル: カード型 (sm未満) -->
+                        <div class="sm:hidden space-y-2">
                 `;
 
                 for (const shift of dayShifts) {
@@ -8286,6 +8275,82 @@ const app = {
 
                     const reasonText = shift.reason || '通常配置';
                     // 理由ごとに色分け (一覧性UP)
+                    const reasonColor = reasonText.includes('既存')   ? 'bg-gray-100 text-gray-700' :
+                                        reasonText.includes('承認済') ? 'bg-emerald-100 text-emerald-700' :
+                                        reasonText.includes('完全一致')? 'bg-blue-100 text-blue-700' :
+                                        reasonText.includes('希望')    ? 'bg-sky-100 text-sky-700' :
+                                        reasonText.includes('優先度')  ? 'bg-amber-100 text-amber-700' :
+                                        reasonText.includes('メンター')? 'bg-purple-100 text-purple-700' :
+                                        reasonText.includes('月給')    ? 'bg-pink-100 text-pink-700' :
+                                        reasonText.includes('レギュラ')? 'bg-indigo-100 text-indigo-700' :
+                                        reasonText.includes('高評価')  ? 'bg-yellow-100 text-yellow-700' :
+                                                                          'bg-slate-100 text-slate-600';
+                    // モバイル用カード
+                    const safeName = this._sanitize(staff.name || '不明');
+                    const safeReason = this._sanitize(reasonText);
+                    const mobileCard = `
+                        <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="font-bold text-gray-800 truncate">${safeName}</span>
+                                    ${roleBadge}
+                                </div>
+                                <span class="inline-block ${reasonColor} text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">${safeReason}</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-sm">
+                                <span class="font-mono text-emerald-600 font-bold">${shift.start_time}</span>
+                                <span class="text-gray-400">→</span>
+                                <span class="font-mono text-red-500 font-bold">${shift.end_time}</span>
+                                <span class="ml-auto text-xs text-gray-500">休${breakMin}分 / 実${workHours.toFixed(1)}h</span>
+                            </div>
+                        </div>
+                    `;
+                    html += mobileCard;
+                }
+
+                // モバイルカード終了、デスクトップテーブル開始
+                html += `
+                        </div>
+                        <!-- デスクトップ: テーブル型 (sm以上) -->
+                        <div class="hidden sm:block overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-xs text-gray-500">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left rounded-l-lg">スタッフ</th>
+                                        <th class="px-3 py-2 text-left">役職</th>
+                                        <th class="px-3 py-2 text-center">出勤</th>
+                                        <th class="px-3 py-2 text-center">退勤</th>
+                                        <th class="px-3 py-2 text-center">休憩</th>
+                                        <th class="px-3 py-2 text-center">実働</th>
+                                        <th class="px-3 py-2 text-left rounded-r-lg">配置理由</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                `;
+
+                // デスクトップテーブル行を再ループで生成
+                for (const shift of dayShifts) {
+                    const staff = staffMap[shift.staff_id] || { name: shift.staff_id, role: '' };
+                    const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
+                    const roleObj = roleList.find(r => r.id === staff.role) || { name: 'スタッフ', color: 'gray' };
+                    const colorMap = {
+                        purple: 'bg-purple-100 text-purple-700',
+                        blue: 'bg-blue-100 text-blue-700',
+                        green: 'bg-green-100 text-green-700',
+                        yellow: 'bg-yellow-100 text-yellow-700',
+                        red: 'bg-red-100 text-red-700',
+                        gray: 'bg-gray-100 text-gray-700'
+                    };
+                    const badgeClass = colorMap[roleObj.color] || colorMap['gray'];
+                    const roleBadge = `<span class="inline-block ${badgeClass} text-xs px-2 py-0.5 rounded-full font-bold">${this._sanitize(roleObj.name)}</span>`;
+                    const breakMin = shift.break_minutes || 0;
+                    const startParts = shift.start_time.split(':');
+                    const endParts = shift.end_time.split(':');
+                    let startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+                    let endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+                    if (endMin <= startMin) endMin += 1440;
+                    const workHours = ((endMin - startMin) - breakMin) / 60;
+                    const reasonText = shift.reason || '通常配置';
                     const reasonColor = reasonText.includes('既存')   ? 'bg-gray-100 text-gray-700' :
                                         reasonText.includes('承認済') ? 'bg-emerald-100 text-emerald-700' :
                                         reasonText.includes('完全一致')? 'bg-blue-100 text-blue-700' :

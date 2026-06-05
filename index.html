@@ -277,8 +277,9 @@
         <!-- Header -->
         <header class="min-h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 lg:px-6 shadow-sm z-20 flex-wrap gap-2 py-2">
             <div class="flex items-center gap-2 sm:gap-4 flex-wrap">
-                <button id="mobileMenuBtn" aria-label="メニューを開く" class="md:hidden text-gray-500 hover:text-gray-700 w-11 h-11 flex items-center justify-center">
-                    <i class="fa-solid fa-bars text-xl" aria-hidden="true"></i>
+                <!-- v3.7.39: ハンバーガーメニューのタップ性向上 (色濃く + 押下フィードバック + 周囲ヒットエリア) -->
+                <button id="mobileMenuBtn" aria-label="メニューを開く" class="md:hidden text-gray-700 hover:bg-gray-100 active:bg-gray-200 w-12 h-12 -ml-1 flex items-center justify-center rounded-lg transition shrink-0">
+                    <i class="fa-solid fa-bars text-2xl" aria-hidden="true"></i>
                 </button>
                 <div class="flex items-center bg-gray-100 rounded-lg p-1 gap-1" role="group" aria-label="期間ナビゲーション">
                     <button id="prevPeriod" aria-label="前の期間" class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm rounded-md transition-all">
@@ -833,11 +834,12 @@
                 </div>
                 </form>
             </div>
-            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-between">
-                <button id="deleteShiftBtn" class="text-red-500 font-bold text-sm hover:underline">削除</button>
-                <div class="flex gap-3">
-                    <button onclick="app.closeModal('editShiftModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
-                    <button id="saveShiftBtn" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">保存</button>
+            <!-- v3.7.39: モバイルでフッターボタンが見切れる問題を修正 -->
+            <div class="p-3 sm:p-5 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0">
+                <button id="deleteShiftBtn" class="text-red-500 font-bold text-sm py-2 sm:py-0 hover:underline order-3 sm:order-1">削除</button>
+                <div class="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2">
+                    <button onclick="app.closeModal('editShiftModal')" class="flex-1 sm:flex-none px-4 py-3 sm:py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                    <button id="saveShiftBtn" class="flex-1 sm:flex-none px-6 py-3 sm:py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">保存</button>
                 </div>
             </div>
         </div>
@@ -1040,9 +1042,10 @@
                 </div>
                 </form>
             </div>
-            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 shrink-0">
-                <button onclick="app.closeModal('staffModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
-                <button onclick="app.saveStaff()" class="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">保存</button>
+            <!-- v3.7.39: モバイルで保存ボタン全幅化 -->
+            <div class="p-3 sm:p-5 bg-gray-50 border-t border-gray-100 flex gap-2 sm:gap-3 sm:justify-end shrink-0">
+                <button onclick="app.closeModal('staffModal')" class="flex-1 sm:flex-none px-4 py-3 sm:py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                <button onclick="app.saveStaff()" class="flex-1 sm:flex-none px-6 py-3 sm:py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow hover:bg-blue-700 transition">保存</button>
             </div>
         </div>
     </div>
@@ -1217,11 +1220,12 @@
                 <label class="block text-xs font-bold text-gray-500 mb-2">メモ内容 (団体予約、イベント等)</label>
                 <textarea id="noteText" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none h-32 resize-none" placeholder="例: 19:00〜 団体20名様"></textarea>
             </div>
-            <div class="p-5 bg-gray-50 border-t border-gray-100 flex justify-between">
-                <button onclick="app.deleteCalendarNote()" class="text-red-500 font-bold text-sm hover:underline">削除</button>
-                <div class="flex gap-3">
-                    <button onclick="app.closeModal('calendarNoteModal')" class="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
-                    <button onclick="app.saveCalendarNote()" class="px-6 py-2 bg-yellow-500 text-white text-sm font-bold rounded-lg shadow hover:bg-yellow-600 transition">保存</button>
+            <!-- v3.7.39: モバイルで保存ボタン全幅化 -->
+            <div class="p-3 sm:p-5 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0">
+                <button onclick="app.deleteCalendarNote()" class="text-red-500 font-bold text-sm py-2 sm:py-0 hover:underline order-3 sm:order-1">削除</button>
+                <div class="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2">
+                    <button onclick="app.closeModal('calendarNoteModal')" class="flex-1 sm:flex-none px-4 py-3 sm:py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
+                    <button onclick="app.saveCalendarNote()" class="flex-1 sm:flex-none px-6 py-3 sm:py-2 bg-yellow-500 text-white text-sm font-bold rounded-lg shadow hover:bg-yellow-600 transition">保存</button>
                 </div>
             </div>
         </div>
