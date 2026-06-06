@@ -708,6 +708,24 @@ class ShiftScheduler:
                     else:
                         slots[t]["any"] = max(slots[t]["any"], rc)
 
+        # v3.7.59: 中休み時間 (中抜き営業) を 0 名扱い
+        # 平日/土曜/日祝 別に config.break_periods を読む
+        break_periods = self.config.get("break_periods") or {}
+        day_type_key = self._get_day_type(date_str)
+        # day_type_key: "weekday" / "weekend" / "holiday" / "closed"
+        bp_key = day_type_key if day_type_key in ("weekday", "weekend", "holiday") else None
+        if bp_key and bp_key in break_periods:
+            bp = break_periods[bp_key]
+            bp_start = bp.get("start")
+            bp_end = bp.get("end")
+            if bp_start and bp_end:
+                bp_s_min = self._to_minutes(bp_start)
+                bp_e_min = self._normalize_end_time(bp_s_min, self._to_minutes(bp_end))
+                # 中休み時間中は base を 0 にする
+                for t in list(slots.keys()):
+                    if bp_s_min <= t < bp_e_min:
+                        slots[t]["base"] = 0
+
         final_slots = {}
         for t, counts in slots.items():
             final_slots[t] = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])

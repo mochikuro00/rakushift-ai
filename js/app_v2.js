@@ -3573,6 +3573,8 @@ const app = {
                         <!-- 営業時間 -->
                         <div class="space-y-4">
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
+                            <!-- v3.7.59: 中休み (中抜き) 時間設定 -->
+                            <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 飲食店の中抜き営業 (例: 14:00-17:30 が休憩) は、下の「中休み時間」で設定できます</p>
                             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
                                 <div class="md:col-span-3 font-bold text-gray-700">平日 (月-金)</div>
                                 <div class="md:col-span-9 flex items-center gap-3">
@@ -3596,6 +3598,38 @@ const app = {
                                     <span class="text-gray-400">～</span>
                                     ${this.get15MinTimeSelect(times.holiday?.end || '20:00', 'time_holiday_end', 'form-input border-gray-300 rounded-lg w-full')}
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- v3.7.59: 中休み時間 (中抜き営業対応) -->
+                        <div class="pt-4 border-t border-gray-100">
+                            <h4 class="text-sm font-bold text-amber-700 mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-pause-circle"></i>🍴 中休み時間 (中抜き営業の方のみ)
+                            </h4>
+                            <p class="text-[11px] text-gray-500 mb-3">飲食店等で「ランチ後〜ディナー前」に営業をストップする場合に設定。AIはこの時間帯にシフトを入れません。</p>
+                            <div class="space-y-2">
+                                ${['weekday', 'weekend', 'holiday'].map((dt, idx) => {
+                                    const label = ['平日', '土曜日', '日祝日'][idx];
+                                    const colorClass = ['text-gray-700', 'text-blue-600', 'text-red-600'][idx];
+                                    const breakP = (this.state.config.break_periods || {})[dt] || {};
+                                    return `
+                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-amber-50/50 p-3 rounded-lg border border-amber-100">
+                                        <div class="md:col-span-3 font-bold ${colorClass} flex items-center gap-2">
+                                            <span>${label}</span>
+                                            <label class="text-[10px] text-gray-500 flex items-center gap-1 cursor-pointer">
+                                                <input type="checkbox" id="break_enable_${dt}" class="w-4 h-4" ${breakP.start && breakP.end ? 'checked' : ''}>
+                                                有効
+                                            </label>
+                                        </div>
+                                        <div class="md:col-span-9 flex items-center gap-2 flex-wrap">
+                                            <input type="time" id="break_start_${dt}" step="60" value="${breakP.start || '14:00'}" class="px-2 py-1.5 border border-gray-300 rounded text-sm font-mono">
+                                            <span class="text-gray-400">～</span>
+                                            <input type="time" id="break_end_${dt}" step="60" value="${breakP.end || '17:00'}" class="px-2 py-1.5 border border-gray-300 rounded text-sm font-mono">
+                                            <span class="text-[10px] text-gray-500 ml-2">の間は営業ストップ</span>
+                                        </div>
+                                    </div>
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
 
@@ -4361,6 +4395,17 @@ const app = {
         // 旧互換
         config.opening_time = config.opening_times.weekday.start;
         config.closing_time = config.opening_times.weekday.end;
+
+        // v3.7.59: 中休み時間 (中抜き営業対応)
+        config.break_periods = {};
+        ['weekday', 'weekend', 'holiday'].forEach(dt => {
+            const enabled = document.getElementById(`break_enable_${dt}`)?.checked;
+            const bStart = getVal(`break_start_${dt}`);
+            const bEnd = getVal(`break_end_${dt}`);
+            if (enabled && bStart && bEnd && bStart !== bEnd) {
+                config.break_periods[dt] = { start: bStart, end: bEnd };
+            }
+        });
 
         // 定休日
         config.closed_days = Array.from(document.querySelectorAll('input[name="setting_closed_days"]:checked')).map(el => parseInt(el.value));
