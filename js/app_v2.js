@@ -3508,7 +3508,7 @@ const app = {
                         <p>ラクシフトAIは、ここに入力された条件を「店舗の絶対的なルール」として学習しシフトを組みます。</p>
                         <p>・<span class="font-bold text-purple-700">正確に設定した場合</span>：時間帯ごとの最適な人員配置、管理者の確実なカバー、休憩の自動付与など「店長が頭を抱えていたパズル」を完璧に解いたシフトを生成します。</p>
                         <p>・<span class="font-bold text-red-500">設定が甘い場合</span>（例: 必要な人数を全て0にする、管理者を設定しない等）：AIは「何人でも良い」「誰でも良い」と判断するため、人が足りない時間帯ができたり、法律上は問題なくても実用的でないシフトが出来上がってしまいます。</p>
-                        <p class="font-bold mt-2">※特に「営業時間内の管理者カバー」と「時間帯別の必要人数」は、店舗の実態に合わせて正確に入力してください。</p>
+                        <p class="font-bold mt-2">※特に「管理者の必須人数」と「シフトパターン (平日/土曜/日祝の必要人数)」は、店舗の実態に合わせて正確に入力してください。</p>
                     </div>
                 </div>
 
@@ -6983,7 +6983,7 @@ const app = {
                             <tbody>
                                 <tr><td class="p-2 border font-bold">営業時間（曜日別）</td><td class="p-2 border">平日/土日/祝日の開店・閉店時間</td><td class="p-2 border text-red-600">閉店後の時間帯にも人員配置される</td></tr>
                                 <tr><td class="p-2 border font-bold">必要人員（曜日別）</td><td class="p-2 border">平日/土日/祝日の最低配置人数</td><td class="p-2 border text-red-600">人手不足・過剰配置が発生する</td></tr>
-                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遅番等の時間テンプレート</td><td class="p-2 border text-red-600">全員が同じ時間帯に集中する</td></tr>
+                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遅番等の時間テンプレートと、平日/土曜/日祝の必要人数</td><td class="p-2 border text-red-600">必要人数が確保されず、人手不足・過剰配置が発生する</td></tr>
                                 <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベースの休業日</td><td class="p-2 border text-red-600">休業日にシフトが配置される</td></tr>
                             </tbody>
                         </table>
@@ -6995,8 +6995,8 @@ const app = {
                             <li>✅ <strong>全スタッフの勤務制約を正確に入力</strong>する（週最大/最低日数、1日最大時間）</li>
                             <li>✅ <strong>月給制/時給制を正しく設定</strong>する → 月給スタッフが優先配置され人件費が最適化される</li>
                             <li>✅ <strong>営業時間を曜日別に設定</strong>する → 土日の短縮営業等が正確に反映される</li>
-                            <li>✅ <strong>シフトパターンを2つ以上登録</strong>する → AIが自動的に中番も生成</li>
-                            <li>✅ <strong>必要人員を曜日別に設定</strong>する → 平日と土日の配置バランスが最適化される</li>
+                            <li>✅ <strong>シフトパターンを2つ以上登録</strong>する → 早番/遅番など複数の時間帯を組み合わせて穴抜けを防げる</li>
+                            <li>✅ <strong>シフトパターンの必要人数を平日/土曜/日祝で個別設定</strong>する → 曜日ごとの繁忙差に合わせて最適配置される</li>
                             <li>✅ <strong>役職と評価を正しく設定</strong>する → チーム編成の質が向上する</li>
                         </ul>
                     </div>
@@ -7117,14 +7117,17 @@ const app = {
                     </div>
 
                     <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-base mb-1">3. ベースの人員設定（1日あたり）</h4>
-                        <p><strong>管理者の必須人数:</strong> 「店長・副店長」といった管理者が、1日に最低何人必要かを設定します。<br>
-                        <strong>全体の最低人数:</strong> 平日・土日・祝日ごとの最低配置人数。これがシフト表の「人員状況」アラートの基準値になります。</p>
+                        <h4 class="font-bold text-orange-700 text-base mb-1">3. 人員配置要件（ベース）</h4>
+                        <p><strong>最低管理者数:</strong> 営業中に常に最低何人の管理者 (店長・リーダー) が必要かを設定します。<br>
+                        <strong>スタッフ総数要件:</strong> 平日・土曜・日祝の各曜日タイプごとに、1日あたりの最低配置人数を設定します。<br>
+                        <span class="text-xs text-gray-500">※ 時間帯別の必要人数 (ランチ・ディナーピーク等) は <strong>シフトパターン</strong> で時間帯と人数を直接指定する方式に統一されました。</span></p>
                     </div>
 
                     <div class="border-l-4 border-purple-400 pl-4 py-1">
-                        <h4 class="font-bold text-purple-700 text-base mb-1">4. シフトパターンの設定</h4>
-                        <p>「早番（09:00〜18:00）」「遅番（13:00〜22:00）」などの時間テンプレートです。<strong>2つ以上登録するとAIが自動的に間を埋める中番パターンも生成</strong>し、時間帯の穴抜けを柔軟に防ぎます。</p>
+                        <h4 class="font-bold text-purple-700 text-base mb-1">4. シフトパターンの設定（重要）</h4>
+                        <p>「早番（09:00〜14:00）」「遅番（17:00〜22:00）」などの時間テンプレートと、その時間帯に何人配置するかを <strong>平日 / 土曜 / 日祝</strong> の3カラムで指定できます。</p>
+                        <p class="text-xs text-gray-600 mt-1">例: 早番 平日2名・土曜3名・日祝3名 / 遅番 平日3名・土曜4名・日祝4名 → AIはこの曜日別人数を必ず満たす形でシフトを組みます。</p>
+                        <p class="text-xs text-amber-700 font-bold mt-1">※ 人数は必須入力です (最少1名)。プリセット (飲食店向け・オフィス向け等) からの一括追加もできます。</p>
                     </div>
 
                     <div class="border-l-4 border-green-400 pl-4 py-1">
