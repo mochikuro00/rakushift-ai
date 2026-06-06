@@ -2664,6 +2664,8 @@ const app = {
                 let worstSlotReq = required;
                 let maxSlotReq = required;
                 let surplusSlots = 0;
+                // v3.7.75: タイムストライプ用 slot 状態配列
+                const slotStates = [];
 
                 for (let t = openM; t < closeM; t += 15) {
                     // v3.7.74: パターン人数の重ねがけ集計
@@ -2701,23 +2703,28 @@ const app = {
 
                     totalSlots++;
                     const slotDeficit = slotReq - concurrent;
+                    let status = 'ok';
                     if (slotDeficit > 0) {
+                        status = 'under';
                         shortageSlots++;
                         if (slotDeficit > worstDeficit) {
                             worstDeficit = slotDeficit;
-                            worstSlotReq = slotReq;  // 最悪の不足が起きたスロットの要件を記録
+                            worstSlotReq = slotReq;
                         }
+                    } else if (concurrent > slotReq + 1) {
+                        status = 'over';
+                        surplusSlots++;
                     }
                     if (slotReq > maxSlotReq) maxSlotReq = slotReq;
                     if (concurrent > maxConcurrent) maxConcurrent = concurrent;
                     if (concurrent < minConcurrent) {
                         minConcurrent = concurrent;
-                        // v3.7.55: 最少が発生した時刻を記録
                         const hh = String(Math.floor(t / 60) % 24).padStart(2, '0');
                         const mm = String(t % 60).padStart(2, '0');
                         minConcurrentTime = `${hh}:${mm}`;
                     }
-                    if (concurrent > slotReq + 1) surplusSlots++;
+                    // v3.7.75: タイムストライプ用に slot 状態を蓄積
+                    slotStates.push({ t, req: slotReq, actual: concurrent, status });
                 }
                 if (minConcurrent === Number.POSITIVE_INFINITY) minConcurrent = 0;
 
@@ -2732,42 +2739,74 @@ const app = {
 
                 let cellContent = '';
                 let cellBg = 'bg-white';
-                // v3.6.2: ラベル別 + 時間帯別ルール有無で表示分岐
-                //   - 時間帯別ルール (time_staff_req) を設定した日のみ「ピーク」「(要◯)」を表示
-                //   - ルール未設定の日はシンプルに人数のみ
-                //   旧版は常に maxConcurrent (ピーク) と要件を表示していたため、
-                //   ユーザーがルールを設定していないのに「ピーク」「(要◯)」が出ていた。
-                const hasTimeRule = timeRules.length > 0;
-                const dupNote = duplicateShifts > 0 ? `<span class="text-red-500 text-[8px] ml-1">⚠重複${duplicateShifts}</span>` : '';
+                const dupNote = duplicateShifts > 0 ? `<span class="text-red-500 text-[8px] ml-0.5">⚠重複${duplicateShifts}</span>` : '';
 
-                let label, peakDisplay, textColor;
+                // v3.7.75: タイムストライプ式表示
+                // 連続する同じ status の slot を run-length encoding でまとめる
+                const runs = [];
+                slotStates.forEach(s => {
+                    const last = runs[runs.length - 1];
+                    if (last && last.status === s.status) {
+                        last.len++;
+                        last.endT = s.t + 15;
+                        if (s.req > last.maxReq) last.maxReq = s.req;
+                        if (s.actual < last.minActual) last.minActual = s.actual;
+                        if (s.actual > last.maxActual) last.maxActual = s.actual;
+                    } else {
+                        runs.push({
+                            status: s.status,
+                            len: 1,
+                            startT: s.t,
+                            endT: s.t + 15,
+                            maxReq: s.req,
+                            minActual: s.actual,
+                            maxActual: s.actual,
+                        });
+                    }
+                });
+
+                const fmtTime = (m) => {
+                    const h = String(Math.floor(m / 60) % 24).padStart(2, '0');
+                    const mm = String(m % 60).padStart(2, '0');
+                    return `${h}:${mm}`;
+                };
+                const statusColor = { ok: 'bg-green-400', under: 'bg-red-500', over: 'bg-amber-400' };
+                const statusLabel = { ok: 'ぴったり', under: '不足', over: '過剰' };
+
+                // ストライプ HTML 生成
+                const stripeHtml = runs.map(r => {
+                    const tip = r.status === 'under'
+                        ? `${fmtTime(r.startT)}〜${fmtTime(r.endT)} 不足 ${r.maxReq - r.minActual}名 (要${r.maxReq} / 実${r.minActual}-${r.maxActual})`
+                        : r.status === 'over'
+                            ? `${fmtTime(r.startT)}〜${fmtTime(r.endT)} 過剰 +${r.maxActual - r.maxReq}名 (要${r.maxReq} / 実${r.minActual}-${r.maxActual})`
+                            : `${fmtTime(r.startT)}〜${fmtTime(r.endT)} ぴったり ${r.maxActual}名 (要${r.maxReq})`;
+                    return `<div class="${statusColor[r.status]}" style="flex:${r.len}" title="${this._sanitize(tip)}"></div>`;
+                }).join('');
+
+                // 要約テキスト (1 行)
+                let summary, summaryColor;
                 if (shortageSlots > 0) {
                     cellBg = 'bg-red-50';
-                    textColor = 'text-red-600';
-                    label = shortageSlots > totalSlots / 2 ? `${worstDeficit}名不足` : '一部不足';
-                    // v3.7.55: 不足の場合は最少同時数 + 時刻 + ピーク数を表示
-                    peakDisplay = hasTimeRule
-                        ? `最少${minConcurrent}名@${minConcurrentTime}(要${worstSlotReq}/ピーク${maxConcurrent})`
-                        : `最少${minConcurrent}名@${minConcurrentTime}(ピーク${maxConcurrent})`;
+                    summaryColor = 'text-red-600';
+                    summary = `⚠ 不足${worstDeficit}名 (${minConcurrentTime})`;
                 } else if (surplusSlots > totalSlots / 3) {
                     cellBg = 'bg-amber-50';
-                    textColor = 'text-amber-500';
-                    label = '過剰';
-                    peakDisplay = hasTimeRule
-                        ? `ピーク${maxConcurrent}名(要${maxSlotReq})`
-                        : `${maxConcurrent}名`;
+                    summaryColor = 'text-amber-600';
+                    summary = `⚡ 過剰 +${maxConcurrent - maxSlotReq}名`;
                 } else {
-                    textColor = 'text-green-600';
-                    label = 'ぴったり';
-                    peakDisplay = `${maxConcurrent}名配置`;
+                    summaryColor = 'text-green-600';
+                    summary = `✓ ${maxConcurrent}名配置`;
                 }
 
                 const animateCls = shortageSlots > 0 ? 'animate-pulse' : '';
-                cellContent = `<div class="flex items-center justify-center h-full px-0.5 w-full overflow-hidden">
-                    <span class="${textColor} font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter ${animateCls}">${label} <span class="opacity-80 ml-0.5">${peakDisplay}</span>${dupNote}</span>
+                cellContent = `<div class="flex flex-col h-full w-full px-0.5 py-0.5 overflow-hidden gap-0.5">
+                    <div class="flex h-2 rounded-sm overflow-hidden border border-gray-200">${stripeHtml}</div>
+                    <div class="flex items-center justify-center flex-1">
+                        <span class="${summaryColor} font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter ${animateCls}">${summary}${dupNote}</span>
+                    </div>
                 </div>`;
 
-                alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 ${cellBg} text-center">${cellContent}</td>`;
+                alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center">${cellContent}</td>`;
             });
             alertRowHtml += `</tr>`;
         }
