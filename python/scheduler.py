@@ -672,10 +672,16 @@ class ShiftScheduler:
         「常時 N 名」(per-slot) 解釈:
           ベース必要人数 (min_weekday 等) は「各時刻に必要な同時在籍数」。
           time_staff_req ルールは「特定時間帯の追加増強」(max でベースを上書き)。
+
+        v3.7.70: 定休日でない限り、ベース 0 でも shift_patterns の count_*
+        が指定されていれば slot 構築を続行する (パターン人数だけで運用するケース)
         """
         req_num = self._get_required_staff(date_str)
-        if req_num <= 0:
+        # 定休日 (closed) なら 0 を返す
+        if self._get_day_type(date_str) == "closed":
             return {}
+        if req_num < 0:
+            req_num = 0
         day_open, day_close = self._get_opening_hours(date_str)
         op = self._to_minutes(day_open)
         cl = self._normalize_end_time(op, self._to_minutes(day_close))
