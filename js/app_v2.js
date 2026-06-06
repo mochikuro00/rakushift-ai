@@ -2642,21 +2642,46 @@ const app = {
                 // 時間帯別の必要人数ルール適用（days配列の型を数値に統一して安全にフィルタ）
                 const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(jsDow));
 
+                // v3.7.74: シフトパターン人数優先方式 (scheduler.py と仕様揃え)
+                // パターン人数が指定された時間帯はそれを必要人数とし、
+                // パターン外時間帯のみベース必要人数 (required) を使う
+                const customShifts = this.state.config.custom_shifts || [];
+                const dayTypeForUi = (this.state.config.special_holidays || []).includes(dateStr)
+                    ? 'holiday'
+                    : (dayOfWeek === 0 ? 'holiday' : (dayOfWeek === 6 ? 'weekend' : 'weekday'));
+                const patCountKey = dayTypeForUi === 'holiday' ? 'count_holiday'
+                                  : dayTypeForUi === 'weekend' ? 'count_weekend'
+                                  : 'count_weekday';
+
                 // 15分スロットごとに「同時在籍人数」vs「そのスロットの要件」を比較
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
                 let totalSlots = 0;
                 let shortageSlots = 0;
                 let worstDeficit = 0; // 最悪の不足数（正値=不足あり）
                 let maxConcurrent = 0;
-                let minConcurrent = Number.POSITIVE_INFINITY;  // v3.6.1: 最少同時数を追跡 (不足箇所の特定用)
-                let minConcurrentTime = '';  // v3.7.55: 最少が発生した時刻
-                let worstSlotReq = required;                   // v3.6.1: 不足が発生したスロットでの要件
+                let minConcurrent = Number.POSITIVE_INFINITY;
+                let minConcurrentTime = '';
+                let worstSlotReq = required;
                 let maxSlotReq = required;
                 let surplusSlots = 0;
 
                 for (let t = openM; t < closeM; t += 15) {
-                    // このスロットでの必要人数（ベース or 時間帯別ルールの大きい方）
-                    let slotReq = required;
+                    // v3.7.74: パターン人数の重ねがけ集計
+                    let patternSum = 0;
+                    customShifts.forEach(pat => {
+                        const ps = toMins(pat.start || '00:00');
+                        let pe = toMins(pat.end || '00:00');
+                        if (pe <= ps) pe += 24 * 60;
+                        const rawCnt = pat[patCountKey] != null ? pat[patCountKey]
+                                     : (pat.count != null ? pat.count : 0);
+                        const cnt = Number(rawCnt) || 0;
+                        if (cnt > 0 && ps <= t && t < pe) {
+                            patternSum += cnt;
+                        }
+                    });
+                    // パターン人数あり: それのみ要件 / なし: ベース
+                    let slotReq = patternSum > 0 ? patternSum : required;
+                    // time_staff_req (UI 廃止済みだが旧データ互換): max で上書き
                     timeRules.forEach(rule => {
                         const rs = toMins(rule.start);
                         let re = toMins(rule.end);
@@ -6495,6 +6520,32 @@ const app = {
         for (let t = startMins; t < effectiveEndMins; t += 15) {
             timeReqs.set(t, Number(baseReq));
             timeReqManager.set(t, Number(reqManager));
+        }
+
+        // v3.7.74: シフトパターン人数優先方式 (scheduler.py と仕様揃え)
+        // パターン人数が指定された時間帯はそれを必要人数とし、
+        // パターン外時間帯のみベース必要人数を使う
+        const customShifts = config.custom_shifts || [];
+        const patCountKey = isHoliday ? 'count_holiday'
+                          : (dayOfWeek === 0 ? 'count_holiday'
+                          : (dayOfWeek === 6 ? 'count_weekend' : 'count_weekday'));
+        for (let t = startMins; t < effectiveEndMins; t += 15) {
+            let patternSum = 0;
+            customShifts.forEach(pat => {
+                if (!pat.start || !pat.end) return;
+                const ps = toMins(pat.start);
+                let pe = toMins(pat.end);
+                if (pe <= ps) pe += 24 * 60;
+                const rawCnt = pat[patCountKey] != null ? pat[patCountKey]
+                             : (pat.count != null ? pat.count : 0);
+                const cnt = Number(rawCnt) || 0;
+                if (cnt > 0 && ps <= t && t < pe) {
+                    patternSum += cnt;
+                }
+            });
+            if (patternSum > 0) {
+                timeReqs.set(t, patternSum);
+            }
         }
 
         // 時間帯別ルールの適用 (time_staff_req)（days配列の型を数値に統一）
