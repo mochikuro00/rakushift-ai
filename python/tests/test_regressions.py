@@ -87,7 +87,7 @@ class TestPreferenceNotExclusive:
     """
 
     def test_pref_does_not_exclude_other_patterns(self):
-        """希望時間帯を設定しても、他のパターンが候補から消えない。"""
+        """v3.7.62: シフトパターンのみで配置するように変更。希望時間帯は候補に追加されない。"""
         staff = make_staff("s1", "山田",
                           pref_start_wd="10:00", pref_end_wd="16:00")
         config = make_config()
@@ -97,10 +97,8 @@ class TestPreferenceNotExclusive:
             dates=["2026-06-01"],
         )
         opts = sch._build_shift_options(staff, "2026-06-01", force=False)
-        # 希望時間帯 (10:00-16:00) と config の早番/遅番が両方候補に含まれる
+        # 早番/遅番のシフトパターンのみ候補
         starts = [o["start"] for o in opts]
-        assert "10:00" in starts  # 希望時間帯
-        # 早番/遅番のいずれかは残る
         assert any(s in starts for s in ["09:00", "15:00"])
 
 

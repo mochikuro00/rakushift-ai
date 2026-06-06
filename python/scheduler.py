@@ -577,24 +577,14 @@ class ShiftScheduler:
         seen = set()
 
         patterns_to_use = self.shift_patterns.copy()
-        
-        # v3.3: カスタム role も含めて社員判定 (level >= 3 or color=purple/red/green)
+
+        # v3.7.62: ユーザー要望「シフト生成時はシフトパターンのみで考えて展開」
+        # 旧 v3.6: スタッフ希望時間 (pref_start_wd 等) を pref_pat として追加していた
+        # 新: pref_pat 追加を削除。custom_shifts (シフトパターン) のみで配置
+        # → 全スタッフが「早番/中番/遅番/通し」等のパターンから選ばれる
+        # → シフト時間が整列し、希望時間集中による不揃いを解消
         is_employee = staff.get("salary_type") == "monthly" or str(staff.get("role", "")).lower() in self._employee_role_ids
         day_type = self._get_day_type(date_str)
-        pref_start = staff.get("pref_start_we") if day_type in ("weekend", "holiday") else staff.get("pref_start_wd")
-        pref_end = staff.get("pref_end_we") if day_type in ("weekend", "holiday") else staff.get("pref_end_wd")
-        # フォールバック (古いprefStart用)
-        pref_start = pref_start or staff.get("pref_start")
-        pref_end = pref_end or staff.get("pref_end")
-        
-        if pref_start and pref_end:
-            pref_pat = {"start": pref_start, "end": pref_end, "name": "pref"}
-            # v3.6: pref_pat を「強い候補」として先頭に追加するが、他のパターンも残す。
-            # 旧版 (v3.1) は patterns_to_use = [pref_pat] で他を完全に削除していたが、
-            # 希望時間帯が営業時間外/シフト外のとき infeasible (配置不可能) になっていた。
-            # 強化された PREFERENCE_EXACT/CLOSE (v3.6 で -3M/-2M) のボーナスで
-            # MILP は十分に希望を尊重するため、強制排他は不要。
-            patterns_to_use.insert(0, pref_pat)
 
         def _add_option(ps, pe, is_pref=False):
             """オプションを追加するヘルパー（重複チェック含む）"""
