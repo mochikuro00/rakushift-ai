@@ -3725,6 +3725,7 @@ const app = {
                                         <th class="p-3 rounded-l-lg">パターン名</th>
                                         <th class="p-3">開始時間</th>
                                         <th class="p-3">終了時間</th>
+                                        <th class="p-3">必要人数</th>
                                         <th class="p-3 text-right rounded-r-lg">操作</th>
                                     </tr>
                                 </thead>
@@ -3740,6 +3741,10 @@ const app = {
                                             <td class="p-2">
                                                 ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
+                                            <td class="p-2">
+                                                <!-- v3.7.64: シフトパターン別の必要人数 -->
+                                                <input type="number" min="0" max="50" step="1" class="setting-shift-count w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${shift.count != null ? shift.count : ''}" placeholder="任意">
+                                            </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
                                                     <i class="fa-solid fa-trash"></i>
@@ -3747,7 +3752,7 @@ const app = {
                                             </td>
                                         </tr>
                                     `).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
@@ -4494,14 +4499,19 @@ const app = {
         const shiftNames = document.querySelectorAll('.setting-shift-name');
         const shiftStarts = document.querySelectorAll('.setting-shift-start');
         const shiftEnds = document.querySelectorAll('.setting-shift-end');
+        // v3.7.64: シフトパターン別の必要人数
+        const shiftCounts = document.querySelectorAll('.setting-shift-count');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
             if (el.value) {
+                const countRaw = shiftCounts[i]?.value;
+                const count = countRaw && !isNaN(Number(countRaw)) ? Number(countRaw) : null;
                 config.custom_shifts.push({
                     name: el.value,
                     start: shiftStarts[i].value,
-                    end: shiftEnds[i].value
+                    end: shiftEnds[i].value,
+                    ...(count !== null ? { count } : {})
                 });
             }
         });

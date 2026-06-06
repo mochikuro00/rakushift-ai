@@ -154,9 +154,19 @@ class ShiftScheduler:
         for p in raw_patterns:
             st = p.get("start", "09:00")
             en = p.get("end", "18:00")
-            self.shift_patterns.append({
+            pat = {
                 "start": st, "end": en, "name": p.get("name", "")
-            })
+            }
+            # v3.7.64: シフトパターン別の必要人数
+            cnt = p.get("count")
+            if cnt is not None:
+                try:
+                    cnt_int = int(cnt)
+                    if cnt_int >= 0:
+                        pat["count"] = cnt_int
+                except (ValueError, TypeError):
+                    pass
+            self.shift_patterns.append(pat)
         if not self.shift_patterns:
             op = self.config.get("opening_time", "09:00")
             cl = self.config.get("closing_time", "22:00")
@@ -1385,6 +1395,36 @@ class ShiftScheduler:
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += workers_sum - slack_over <= req
                             penalty += slack_over * self.W.COVERAGE_OVER_SLOT
+
+                # --- v3.7.64: シフトパターン別の必要人数制約 ---
+                # 各パターンに count が設定されている場合、その時間帯で count 名を確保
+                # 「早番 3名、遅番 3名」のようなユーザー指定を反映
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    for pat in self.shift_patterns:
+                        pat_count = pat.get("count")
+                        if pat_count is None or pat_count <= 0:
+                            continue
+                        ps_min = self._to_minutes(pat["start"])
+                        pe_min = self._normalize_end_time(ps_min, self._to_minutes(pat["end"]))
+                        if ps_min >= pe_min:
+                            continue
+                        # このパターンの時間帯にマッチする opt を集計 (start_min <= ps_min かつ end_min >= pe_min )
+                        # → そのパターンと同じ時間帯のシフトに入る人数を数える
+                        pat_workers = []
+                        for s in self.staff_list:
+                            sid = s["id"]
+                            for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                                # opt がパターン全体をカバー (もしくはほぼ一致) するか
+                                if opt["start_min"] == ps_min and opt["end_min"] == pe_min:
+                                    pat_workers.append(x[(sid, d, oi)])
+                        if pat_workers:
+                            pat_slack = pulp.LpVariable(
+                                "pat_{}_{}_{}".format(d, ps_min, pe_min), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(pat_workers) + pat_slack >= pat_count
+                            # Tier 2 (10M): パターン別必要人数の達成
+                            penalty += pat_slack * 10_000_000
 
                 # --- 社員常駐制約 (v3.7.16: 管理者限定→「社員 (月給+店長) 1名以上」に変更) ---
                 # 全時間帯で月給制 or 店長のうち1名以上を出勤させる
