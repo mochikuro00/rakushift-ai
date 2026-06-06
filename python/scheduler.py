@@ -652,21 +652,13 @@ class ShiftScheduler:
                 _add_option(ps, pe, is_pref)
             # -------------------------------------------------------------------
 
-        # v3.7.56: 営業開始時刻に合わせたシフトオプションを追加
-        # 「11:00開始のスタッフが多くて10:00時点で人手不足」問題を解消
-        # スタッフの希望時間が営業開始より遅い場合、営業開始からの opt も追加
-        # （COVERAGE_UNDER が選択を促し、希望オプションより優先される場合あり）
-        if open_min < close_min:
-            # 営業開始から max_hours まで (= 営業開始の標準シフト)
-            ms_break = self._get_break_minutes(max_hours)
-            ms_total_hours = max_hours + (ms_break / 60.0)
-            morning_pe = min(open_min + int(ms_total_hours * 60), close_min)
-            if morning_pe - open_min >= 60:  # 最低1時間
-                _add_option(open_min, morning_pe, is_pref=False)
-            # 閉店時刻まで (= 営業終了に合わせた標準シフト)
-            evening_ps = max(close_min - int(ms_total_hours * 60), open_min)
-            if close_min - evening_ps >= 60:
-                _add_option(evening_ps, close_min, is_pref=False)
+        # v3.7.61: 営業開始時刻の自動シフトオプション追加を撤回
+        # ユーザー要望: 「シフト時間 > 営業時間」(シフトパターン優先)
+        # v3.7.56 で追加した「強制 open_min 始まりの opt」がシフトパターンを
+        # 上書きしていた問題を解消
+        # → シフトパターン (custom_shifts) の時間がそのまま使われる
+        # → 09:00-19:00 パターンなら、営業10:00開始でも 09:00 から配置可能
+        # → 開店前作業 (1時間前から準備) も尊重
 
         return options
 
