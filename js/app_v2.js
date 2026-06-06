@@ -3706,6 +3706,16 @@ const app = {
                                 <button onclick="app.applyShiftPreset('restaurant')" class="text-xs bg-orange-50 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-lg font-bold hover:bg-orange-100 transition">
                                     <i class="fa-solid fa-utensils mr-1"></i>飲食店向け
                                 </button>
+                                <!-- v3.7.58: 2部営業 (中抜き) プリセット -->
+                                <button onclick="app.applyShiftPreset('lunch_dinner')" class="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition">
+                                    <i class="fa-solid fa-bell-concierge mr-1"></i>2部営業 (ランチ+ディナー)
+                                </button>
+                                <button onclick="app.applyShiftPreset('lunch_only')" class="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1.5 rounded-lg font-bold hover:bg-yellow-100 transition">
+                                    <i class="fa-solid fa-mug-hot mr-1"></i>ランチのみ
+                                </button>
+                                <button onclick="app.applyShiftPreset('dinner_only')" class="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 transition">
+                                    <i class="fa-solid fa-wine-glass mr-1"></i>ディナーのみ
+                                </button>
                                 <button onclick="app.applyShiftPreset('office')" class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition">
                                     <i class="fa-solid fa-building mr-1"></i>オフィス向け
                                 </button>
@@ -8800,7 +8810,35 @@ const app = {
                 { name: '準夜勤', start: '16:30', end: '01:00' },
                 { name: '半日', start: '08:30', end: '12:30' },
             ]
-        }
+        },
+        // v3.7.58: 2部営業 (中抜き) プリセット
+        lunch_dinner: {
+            name: '2部営業 (ランチ+ディナー)',
+            patterns: [
+                { name: 'ランチ早番', start: '10:30', end: '14:30' },
+                { name: 'ランチ遅番', start: '11:30', end: '15:00' },
+                { name: 'ディナー早番', start: '17:00', end: '21:00' },
+                { name: 'ディナー遅番', start: '18:00', end: '23:30' },
+                { name: '通しランチ+ディナー', start: '10:30', end: '23:30' },
+            ]
+        },
+        lunch_only: {
+            name: 'ランチ営業のみ',
+            patterns: [
+                { name: 'ランチ早番', start: '10:00', end: '14:00' },
+                { name: 'ランチ通し', start: '10:00', end: '15:00' },
+                { name: 'ランチ遅番', start: '11:00', end: '15:00' },
+            ]
+        },
+        dinner_only: {
+            name: 'ディナー営業のみ',
+            patterns: [
+                { name: 'ディナー早番', start: '17:00', end: '22:00' },
+                { name: 'ディナー通し', start: '17:00', end: '23:30' },
+                { name: 'ディナー遅番', start: '18:00', end: '23:30' },
+                { name: '深夜帯', start: '20:00', end: '02:00' },
+            ]
+        },
     },
 
     /**
