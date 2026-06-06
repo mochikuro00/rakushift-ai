@@ -2189,11 +2189,18 @@ const app = {
         // Period controls (only for table mode)
         let periodControls = '';
         if (isTable) {
+            // v3.7.63: 縮小/拡大ボタン (シフト表のズーム機能)
+            const zoom = this.state.shiftZoom || 1.0;
             periodControls = `
                 <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg ml-4">
                     <button onclick="app.switchShiftTablePeriod('month')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='month')}">月間</button>
                     <button onclick="app.switchShiftTablePeriod('week')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='week')}">1週間</button>
                     <button onclick="app.switchShiftTablePeriod('day')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='day')}">1日</button>
+                </div>
+                <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg ml-2">
+                    <button onclick="app.changeShiftZoom(-0.25)" class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 transition" title="縮小"><i class="fa-solid fa-magnifying-glass-minus text-xs"></i></button>
+                    <span class="px-2 text-[10px] font-bold text-gray-500 font-mono w-10 text-center">${Math.round(zoom*100)}%</span>
+                    <button onclick="app.changeShiftZoom(0.25)" class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 transition" title="拡大"><i class="fa-solid fa-magnifying-glass-plus text-xs"></i></button>
                 </div>
             `;
         }
@@ -2268,6 +2275,15 @@ const app = {
         this.renderShiftView(document.getElementById('viewContainer'));
     },
 
+    // v3.7.63: シフト表のズーム機能 (スマホでも縮小可能に)
+    changeShiftZoom(delta) {
+        const cur = this.state.shiftZoom || 1.0;
+        const next = Math.max(0.5, Math.min(2.0, +((cur + delta).toFixed(2))));
+        this.state.shiftZoom = next;
+        this.renderCurrentView();
+        this.showToast(`表示倍率: ${Math.round(next * 100)}%`, 'info');
+    },
+
     switchShiftTablePeriod(period) {
         this.state.shiftTablePeriod = period;
         if (period === 'month') {
@@ -2301,9 +2317,12 @@ const app = {
         const period = this.state.shiftTablePeriod || 'month';
         const year = this.state.currentDate.getFullYear();
         const month = this.state.currentDate.getMonth();
-        
+
+        // v3.7.63: ズーム倍率を適用 (デフォルト 1.0)
+        const zoom = this.state.shiftZoom || 1.0;
+
         let days = [];
-        let colWidthClass = 'min-w-[40px]'; // Default narrow
+        let colWidthClass = `min-w-[${Math.max(20, Math.round(40 * zoom))}px]`;
         let isGanttMode = false;
 
         if (period === 'month') {
@@ -2313,12 +2332,12 @@ const app = {
             });
         } else if (period === 'day') {
             // 1日表示: ガント大幅 (15分目盛りが見やすい幅) + メモ列付き
-            colWidthClass = 'min-w-[1600px]';
+            colWidthClass = `min-w-[${Math.max(800, Math.round(1600 * zoom))}px]`;
             isGanttMode = true;
             days = [new Date(this.state.currentDate)];
         } else {
             // 1週間ガント (15分目盛り視認のため広く)
-            colWidthClass = 'min-w-[1200px]';
+            colWidthClass = `min-w-[${Math.max(600, Math.round(1200 * zoom))}px]`;
             isGanttMode = true;
             const start = new Date(this.state.currentDate);
             days = Array.from({length: 7}, (_, i) => {
@@ -2328,8 +2347,8 @@ const app = {
             });
         }
         
-        // ヘッダー生成
-        let headerHtml = `<th class="p-3 sticky left-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>`;
+        // v3.7.63: 日付ヘッダーを縦スクロール時も固定 (sticky top-0 追加)
+        let headerHtml = `<th class="p-3 sticky left-0 top-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>`;
         days.forEach(date => {
             const d = date.getDate();
             const m = date.getMonth() + 1;
@@ -2368,8 +2387,8 @@ const app = {
                 `;
             }
             
-            headerHtml += `<th class="p-2 ${colWidthClass} text-center border-b border-gray-200 bg-gray-50 text-xs font-bold ${colorClass}">
-                <div class="sticky left-0 right-0 flex flex-col items-center justify-center leading-tight">
+            headerHtml += `<th class="p-2 ${colWidthClass} text-center border-b border-gray-200 bg-gray-50 text-xs font-bold ${colorClass} sticky top-0 z-30">
+                <div class="flex flex-col items-center justify-center leading-tight">
                     <span class="text-sm block">${label}</span>
                     <span class="text-[10px] font-normal block">${['日','月','火','水','木','金','土'][dayOfWeek]}</span>
                 </div>
