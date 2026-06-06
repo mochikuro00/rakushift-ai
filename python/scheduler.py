@@ -152,8 +152,21 @@ class ShiftScheduler:
         raw_patterns = self.config.get("custom_shifts", [])
         self.shift_patterns = []
         for p in raw_patterns:
-            st = p.get("start", "09:00")
-            en = p.get("end", "18:00")
+            st = (p.get("start") or "09:00").strip() or "09:00"
+            en = (p.get("end") or "18:00").strip() or "18:00"
+            # v3.7.71: 不正な時刻ペアを無視 (start >= end は同日ではあり得ない設定)
+            try:
+                sh, sm = map(int, st.split(":")[:2])
+                eh, em = map(int, en.split(":")[:2])
+                if (sh, sm) == (eh, em):
+                    logger.warning(
+                        "shift_pattern skipped: start==end (%s)", p.get("name"))
+                    continue
+            except (ValueError, AttributeError):
+                logger.warning(
+                    "shift_pattern skipped: invalid time (%s start=%r end=%r)",
+                    p.get("name"), st, en)
+                continue
             pat = {
                 "start": st, "end": en, "name": p.get("name", "")
             }
@@ -171,6 +184,13 @@ class ShiftScheduler:
                 except (ValueError, TypeError):
                     pass
             self.shift_patterns.append(pat)
+        # v3.7.71: シフトパターンのデバッグログ (本番でユーザー設定の状況を把握)
+        logger.info(
+            "shift_patterns loaded: count=%d details=%s",
+            len(self.shift_patterns),
+            [(p.get("name"), p["start"], p["end"],
+              p.get("count_weekday"), p.get("count_weekend"),
+              p.get("count_holiday")) for p in self.shift_patterns])
         if not self.shift_patterns:
             op = self.config.get("opening_time", "09:00")
             cl = self.config.get("closing_time", "22:00")

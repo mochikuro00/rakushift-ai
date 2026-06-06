@@ -4383,25 +4383,33 @@ const app = {
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
-            if (el.value) {
-                // 必須: デフォルト 1 (空欄ならフォールバック)
-                const parseCount = (input) => {
-                    const v = Number(input?.value);
-                    return Number.isFinite(v) && v >= 1 ? Math.min(v, 50) : 1;
-                };
-                const cwd = parseCount(shiftCountsWd[i]);
-                const cwe = parseCount(shiftCountsWe[i]);
-                const chd = parseCount(shiftCountsHd[i]);
-                config.custom_shifts.push({
-                    name: el.value,
-                    start: shiftStarts[i].value,
-                    end: shiftEnds[i].value,
-                    count_weekday: cwd,
-                    count_weekend: cwe,
-                    count_holiday: chd,
-                    count: cwd, // 旧互換
-                });
+            const name = (el.value || '').trim();
+            const start = (shiftStarts[i]?.value || '').trim();
+            const end = (shiftEnds[i]?.value || '').trim();
+            // v3.7.71: name/start/end のいずれかが空ならこのパターンを破棄
+            // (空の start/end が scheduler 側で "00:00-00:00" として無視される
+            //  バグを未然防止)
+            if (!name || !start || !end || start === end) {
+                console.warn('[saveSettings] skipped invalid shift pattern',
+                    { name, start, end });
+                return;
             }
+            const parseCount = (input) => {
+                const v = Number(input?.value);
+                return Number.isFinite(v) && v >= 1 ? Math.min(v, 50) : 1;
+            };
+            const cwd = parseCount(shiftCountsWd[i]);
+            const cwe = parseCount(shiftCountsWe[i]);
+            const chd = parseCount(shiftCountsHd[i]);
+            config.custom_shifts.push({
+                name,
+                start,
+                end,
+                count_weekday: cwd,
+                count_weekend: cwe,
+                count_holiday: chd,
+                count: cwd, // 旧互換
+            });
         });
 
         // 人員配置ルール (v3.6: 負数/NaN を防止して MILP クラッシュを回避)
