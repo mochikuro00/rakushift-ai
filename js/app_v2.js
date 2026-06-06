@@ -3565,23 +3565,6 @@ const app = {
                     </div>
                 </div>
 
-                <!-- 1.5. ポジション設定 -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
-                    <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-map-pin text-teal-500"></i> ポジション設定</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">店舗内の役割（ホール、キッチンなど）を自由に設定できます。</p>
-                    </div>
-                    <div class="p-6">
-                        <label class="block text-xs font-bold text-gray-500 mb-2">ポジション一覧（スペース・読点等で区切って入力）</label>
-                        <input type="text" id="settingPositions" class="w-full border-gray-300 rounded-lg px-3 py-2 text-sm font-bold bg-white" value="${positions.join('　')}" placeholder="例: ホール　キッチン　デリバリー">
-                        <p class="text-xs text-gray-400 mt-3">※ ここで設定したポジションは、スタッフ管理の「担当ポジション」や、時間帯別ルールの「ポジション指定」の選択肢になります。</p>
-                        <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800 leading-relaxed">
-                            <i class="fa-solid fa-circle-exclamation mr-1 text-yellow-600"></i> <strong>【重要】ポジション変更時のご注意</strong><br>
-                            稼働中にポジション名を変更・削除すると、過去にそのポジションに設定されていたスタッフは「指定なし (全般)」として扱われます。なるべく初期設定の段階でポジションを確定させてください。
-                        </div>
-                    </div>
-                </div>
-
                 <!-- 2. 営業時間・定休日 -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -3592,7 +3575,7 @@ const app = {
                         <!-- 営業時間 (v3.7.60: 24時間営業対応) -->
                         <div class="space-y-4">
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
-                            <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 24時間営業の場合は右のチェック、中抜き営業 (例: 14:00-17:30 休憩) は下の「中休み時間」で設定</p>
+                            <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 24時間営業の場合は右のチェックを ON にしてください。</p>
                             ${(() => {
                                 const is24hWd = !!(this.state.config.is_24h?.weekday);
                                 const is24hWe = !!(this.state.config.is_24h?.weekend);
@@ -3617,38 +3600,6 @@ const app = {
                                        renderRow('weekend', '土曜日', 'text-blue-600', '10:00', '20:00', is24hWe) +
                                        renderRow('holiday', '日祝日', 'text-red-600', '10:00', '20:00', is24hHd);
                             })()}
-                        </div>
-
-                        <!-- v3.7.59: 中休み時間 (中抜き営業対応) -->
-                        <div class="pt-4 border-t border-gray-100">
-                            <h4 class="text-sm font-bold text-amber-700 mb-2 flex items-center gap-2">
-                                <i class="fa-solid fa-pause-circle"></i>🍴 中休み時間 (中抜き営業の方のみ)
-                            </h4>
-                            <p class="text-[11px] text-gray-500 mb-3">飲食店等で「ランチ後〜ディナー前」に営業をストップする場合に設定。AIはこの時間帯にシフトを入れません。</p>
-                            <div class="space-y-2">
-                                ${['weekday', 'weekend', 'holiday'].map((dt, idx) => {
-                                    const label = ['平日', '土曜日', '日祝日'][idx];
-                                    const colorClass = ['text-gray-700', 'text-blue-600', 'text-red-600'][idx];
-                                    const breakP = (this.state.config.break_periods || {})[dt] || {};
-                                    return `
-                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-amber-50/50 p-3 rounded-lg border border-amber-100">
-                                        <div class="md:col-span-3 font-bold ${colorClass} flex items-center gap-2">
-                                            <span>${label}</span>
-                                            <label class="text-[10px] text-gray-500 flex items-center gap-1 cursor-pointer">
-                                                <input type="checkbox" id="break_enable_${dt}" class="w-4 h-4" ${breakP.start && breakP.end ? 'checked' : ''}>
-                                                有効
-                                            </label>
-                                        </div>
-                                        <div class="md:col-span-9 flex items-center gap-2 flex-wrap">
-                                            <input type="time" id="break_start_${dt}" step="60" value="${breakP.start || '14:00'}" class="px-2 py-1.5 border border-gray-300 rounded text-sm font-mono">
-                                            <span class="text-gray-400">～</span>
-                                            <input type="time" id="break_end_${dt}" step="60" value="${breakP.end || '17:00'}" class="px-2 py-1.5 border border-gray-300 rounded text-sm font-mono">
-                                            <span class="text-[10px] text-gray-500 ml-2">の間は営業ストップ</span>
-                                        </div>
-                                    </div>
-                                    `;
-                                }).join('')}
-                            </div>
                         </div>
 
                         <!-- 定休日 -->
@@ -3797,7 +3748,7 @@ const app = {
                                     <i class="fa-solid fa-hospital mr-1"></i>医療・介護向け
                                 </button>
                             </div>
-                            <p class="text-xs text-gray-400 mt-3">💡 ピーク時 (ランチ帯等) の人員確保は、下記「<b>人員配置要件 → 時間帯別・曜日別 人員増強</b>」で個別ルールを追加してください。</p>
+                            <p class="text-xs text-gray-400 mt-3">💡 平日・土曜・日祝でシフトパターンごとの必要人数を分けて設定できます。</p>
                         </div>
                     </div>
                 </div>
@@ -3837,87 +3788,6 @@ const app = {
                             </div>
                         </div>
                         ${this._renderStaffingFeasibilityTip()}
-
-                        <!-- v3.7.57: 時間帯別人員配置 (改善版) -->
-                        <div class="border-t-2 border-blue-100 pt-4 mt-4">
-                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 gap-2">
-                                <div>
-                                    <h4 class="text-sm font-bold text-blue-700 flex items-center gap-2">
-                                        <i class="fa-solid fa-clock"></i>⏰ 時間帯別の必要人数 (ランチ・ディナー等)
-                                    </h4>
-                                    <p class="text-[11px] text-gray-500 mt-0.5">ピーク時間に必要な人数を時間帯ごとに細かく設定できます (例: 11-15時は8名、それ以外は5名)</p>
-                                </div>
-                                <button onclick="app.addTimeStaffReq()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold transition flex items-center justify-center gap-1 whitespace-nowrap">
-                                    <i class="fa-solid fa-plus"></i>ルール追加
-                                </button>
-                            </div>
-                            <!-- v3.7.60: 時間帯別 必要人数 ダイレクト入力ガイド -->
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                                <p class="text-xs font-bold text-blue-800 mb-1"><i class="fa-solid fa-info-circle mr-1"></i>時間帯ごとの必要人数の決め方</p>
-                                <p class="text-[11px] text-blue-700 leading-relaxed">
-                                    「時間」と「人数」を直接入力できます。例:<br>
-                                    ・<strong>11:00 - 14:00 → 6名</strong> (ランチタイム)<br>
-                                    ・<strong>17:00 - 21:00 → 6名</strong> (ディナータイム)<br>
-                                    ・それ以外の時間は下の「平日/土曜/日祝 必要人数」(ベース)が適用されます
-                                </p>
-                            </div>
-                            <!-- プリセットボタン -->
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                <button onclick="app.addTimeStaffReqPreset('lunch')" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md font-bold border border-amber-200 transition"><i class="fa-solid fa-utensils mr-1"></i>ランチピーク (11-15時 +2名)</button>
-                                <button onclick="app.addTimeStaffReqPreset('dinner')" class="text-[10px] bg-orange-50 hover:bg-orange-100 text-orange-700 px-2.5 py-1 rounded-md font-bold border border-orange-200 transition"><i class="fa-solid fa-moon mr-1"></i>ディナーピーク (18-21時 +2名)</button>
-                                <button onclick="app.addTimeStaffReqPreset('weekend_busy')" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1 rounded-md font-bold border border-rose-200 transition"><i class="fa-solid fa-fire mr-1"></i>土日終日ピーク (10-21時 +1名)</button>
-                                <button onclick="app.addTimeStaffReqPreset('morning_low')" class="text-[10px] bg-sky-50 hover:bg-sky-100 text-sky-700 px-2.5 py-1 rounded-md font-bold border border-sky-200 transition"><i class="fa-solid fa-mug-hot mr-1"></i>朝アイドル (9-11時 -1名)</button>
-                                <button onclick="app.addTimeStaffReqPreset('night_24h')" class="text-[10px] bg-purple-50 hover:bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md font-bold border border-purple-200 transition"><i class="fa-solid fa-moon mr-1"></i>深夜時間帯 (22-翌6時 2名)</button>
-                            </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left text-sm">
-                                    <thead class="bg-gray-50 text-xs text-gray-500">
-                                        <tr>
-                                            <th class="p-2 w-1/3">曜日</th>
-                                            <th class="p-2">開始</th>
-                                            <th class="p-2">終了</th>
-                                            <th class="p-2">人数</th>
-                                            <th class="p-2 w-1/4">ポジション</th>
-                                            <th class="p-2 text-right"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="timeStaffReqBody" class="divide-y divide-gray-50">
-                                        ${timeStaffReq.map((rule, idx) => {
-                                            const daysStr = ['日','月','火','水','木','金','土'];
-                                            return `
-                                            <tr>
-                                                <td class="p-2">
-                                                    <div class="flex flex-wrap gap-1">
-                                                    ${daysStr.map((d, i) => `
-                                                        <label class="cursor-pointer select-none">
-                                                            <input type="checkbox" class="hidden peer setting-time-req-day-${idx}" value="${i}" ${rule.days.includes(i) ? 'checked' : ''}>
-                                                            <span class="block w-6 h-6 text-center leading-6 rounded text-xs font-bold peer-checked:bg-green-500 peer-checked:text-white bg-gray-100 text-gray-400 hover:bg-gray-200 transition-colors">${d}</span>
-                                                        </label>
-                                                    `).join('')}
-                                                    </div>
-                                                </td>
-                                                <td class="p-2">
-                                                    ${this.get15MinTimeSelect(rule.start, '', 'setting-time-req-start border-gray-300 rounded px-2 py-1 text-xs w-full')}
-                                                </td>
-                                                <td class="p-2">
-                                                    ${this.get15MinTimeSelect(rule.end, '', 'setting-time-req-end border-gray-300 rounded px-2 py-1 text-xs w-full')}
-                                                </td>
-                                                <td class="p-2"><input type="number" class="setting-time-req-count border-gray-300 rounded px-2 py-1 text-xs w-12 text-center font-bold" value="${rule.count}"></td>
-                                                <td class="p-2">
-                                                    <select class="setting-time-req-position border-gray-300 rounded px-2 py-1 text-xs w-full font-bold">
-                                                        <option value="any" ${rule.position === 'any' || !rule.position ? 'selected' : ''}>全般 (区別なし)</option>
-                                                        ${positions.map(p => `<option value="${this._sanitize(p)}" ${rule.position === p ? 'selected' : ''}>${this._sanitize(p)}のみ</option>`).join('')}
-                                                    </select>
-                                                </td>
-                                                <td class="p-2 text-right"><button onclick="app.removeTimeStaffReq(${idx})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button></td>
-                                            </tr>
-                                            `;
-                                        }).join('')}
-                                    </tbody>
-                                </table>
-                                ${timeStaffReq.length === 0 ? '<p class="text-xs text-gray-400 text-center py-4">特定の時間帯（例：ランチタイム）に必要な人数を設定できます</p>' : ''}
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -4470,24 +4340,18 @@ const app = {
             }
         });
 
-        // v3.7.59: 中休み時間 (中抜き営業対応)
+        // v3.7.67: 中休み時間 UI 廃止 → 常に空
         config.break_periods = {};
-        ['weekday', 'weekend', 'holiday'].forEach(dt => {
-            const enabled = document.getElementById(`break_enable_${dt}`)?.checked;
-            const bStart = getVal(`break_start_${dt}`);
-            const bEnd = getVal(`break_end_${dt}`);
-            if (enabled && bStart && bEnd && bStart !== bEnd) {
-                config.break_periods[dt] = { start: bStart, end: bEnd };
-            }
-        });
 
         // 定休日
         config.closed_days = Array.from(document.querySelectorAll('input[name="setting_closed_days"]:checked')).map(el => parseInt(el.value));
 
-        // ポジション設定
-        const posInput = document.getElementById('settingPositions')?.value || '';
-        config.positions = posInput.split(/[,、\s　]+/).map(p => p.trim()).filter(p => p !== '');
-        if (config.positions.length === 0) config.positions = ['ホール', 'キッチン'];
+        // v3.7.67: ポジション設定 UI 廃止 → 既存値を維持 (なければデフォルト)
+        if (!Array.isArray(this.state.config.positions) || this.state.config.positions.length === 0) {
+            config.positions = ['ホール', 'キッチン'];
+        } else {
+            config.positions = this.state.config.positions;
+        }
 
         // 役職・ロール設定
         const roleNames = document.querySelectorAll('.setting-role-name');
@@ -4565,24 +4429,8 @@ const app = {
         // v18 修正: 空配列でも上書き (旧版は length=0 で既存維持 → 削除できないバグ)
         config.break_rules = breakRules;
 
-        // 時間帯別ルール (v3.6: 不正な値はスキップ)
+        // v3.7.67: 時間帯別ルール UI 廃止 → 常に空
         config.time_staff_req = [];
-        const timeReqRows = document.querySelectorAll('#timeStaffReqBody tr');
-        timeReqRows.forEach((row, idx) => {
-            const start = row.querySelector('.setting-time-req-start')?.value;
-            const end = row.querySelector('.setting-time-req-end')?.value;
-            const countRaw = Number(row.querySelector('.setting-time-req-count')?.value);
-            const position = row.querySelector('.setting-time-req-position')?.value || 'any';
-
-            const daysChecks = document.querySelectorAll(`.setting-time-req-day-${idx}:checked`);
-            const days = Array.from(daysChecks).map(c => Number(c.value));
-
-            // 数値検証: 有限な正の整数のみ、上限50で clamp
-            const count = (Number.isFinite(countRaw) && countRaw > 0) ? Math.min(Math.floor(countRaw), 50) : 0;
-            if (days.length > 0 && start && end && count > 0) {
-                config.time_staff_req.push({ days, start, end, count, position });
-            }
-        });
 
         // v3.6.1: mid_shift_auto_generate は撤廃。
         // ピーク管理は time_staff_req (時間帯別ルール) に統一されたため、
@@ -5248,16 +5096,8 @@ const app = {
         select.innerHTML = roles.map(r => `<option value="${r.id}">${this._sanitize(r.name)}</option>`).join('');
     },
     
-    updateStaffPositionSelect() {
-        const select = document.getElementById('staffPosition');
-        if(!select) return;
-        const positions = this.state.config.positions || ['ホール', 'キッチン'];
-        let html = '<option value="any">指定なし (全般)</option>';
-        positions.forEach(p => {
-            html += `<option value="${this._sanitize(p)}">${this._sanitize(p)}専用</option>`;
-        });
-        select.innerHTML = html;
-    },
+    // v3.7.67: 担当ポジション UI 廃止 (no-op)
+    updateStaffPositionSelect() {},
 
     // プラン別スタッフ上限
     getStaffLimit() {
@@ -5381,7 +5221,8 @@ const app = {
             if (!prefEndWe && prefEndWd) { prefEndWe = prefEndWd; _autoFilledNote = '土日希望時間を平日希望時間で自動補完しました'; }
         }
         const reqPairs = document.getElementById('staffReqPairs')?.value || '';
-        const position = document.getElementById('staffPosition')?.value || 'any';
+        // v3.7.67: 担当ポジション UI 廃止 → 全員 'any' 固定
+        const position = 'any';
 
         // NG曜日を収集
         const ngWeekdays = [];
@@ -7270,12 +7111,6 @@ const app = {
                         <p class="text-xs text-gray-500 mt-1">※AIは「Manager」や「Sub-Manager」を管理者として扱い、店舗を空にしないよう必ず配置します。</p>
                     </div>
 
-                    <div class="border-l-4 border-teal-400 pl-4 py-1">
-                        <h4 class="font-bold text-teal-700 text-base mb-1">1.5. ポジション設定（重要）</h4>
-                        <p>店舗内の役割（ホール・キッチン・デリバリーなど）をスペースや読点等で区切って自由に設定できます。</p>
-                        <p class="text-xs text-red-600 font-bold mt-1">※注意: 稼働中にポジション名を変更・削除すると、過去そのポジションだったスタッフは「指定なし (全般)」扱いになるため、なるべく初期設定で確定させてください。</p>
-                    </div>
-                    
                     <div class="border-l-4 border-blue-400 pl-4 py-1">
                         <h4 class="font-bold text-blue-700 text-base mb-1">2. 営業時間 ＆ 定休日</h4>
                         <p>平日・土日・祝日ごとに開店/閉店時間を設定します。未設定だと全日同一営業時間で計算されます。<br>定休日（毎週水曜など）を設定すると、AIはその曜日には一切シフトを入れません。</p>
@@ -7287,19 +7122,13 @@ const app = {
                         <strong>全体の最低人数:</strong> 平日・土日・祝日ごとの最低配置人数。これがシフト表の「人員状況」アラートの基準値になります。</p>
                     </div>
 
-                    <div class="border-l-4 border-red-500 pl-4 py-1">
-                        <h4 class="font-bold text-red-700 text-base mb-1">4. 時間帯別・曜日別 人員増強（ピンポイント指定）</h4>
-                        <p>「毎週金曜日の17:00〜22:00は、ホールを＋2名増やしたい」といったピンポイントなルールの追加が可能です。<br>
-                        設定されたルールはAIの計算エンジンに最優先で組み込まれ、ポジションごとの過不足を完璧に防ぎます。</p>
-                    </div>
-                    
                     <div class="border-l-4 border-purple-400 pl-4 py-1">
-                        <h4 class="font-bold text-purple-700 text-base mb-1">5. シフトパターンの設定</h4>
+                        <h4 class="font-bold text-purple-700 text-base mb-1">4. シフトパターンの設定</h4>
                         <p>「早番（09:00〜18:00）」「遅番（13:00〜22:00）」などの時間テンプレートです。<strong>2つ以上登録するとAIが自動的に間を埋める中番パターンも生成</strong>し、時間帯の穴抜けを柔軟に防ぎます。</p>
                     </div>
 
                     <div class="border-l-4 border-green-400 pl-4 py-1">
-                        <h4 class="font-bold text-green-700 text-base mb-1">6. 休憩ルールの設定</h4>
+                        <h4 class="font-bold text-green-700 text-base mb-1">5. 休憩ルールの設定</h4>
                         <p>「〇〇時間以上の勤務なら〇〇分の休憩を与える」というルールです。労働基準法に則り、6時間超で45分、8時間超で60分がデフォルトで設定されています。</p>
                     </div>
                 </div>
