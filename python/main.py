@@ -342,7 +342,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.71"}
+        return {"status": "ok", "db": "alive", "version": "3.7.72"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -640,6 +640,23 @@ async def generate_shifts(request: Request, req: ShiftRequest,
                 audited_count = len(audited)
                 missing_staff = original_staff_ids - audited_staff_ids
 
+                # v3.7.72: シフトパターン構造の破壊チェック
+                # Gemini が独自に時間を統合・延長して登録済みパターン外の時間帯を
+                # 作り出していたら audit 結果を破棄して MILP 原案を採用
+                allowed_pattern_times = set()
+                for sp in req.config.get("custom_shifts", []):
+                    st = (sp.get("start") or "").strip()[:5]
+                    en = (sp.get("end") or "").strip()[:5]
+                    if st and en:
+                        allowed_pattern_times.add((st, en))
+                pattern_violations = 0
+                if allowed_pattern_times:
+                    for c in audited:
+                        st = (c.get("start_time") or "")[:5]
+                        en = (c.get("end_time") or "")[:5]
+                        if (st, en) not in allowed_pattern_times:
+                            pattern_violations += 1
+
                 # シフト数が50%以下に減少した場合は破棄
                 if audited_count < original_count * 0.5:
                     logger.info("[Gemini Audit] REJECTED: shift count dropped too much ({} -> {})".format(
@@ -652,6 +669,11 @@ async def generate_shifts(request: Request, req: ShiftRequest,
                 elif len(missing_staff) > 0:
                     logger.info("[Gemini Audit] REJECTED: {} staff lost shifts: {}".format(
                         len(missing_staff), missing_staff))
+                # v3.7.72: パターン外時間帯違反 10% 超えで破棄
+                elif allowed_pattern_times and pattern_violations > max(2, int(audited_count * 0.1)):
+                    logger.info(
+                        "[Gemini Audit] REJECTED: Gemini fabricated %d/%d shifts outside registered patterns (allowed=%s)",
+                        pattern_violations, audited_count, sorted(allowed_pattern_times))
                 else:
                     # Gemini audit が reason フィールドを返さないことが多いため、
                     # 元の result から (staff_id, date) キーで reason を引き戻す。
@@ -849,15 +871,35 @@ def run_gemini_audit(api_key: str, model: str, req: ShiftRequest, shifts: list) 
                 "end": s["end_time"],
             })
 
+        # v3.7.72: シフトパターン情報を Gemini に渡す
+        # 旧プロンプトには custom_shifts (早番/遅番の時間と曜日別人数) が含まれず、
+        # Gemini が「ベース必要人数しか必要ない」と誤判断してパターン構造を
+        # 統合・破壊するバグの原因となっていた
+        custom_shifts_for_prompt = []
+        for sp in config.get("custom_shifts", []):
+            custom_shifts_for_prompt.append({
+                "name": sp.get("name", ""),
+                "start": sp.get("start", ""),
+                "end": sp.get("end", ""),
+                "count_weekday": sp.get("count_weekday", sp.get("count", 1)),
+                "count_weekend": sp.get("count_weekend", sp.get("count", 1)),
+                "count_holiday": sp.get("count_holiday", sp.get("count", 1)),
+            })
+
         prompt = """あなたは日本の労働基準法に精通した熟練シフト管理者AIです。
-Pythonシステムが生成した「一次シフト案」を監査し、以下の全ルールに違反がないか検証してください。
+Pythonシステム(MILPソルバー)が生成した「一次シフト案」を監査し、以下の全ルールに違反がないか検証してください。
 違反があれば**最小限の修正**を加え、なければそのまま出力してください。
 
-=== 最重要: 最小変更原則 ===
-- 一次シフト案はMILPソルバーで最適化済みです。人員配置バランスが計算されています。
-- 労基法違反の修正以外は、シフトの追加・削除・時間変更をしないでください。
-- 各時間帯の同時在籍人数が「必要人数±1」の範囲に収まるように維持してください。
-- スタッフの追加や入れ替えにより、他の日の人員バランスが崩れないよう注意してください。
+=== 最重要: 最小変更原則 (これを守らないと納品事故になる) ===
+- 一次シフト案は MILP で最適化済みです。人員配置バランスは既に計算されています。
+- 労基法違反の修正以外は、シフトの追加・削除・**開始/終了時刻の変更を絶対にしない**でください。
+- 各シフトの開始/終了時刻は下記「シフトパターン」のいずれかと一致しています。
+  Gemini が独自に開始/終了時刻を統合・延長・短縮することを禁止します。
+  時刻を変える必要がある場合 (例: 法定休憩追加) は、シフトパターン定義の中から
+  別のパターン時刻を選んでください。完全に新規の時刻を作らないでください。
+
+=== シフトパターン定義 (UI で店舗管理者が指定したもの。これを尊重) ===
+{}
 
 === 絶対遵守ルール (違反は許されない) ===
 1. スタッフの希望休(unavailable_dates/承認済みoff)には絶対に配置しない
@@ -874,7 +916,6 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
 === 推奨ルール (可能な限り遵守) ===
 - 管理者(manager/leader)が各シフトに最低{}名
 - 平日最低{}名、土日最低{}名、祝日最低{}名
-- 時間帯別の必要人数要件: {}
 - 月給スタッフは週5日程度配置
 - 新人(evaluation=D)がいる場合はメンター(manager/leader)も配置
 
@@ -892,11 +933,14 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
 修正後の完全なシフト表をJSON配列で出力してください。
 **重要**: 純粋なJSON配列のみ出力。マークダウンや解説は不要。
 **重要**: 違反がない場合は一次シフト案をそのまま出力してください。不要な変更はしないでください。
+**重要**: 各シフトの start_time / end_time は、上記シフトパターン定義の start / end のいずれかと一致させてください。
 [
   {{"staff_id": "...", "date": "YYYY-MM-DD", "start_time": "HH:MM", "end_time": "HH:MM", "break_minutes": 60, "is_irregular": false}},
   ...
 ]
 ※ 欠員補充のために社員（monthly）のシフトを延長した、または休みから呼び出した場合は、該当シフトの `"is_irregular": true` としてください。通常シフトは `false` です。""".format(
+            json.dumps(custom_shifts_for_prompt, ensure_ascii=False)
+                if custom_shifts_for_prompt else "（シフトパターン未定義 / 営業時間全体を一律使用）",
             "、".join(closed_days_names) if closed_days_names else "なし",
             ", ".join(config.get("special_holidays", [])) if config.get("special_holidays") else "なし",
             json.dumps(break_rules, ensure_ascii=False),
@@ -904,7 +948,6 @@ Pythonシステムが生成した「一次シフト案」を監査し、以下�
             staff_req.get("min_weekday", 2),
             staff_req.get("min_weekend", 3),
             staff_req.get("min_holiday", 3),
-            json.dumps(config.get("time_staff_req", []), ensure_ascii=False) if config.get("time_staff_req") else "特になし",
             json.dumps(staff_info, ensure_ascii=False),
             json.dumps(req.dates),
             json.dumps(shift_summary, ensure_ascii=False),
