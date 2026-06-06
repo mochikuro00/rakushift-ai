@@ -3723,14 +3723,22 @@ const app = {
                                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
                                     <tr>
                                         <th class="p-3 rounded-l-lg">パターン名</th>
-                                        <th class="p-3">開始時間</th>
-                                        <th class="p-3">終了時間</th>
-                                        <th class="p-3">必要人数</th>
+                                        <th class="p-3">開始</th>
+                                        <th class="p-3">終了</th>
+                                        <th class="p-3 text-center">平日<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-3 text-center text-blue-600">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-3 text-center text-red-600">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-3 text-right rounded-r-lg">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100" id="shiftPatternsBody">
-                                    ${customShifts.map((shift, index) => `
+                                    ${customShifts.map((shift, index) => {
+                                        // v3.7.66: 曜日別の必要人数 (count_weekday / count_weekend / count_holiday)
+                                        // 旧 count は count_weekday へのフォールバック
+                                        const cwd = shift.count_weekday != null ? shift.count_weekday : (shift.count != null ? shift.count : 1);
+                                        const cwe = shift.count_weekend != null ? shift.count_weekend : cwd;
+                                        const chd = shift.count_holiday != null ? shift.count_holiday : cwe;
+                                        return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-2">
                                                 <input type="text" class="setting-shift-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${shift.name}" placeholder="例: 早番">
@@ -3741,9 +3749,14 @@ const app = {
                                             <td class="p-2">
                                                 ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
-                                            <td class="p-2">
-                                                <!-- v3.7.64: シフトパターン別の必要人数 -->
-                                                <input type="number" min="0" max="50" step="1" class="setting-shift-count w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${shift.count != null ? shift.count : ''}" placeholder="任意">
+                                            <td class="p-2 text-center">
+                                                <input type="number" required min="1" max="50" step="1" class="setting-shift-count-wd w-14 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <input type="number" required min="1" max="50" step="1" class="setting-shift-count-we w-14 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <input type="number" required min="1" max="50" step="1" class="setting-shift-count-hd w-14 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
                                             </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
@@ -3751,8 +3764,9 @@ const app = {
                                                 </button>
                                             </td>
                                         </tr>
-                                    `).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
+                                        `;
+                                    }).join('')}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="7" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
@@ -4495,23 +4509,33 @@ const app = {
             }
         });
 
-        // シフトパターン
+        // シフトパターン (v3.7.66: 曜日別必要人数 + 必須化)
         const shiftNames = document.querySelectorAll('.setting-shift-name');
         const shiftStarts = document.querySelectorAll('.setting-shift-start');
         const shiftEnds = document.querySelectorAll('.setting-shift-end');
-        // v3.7.64: シフトパターン別の必要人数
-        const shiftCounts = document.querySelectorAll('.setting-shift-count');
+        const shiftCountsWd = document.querySelectorAll('.setting-shift-count-wd');
+        const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
+        const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
             if (el.value) {
-                const countRaw = shiftCounts[i]?.value;
-                const count = countRaw && !isNaN(Number(countRaw)) ? Number(countRaw) : null;
+                // 必須: デフォルト 1 (空欄ならフォールバック)
+                const parseCount = (input) => {
+                    const v = Number(input?.value);
+                    return Number.isFinite(v) && v >= 1 ? Math.min(v, 50) : 1;
+                };
+                const cwd = parseCount(shiftCountsWd[i]);
+                const cwe = parseCount(shiftCountsWe[i]);
+                const chd = parseCount(shiftCountsHd[i]);
                 config.custom_shifts.push({
                     name: el.value,
                     start: shiftStarts[i].value,
                     end: shiftEnds[i].value,
-                    ...(count !== null ? { count } : {})
+                    count_weekday: cwd,
+                    count_weekend: cwe,
+                    count_holiday: chd,
+                    count: cwd, // 旧互換
                 });
             }
         });

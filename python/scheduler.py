@@ -679,11 +679,17 @@ class ShiftScheduler:
         for t in range(op, cl, 15):
             slots[t] = {"base": req_num, "hall": 0, "kitchen": 0, "any": 0, "pattern_sum": 0}
 
-        # v3.7.65: シフトパターンの count を slot ごとに合算
-        # 例: 早番 (09-15) 3名 + 遅番 (15-22) 3名
-        #     → 09-15 帯は pattern_sum = 3、15-22 帯は pattern_sum = 3
+        # v3.7.66: シフトパターンの count を曜日別に読み取り、slot ごとに合算
+        # 各パターンに count_weekday / count_weekend / count_holiday があれば使う
+        # なければ旧 count にフォールバック
+        day_type_for_pat = self._get_day_type(date_str)
         for pat in self.shift_patterns:
-            pat_count = pat.get("count")
+            if day_type_for_pat == "holiday":
+                pat_count = pat.get("count_holiday", pat.get("count"))
+            elif day_type_for_pat == "weekend":
+                pat_count = pat.get("count_weekend", pat.get("count"))
+            else:
+                pat_count = pat.get("count_weekday", pat.get("count"))
             if not pat_count or pat_count <= 0:
                 continue
             try:
@@ -1424,14 +1430,19 @@ class ShiftScheduler:
                             prob += workers_sum - slack_over <= req
                             penalty += slack_over * self.W.COVERAGE_OVER_SLOT
 
-                # --- v3.7.64: シフトパターン別の必要人数制約 ---
-                # 各パターンに count が設定されている場合、その時間帯で count 名を確保
-                # 「早番 3名、遅番 3名」のようなユーザー指定を反映
+                # --- v3.7.66: シフトパターン別必要人数制約 (曜日別 count) ---
                 for d in self.dates:
-                    if self._get_day_type(d) == "closed":
+                    day_type_d = self._get_day_type(d)
+                    if day_type_d == "closed":
                         continue
                     for pat in self.shift_patterns:
-                        pat_count = pat.get("count")
+                        # 曜日別 count を取得
+                        if day_type_d == "holiday":
+                            pat_count = pat.get("count_holiday", pat.get("count"))
+                        elif day_type_d == "weekend":
+                            pat_count = pat.get("count_weekend", pat.get("count"))
+                        else:
+                            pat_count = pat.get("count_weekday", pat.get("count"))
                         if pat_count is None or pat_count <= 0:
                             continue
                         ps_min = self._to_minutes(pat["start"])
