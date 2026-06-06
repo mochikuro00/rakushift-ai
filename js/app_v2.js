@@ -3757,13 +3757,25 @@ const app = {
                         </div>
                         ${this._renderStaffingFeasibilityTip()}
 
-                        <!-- 時間帯別人員配置 -->
-                        <div class="border-t border-gray-100 pt-4">
-                            <div class="flex justify-between items-center mb-3">
-                                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">時間帯別・曜日別 人員増強</h4>
-                                <button onclick="app.addTimeStaffReq()" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-bold hover:bg-green-200 transition">
-                                    <i class="fa-solid fa-plus mr-1"></i>ルール追加
+                        <!-- v3.7.57: 時間帯別人員配置 (改善版) -->
+                        <div class="border-t-2 border-blue-100 pt-4 mt-4">
+                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 gap-2">
+                                <div>
+                                    <h4 class="text-sm font-bold text-blue-700 flex items-center gap-2">
+                                        <i class="fa-solid fa-clock"></i>⏰ 時間帯別の必要人数 (ランチ・ディナー等)
+                                    </h4>
+                                    <p class="text-[11px] text-gray-500 mt-0.5">ピーク時間に必要な人数を時間帯ごとに細かく設定できます (例: 11-15時は8名、それ以外は5名)</p>
+                                </div>
+                                <button onclick="app.addTimeStaffReq()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold transition flex items-center justify-center gap-1 whitespace-nowrap">
+                                    <i class="fa-solid fa-plus"></i>ルール追加
                                 </button>
+                            </div>
+                            <!-- プリセットボタン -->
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                <button onclick="app.addTimeStaffReqPreset('lunch')" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md font-bold border border-amber-200 transition"><i class="fa-solid fa-utensils mr-1"></i>ランチピーク (11-15時 +2名)</button>
+                                <button onclick="app.addTimeStaffReqPreset('dinner')" class="text-[10px] bg-orange-50 hover:bg-orange-100 text-orange-700 px-2.5 py-1 rounded-md font-bold border border-orange-200 transition"><i class="fa-solid fa-moon mr-1"></i>ディナーピーク (18-21時 +2名)</button>
+                                <button onclick="app.addTimeStaffReqPreset('weekend_busy')" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1 rounded-md font-bold border border-rose-200 transition"><i class="fa-solid fa-fire mr-1"></i>土日終日ピーク (10-21時 +1名)</button>
+                                <button onclick="app.addTimeStaffReqPreset('morning_low')" class="text-[10px] bg-sky-50 hover:bg-sky-100 text-sky-700 px-2.5 py-1 rounded-md font-bold border border-sky-200 transition"><i class="fa-solid fa-mug-hot mr-1"></i>朝アイドル (9-11時 -1名)</button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left text-sm">
@@ -4146,6 +4158,31 @@ const app = {
                 });
             }
         } catch (e) { console.warn('save failed:', e); }
+    },
+
+    // v3.7.57: プリセットルール (ランチ/ディナー等) を一括追加
+    addTimeStaffReqPreset(presetType) {
+        this.state.config = this.readSettingsFromDOM();
+        if (!this.state.config.time_staff_req) this.state.config.time_staff_req = [];
+        const baseCount = Number(this.state.config.staff_req?.min_weekday || 4);
+        const presets = {
+            lunch: { days: [1,2,3,4,5], start: '11:00', end: '15:00', count: baseCount + 2, label: 'ランチピーク' },
+            dinner: { days: [1,2,3,4,5], start: '18:00', end: '21:00', count: baseCount + 2, label: 'ディナーピーク' },
+            weekend_busy: { days: [0,6], start: '10:00', end: '21:00', count: baseCount + 1, label: '土日終日ピーク' },
+            morning_low: { days: [1,2,3,4,5], start: '09:00', end: '11:00', count: Math.max(1, baseCount - 1), label: '朝アイドル' },
+        };
+        const preset = presets[presetType];
+        if (preset) {
+            this.state.config.time_staff_req.push({
+                days: preset.days,
+                start: preset.start,
+                end: preset.end,
+                count: preset.count,
+                position: 'any'
+            });
+            this.renderSettings(document.getElementById('viewContainer'));
+            this.showToast(`「${preset.label}」を追加しました (${preset.count}名)`, 'success');
+        }
     },
 
     addTimeStaffReq() {
