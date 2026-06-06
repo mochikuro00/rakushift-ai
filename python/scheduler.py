@@ -775,16 +775,24 @@ class ShiftScheduler:
 
         final_slots = {}
         for t, counts in slots.items():
-            # v3.7.65: シフトパターン人数 + 時間帯別 を合算
-            # = max(base, any+hall+kitchen) + pattern_sum
-            # ベース必要人数とパターン人数を合計する設計
+            # v3.7.73: シフトパターン人数優先方式に変更
+            # 旧設計 (max(base, role) + pattern_sum) では、
+            #   ベース 7名 + 早番 3名 → 全時間帯で 7+3=10 名 という不自然な要件になり、
+            #   結果として MILP は「全員通しシフト」を選んで 7名以上を確保する戦略を取る。
+            #   これではユーザーの「早番3名+遅番4名=日合計7名」という意図と乖離する。
+            # 新設計:
+            #   パターン人数 (count_weekday 等) が指定されていれば、その時間帯は
+            #   パターン人数 (重ねがけ可) のみを必要人数とする。
+            #   パターン人数が指定されていない時間帯 (パターン外の余り時間) は
+            #   従来通り max(base, role) を必要人数とする。
+            # これでユーザーが「早番3 + 遅番4」と指定すれば、各時間帯で 3 名 or 4 名
+            # (重複帯は合算 7 名) が必要人数となり、MILP が早番/遅番を選ぶようになる。
             base_or_rule = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
             pattern_sum = counts.get("pattern_sum", 0)
-            # base+rule か pattern_sum の大きい方 + 加算 (合算)
-            # 例: base=2, time_staff_req=5(any), pattern_sum=3
-            #   旧: max(2, 5) = 5
-            #   新: max(2, 5) + 3 = 8 ← 合算
-            final_slots[t] = base_or_rule + pattern_sum
+            if pattern_sum > 0:
+                final_slots[t] = pattern_sum
+            else:
+                final_slots[t] = base_or_rule
         return final_slots
 
     def _build_pos_requirements(self, date_str):
