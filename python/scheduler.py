@@ -677,7 +677,26 @@ class ShiftScheduler:
         cl = self._normalize_end_time(op, self._to_minutes(day_close))
         slots = {}
         for t in range(op, cl, 15):
-            slots[t] = {"base": req_num, "hall": 0, "kitchen": 0, "any": 0}
+            slots[t] = {"base": req_num, "hall": 0, "kitchen": 0, "any": 0, "pattern_sum": 0}
+
+        # v3.7.65: シフトパターンの count を slot ごとに合算
+        # 例: 早番 (09-15) 3名 + 遅番 (15-22) 3名
+        #     → 09-15 帯は pattern_sum = 3、15-22 帯は pattern_sum = 3
+        for pat in self.shift_patterns:
+            pat_count = pat.get("count")
+            if not pat_count or pat_count <= 0:
+                continue
+            try:
+                pat_count_int = int(pat_count)
+            except (ValueError, TypeError):
+                continue
+            ps = self._to_minutes(pat.get("start", "09:00"))
+            pe = self._normalize_end_time(ps, self._to_minutes(pat.get("end", "18:00")))
+            if ps >= pe:
+                continue
+            for t in range(op, cl, 15):
+                if ps <= t < pe and t in slots:
+                    slots[t]["pattern_sum"] += pat_count_int
 
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
@@ -720,7 +739,16 @@ class ShiftScheduler:
 
         final_slots = {}
         for t, counts in slots.items():
-            final_slots[t] = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
+            # v3.7.65: シフトパターン人数 + 時間帯別 を合算
+            # = max(base, any+hall+kitchen) + pattern_sum
+            # ベース必要人数とパターン人数を合計する設計
+            base_or_rule = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
+            pattern_sum = counts.get("pattern_sum", 0)
+            # base+rule か pattern_sum の大きい方 + 加算 (合算)
+            # 例: base=2, time_staff_req=5(any), pattern_sum=3
+            #   旧: max(2, 5) = 5
+            #   新: max(2, 5) + 3 = 8 ← 合算
+            final_slots[t] = base_or_rule + pattern_sum
         return final_slots
 
     def _build_pos_requirements(self, date_str):
