@@ -3570,35 +3570,34 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">AIはこの時間帯の中でだけシフトを生成します。定休日にはシフトを入れません。</p>
                     </div>
                     <div class="p-6 space-y-8">
-                        <!-- 営業時間 -->
+                        <!-- 営業時間 (v3.7.60: 24時間営業対応) -->
                         <div class="space-y-4">
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
-                            <!-- v3.7.59: 中休み (中抜き) 時間設定 -->
-                            <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 飲食店の中抜き営業 (例: 14:00-17:30 が休憩) は、下の「中休み時間」で設定できます</p>
-                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
-                                <div class="md:col-span-3 font-bold text-gray-700">平日 (月-金)</div>
-                                <div class="md:col-span-9 flex items-center gap-3">
-                                    ${this.get15MinTimeSelect(times.weekday?.start || '09:00', 'time_weekday_start', 'form-input border-gray-300 rounded-lg w-full')}
-                                    <span class="text-gray-400">～</span>
-                                    ${this.get15MinTimeSelect(times.weekday?.end || '22:00', 'time_weekday_end', 'form-input border-gray-300 rounded-lg w-full')}
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
-                                <div class="md:col-span-3 font-bold text-blue-600">土曜日</div>
-                                <div class="md:col-span-9 flex items-center gap-3">
-                                    ${this.get15MinTimeSelect(times.weekend?.start || '10:00', 'time_weekend_start', 'form-input border-gray-300 rounded-lg w-full')}
-                                    <span class="text-gray-400">～</span>
-                                    ${this.get15MinTimeSelect(times.weekend?.end || '20:00', 'time_weekend_end', 'form-input border-gray-300 rounded-lg w-full')}
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                <div class="md:col-span-3 font-bold text-red-600">日祝日</div>
-                                <div class="md:col-span-9 flex items-center gap-3">
-                                    ${this.get15MinTimeSelect(times.holiday?.start || '10:00', 'time_holiday_start', 'form-input border-gray-300 rounded-lg w-full')}
-                                    <span class="text-gray-400">～</span>
-                                    ${this.get15MinTimeSelect(times.holiday?.end || '20:00', 'time_holiday_end', 'form-input border-gray-300 rounded-lg w-full')}
-                                </div>
-                            </div>
+                            <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 24時間営業の場合は右のチェック、中抜き営業 (例: 14:00-17:30 休憩) は下の「中休み時間」で設定</p>
+                            ${(() => {
+                                const is24hWd = !!(this.state.config.is_24h?.weekday);
+                                const is24hWe = !!(this.state.config.is_24h?.weekend);
+                                const is24hHd = !!(this.state.config.is_24h?.holiday);
+                                const renderRow = (dt, label, colorClass, defaultStart, defaultEnd, is24h) => `
+                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
+                                        <div class="md:col-span-3 font-bold ${colorClass}">${label}</div>
+                                        <div class="md:col-span-6 flex items-center gap-3 ${is24h ? 'opacity-40 pointer-events-none' : ''}">
+                                            ${this.get15MinTimeSelect(times[dt]?.start || defaultStart, 'time_'+dt+'_start', 'form-input border-gray-300 rounded-lg w-full')}
+                                            <span class="text-gray-400">～</span>
+                                            ${this.get15MinTimeSelect(times[dt]?.end || defaultEnd, 'time_'+dt+'_end', 'form-input border-gray-300 rounded-lg w-full')}
+                                        </div>
+                                        <div class="md:col-span-3 flex items-center">
+                                            <label class="flex items-center gap-2 cursor-pointer text-xs font-bold bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-2 rounded-lg transition">
+                                                <input type="checkbox" id="is_24h_${dt}" class="w-4 h-4" ${is24h ? 'checked' : ''} onchange="app._toggle24h('${dt}', this.checked)">
+                                                <span class="text-violet-700">🕐 24時間営業</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                `;
+                                return renderRow('weekday', '平日 (月-金)', 'text-gray-700', '09:00', '22:00', is24hWd) +
+                                       renderRow('weekend', '土曜日', 'text-blue-600', '10:00', '20:00', is24hWe) +
+                                       renderRow('holiday', '日祝日', 'text-red-600', '10:00', '20:00', is24hHd);
+                            })()}
                         </div>
 
                         <!-- v3.7.59: 中休み時間 (中抜き営業対応) -->
@@ -3814,12 +3813,23 @@ const app = {
                                     <i class="fa-solid fa-plus"></i>ルール追加
                                 </button>
                             </div>
+                            <!-- v3.7.60: 時間帯別 必要人数 ダイレクト入力ガイド -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                                <p class="text-xs font-bold text-blue-800 mb-1"><i class="fa-solid fa-info-circle mr-1"></i>時間帯ごとの必要人数の決め方</p>
+                                <p class="text-[11px] text-blue-700 leading-relaxed">
+                                    「時間」と「人数」を直接入力できます。例:<br>
+                                    ・<strong>11:00 - 14:00 → 6名</strong> (ランチタイム)<br>
+                                    ・<strong>17:00 - 21:00 → 6名</strong> (ディナータイム)<br>
+                                    ・それ以外の時間は下の「平日/土曜/日祝 必要人数」(ベース)が適用されます
+                                </p>
+                            </div>
                             <!-- プリセットボタン -->
                             <div class="flex flex-wrap gap-2 mb-3">
                                 <button onclick="app.addTimeStaffReqPreset('lunch')" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md font-bold border border-amber-200 transition"><i class="fa-solid fa-utensils mr-1"></i>ランチピーク (11-15時 +2名)</button>
                                 <button onclick="app.addTimeStaffReqPreset('dinner')" class="text-[10px] bg-orange-50 hover:bg-orange-100 text-orange-700 px-2.5 py-1 rounded-md font-bold border border-orange-200 transition"><i class="fa-solid fa-moon mr-1"></i>ディナーピーク (18-21時 +2名)</button>
                                 <button onclick="app.addTimeStaffReqPreset('weekend_busy')" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1 rounded-md font-bold border border-rose-200 transition"><i class="fa-solid fa-fire mr-1"></i>土日終日ピーク (10-21時 +1名)</button>
                                 <button onclick="app.addTimeStaffReqPreset('morning_low')" class="text-[10px] bg-sky-50 hover:bg-sky-100 text-sky-700 px-2.5 py-1 rounded-md font-bold border border-sky-200 transition"><i class="fa-solid fa-mug-hot mr-1"></i>朝アイドル (9-11時 -1名)</button>
+                                <button onclick="app.addTimeStaffReqPreset('night_24h')" class="text-[10px] bg-purple-50 hover:bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md font-bold border border-purple-200 transition"><i class="fa-solid fa-moon mr-1"></i>深夜時間帯 (22-翌6時 2名)</button>
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left text-sm">
@@ -4204,6 +4214,19 @@ const app = {
         } catch (e) { console.warn('save failed:', e); }
     },
 
+    // v3.7.60: 24時間営業チェック切替
+    _toggle24h(dayType, enabled) {
+        if (!this.state.config.is_24h) this.state.config.is_24h = {};
+        this.state.config.is_24h[dayType] = enabled;
+        // チェック時は 00:00 〜 23:45 (営業時間 = 24h)
+        if (enabled) {
+            if (!this.state.config.opening_times) this.state.config.opening_times = {};
+            this.state.config.opening_times[dayType] = { start: '00:00', end: '23:45' };
+        }
+        this.renderSettings(document.getElementById('viewContainer'));
+        this.showToast(enabled ? `${dayType} を24時間営業に設定しました` : `${dayType} の24時間設定を解除しました`, 'success');
+    },
+
     // v3.7.57: プリセットルール (ランチ/ディナー等) を一括追加
     addTimeStaffReqPreset(presetType) {
         this.state.config = this.readSettingsFromDOM();
@@ -4214,6 +4237,7 @@ const app = {
             dinner: { days: [1,2,3,4,5], start: '18:00', end: '21:00', count: baseCount + 2, label: 'ディナーピーク' },
             weekend_busy: { days: [0,6], start: '10:00', end: '21:00', count: baseCount + 1, label: '土日終日ピーク' },
             morning_low: { days: [1,2,3,4,5], start: '09:00', end: '11:00', count: Math.max(1, baseCount - 1), label: '朝アイドル' },
+            night_24h: { days: [0,1,2,3,4,5,6], start: '22:00', end: '06:00', count: 2, label: '深夜時間帯' },
         };
         const preset = presets[presetType];
         if (preset) {
@@ -4395,6 +4419,18 @@ const app = {
         // 旧互換
         config.opening_time = config.opening_times.weekday.start;
         config.closing_time = config.opening_times.weekday.end;
+
+        // v3.7.60: 24時間営業フラグ
+        config.is_24h = config.is_24h || {};
+        ['weekday', 'weekend', 'holiday'].forEach(dt => {
+            const cb = document.getElementById(`is_24h_${dt}`);
+            if (cb) {
+                config.is_24h[dt] = cb.checked;
+                if (cb.checked) {
+                    config.opening_times[dt] = { start: '00:00', end: '23:45' };
+                }
+            }
+        });
 
         // v3.7.59: 中休み時間 (中抜き営業対応)
         config.break_periods = {};
