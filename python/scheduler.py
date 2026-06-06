@@ -157,13 +157,17 @@ class ShiftScheduler:
             pat = {
                 "start": st, "end": en, "name": p.get("name", "")
             }
-            # v3.7.64: シフトパターン別の必要人数
-            cnt = p.get("count")
-            if cnt is not None:
+            # v3.7.69: 曜日別必要人数 (v3.7.66 で追加された count_weekday/weekend/holiday
+            # を初期化でコピーし忘れていた重大バグ修正)
+            # 旧 count は count_weekday 不在時のフォールバック専用
+            for key in ("count", "count_weekday", "count_weekend", "count_holiday"):
+                v = p.get(key)
+                if v is None:
+                    continue
                 try:
-                    cnt_int = int(cnt)
-                    if cnt_int >= 0:
-                        pat["count"] = cnt_int
+                    v_int = int(v)
+                    if v_int >= 0:
+                        pat[key] = v_int
                 except (ValueError, TypeError):
                     pass
             self.shift_patterns.append(pat)
