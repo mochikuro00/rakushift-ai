@@ -2720,6 +2720,25 @@ const app = {
                     } else {
                         slotReq = required;
                     }
+
+                    // v3.7.99: 過剰配置 ON のときは「補完シフト数」を slot_req に加算
+                    //   過剰許容モードでスタッフが追加配置されるが、これを「過剰」と
+                    //   表示しないため、本来の slot_req に補完分 (α) を上乗せして
+                    //   「ぴったり」判定にする。
+                    //   補完シフトは scheduler が reason に "補完" を含めて識別可能。
+                    if (this.state.config.allow_overstaffing) {
+                        // 補完シフトは reason / memo のいずれかに "補完" を含む
+                        const filledInSlot = shiftsForDay.filter(s => {
+                            const tag = (s.reason || '') + ' ' + (s.memo || '');
+                            if (!tag.includes('補完')) return false;
+                            const ss = toMins(s.start_time);
+                            let se = toMins(s.end_time);
+                            if (se <= ss) se += 24 * 60;
+                            return ss <= t && t < se;
+                        }).length;
+                        slotReq += filledInSlot;
+                    }
+
                     // time_staff_req (UI 廃止済みだが旧データ互換): max で上書き
                     timeRules.forEach(rule => {
                         const rs = toMins(rule.start);
@@ -2740,6 +2759,9 @@ const app = {
 
                     totalSlots++;
                     const slotDeficit = slotReq - concurrent;
+                    // v3.7.99: 過剰ON のとき過剰判定閾値を +1 → +3 に緩和
+                    // (補完シフトを reason で識別できなかった場合のフォールバック)
+                    const overThreshold = this.state.config.allow_overstaffing ? 3 : 1;
                     let status = 'ok';
                     if (slotDeficit > 0) {
                         status = 'under';
@@ -2748,10 +2770,9 @@ const app = {
                             worstDeficit = slotDeficit;
                             worstSlotReq = slotReq;
                         }
-                    } else if (concurrent > slotReq + 1) {
+                    } else if (concurrent > slotReq + overThreshold) {
                         status = 'over';
                         surplusSlots++;
-                        // v3.7.85: 過剰スロットでの最大超過数を追跡
                         const surplus = concurrent - slotReq;
                         if (surplus > worstSurplus) worstSurplus = surplus;
                     }
