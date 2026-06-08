@@ -2177,6 +2177,12 @@ class ShiftScheduler:
             logger.info("[Report] coverage_gaps={} open_close_gaps={}".format(
                 len(coverage_gaps), len(open_close_gaps)))
             logger.info("[Result] {} shifts".format(len(shifts)))
+
+            # v3.7.97: 過剰配置許容モード時の最低出勤日数 ランダム補完
+            if shifts and self.allow_overstaffing:
+                shifts = self._fill_to_min_days_random(shifts)
+                logger.info("[Result after fill] {} shifts".format(len(shifts)))
+
             return shifts if shifts else None
 
         except Exception as e:
@@ -2184,6 +2190,119 @@ class ShiftScheduler:
             import traceback
             traceback.print_exc()
             return None
+
+    # ===========================================================
+    # v3.7.97: 過剰配置許容モード時の最低出勤日数 ランダム補完
+    # ===========================================================
+    def _fill_to_min_days_random(self, shifts):
+        """allow_overstaffing=ON の場合、min_days_month / min_days_week に
+        足りていないスタッフを特定し、不足日数をランダムな営業日に追加配置。
+
+        スタッフ全員の min_days_month 達成を目指し、過剰配置を許容する設計。
+        各スタッフごとに:
+          1. 現在の出勤日数 (cur) を集計
+          2. shortage = max(0, min_days_month - cur)
+          3. shortage 日数を、まだ出勤していない日付からランダム選択
+          4. NG曜日 / 既存シフトと重複 / max_days_month を超えないよう
+             フィルタしながら追加
+        """
+        import random
+        random.seed()  # 毎回シード変更 (ランダム性確保)
+
+        if not shifts:
+            return shifts
+
+        # 1) 各スタッフの現状出勤日付集合
+        by_staff = {}
+        for s in shifts:
+            sid = s.get("staff_id")
+            d = s.get("date")
+            if sid and d:
+                by_staff.setdefault(sid, set()).add(d)
+
+        # 2) 不足者を特定
+        shortage_list = []  # [(sid, shortage_count)]
+        for staff in self.staff_list:
+            sid = staff["id"]
+            cur = len(by_staff.get(sid, set()))
+            min_target = int(staff.get("min_days_month") or 0)
+            max_target = int(staff.get("max_days_month") or 31)
+            if min_target > cur:
+                shortage = min_target - cur
+                # max_days_month を超えない範囲で
+                room = max_target - cur
+                shortage = min(shortage, room)
+                if shortage > 0:
+                    shortage_list.append((sid, shortage))
+
+        if not shortage_list:
+            logger.info("[FillRandom] no shortage staff")
+            return shifts
+
+        logger.info("[FillRandom] shortage staff: {}".format(
+            [(self._staff_map[sid].get("name", sid), n) for sid, n in shortage_list]))
+
+        # 3) 営業日のみのリスト
+        op_dates = [d for d in self.dates if self._get_day_type(d) != "closed"]
+
+        added = 0
+        for sid, shortage in shortage_list:
+            staff = self._staff_map.get(sid)
+            if not staff:
+                continue
+            ng_set = self._get_staff_ng_dates(staff)
+            already = by_staff.get(sid, set())
+
+            # 候補日: 営業日 - NG - 既存出勤
+            candidates = [d for d in op_dates
+                          if d not in already and d not in ng_set]
+            random.shuffle(candidates)
+
+            # 週最大日数も尊重
+            max_dw = int(staff.get("max_days_week") or 5)
+            week_count = {}  # iso week -> count
+            for d in already:
+                try:
+                    dt = datetime.strptime(d, "%Y-%m-%d")
+                    wk = "{}_{}".format(dt.year, dt.isocalendar()[1])
+                    week_count[wk] = week_count.get(wk, 0) + 1
+                except ValueError:
+                    pass
+
+            picked = 0
+            for d in candidates:
+                if picked >= shortage:
+                    break
+                try:
+                    dt = datetime.strptime(d, "%Y-%m-%d")
+                    wk = "{}_{}".format(dt.year, dt.isocalendar()[1])
+                except ValueError:
+                    continue
+                if week_count.get(wk, 0) >= max_dw:
+                    continue  # 週最大日数 超え
+
+                # シフトオプションをランダム選択
+                opts = self._build_shift_options(staff, d)
+                if not opts:
+                    continue
+                opt = random.choice(opts)
+                brk_mins = self._get_break_minutes(opt["hours"])
+                shifts.append({
+                    "staff_id": sid,
+                    "date": d,
+                    "start_time": opt["start"],
+                    "end_time": opt["end"],
+                    "break_minutes": brk_mins,
+                    "is_irregular": False,
+                    "reason": "過剰配置許容: 最低出勤日数 補完 (ランダム)",
+                })
+                week_count[wk] = week_count.get(wk, 0) + 1
+                already.add(d)
+                picked += 1
+                added += 1
+
+        logger.info("[FillRandom] added {} shifts".format(added))
+        return shifts
 
     # ===========================================================
     # バリデーション
