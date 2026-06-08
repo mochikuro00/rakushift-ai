@@ -5,6 +5,15 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger("rakushift.scheduler")
 
+# v3.7.85: 日本の祝日判定 (海の日など国民の祝日を holiday 扱いに)
+try:
+    import jpholiday
+    _JP_HOLIDAY_AVAILABLE = True
+except ImportError:
+    jpholiday = None
+    _JP_HOLIDAY_AVAILABLE = False
+    logger.warning("jpholiday module not available; only Sunday will be treated as holiday")
+
 class ShiftScheduler:
     """
     ラクシフトAI シフト最適化エンジン v3.0
@@ -441,6 +450,9 @@ class ShiftScheduler:
                 
         if js_dow in closed_ints:
             return "closed"
+        # v3.7.85: 日本の国民の祝日も holiday 扱い (海の日/スポーツの日 等)
+        if _JP_HOLIDAY_AVAILABLE and jpholiday.is_holiday(dt.date()):
+            return "holiday"
         if dt.weekday() == 6:  # 日曜
             return "holiday"
         if dt.weekday() == 5:  # 土曜

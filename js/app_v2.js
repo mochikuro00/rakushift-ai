@@ -2680,14 +2680,14 @@ const app = {
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
                 let totalSlots = 0;
                 let shortageSlots = 0;
-                let worstDeficit = 0; // 最悪の不足数（正値=不足あり）
+                let worstDeficit = 0;
                 let maxConcurrent = 0;
                 let minConcurrent = Number.POSITIVE_INFINITY;
                 let minConcurrentTime = '';
                 let worstSlotReq = required;
                 let maxSlotReq = required;
                 let surplusSlots = 0;
-                // v3.7.75: タイムストライプ用 slot 状態配列
+                let worstSurplus = 0; // v3.7.85: 過剰スロットでの最大超過数
                 const slotStates = [];
 
                 for (let t = openM; t < closeM; t += 15) {
@@ -2746,6 +2746,9 @@ const app = {
                     } else if (concurrent > slotReq + 1) {
                         status = 'over';
                         surplusSlots++;
+                        // v3.7.85: 過剰スロットでの最大超過数を追跡
+                        const surplus = concurrent - slotReq;
+                        if (surplus > worstSurplus) worstSurplus = surplus;
                     }
                     if (slotReq > maxSlotReq) maxSlotReq = slotReq;
                     if (concurrent > maxConcurrent) maxConcurrent = concurrent;
@@ -2824,7 +2827,8 @@ const app = {
                 } else if (surplusSlots > totalSlots / 3) {
                     cellBg = 'bg-amber-50';
                     summaryColor = 'text-amber-600';
-                    summary = `⚡ 過剰 +${maxConcurrent - maxSlotReq}名`;
+                    // v3.7.85: 過剰スロット内の最大超過数を表示 (旧: maxConcurrent - maxSlotReq で 0 になるケースを修正)
+                    summary = `⚡ 過剰 +${worstSurplus}名`;
                 } else {
                     summaryColor = 'text-green-600';
                     summary = `✓ ${maxConcurrent}名配置`;
