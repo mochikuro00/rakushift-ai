@@ -2662,8 +2662,11 @@ const app = {
                 const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(jsDow));
 
                 // v3.7.80: シフトパターン登録時はパターン外時間帯を「要件0」(scheduler.py と仕様揃え)
+                // v3.7.92: 国民の祝日 (海の日・スポーツの日等) も holiday 扱いに
                 const customShifts = this.state.config.custom_shifts || [];
-                const dayTypeForUi = (this.state.config.special_holidays || []).includes(dateStr)
+                const _jhUi = (typeof JapaneseHolidays !== 'undefined') ? JapaneseHolidays : null;
+                const isJpHolidayUi = _jhUi ? _jhUi.isHoliday(dateStr) : false;
+                const dayTypeForUi = (this.state.config.special_holidays || []).includes(dateStr) || isJpHolidayUi
                     ? 'holiday'
                     : (dayOfWeek === 0 ? 'holiday' : (dayOfWeek === 6 ? 'weekend' : 'weekday'));
                 const patCountKey = dayTypeForUi === 'holiday' ? 'count_holiday'
