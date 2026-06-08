@@ -3914,6 +3914,22 @@ const app = {
                             </div>
                         </div>
                         ${this._renderStaffingFeasibilityTip()}
+
+                        <!-- v3.7.91: 過剰配置トグル -->
+                        <div class="mt-6 pt-4 border-t border-gray-100">
+                            <h4 class="text-sm font-bold text-gray-700 mb-3">過剰配置ポリシー</h4>
+                            <label class="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+                                <input type="checkbox" id="settingAllowOverstaffing" class="w-5 h-5 mt-0.5 accent-amber-600" ${config.allow_overstaffing ? 'checked' : ''}>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-gray-800">⚡ 過剰配置を許容する</div>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <strong>OFF (推奨):</strong> 必要人数 <strong>ぴったり</strong>に配置 (過剰回避を最優先)<br>
+                                        <strong>ON:</strong> 必要人数より<strong>多めに配置</strong>を許容 (スタッフを多く入れたい場合)
+                                    </p>
+                                    <p class="text-[10px] text-amber-600 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>例: 「スタッフ全員を最低5日入れたいので、必要人数を超えても OK」 → ON にする</p>
+                                </div>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -4497,6 +4513,9 @@ const app = {
         // v3.7.67: 中休み時間 UI 廃止 → 常に空
         config.break_periods = {};
 
+        // v3.7.91: 過剰配置許容トグル
+        config.allow_overstaffing = !!document.getElementById('settingAllowOverstaffing')?.checked;
+
         // 定休日
         config.closed_days = Array.from(document.querySelectorAll('input[name="setting_closed_days"]:checked')).map(el => parseInt(el.value));
 
@@ -4750,6 +4769,8 @@ const app = {
                 break_rules: newConfig.break_rules,
                 shop_rules_text: newConfig.shop_rules_text,
                 custom_shifts: newConfig.custom_shifts,
+                // v3.7.91: 過剰配置トグル
+                allow_overstaffing: !!newConfig.allow_overstaffing,
             };
 
             const rpcRes = await API.rpc('update_config_by_contract', {
@@ -5523,6 +5544,11 @@ const app = {
             max_hours_day: Number((document.getElementById('staffMaxHoursPerDay')?.value || '')),
             min_days_week: Number((document.getElementById('staffMinDaysPerWeek')?.value || '')) || 0,
             min_days_month: Number((document.getElementById('staffMinDaysPerMonth')?.value || '')) || 0,
+            // v3.7.91: 月の最大出勤日数 (デフォルト 31 = 制限なし)
+            max_days_month: (() => {
+                const v = Number(document.getElementById('staffMaxDaysPerMonth')?.value);
+                return (Number.isFinite(v) && v >= 1 && v <= 31) ? v : 31;
+            })(),
             // 専用カラム (migration 50/51 で追加)
             shift_priority: shiftPriority,
             contract_type: contractType,
@@ -5712,6 +5738,10 @@ const app = {
         document.getElementById('staffMaxHoursPerDay').value = s.max_hours_day || 8;
         document.getElementById('staffMinDaysPerWeek').value = s.min_days_week || 0;
         document.getElementById('staffMinDaysPerMonth').value = s.min_days_month || 0;
+        // v3.7.91: 月の最大出勤日数 (デフォルト 31)
+        if (document.getElementById('staffMaxDaysPerMonth')) {
+            document.getElementById('staffMaxDaysPerMonth').value = s.max_days_month || 31;
+        }
         // v3.7.77: シフトパターン目標回数を復元
         this.renderStaffPatternTargets(s.pattern_target_counts || {});
         this.toggleSalaryInputs();

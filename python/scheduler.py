@@ -225,6 +225,8 @@ class ShiftScheduler:
         self.min_holiday = int(sr.get("min_holiday", 3))
         self.min_manager = int(sr.get("min_manager", 1))
         self.time_staff_req = self.config.get("time_staff_req", [])
+        # v3.7.91: 過剰配置を許容するか (false=必要人数ぴったり / true=緩和)
+        self.allow_overstaffing = bool(self.config.get("allow_overstaffing", False))
 
         # 休憩ルール（型安全性の向上）
         raw_rules = self.config.get("break_rules", [])
@@ -1256,6 +1258,16 @@ class ShiftScheduler:
                     if wv:
                         prob += pulp.lpSum(wv) <= effective_max_days
 
+                # --- v3.7.91: 月の最大出勤日数 (ハード制約) ---
+                max_days_month = int(s.get("max_days_month") or 31)
+                if max_days_month > 0 and max_days_month < 31:
+                    all_wv_mdm_max = []
+                    for d in self.dates:
+                        for oi in range(len(staff_opts.get((sid, d), []))):
+                            all_wv_mdm_max.append(x[(sid, d, oi)])
+                    if all_wv_mdm_max:
+                        prob += pulp.lpSum(all_wv_mdm_max) <= max_days_month
+
                 # --- 週の最低出勤日数 (全週ハード制約: 絶対遵守) ---
                 min_days_week = int(s.get("min_days_week") or 0)
                 if not force and min_days_week > 0:
@@ -1496,7 +1508,10 @@ class ShiftScheduler:
                             slack_over = pulp.LpVariable(
                                 "over_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += workers_sum - slack_over <= req
-                            penalty += slack_over * self.W.COVERAGE_OVER_SLOT
+                            # v3.7.91: 過剰配置許容トグル
+                            # allow_overstaffing=True → 1M (緩和) / False → 100M (厳格)
+                            over_weight = 1_000_000 if self.allow_overstaffing else self.W.COVERAGE_OVER_SLOT
+                            penalty += slack_over * over_weight
 
                 # --- v3.7.66: シフトパターン別必要人数制約 (曜日別 count) ---
                 for d in self.dates:
@@ -1530,15 +1545,15 @@ class ShiftScheduler:
                             pat_slack = pulp.LpVariable(
                                 "pat_{}_{}_{}".format(d, ps_min, pe_min), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(pat_workers) + pat_slack >= pat_count
-                            # v3.7.88: 50M → 100M (COVERAGE と同等) で「絶対ぴったり」
-                            # COVERAGE_UNDER (100M) と同等優先 → 物理的可能なら必ず達成
+                            # v3.7.88: 100M (COVERAGE と同等) で「絶対ぴったり」
                             penalty += pat_slack * 100_000_000
-                            # 過剰側も 100M でペナルティ → 設定人数を超えて配置しない
+                            # v3.7.91: 過剰側は allow_overstaffing トグルで切替
                             pat_over = pulp.LpVariable(
                                 "pat_over_{}_{}_{}".format(d, ps_min, pe_min),
                                 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(pat_workers) - pat_over <= pat_count
-                            penalty += pat_over * 100_000_000
+                            pat_over_weight = 1_000_000 if self.allow_overstaffing else 100_000_000
+                            penalty += pat_over * pat_over_weight
 
                 # --- v3.7.77: スタッフ別シフトパターン月間目標回数 (Tier 4 ソフト制約) ---
                 # staff.pattern_target_counts = { "早番": 3, "遅番": 3, ... }
