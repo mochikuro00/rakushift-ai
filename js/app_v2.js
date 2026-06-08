@@ -4352,17 +4352,53 @@ const app = {
     },
 
     async deleteShiftPattern(index) {
-        this.state.config = this.readSettingsFromDOM();
-        if (!Array.isArray(this.state.config.custom_shifts)) this.state.config.custom_shifts = [];
-        if (index < 0 || index >= this.state.config.custom_shifts.length) return;
-        this.state.config.custom_shifts.splice(index, 1);
+        // v3.7.79: readSettingsFromDOM (v3.7.71 で追加されたバリデーション
+        // フィルタにより空 name 行が除外される) を経由すると、未入力の新規
+        // 追加行があるとき DOM 上の index と配列 index がずれ、別のパターンが
+        // 削除される CRITICAL バグを修正。
+        // DOM 上の全パターン (空名前含む) を直接読み取り、index を保ったまま
+        // splice する。保存時のみバリデーションを適用。
+        const shiftNames    = document.querySelectorAll('.setting-shift-name');
+        const shiftStarts   = document.querySelectorAll('.setting-shift-start');
+        const shiftEnds     = document.querySelectorAll('.setting-shift-end');
+        const shiftCountsWd = document.querySelectorAll('.setting-shift-count-wd');
+        const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
+        const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
+
+        const parseCount = (input) => {
+            const v = Number(input?.value);
+            return Number.isFinite(v) && v >= 1 ? Math.min(v, 50) : 1;
+        };
+        const all = [];
+        shiftNames.forEach((el, i) => {
+            const cwd = parseCount(shiftCountsWd[i]);
+            const cwe = parseCount(shiftCountsWe[i]);
+            const chd = parseCount(shiftCountsHd[i]);
+            all.push({
+                name: (el.value || '').trim(),
+                start: (shiftStarts[i]?.value || '').trim(),
+                end: (shiftEnds[i]?.value || '').trim(),
+                count_weekday: cwd,
+                count_weekend: cwe,
+                count_holiday: chd,
+                count: cwd,
+            });
+        });
+
+        if (index < 0 || index >= all.length) return;
+        all.splice(index, 1);
+        this.state.config.custom_shifts = all;
         this.renderSettings(document.getElementById('viewContainer'));
+
+        // 保存時のみ readSettingsFromDOM と同じバリデーションを適用
+        const validForSave = all.filter(p =>
+            p.name && p.start && p.end && p.start !== p.end);
         try {
             const cid = this._getContractId();
             if (cid) {
                 await API.rpc('update_config_by_contract', {
                     p_contract_id: cid,
-                    p_data: { custom_shifts: this.state.config.custom_shifts }
+                    p_data: { custom_shifts: validForSave }
                 });
                 this.showToast('シフトパターンを削除しました', 'success');
             }
