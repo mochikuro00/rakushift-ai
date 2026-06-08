@@ -2835,18 +2835,21 @@ const app = {
                 }
 
                 const animateCls = shortageSlots > 0 ? 'animate-pulse' : '';
-                // v3.7.86: 不足セルクリック → 原因分析モーダル
-                const clickAction = shortageSlots > 0
-                    ? `onclick="app.showShortageReason('${dateStr}', '${minConcurrentTime}', ${worstSlotReq}, ${minConcurrent})"`
+                // v3.7.87: 不足セルクリック → 原因分析モーダル
+                // ストライプ div の pointer-events:none で onclick 妨害を回避
+                const isShort = shortageSlots > 0;
+                const clickHandler = isShort
+                    ? `app.showShortageReason('${dateStr}', '${minConcurrentTime}', ${worstSlotReq}, ${minConcurrent}); event.stopPropagation();`
                     : '';
-                const cursor = shortageSlots > 0 ? 'cursor:pointer;' : '';
-                cellContent = `<div class="flex flex-col h-full w-full px-0.5 py-0.5 overflow-hidden gap-0.5">
-                    <div class="flex h-2 rounded-sm overflow-hidden border border-gray-200">${stripeHtml}</div>
+                cellContent = `<div class="flex flex-col h-full w-full px-0.5 py-0.5 overflow-hidden gap-0.5" style="pointer-events:none;">
+                    <div class="flex h-2 rounded-sm overflow-hidden border border-gray-200" style="pointer-events:none;">${stripeHtml}</div>
                     <div class="flex items-center justify-center flex-1">
                         <span class="${summaryColor} font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter ${animateCls}">${summary}${dupNote}</span>
                     </div>
                 </div>`;
-                alertRowHtml += `<td style="${cursor}" class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center" ${clickAction}>${cellContent}</td>`;
+                const cellStyle = isShort ? 'cursor:pointer;' : '';
+                const cellAttr = isShort ? `onclick="${clickHandler}" title="クリックで不足原因を表示"` : '';
+                alertRowHtml += `<td style="${cellStyle}" class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center" ${cellAttr}>${cellContent}</td>`;
             });
             alertRowHtml += `</tr>`;
         }
