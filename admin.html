@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ラクシフトAI - 運営管理画面</title>
-    <!-- Security Headers -->
+    <!-- Security Headers (v3.7.76: X-Frame-Options/frame-ancestors は _headers に集約) -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <meta http-equiv="X-Frame-Options" content="DENY">
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
         script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
@@ -15,7 +14,6 @@
         font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:;
         img-src 'self' data: blob: https:;
         connect-src 'self' https://*.supabase.co https://*.up.railway.app https://*.railway.app https://api.stripe.com;
-        frame-ancestors 'none';
         base-uri 'self';
         form-action 'self';
     ">

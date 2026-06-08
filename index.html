@@ -6,13 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, user-scalable=yes">
     <title>ラクシフトAI - AIシフト管理システム</title>
     <!-- Security Headers -->
+    <!-- v3.7.76: X-Frame-Options と frame-ancestors は HTTP ヘッダで指定する仕様。
+         _headers ファイルで設定済みのため <meta> 版は削除しブラウザコンソール
+         エラー (「meta では設定不可」) を解消。 -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <meta http-equiv="X-Frame-Options" content="DENY">
     <!-- Content Security Policy: XSS 被害を構造的に縮小する。
          tailwindcss CDN は inline-style を生成するため style-src に 'unsafe-inline' は許可。
-         script-src の 'unsafe-inline' は admin.html 等の inline script で必要。
-         将来 inline script を撤去できれば script-src から 'unsafe-inline' を外せる。-->
+         script-src の 'unsafe-inline' は admin.html 等の inline script で必要。-->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
         script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
@@ -20,7 +21,6 @@
         font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:;
         img-src 'self' data: blob: https:;
         connect-src 'self' https://*.supabase.co https://*.up.railway.app https://*.railway.app https://api.stripe.com;
-        frame-ancestors 'none';
         base-uri 'self';
         form-action 'self';
     ">
