@@ -1363,16 +1363,11 @@ class ShiftScheduler:
                         pass
 
                 # --- 週40時間上限 (労基法32条) ---
-                if not force:
-                    for week in week_groups:
-                        hours_expr = pulp.LpAffineExpression()
-                        has_vars = False
-                        for d in week:
-                            for oi, opt in enumerate(staff_opts.get((sid, d), [])):
-                                hours_expr += x[(sid, d, oi)] * opt["work_hours"]
-                                has_vars = True
-                        if has_vars:
-                            prob += hours_expr <= self.LEGAL_MAX_HOURS_WEEK
+                # v3.7.90: ユーザー指示により撤廃。
+                # 変形労働時間制等の運用 / シフト柔軟性を優先するため、
+                # 週40時間 ハード制約は削除。
+                # 注: 1日 max_hours_day (個別設定) と 連続勤務6日上限 (35条) は維持。
+                # 労基法32条遵守のためには店舗運用ルール側で管理してください。
 
                 # --- 連続勤務6日上限 (労基法35条: 週1日の休日) ---
                 # v3.6: 日付ギャップ考慮。
@@ -2277,11 +2272,9 @@ class ShiftScheduler:
                             raw_hrs = (em - sm) / 60.0
                             brk = self._get_break_minutes(raw_hrs) / 60.0
                             total_hours += (raw_hrs - brk)
-                if total_hours > self.LEGAL_MAX_HOURS_WEEK:
-                    logger.info("  VIOLATION: {} week {} hours={:.1f} > {}".format(
-                        s.get("name", sid), week[0], total_hours,
-                        self.LEGAL_MAX_HOURS_WEEK))
-                    violations += 1
+                # v3.7.90: 週40h 違反検出を撤廃 (制約自体を削除したため警告も無効化)
+                # 必要なら店舗運用ルール側で別途モニターしてください
+                pass
 
         # NG日検証
         for s in self.staff_list:
@@ -2608,8 +2601,8 @@ class ShiftScheduler:
                             sh_start = self._to_minutes(sh["start_time"])
                             sh_end = self._normalize_end_time(sh_start, self._to_minutes(sh["end_time"]))
                             existing_hours += (sh_end - sh_start) / 60.0 - (sh.get("break_minutes", 0) / 60.0)
-                    if existing_hours + opt["work_hours"] > self.LEGAL_MAX_HOURS_WEEK:
-                        continue
+                    # v3.7.90: 週40h チェックを撤廃
+                    pass
 
                     brk = self._get_break_minutes(opt["hours"])
                     shifts.append({
@@ -2635,10 +2628,9 @@ class ShiftScheduler:
         if cur_days >= md:
             return True  # 週最大日数超過
 
-        cur_hours = weekly_hours.get(sid, {}).get(wk, 0)
-        max_hours = float(staff.get("max_hours_day") or self.LEGAL_MAX_HOURS_DAY)
-        if cur_hours + max_hours > self.LEGAL_MAX_HOURS_WEEK:
-            return True  # 週40時間超過の可能性
+        # v3.7.90: 週40h チェックを撤廃 (制約自体を削除したため)
+        # 1日 max_hours_day は維持
+        _ = weekly_hours  # 互換のため引数受け取りは継続
 
         cur_consec = consecutive.get(sid, 0)
         if cur_consec >= self.LEGAL_MAX_CONSECUTIVE_DAYS:
