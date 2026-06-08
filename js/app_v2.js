@@ -5158,6 +5158,42 @@ const app = {
             const cb = document.getElementById('prefDay'+i);
             if(cb) cb.checked = true;
         }
+        // v3.7.77: シフトパターン目標回数 (新規スタッフは空)
+        this.renderStaffPatternTargets({});
+    },
+
+    // v3.7.77: シフトパターン別月間目標回数の動的描画
+    renderStaffPatternTargets(targets) {
+        const container = document.getElementById('staffPatternTargetsContainer');
+        if (!container) return;
+        const patterns = this.state.config.custom_shifts || [];
+        if (patterns.length === 0) {
+            container.innerHTML = `<p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>`;
+            return;
+        }
+        const safeTargets = (targets && typeof targets === 'object') ? targets : {};
+        container.innerHTML = patterns.map((pat, idx) => {
+            const name = this._sanitize(pat.name || `パターン${idx+1}`);
+            const start = this._sanitize(pat.start || '');
+            const end = this._sanitize(pat.end || '');
+            const key = pat.name || `pattern_${idx}`;
+            const val = safeTargets[key] != null ? Number(safeTargets[key]) : '';
+            return `
+                <div class="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-teal-700">${name}</div>
+                        <div class="text-[10px] text-gray-500">${start} - ${end}</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <input type="number" min="0" max="31" step="1"
+                            data-pattern-target="${this._sanitize(key)}"
+                            class="setting-staff-pattern-target w-16 px-2 py-1.5 text-sm font-bold text-center border border-gray-300 rounded-lg"
+                            value="${val}" placeholder="0">
+                        <span class="text-xs text-gray-500">回/月</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
     },
     
     updateStaffRoleSelect() {
@@ -5303,6 +5339,16 @@ const app = {
             if (cb && !cb.checked) ngWeekdays.push(i);
         }
 
+        // v3.7.77: シフトパターン別月間目標回数を収集
+        const patternTargets = {};
+        document.querySelectorAll('.setting-staff-pattern-target').forEach(el => {
+            const key = el.getAttribute('data-pattern-target');
+            const v = Number(el.value);
+            if (key && Number.isFinite(v) && v > 0) {
+                patternTargets[key] = Math.min(Math.floor(v), 31);
+            }
+        });
+
         const data = {
             name: (document.getElementById('staffName')?.value || ''),
             role: (document.getElementById('staffRole')?.value || ''),
@@ -5324,6 +5370,8 @@ const app = {
             req_pairs: reqPairs || null,
             position: position,
             ng_weekdays: ngWeekdays,
+            // v3.7.77: シフトパターン別月間目標回数
+            pattern_target_counts: patternTargets,
             contract_id: contractId
         };
 
@@ -5501,6 +5549,8 @@ const app = {
         document.getElementById('staffMaxHoursPerDay').value = s.max_hours_day || 8;
         document.getElementById('staffMinDaysPerWeek').value = s.min_days_week || 0;
         document.getElementById('staffMinDaysPerMonth').value = s.min_days_month || 0;
+        // v3.7.77: シフトパターン目標回数を復元
+        this.renderStaffPatternTargets(s.pattern_target_counts || {});
         this.toggleSalaryInputs();
         this.togglePrefHoursInputs();
         this.openModal('staffModal');

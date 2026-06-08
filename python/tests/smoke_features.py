@@ -212,6 +212,40 @@ def test_9_off_request():
     return ok
 
 
+def test_10_pattern_target():
+    print("\n=== 10. パターン別月間目標回数 (v3.7.77) ===")
+    cfg = base_config('09:00', '22:00', [
+        {'name': '早番', 'start': '09:00', 'end': '15:00',
+         'count_weekday': 1, 'count_weekend': 1, 'count_holiday': 1, 'count': 1},
+        {'name': '遅番', 'start': '15:00', 'end': '22:00',
+         'count_weekday': 1, 'count_weekend': 1, 'count_holiday': 1, 'count': 1},
+    ])
+    staff = base_staff(3, max_h=8, max_d=7)
+    # s0 は早番に3回入りたい / s1 は遅番に3回入りたい / s2 は指定なし
+    staff[0]['pattern_target_counts'] = {'早番': 3, '遅番': 0}
+    staff[1]['pattern_target_counts'] = {'早番': 0, '遅番': 3}
+    dates = [f'2026-06-{d:02d}' for d in range(8, 15)]  # 月-日
+    result = run_solve(cfg, staff, dates)
+    s0_haya = sum(1 for s in result
+                  if s['staff_id'] == 's0'
+                  and s['start_time'][:5] == '09:00' and s['end_time'][:5] == '15:00')
+    s0_oso = sum(1 for s in result
+                 if s['staff_id'] == 's0'
+                 and s['start_time'][:5] == '15:00' and s['end_time'][:5] == '22:00')
+    s1_haya = sum(1 for s in result
+                  if s['staff_id'] == 's1'
+                  and s['start_time'][:5] == '09:00' and s['end_time'][:5] == '15:00')
+    s1_oso = sum(1 for s in result
+                 if s['staff_id'] == 's1'
+                 and s['start_time'][:5] == '15:00' and s['end_time'][:5] == '22:00')
+    print(f"  s0: 早番{s0_haya}回 / 遅番{s0_oso}回 (目標 早3/遅0)")
+    print(f"  s1: 早番{s1_haya}回 / 遅番{s1_oso}回 (目標 早0/遅3)")
+    # s0 は早番にしか入らない方が好まれる、s1 は遅番にしか入らない方が好まれる
+    ok = s0_haya >= s0_oso and s1_oso >= s1_haya
+    print("  ", "✅ PASS" if ok else "❌ FAIL")
+    return ok
+
+
 if __name__ == '__main__':
     results = {}
     tests = [
@@ -223,6 +257,7 @@ if __name__ == '__main__':
         ('6.人員過剰', test_6_overstaffed),
         ('8.ペア', test_8_pair),
         ('9.休み希望', test_9_off_request),
+        ('10.パターン目標', test_10_pattern_target),
     ]
     for name, fn in tests:
         try:

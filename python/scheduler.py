@@ -1503,6 +1503,50 @@ class ShiftScheduler:
                             # Tier 2 (10M): パターン別必要人数の達成
                             penalty += pat_slack * 10_000_000
 
+                # --- v3.7.77: スタッフ別シフトパターン月間目標回数 (Tier 4 ソフト制約) ---
+                # staff.pattern_target_counts = { "早番": 3, "遅番": 3, ... }
+                # 各スタッフが当該パターンに配置される回数と目標値の差分にペナルティ
+                # 集計対象は MILP の対象日付範囲のみ (= ユーザーが「今月」を生成する場合の月間)
+                for staff in self.staff_list:
+                    targets = staff.get("pattern_target_counts") or {}
+                    if not isinstance(targets, dict) or not targets:
+                        continue
+                    sid = staff["id"]
+                    for pat in self.shift_patterns:
+                        key = pat.get("name") or ""
+                        target_raw = targets.get(key)
+                        if target_raw is None:
+                            continue
+                        try:
+                            target = int(target_raw)
+                        except (ValueError, TypeError):
+                            continue
+                        if target <= 0:
+                            continue
+                        ps_min = self._to_minutes(pat["start"])
+                        pe_min = self._normalize_end_time(
+                            ps_min, self._to_minutes(pat["end"]))
+                        if ps_min >= pe_min:
+                            continue
+                        pat_vars = []
+                        for d in self.dates:
+                            if self._get_day_type(d) == "closed":
+                                continue
+                            for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                                if opt["start_min"] == ps_min and opt["end_min"] == pe_min:
+                                    pat_vars.append(x[(sid, d, oi)])
+                        if not pat_vars:
+                            continue
+                        diff_pos = pulp.LpVariable(
+                            "pat_tgt_pos_{}_{}".format(sid, ps_min),
+                            0, None, pulp.LpInteger)
+                        diff_neg = pulp.LpVariable(
+                            "pat_tgt_neg_{}_{}".format(sid, ps_min),
+                            0, None, pulp.LpInteger)
+                        prob += pulp.lpSum(pat_vars) - target == diff_pos - diff_neg
+                        # Tier 4 (500k): 目標値からの差分 1 回あたりのペナルティ
+                        penalty += (diff_pos + diff_neg) * 500_000
+
                 # --- 社員常駐制約 (v3.7.16: 管理者限定→「社員 (月給+店長) 1名以上」に変更) ---
                 # 全時間帯で月給制 or 店長のうち1名以上を出勤させる
                 for d in self.dates:

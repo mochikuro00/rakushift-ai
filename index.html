@@ -1025,6 +1025,16 @@
                     </div>
                 </div>
 
+                <!-- v3.7.77: シフトパターン別 月間目標回数 -->
+                <div class="border-t border-gray-100 pt-4 mt-2">
+                    <h4 class="text-sm font-bold text-teal-600 mb-2"><i class="fa-solid fa-shuffle"></i> シフトパターン別 月間目標回数</h4>
+                    <p class="text-xs text-gray-500 mb-3">このスタッフを、各シフトパターンに月何回入れたいかを指定します。例: 早番 3回、遅番 3回、夜勤 3回。空欄なら自動配置 (制約なし)。</p>
+                    <div id="staffPatternTargetsContainer" class="space-y-2">
+                        <!-- JS で config.custom_shifts に基づき動的描画 -->
+                        <p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>
+                    </div>
+                </div>
+
                 <div class="border-t border-gray-100 pt-4 mt-2">
                     <h4 class="text-sm font-bold text-purple-600 mb-3"><i class="fa-solid fa-users"></i> 人間関係コントロール (AI自動調整用)</h4>
                     <div class="mb-2">
