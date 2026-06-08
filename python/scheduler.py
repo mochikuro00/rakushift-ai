@@ -2281,11 +2281,29 @@ class ShiftScheduler:
                 if week_count.get(wk, 0) >= max_dw:
                     continue  # 週最大日数 超え
 
-                # シフトオプションをランダム選択
+                # v3.7.98: 「パターン時間ぴったり一致」する opt のみを優先採用。
+                # 分割版 opt (通し 09-22 → 09-18 / 12-22) を使うと UI の
+                # pattern_sum 計算とズレ、人員状況が「正常じゃない」表示になる。
                 opts = self._build_shift_options(staff, d)
                 if not opts:
                     continue
-                opt = random.choice(opts)
+                pat_min_set = set()
+                for pat in self.shift_patterns:
+                    pps = self._to_minutes(pat.get("start", "09:00"))
+                    ppe = self._normalize_end_time(
+                        pps, self._to_minutes(pat.get("end", "18:00")))
+                    if pps < ppe:
+                        pat_min_set.add((pps, ppe))
+                matched = [o for o in opts
+                           if (o["start_min"], o["end_min"]) in pat_min_set]
+                if matched:
+                    opt = random.choice(matched)
+                elif opts:
+                    # パターン一致が無ければスキップ (分割版を使わない)
+                    continue
+                else:
+                    continue
+
                 brk_mins = self._get_break_minutes(opt["hours"])
                 shifts.append({
                     "staff_id": sid,
