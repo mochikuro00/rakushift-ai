@@ -1273,19 +1273,22 @@ class ShiftScheduler:
                         if wv:
                             effective_min = min(min_days_week, available_days_in_week, max_days)
                             if effective_min > 0:
-                                # v3.7.46: 月給スタッフは強く達成必須 (1M/日)
-                                # 時給スタッフは希望事項のまま (30k/日)
-                                mdw_slack = pulp.LpVariable(
-                                    "mdw_{}_{}".format(sid, week[0] if week else "x"),
-                                    0, None, pulp.LpInteger)
-                                prob += pulp.lpSum(wv) + mdw_slack >= effective_min
                                 is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
+                                # v3.7.89: 月給スタッフは ハード制約 (min_days_month と一貫)
+                                # 旧: 月給 1M ペナルティ → パターン100M/COVERAGE100M に負けて
+                                #   ユーザー設定の週N日が達成されないケースが頻発
+                                # 新: ハード制約で必ず達成 (effective_min は available_days で
+                                #   抑制済みなので infeasible リスクなし)
                                 if is_monthly:
-                                    # v3.7.47 [Tier 3]: 月給 min_days_week 1M (重要)
-                                    penalty += mdw_slack * 1_000_000
+                                    prob += pulp.lpSum(wv) >= effective_min
                                 else:
-                                    # [Tier 5]: 時給 30k
-                                    penalty += mdw_slack * 30_000
+                                    # 時給はソフト制約だが 30k → 1M に強化
+                                    # (時間帯柔軟性は維持しつつ達成優先度を上げる)
+                                    mdw_slack = pulp.LpVariable(
+                                        "mdw_{}_{}".format(sid, week[0] if week else "x"),
+                                        0, None, pulp.LpInteger)
+                                    prob += pulp.lpSum(wv) + mdw_slack >= effective_min
+                                    penalty += mdw_slack * 1_000_000
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
