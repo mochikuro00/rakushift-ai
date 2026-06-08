@@ -262,15 +262,26 @@ class ShiftScheduler:
                 rid = str(r.get("id", "")).lower()
                 level = r.get("level")
                 color = str(r.get("color", "")).lower()
+                is_manager_flag = r.get("is_manager")
                 if not rid:
                     continue
-                # level >= 4 (店長級) または color=purple/red はメンター扱い
-                if (isinstance(level, (int, float)) and level >= 4) or color in ("purple", "red"):
+                # v3.7.81: 明示的な is_manager フラグが最優先
+                #   True  → メンター + employee に追加
+                #   False → デフォルト判定をスキップ
+                #   None  → 旧データ互換で level/color から推定
+                if is_manager_flag is True:
                     custom_mentor_ids.add(rid)
-                # level >= 3 (社員/管理者級) または color=purple/red/green は employee 扱い
-                if (isinstance(level, (int, float)) and level >= 3) or color in ("purple", "red", "green"):
                     custom_employee_role_ids.add(rid)
-                # level == 1 (新人級) または color=yellow は rookie 候補
+                elif is_manager_flag is False:
+                    # 明示的に管理者でないと指定された場合は追加しない
+                    pass
+                else:
+                    # 旧データ互換: level/color から推定
+                    if (isinstance(level, (int, float)) and level >= 4) or color in ("purple", "red"):
+                        custom_mentor_ids.add(rid)
+                    if (isinstance(level, (int, float)) and level >= 3) or color in ("purple", "red", "green"):
+                        custom_employee_role_ids.add(rid)
+                # rookie 判定は is_manager に関係なく
                 if (isinstance(level, (int, float)) and level <= 1) or color == "yellow":
                     custom_rookie_ids.add(rid)
         self._mentor_role_ids = custom_mentor_ids

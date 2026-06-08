@@ -2482,10 +2482,8 @@ const app = {
 
                 let content = '';
                 if (shift) {
-                    const startH = parseInt(shift.start_time);
-                    let barColor = 'bg-blue-100 text-blue-700 border-blue-500'; // base
-                    if (startH < 10) barColor = 'bg-yellow-100 text-yellow-800 border-yellow-500';
-                    if (startH >= 17) barColor = 'bg-purple-100 text-purple-700 border-purple-500';
+                    // v3.7.81: シフトパターン名 + パターンインデックスで色分け
+                    let barColor = this._getShiftBarColor(shift, this.state.config.custom_shifts || []);
                     
                     // イレギュラーアサイン（社員の強制アサイン等）の強調
                     if (shift.is_irregular) {
@@ -3606,11 +3604,17 @@ const app = {
                                         <th class="p-3 rounded-l-lg">役職名</th>
                                         <th class="p-3">識別ID</th>
                                         <th class="p-3">バッジカラー</th>
+                                        <th class="p-3 text-center">管理者<br><span class="text-[9px] text-gray-400">として認識</span></th>
                                         <th class="p-3 text-right rounded-r-lg">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100" id="rolesBody">
-                                    ${roles.map((role, index) => `
+                                    ${roles.map((role, index) => {
+                                        // v3.7.81: 明示的な is_manager フラグ (旧データは color/id から推定)
+                                        const inferred = (role.color === 'purple' || role.color === 'red' || role.color === 'green'
+                                                       || role.id === 'manager' || role.id === 'sub_manager' || role.id === 'employee');
+                                        const isMgr = role.is_manager != null ? !!role.is_manager : inferred;
+                                        return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-2">
                                                 <input type="text" class="setting-role-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${role.name}" placeholder="役職名">
@@ -3628,13 +3632,19 @@ const app = {
                                                     <option value="gray" ${role.color==='gray'?'selected':''}>灰 (Other)</option>
                                                 </select>
                                             </td>
+                                            <td class="p-2 text-center">
+                                                <label class="inline-flex items-center justify-center cursor-pointer" title="チェックを入れると、この役職のスタッフは「管理者最低人数」の対象になります">
+                                                    <input type="checkbox" class="setting-role-is-manager w-5 h-5 accent-indigo-600" ${isMgr?'checked':''}>
+                                                </label>
+                                            </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteRole(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition" ${role.id==='manager'||role.id==='staff'?'title="基本役職 (AIシフト生成で内部参照されます)。削除には確認が必要"':''}>
                                                     <i class="fa-solid fa-trash"></i>
                                                 </button>
                                             </td>
                                         </tr>
-                                    `).join('')}
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
                         </div>
@@ -4462,6 +4472,7 @@ const app = {
         const roleNames = document.querySelectorAll('.setting-role-name');
         const roleIds = document.querySelectorAll('.setting-role-id');
         const roleColors = document.querySelectorAll('.setting-role-color');
+        const roleIsManagers = document.querySelectorAll('.setting-role-is-manager');
 
         const existingRoles = this.state.config.roles || [];
         config.roles = [];
@@ -4473,7 +4484,9 @@ const app = {
                     id: rId,
                     name: el.value,
                     color: roleColors[i].value,
-                    level: prev ? prev.level : 1
+                    level: prev ? prev.level : 1,
+                    // v3.7.81: 明示的な管理者フラグ
+                    is_manager: roleIsManagers[i] ? !!roleIsManagers[i].checked : false,
                 });
             }
         });
@@ -4976,6 +4989,70 @@ const app = {
     // ユーザー要望「ドロップダウンではなく打ち込み出来るように」を反映。
     // step="60" で 1分刻み (打ち込み自由)。class 名 (setting-shift-start 等) は
     // 呼び出し側の querySelectorAll で参照するため保持。
+    /**
+     * v3.7.81: シフトパターンを参照してバーの色を決定。
+     *   1) shift の時間範囲と一致するパターンを探す
+     *   2) パターン名で名称マッチ (早番/遅番/夜勤/通し)
+     *   3) マッチしなければパターン登録順のパレット
+     *   4) パターンが見つからなければ開始時刻ベースのフォールバック
+     */
+    _getShiftBarColor(shift, customShifts) {
+        const PALETTE = [
+            'bg-yellow-100 text-yellow-800 border-yellow-500',  // 0: 早番想定 (yellow)
+            'bg-purple-100 text-purple-700 border-purple-500',  // 1: 遅番想定 (purple)
+            'bg-sky-100 text-sky-700 border-sky-500',           // 2: 中番想定 (sky)
+            'bg-indigo-200 text-indigo-800 border-indigo-600',  // 3: 夜勤想定 (indigo dark)
+            'bg-emerald-100 text-emerald-700 border-emerald-500', // 4: 通し想定 (emerald)
+            'bg-pink-100 text-pink-700 border-pink-500',        // 5
+            'bg-orange-100 text-orange-700 border-orange-500',  // 6
+            'bg-teal-100 text-teal-700 border-teal-500',        // 7
+        ];
+        const NAME_COLOR_MAP = [
+            { kw: ['早', '朝', 'モーニング', 'morning', 'early'],   color: PALETTE[0] },
+            { kw: ['遅', '夕', 'イブニング', 'evening', 'late'],     color: PALETTE[1] },
+            { kw: ['中', '昼', 'ランチ', 'mid', 'middle', 'lunch'], color: PALETTE[2] },
+            { kw: ['夜勤', '深夜', '夜', 'ナイト', 'night'],          color: PALETTE[3] },
+            { kw: ['通し', '全日', 'フル', 'full'],                  color: PALETTE[4] },
+        ];
+
+        // 1) 時間範囲一致でパターン特定
+        const sStart = (shift.start_time || '').slice(0, 5);
+        const sEnd = (shift.end_time || '').slice(0, 5);
+        let matchedIdx = -1;
+        let matchedName = '';
+        customShifts.forEach((p, i) => {
+            const pStart = (p.start || '').slice(0, 5);
+            const pEnd = (p.end || '').slice(0, 5);
+            if (pStart && pEnd && pStart === sStart && pEnd === sEnd) {
+                matchedIdx = i;
+                matchedName = (p.name || '').toLowerCase();
+            }
+        });
+
+        // 2) 名称マッチ優先 (より特定的なほうから)
+        if (matchedName) {
+            // 夜勤を先にチェック (夜 だけだと遅番にマッチしてしまうため)
+            const orderedMap = [NAME_COLOR_MAP[3], NAME_COLOR_MAP[4], NAME_COLOR_MAP[0],
+                                NAME_COLOR_MAP[2], NAME_COLOR_MAP[1]];
+            for (const rule of orderedMap) {
+                if (rule.kw.some(k => matchedName.includes(k.toLowerCase()))) {
+                    return rule.color;
+                }
+            }
+        }
+
+        // 3) パターンインデックスベース
+        if (matchedIdx >= 0) {
+            return PALETTE[matchedIdx % PALETTE.length];
+        }
+
+        // 4) フォールバック (旧 v3.7.80 までの動作)
+        const startH = parseInt(sStart);
+        if (startH < 10) return PALETTE[0];
+        if (startH >= 17) return PALETTE[1];
+        return 'bg-blue-100 text-blue-700 border-blue-500';
+    },
+
     get15MinTimeSelect(currentVal, id, className) {
         const normalizedVal = currentVal ? currentVal.substr(0, 5) : '';
         const idAttr = id ? `id="${id}"` : '';
