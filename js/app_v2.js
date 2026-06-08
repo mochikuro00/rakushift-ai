@@ -7487,6 +7487,21 @@ const app = {
                             <li>・現在のシフトをリセットして再構築</li>
                         </ul>
                     </div>
+                    <!-- v3.7.96: 不足セルクリック → 原因分析モーダル の説明 -->
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+                        <p class="text-xs font-bold text-amber-800 mb-1"><i class="fa-solid fa-circle-question mr-1"></i>「不足」が出たら クリックで原因を確認</p>
+                        <p class="text-xs text-amber-700 leading-relaxed">
+                            シフト表の <strong>「⚠ 不足N名」</strong> セルをクリックすると、
+                            その日その時刻に「入れていないスタッフ」を以下のように分類表示します:
+                        </p>
+                        <ul class="text-xs text-amber-700 mt-1 space-y-0.5 list-disc list-inside ml-2">
+                            <li>✓ 在籍中 / ⏰ 別時間帯で勤務中 (シフト延長で配置可能)</li>
+                            <li>🏖 承認済み休み希望 (却下で配置可能)</li>
+                            <li>📅 NG曜日 (出勤不可)</li>
+                            <li>⏳ 希望時間帯外 (希望時間の見直し)</li>
+                            <li>? その他/週月上限到達</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -7496,8 +7511,8 @@ const app = {
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条項</th><th class="p-2 text-left border">内容</th><th class="p-2 text-left border">システムの制御</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">1日8時間以内</td><td class="p-2 border">スタッフ個別設定で上書き可</td></tr>
-                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">週40時間以内</td><td class="p-2 border">自動計算で制限</td></tr>
+                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">1日8時間以内</td><td class="p-2 border">スタッフ個別設定で上書き可 (1日最大時間)</td></tr>
+                        <tr class="bg-amber-50"><td class="p-2 border">労基法32条</td><td class="p-2 border">週40時間以内</td><td class="p-2 border text-amber-700 text-xs"><strong>v3.7.90で撤廃</strong>: 変形労働時間制対応のためシステム側 自動制限を解除。店舗運用ルール側で管理してください。</td></tr>
                         <tr><td class="p-2 border">労基法34条</td><td class="p-2 border">6h超→45分休憩、8h超→60分休憩</td><td class="p-2 border">自動付与（設定変更可）</td></tr>
                         <tr><td class="p-2 border">労基法35条</td><td class="p-2 border">週1日以上の休日（連続6日まで）</td><td class="p-2 border">自動遵守</td></tr>
                     </tbody>
@@ -7540,8 +7555,8 @@ const app = {
                     
                     <div class="border-l-4 border-indigo-400 pl-4 py-1">
                         <h4 class="font-bold text-indigo-700 text-base mb-1">1. 役職・ロール設定</h4>
-                        <p>スタッフの肩書き（店長・副店長・社員など）を自由にカスタマイズし、バッジの色を設定できます。また、各役職がシステムの裏側でどの「識別ID（Manager/Sub-Manager/Staffなど）」として扱われるかを決定します。</p>
-                        <p class="text-xs text-gray-500 mt-1">※AIは「Manager」や「Sub-Manager」を管理者として扱い、店舗を空にしないよう必ず配置します。</p>
+                        <p>スタッフの肩書き（店長・副店長・社員など）を自由にカスタマイズし、バッジの色を設定できます。各役職に「管理者として認識」チェックを付けると、AIは その役職のスタッフを <strong>管理者最低人数</strong> の対象として扱います。</p>
+                        <p class="text-xs text-gray-500 mt-1">※ チェック OFF の役職は管理者カウントから外れます。未設定の場合は紫/赤/緑のバッジカラーから自動判定 (後方互換)。</p>
                     </div>
 
                     <div class="border-l-4 border-blue-400 pl-4 py-1">
@@ -7563,10 +7578,41 @@ const app = {
                         <p class="text-xs text-amber-700 font-bold mt-1">※ 人数は必須入力です (最少1名)。プリセット (飲食店向け・オフィス向け等) からの一括追加もできます。</p>
                     </div>
 
+                    <!-- v3.7.96: 過剰配置トグル の説明 -->
+                    <div class="border-l-4 border-amber-400 pl-4 py-1">
+                        <h4 class="font-bold text-amber-700 text-base mb-1">4.5. 過剰配置ポリシー (v3.7.91+)</h4>
+                        <p>人員配置要件セクションの下に「⚡ 過剰配置を許容する」チェックがあります:</p>
+                        <ul class="text-xs text-gray-700 mt-1 list-disc list-inside ml-2 leading-relaxed">
+                            <li><strong>OFF (推奨):</strong> 必要人数 <strong>ぴったり</strong>に配置 (過剰回避を最優先)</li>
+                            <li><strong>ON:</strong> 必要人数より<strong>多めに配置</strong>を許容 (スタッフを多く入れたい場合)</li>
+                        </ul>
+                        <p class="text-xs text-amber-700 mt-1">💡 「全員を最低5日入れたい」「過剰でも全員の出勤日数を満たしたい」場合は ON にしてください。</p>
+                    </div>
+
                     <div class="border-l-4 border-green-400 pl-4 py-1">
                         <h4 class="font-bold text-green-700 text-base mb-1">5. 休憩ルールの設定</h4>
                         <p>「〇〇時間以上の勤務なら〇〇分の休憩を与える」というルールです。労働基準法に則り、6時間超で45分、8時間超で60分がデフォルトで設定されています。</p>
                     </div>
+                </div>
+
+                <!-- v3.7.96: スタッフ管理マニュアル追記 -->
+                <div class="mt-6 bg-white border-2 border-blue-200 rounded-xl p-5">
+                    <h3 class="text-lg font-bold text-blue-800 mb-3"><i class="fa-solid fa-user-gear mr-1"></i>スタッフ管理 — 勤務制約 (v3.7.91+)</h3>
+                    <p class="text-sm text-gray-700 mb-3">スタッフ編集モーダルの「勤務制約 (AI自動作成用)」セクションは、最低/最大を週×月の表で管理します:</p>
+                    <table class="w-full text-xs border-collapse">
+                        <thead><tr class="bg-blue-50"><th class="p-2 border border-blue-200 text-left">期間</th><th class="p-2 border border-blue-200">最低出勤日数</th><th class="p-2 border border-blue-200">最大出勤日数</th></tr></thead>
+                        <tbody>
+                            <tr><td class="p-2 border border-blue-200 font-bold">週 (7日)</td><td class="p-2 border border-blue-200 text-center">0 〜 7</td><td class="p-2 border border-blue-200 text-center">1 〜 7</td></tr>
+                            <tr><td class="p-2 border border-blue-200 font-bold">月 (1-31日)</td><td class="p-2 border border-blue-200 text-center">0 〜 31</td><td class="p-2 border border-blue-200 text-center">1 〜 31</td></tr>
+                        </tbody>
+                    </table>
+                    <ul class="text-xs text-gray-600 mt-2 space-y-1 list-disc list-inside">
+                        <li><strong>最低出勤日数</strong>: 月給スタッフは <strong>ハード制約</strong>で必ず達成 / 時給スタッフは Tier 3 ソフト制約 (1M)</li>
+                        <li><strong>最大出勤日数 (週)</strong>: ハード制約 (週N日を超えない)</li>
+                        <li><strong>最大出勤日数 (月)</strong>: ハード制約 / 31日 = 制限なし</li>
+                        <li><strong>1日の最大勤務時間</strong>: 実労働ベース (休憩除く)、ハード制約</li>
+                    </ul>
+                    <p class="text-xs text-amber-700 mt-2"><i class="fa-solid fa-info-circle mr-1"></i>月給スタッフは min_days_week / min_days_month が <strong>ハード制約</strong> です。物理的に達成可能な値を設定してください (例: 週5日勤務想定なら 月22日まで設定可能)。</p>
                 </div>
             </div>
 
