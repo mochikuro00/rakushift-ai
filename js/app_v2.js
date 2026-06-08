@@ -7088,6 +7088,7 @@ const app = {
                     <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
                     <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
                     <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタッフ評価 (A〜D)</a>
+                    <a href="#m-pattern-target" class="text-teal-600 hover:underline">2.5. シフトパターン振り分け</a>
                     <a href="#m-shift" class="text-indigo-600 hover:underline">3. AIシフト作成</a>
                     <a href="#m-labor" class="text-indigo-600 hover:underline">4. 労働基準法ルール</a>
                     <a href="#m-break" class="text-indigo-600 hover:underline">5. 休憩ルール</a>
@@ -7181,6 +7182,32 @@ const app = {
                     </tbody>
                 </table>
                 <p class="text-xs text-gray-400 mt-2">※ チーム全体の戦力スコアが基準を満たすようAIが自動調整します</p>
+            </div>
+
+            <!-- 2.5. シフトパターン振り分け (v3.7.77) -->
+            <div id="m-pattern-target" class="bg-white rounded-xl shadow-sm border border-teal-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-teal-500 mr-2">2.5.</span>シフトパターン振り分け (月間目標回数)</h3>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <p>スタッフ編集モーダルの <strong>「シフトパターン別 月間目標回数」</strong> セクションで、各スタッフを各シフトパターン (早番・遅番・夜勤等) に <strong>月何回入れたいか</strong> を指定できます。</p>
+                    <div class="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                        <p class="text-xs font-bold text-teal-800 mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>使用例</p>
+                        <table class="w-full text-xs border-collapse">
+                            <thead><tr class="bg-teal-100"><th class="p-2 text-left border border-teal-200">スタッフ</th><th class="p-2 text-left border border-teal-200">早番</th><th class="p-2 text-left border border-teal-200">遅番</th><th class="p-2 text-left border border-teal-200">夜勤</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border border-teal-200 font-bold">Aさん (早番担当)</td><td class="p-2 border border-teal-200">3</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">0</td></tr>
+                                <tr><td class="p-2 border border-teal-200 font-bold">Bさん (遅番担当)</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">3</td><td class="p-2 border border-teal-200">0</td></tr>
+                                <tr><td class="p-2 border border-teal-200 font-bold">Cさん (夜勤担当)</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">3</td></tr>
+                            </tbody>
+                        </table>
+                        <p class="text-xs text-teal-700 mt-2">→ AIは各スタッフの担当パターンを尊重しながらシフトを組みます。</p>
+                    </div>
+                    <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside ml-2">
+                        <li><strong>0 または空欄</strong>: 制約なし (AI が自由に配置)</li>
+                        <li><strong>1 以上</strong>: 月間で目標回数に近づくよう優先配置</li>
+                        <li>シフトパターン人数要件 (店舗設定側) と <strong>競合した場合は人数要件が優先</strong>される (= 「Aさん早番3回」と指定しても、その日に早番が不足していれば他のパターンに回ることがある)</li>
+                    </ul>
+                    <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><strong>💡 こんな運用に最適:</strong> 「夜勤専門のスタッフがいる」「学生バイトは早番だけにしたい」「特定スタッフを各時間帯に均等に分散させたい」など、スタッフごとの担当時間帯が明確な店舗。</p>
+                </div>
             </div>
 
             <!-- 3. AIシフト作成 -->
