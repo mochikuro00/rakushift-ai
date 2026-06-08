@@ -1532,16 +1532,15 @@ class ShiftScheduler:
                             pat_slack = pulp.LpVariable(
                                 "pat_{}_{}_{}".format(d, ps_min, pe_min), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(pat_workers) + pat_slack >= pat_count
-                            # v3.7.87: 10M → 50M (Tier 1相当) で「ぴったり」配置を優先
-                            # COVERAGE_UNDER (100M) には負けるが、他制約より圧倒的に優先
-                            # → ユーザー設定のシフトパターン人数が物理的可能なら必ず達成
-                            penalty += pat_slack * 50_000_000
-                            # 過剰側も同じく強くペナルティ (パターン人数 + 1 を超えたら抑制)
+                            # v3.7.88: 50M → 100M (COVERAGE と同等) で「絶対ぴったり」
+                            # COVERAGE_UNDER (100M) と同等優先 → 物理的可能なら必ず達成
+                            penalty += pat_slack * 100_000_000
+                            # 過剰側も 100M でペナルティ → 設定人数を超えて配置しない
                             pat_over = pulp.LpVariable(
                                 "pat_over_{}_{}_{}".format(d, ps_min, pe_min),
                                 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(pat_workers) - pat_over <= pat_count
-                            penalty += pat_over * 50_000_000
+                            penalty += pat_over * 100_000_000
 
                 # --- v3.7.77: スタッフ別シフトパターン月間目標回数 (Tier 4 ソフト制約) ---
                 # staff.pattern_target_counts = { "早番": 3, "遅番": 3, ... }
