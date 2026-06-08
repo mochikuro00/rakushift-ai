@@ -3146,7 +3146,7 @@ const app = {
                         <thead class="bg-gray-50 text-gray-500 border-b border-gray-200">
                             <tr>
                                 <th class="p-4 font-medium">スタッフ名</th>
-                                <th class="p-4 font-medium text-right">出勤日数</th>
+                                <th class="p-4 font-medium text-right">出勤日数<br><span class="text-[10px] font-normal">(目標)</span></th>
                                 <th class="p-4 font-medium text-right">労働時間</th>
                                 <th class="p-4 font-medium text-right">法定目安(176h)との差</th>
                                 <th class="p-4 font-medium text-right">推定支給額</th>
@@ -3154,18 +3154,25 @@ const app = {
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             ${stats.staffStats.map(s => {
-                                const limit = 176; // 月間法定労働時間の目安 (40週 * 4.4週)
+                                const limit = 176;
                                 const diff = s.hours - limit;
                                 const isOver = diff > 0;
                                 const diffText = isOver ? `+${diff.toFixed(1)}h` : 'OK';
-                                const rowClass = isOver ? 'bg-red-50' : 'hover:bg-gray-50';
+                                // v3.7.83: 月間最低出勤日数の達成状況も併記
+                                const staffRec = (this.state.staff || []).find(st => st.id === s.id);
+                                const minMonth = staffRec ? Number(staffRec.min_days_month) || 0 : 0;
+                                const daysShort = minMonth > 0 && s.days < minMonth;
+                                const daysCell = minMonth > 0
+                                    ? `${s.days}日 <span class="${daysShort?'text-red-600 font-bold':'text-gray-400'} text-xs">/ 目標${minMonth}${daysShort?` (${minMonth-s.days}日不足)`:''}</span>`
+                                    : `${s.days}日`;
+                                const rowClass = (isOver || daysShort) ? 'bg-red-50' : 'hover:bg-gray-50';
                                 const textClass = isOver ? 'text-red-600 font-bold' : 'text-green-600';
                                 const icon = isOver ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>' : '<i class="fa-solid fa-check mr-1"></i>';
 
                                 return `
                                 <tr class="${rowClass}">
                                     <td class="p-4 font-bold text-gray-700">${this._sanitize(s.name)}</td>
-                                    <td class="p-4 text-right">${s.days}日</td>
+                                    <td class="p-4 text-right">${daysCell}</td>
                                     <td class="p-4 text-right">${s.hours.toFixed(1)}h</td>
                                     <td class="p-4 text-right ${textClass}">${icon}${diffText}</td>
                                     <td class="p-4 text-right font-mono">¥${s.cost.toLocaleString()}</td>
@@ -3242,7 +3249,7 @@ const app = {
             const dayIndex = parseInt(shift.date.split('-')[2]) - 1;
             if (dayIndex >= 0 && dayIndex < dailyCosts.length) dailyCosts[dayIndex] += cost;
 
-            if (!staffMap[staff.id]) staffMap[staff.id] = { name: staff.name, cost: 0, hours: 0, days: new Set() };
+            if (!staffMap[staff.id]) staffMap[staff.id] = { id: staff.id, name: staff.name, cost: 0, hours: 0, days: new Set() };
             staffMap[staff.id].cost += cost;
             staffMap[staff.id].hours += workHours;
             staffMap[staff.id].days.add(shift.date);
@@ -3252,7 +3259,7 @@ const app = {
             if (s.salary_type === 'monthly') {
                 const salary = s.monthly_salary || 0;
                 totalCost += salary;
-                if (!staffMap[s.id]) staffMap[s.id] = { name: s.name, cost: 0, hours: 0, days: new Set() };
+                if (!staffMap[s.id]) staffMap[s.id] = { id: s.id, name: s.name, cost: 0, hours: 0, days: new Set() };
                 staffMap[s.id].cost += salary;
                 // v3.6.3: 月給を日次コストに分散 (旧版は日次グラフから完全脱落していた)
                 if (daysInMonth > 0) {
