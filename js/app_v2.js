@@ -2336,7 +2336,10 @@ const app = {
         const zoom = this.state.shiftZoom || 1.0;
 
         let days = [];
-        let colWidthClass = `min-w-[${Math.max(20, Math.round(40 * zoom))}px]`;
+        // v3.7.94: モバイルでは最低 56px (時刻 09:45 が読める幅) を確保
+        const isMobileTable = (typeof window !== 'undefined' && window.innerWidth <= 768);
+        const minCellPx = isMobileTable ? 56 : 40;
+        let colWidthClass = `min-w-[${Math.max(minCellPx, Math.round(minCellPx * zoom))}px]`;
         let isGanttMode = false;
 
         if (period === 'month') {
@@ -2345,16 +2348,13 @@ const app = {
                 return new Date(year, month, i + 1);
             });
         } else if (period === 'day') {
-            // 1日表示: ガント大幅 (15分目盛りが見やすい幅) + メモ列付き
             colWidthClass = `min-w-[${Math.max(800, Math.round(1600 * zoom))}px]`;
             isGanttMode = true;
             days = [new Date(this.state.currentDate)];
         } else {
-            // 1週間表示
-            const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 768);
-            if (isMobile) {
-                // v3.7.82: モバイル幅では非ガント (コンパクト) で 7日を画面内に
-                colWidthClass = `min-w-[${Math.max(38, Math.round(45 * zoom))}px]`;
+            if (isMobileTable) {
+                // v3.7.94: モバイル週モードのセル幅を 56px に増やして時刻が読めるように
+                colWidthClass = `min-w-[${Math.max(56, Math.round(56 * zoom))}px]`;
                 isGanttMode = false;
             } else {
                 colWidthClass = `min-w-[${Math.max(600, Math.round(1200 * zoom))}px]`;
@@ -2568,8 +2568,10 @@ const app = {
                             </div>
                         `;
                     } else {
-                        // === Month Style (Block) ===
-                        content = `<div class="w-full h-full p-1"><div class="${barColor} border-l-2 rounded text-[10px] font-bold text-center leading-tight py-1 truncate shadow-sm">${shift.start_time}<br>|${shift.end_time}</div></div>`;
+                        // === Month Style (Block) === v3.7.94: 開始時刻のみ HH:MM 表示してオーバーフロー回避
+                        const stShort = (shift.start_time || '').slice(0, 5);
+                        const etShort = (shift.end_time || '').slice(0, 5);
+                        content = `<div class="w-full h-full p-0.5"><div class="${barColor} border-l-2 rounded text-[9px] sm:text-[10px] font-bold text-center leading-tight py-1 shadow-sm" style="overflow:hidden;">${stShort}<br>${etShort}</div></div>`;
                     }
                 } else if (isSpecialHoliday) {
                     content = `<div class="w-full h-full flex items-center justify-center"><span class="text-[10px] text-red-300 font-bold">休</span></div>`;
@@ -2912,9 +2914,29 @@ const app = {
                 </div>`;
         }
 
+        // v3.7.94: スマホ向けレスポンシブ最適化
+        // - overscroll-behavior で背景スクロール抑制
+        // - -webkit-overflow-scrolling で iOS スムーズスクロール
+        // - スティッキー列に右側シャドウ (横スクロール境界の視覚化)
+        // - 横スクロールヒント (モバイル初回のみ)
+        const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 768);
+        const showHint = isMobile && !localStorage.getItem('shiftScrollHintShown');
+        if (showHint) {
+            try { localStorage.setItem('shiftScrollHintShown', '1'); } catch (e) {}
+        }
+        const hintHtml = showHint
+            ? `<div id="shiftScrollHint" class="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-2 animate-pulse">
+                <i class="fa-solid fa-arrows-left-right"></i>
+                <span>👆 横にスワイプして全日付を確認できます</span>
+                <button onclick="document.getElementById('shiftScrollHint')?.remove()" class="ml-auto text-blue-400 hover:text-blue-600"><i class="fa-solid fa-xmark"></i></button>
+            </div>`
+            : '';
+
         container.innerHTML = `
-            <div class="h-full overflow-auto custom-scrollbar">
-                <table class="w-full border-collapse">
+            ${hintHtml}
+            <div class="h-full overflow-auto custom-scrollbar"
+                 style="overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;">
+                <table class="border-collapse" style="min-width: 100%;">
                     <thead><tr>${headerHtml}</tr></thead>
                     <tbody id="shiftTableBody">
                         ${alertRowHtml}
@@ -2923,6 +2945,22 @@ const app = {
                 </table>
                 ${dayDetailHtml}
             </div>
+            <style>
+                /* v3.7.94: スティッキー列に右端シャドウを追加 (横スクロール境界が見える) */
+                #shiftTableBody td.sticky,
+                thead th.sticky {
+                    box-shadow: 2px 0 4px -2px rgba(0,0,0,0.15);
+                }
+                /* モバイル: セル padding をコンパクトに */
+                @media (max-width: 768px) {
+                    #shiftTableBody td, thead th { padding: 4px 2px !important; }
+                    #shiftTableBody td.sticky, thead th.sticky {
+                        min-width: 80px !important;
+                        max-width: 100px !important;
+                        font-size: 11px;
+                    }
+                }
+            </style>
         `;
     },
 
