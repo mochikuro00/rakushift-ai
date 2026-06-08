@@ -1302,21 +1302,21 @@ class ShiftScheduler:
                             for oi in range(len(staff_opts.get((sid, d), []))):
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
-                            mdm_slack = pulp.LpVariable(
-                                "mdm_{}".format(sid), 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
                             is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
+                            # v3.7.84: 月給スタッフは ハード制約 で必ず達成
+                            # 旧: 20M ペナルティ → COVERAGE_OVER (100M) と衝突して犠牲
+                            #   過剰回避優先で月給スタッフの21日設定が無視されていた
+                            # 新: target_min_month はすでに物理上限 (max_possible /
+                            #   available_total) で抑制済みなので、infeasible リスク
+                            #   なしにハード制約化できる
                             if is_monthly:
-                                # v3.7.54: 50M → 20M に弱化
-                                # COVERAGE_UNDER/OVER (100M) との階層差を 5倍確保
-                                # 物理的に達成可能なら確実に満たされる
-                                penalty += mdm_slack * 20_000_000
+                                prob += pulp.lpSum(all_wv) >= target_min_month
                             else:
-                                # v3.7.83: 時給 50k → 1M に強化 (Tier 3 相当)
-                                # 旧: パターン要件 (10M) や過剰回避 (1M) に負けて
-                                #     ユーザーが「最低21日」と入れても達成されない
-                                # 新: 1M に上げ、過剰回避と同等以上で物理的に
-                                #     可能な月は達成されるように
+                                # 時給スタッフはソフト制約のまま (柔軟調整余地を残す)
+                                mdm_slack = pulp.LpVariable(
+                                    "mdm_{}".format(sid), 0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
+                                # v3.7.83: 1M (Tier 3 相当)
                                 penalty += mdm_slack * 1_000_000
 
                 # --- v3.7.54: 全スタッフ最低出勤保証 (Tier 4 500k に弱化) ---
