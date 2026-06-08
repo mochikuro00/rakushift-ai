@@ -6822,8 +6822,12 @@ const app = {
                 end_time: s.end_time,
                 break_minutes: s.break_minutes || 0
             };
-            // イレギュラーフラグがある場合のみ保存（通常シフトではfalse/未設定）
+            // イレギュラーフラグがある場合のみ保存
             if (s.is_irregular) obj.is_irregular = true;
+            // v3.7.102: memo を保存 (scheduler 補完シフトの識別用)
+            // 補完シフトの memo を保存しないと UI で人員状況計算時に
+            // 「補完分」を slot_req に加算できず、過剰判定が乱発する
+            if (s.memo) obj.memo = s.memo;
             return obj;
         }.bind(this));
 
