@@ -2835,14 +2835,18 @@ const app = {
                 }
 
                 const animateCls = shortageSlots > 0 ? 'animate-pulse' : '';
+                // v3.7.86: 不足セルクリック → 原因分析モーダル
+                const clickAction = shortageSlots > 0
+                    ? `onclick="app.showShortageReason('${dateStr}', '${minConcurrentTime}', ${worstSlotReq}, ${minConcurrent})"`
+                    : '';
+                const cursor = shortageSlots > 0 ? 'cursor:pointer;' : '';
                 cellContent = `<div class="flex flex-col h-full w-full px-0.5 py-0.5 overflow-hidden gap-0.5">
                     <div class="flex h-2 rounded-sm overflow-hidden border border-gray-200">${stripeHtml}</div>
                     <div class="flex items-center justify-center flex-1">
                         <span class="${summaryColor} font-bold text-[9px] sm:text-[10px] md:text-xs whitespace-nowrap truncate tracking-tighter ${animateCls}">${summary}${dupNote}</span>
                     </div>
                 </div>`;
-
-                alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center">${cellContent}</td>`;
+                alertRowHtml += `<td style="${cursor}" class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center" ${clickAction}>${cellContent}</td>`;
             });
             alertRowHtml += `</tr>`;
         }
@@ -8122,6 +8126,139 @@ const app = {
     upgradeFromModal(plan) {
         this.closeModal('upgradeModal');
         this.startCheckout(plan);
+    },
+
+    // v3.7.86: 不足セルクリック時の原因分析モーダル
+    showShortageReason(dateStr, timeStr, requiredCount, actualCount) {
+        const time = timeStr || '';
+        const [hh, mm] = (time || '00:00').split(':').map(Number);
+        const slotMin = (hh * 60 + (mm || 0));
+        const shiftsForDay = (this.state.shifts || []).filter(s => s.date === dateStr);
+        const toMins = (t) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m||0); };
+
+        // この時刻に在籍中のスタッフ
+        const presentIds = new Set();
+        shiftsForDay.forEach(s => {
+            const ss = toMins(s.start_time);
+            let se = toMins(s.end_time);
+            if (se <= ss) se += 24 * 60;
+            if (ss <= slotMin && slotMin < se) presentIds.add(s.staff_id);
+        });
+
+        // この日のシフトに既に入っているスタッフ (時間帯不一致でも休出扱い)
+        const onShiftToday = new Set(shiftsForDay.map(s => s.staff_id));
+
+        // 当日の day_type 判定
+        const d = new Date(dateStr + 'T00:00:00');
+        const dow = d.getDay();
+        const jh = (typeof JapaneseHolidays !== 'undefined') ? JapaneseHolidays : null;
+        const isHoliday = jh ? jh.isHoliday(dateStr) : false;
+        const dayLabel = isHoliday ? '祝日' : (dow === 0 ? '日曜' : (dow === 6 ? '土曜' : '平日'));
+
+        // 全スタッフをチェックして「入れない理由」を分類
+        const allStaff = this.state.staff || [];
+        const reasons = { present: [], onShift: [], offRequested: [], ngDay: [], prefTime: [], unknown: [] };
+
+        // 当日の承認済み休み希望
+        const offReqs = (this.state.requests || []).filter(r =>
+            r.type === 'off' && r.status === 'approved' && Array.isArray(r.dates) && r.dates.includes(dateStr)
+        );
+        const offIds = new Set(offReqs.map(r => r.staff_id));
+
+        allStaff.forEach(s => {
+            if (presentIds.has(s.id)) {
+                reasons.present.push(s.name);
+                return;
+            }
+            if (offIds.has(s.id)) {
+                reasons.offRequested.push(s.name);
+                return;
+            }
+            if (Array.isArray(s.ng_weekdays) && s.ng_weekdays.map(Number).includes(dow)) {
+                reasons.ngDay.push(`${s.name} (${['日','月','火','水','木','金','土'][dow]}NG)`);
+                return;
+            }
+            // 希望時間が指定されていて、この時刻が範囲外
+            const isWeekend = dow === 0 || dow === 6 || isHoliday;
+            const ps = isWeekend ? s.pref_start_we : s.pref_start_wd;
+            const pe = isWeekend ? s.pref_end_we : s.pref_end_wd;
+            if (ps && pe) {
+                const psM = toMins(ps);
+                let peM = toMins(pe);
+                if (peM <= psM) peM += 24 * 60;
+                if (slotMin < psM || slotMin >= peM) {
+                    reasons.prefTime.push(`${s.name} (希望 ${ps}-${pe})`);
+                    return;
+                }
+            }
+            if (onShiftToday.has(s.id)) {
+                reasons.onShift.push(`${s.name} (別時間帯で勤務中)`);
+                return;
+            }
+            reasons.unknown.push(s.name);
+        });
+
+        const fmtList = (arr) => arr.length === 0 ? '<span class="text-gray-400 text-xs">なし</span>'
+            : '<div class="text-xs leading-relaxed">' + arr.map(n => this._sanitize(n)).join(', ') + '</div>';
+
+        const shortage = requiredCount - actualCount;
+        const html = `
+            <div id="shortageReasonModal" class="modal fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onclick="if(event.target===this)document.getElementById('shortageReasonModal').remove()">
+                <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+                    <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-red-500 to-amber-500 flex justify-between items-center">
+                        <div class="text-white">
+                            <h3 class="font-bold text-lg"><i class="fa-solid fa-triangle-exclamation mr-2"></i>${this._sanitize(dateStr)} ${time} の不足分析</h3>
+                            <p class="text-xs text-white/80 mt-0.5">${dayLabel} / 必要 ${requiredCount}名 / 在籍 ${actualCount}名 / <strong class="text-yellow-300">${shortage}名不足</strong></p>
+                        </div>
+                        <button onclick="document.getElementById('shortageReasonModal').remove()" class="text-white/70 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-5 space-y-3 overflow-y-auto">
+                        <p class="text-xs text-gray-500 mb-2">この時刻に入れていないスタッフを理由別に分類:</p>
+
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <p class="text-xs font-bold text-green-700 mb-1"><i class="fa-solid fa-check mr-1"></i>在籍中 (${reasons.present.length}名)</p>
+                            ${fmtList(reasons.present)}
+                        </div>
+
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p class="text-xs font-bold text-amber-700 mb-1"><i class="fa-solid fa-clock mr-1"></i>別時間帯で勤務中 (${reasons.onShift.length}名)</p>
+                            ${fmtList(reasons.onShift)}
+                            <p class="text-[10px] text-amber-600 mt-1">→ 別時間のシフトを延長または時間変更すれば配置可能</p>
+                        </div>
+
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <p class="text-xs font-bold text-red-700 mb-1"><i class="fa-solid fa-umbrella-beach mr-1"></i>承認済み休み希望 (${reasons.offRequested.length}名)</p>
+                            ${fmtList(reasons.offRequested)}
+                            <p class="text-[10px] text-red-600 mt-1">→ 休み希望の却下を検討</p>
+                        </div>
+
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <p class="text-xs font-bold text-slate-700 mb-1"><i class="fa-solid fa-calendar-xmark mr-1"></i>NG曜日のため出勤不可 (${reasons.ngDay.length}名)</p>
+                            ${fmtList(reasons.ngDay)}
+                        </div>
+
+                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                            <p class="text-xs font-bold text-purple-700 mb-1"><i class="fa-solid fa-hourglass-half mr-1"></i>希望時間帯外 (${reasons.prefTime.length}名)</p>
+                            ${fmtList(reasons.prefTime)}
+                            <p class="text-[10px] text-purple-600 mt-1">→ スタッフ設定 → 希望時間 を見直す</p>
+                        </div>
+
+                        ${reasons.unknown.length > 0 ? `
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p class="text-xs font-bold text-blue-700 mb-1"><i class="fa-solid fa-circle-question mr-1"></i>その他/週月上限到達 (${reasons.unknown.length}名)</p>
+                            ${fmtList(reasons.unknown)}
+                            <p class="text-[10px] text-blue-600 mt-1">→ 週/月の最大勤務日数・時間 を見直す、または手動でシフト追加</p>
+                        </div>` : ''}
+                    </div>
+                    <div class="p-3 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+                        <button onclick="document.getElementById('shortageReasonModal').remove()" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold rounded-lg">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const old = document.getElementById('shortageReasonModal');
+        if (old) old.remove();
+        document.body.insertAdjacentHTML('beforeend', html);
     },
 
     openModal(id) {
