@@ -4845,18 +4845,39 @@ const app = {
         }
 
         // 3. 印刷用ウィンドウ作成
-        // 印刷ウィンドウの opener 参照を切断し tabnabbing を防止。
-        // (noopener フラグ付き open は戻り値が null になるため、開いた後で opener を nullify する)
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-            try { printWindow.opener = null; } catch (_) { /* same-origin restriction で失敗しても無害 */ }
-        } else {
-            this.showToast('ポップアップがブロックされました。ブラウザの設定を確認してください。', 'error');
-            return;
-        }
-        if (!printWindow) {
-            alert('ポップアップがブロックされました。「許可」してください。');
-            return;
+        // v3.7.93: window.open による新規ウィンドウを廃止。
+        // 旧: Chrome/Brave 等のスマホブラウザで window.close() が拒否されると
+        //     新規タブから元の画面に戻れなくなる問題があった
+        // 新: メインページ上にフルスクリーン overlay を表示。
+        //     ☓ ボタンで overlay を削除すれば確実に元の画面に戻れる。
+        const existingOverlay = document.getElementById('printOverlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        // 印刷モード用スタイルが未挿入なら一度だけ追加
+        if (!document.getElementById('printOverlayStyle')) {
+            const style = document.createElement('style');
+            style.id = 'printOverlayStyle';
+            style.textContent = `
+                /* スクリーン表示時: overlay 全画面 */
+                #printOverlay {
+                    position: fixed; inset: 0; z-index: 9999;
+                    background: white; overflow-y: auto;
+                    padding: 16px; -webkit-overflow-scrolling: touch;
+                }
+                /* 印刷時: overlay 以外を非表示、overlay は通常文書扱い */
+                @media print {
+                    body > *:not(#printOverlay) { display: none !important; }
+                    #printOverlay {
+                        position: static !important;
+                        padding: 0 !important;
+                        overflow: visible !important;
+                    }
+                    #printOverlay .no-print { display: none !important; }
+                    .table-chunk:last-child { page-break-after: auto !important; }
+                }
+                @page { size: landscape; margin: 8mm; }
+            `;
+            document.head.appendChild(style);
         }
 
         // --- コンテンツ生成関数 ---
@@ -5001,52 +5022,48 @@ const app = {
         // 全チャンクのHTML結合
         const allTablesHtml = dayChunks.map((chunk, idx) => generateTableHTML(chunk, idx, dayChunks.length)).join('');
 
-        const html = `
-            <!DOCTYPE html>
-            <html lang="ja">
-            <head>
-                <meta charset="UTF-8">
-                <title>シフト表印刷</title>
-                <style>
-                    @page { size: landscape; margin: 8mm; }
-                    body { font-family: "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 10px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    .no-print { margin-bottom: 20px; padding: 15px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; }
-                    button { cursor: pointer; padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-right: 10px; }
-                    @media print { .no-print { display: none; } .table-chunk:last-child { page-break-after: auto !important; } }
-                </style>
-            </head>
-            <body>
-                <div class="no-print">
-                    <h2 style="margin-top:0;">🖨 印刷プレビュー (分割レイアウト版)</h2>
-                    <p style="font-size: 14px; line-height: 1.6;">
-                        視認性を確保するため、<strong>7日ごとに分割して表示</strong>しています。<br>
-                        「印刷」ボタンを押し、送信先で<strong>「PDFに保存」</strong>を選択すると、全期間を含むPDFファイルが作成できます。<br>
-                        ※ 紙に印刷する場合も、A4横サイズで綺麗にページ分けされます。
-                    </p>
-                    <div style="margin-top: 15px; display:flex; flex-wrap:wrap; gap:10px;">
-                        <button onclick="window.print()" style="flex:1; min-width:180px;">🖨 印刷 / PDF保存</button>
-                        <!-- v3.7.82: スマホで元画面に戻れない問題の対処。
-                             window.close が拒否された場合は history.back にフォールバック -->
-                        <button onclick="(function(){try{window.close();}catch(e){};setTimeout(function(){if(!window.closed){try{history.back();}catch(_){window.location.href='/';}}},150);})()"
-                                style="flex:1; min-width:180px; background:#64748b;">
-                            ✕ 閉じて戻る
-                        </button>
-                    </div>
+        // v3.7.93: メインページに overlay を挿入 (新規ウィンドウなし)
+        const overlay = document.createElement('div');
+        overlay.id = 'printOverlay';
+        overlay.innerHTML = `
+            <div class="no-print" style="margin-bottom: 16px; padding: 12px 16px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; position: relative;">
+                <button onclick="app.closePrintOverlay()" aria-label="閉じる"
+                        style="position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: none; background: #ef4444; color: white; border-radius: 50%; font-size: 22px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;">
+                    ✕
+                </button>
+                <h2 style="margin: 0 0 8px 0; padding-right: 48px; font-size: 18px;">🖨 印刷プレビュー</h2>
+                <p style="font-size: 13px; line-height: 1.6; margin: 0;">
+                    7日ごとに分割して表示しています。「印刷 / PDF保存」を押すとブラウザの印刷ダイアログが開きます。
+                </p>
+                <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px;">
+                    <button onclick="window.print()"
+                            style="flex: 1; min-width: 180px; padding: 12px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer;">
+                        🖨 印刷 / PDF保存
+                    </button>
+                    <button onclick="app.closePrintOverlay()"
+                            style="flex: 1; min-width: 180px; padding: 12px 20px; background: #64748b; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer;">
+                        ✕ 閉じて戻る
+                    </button>
                 </div>
-
-                <h1 style="font-size: 24px; margin-bottom: 20px;">
-                    ${year}年 ${month + 1}月 シフト表
-                </h1>
-
-                ${allTablesHtml}
-
-            </body>
-            </html>
+            </div>
+            <h1 style="font-size: 22px; margin: 16px 0;">${year}年 ${month + 1}月 シフト表</h1>
+            ${allTablesHtml}
         `;
+        document.body.appendChild(overlay);
+        // Esc キーでも閉じられるように
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closePrintOverlay();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    },
 
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
+    // v3.7.93: 印刷オーバーレイを閉じて元画面に戻る
+    closePrintOverlay() {
+        const el = document.getElementById('printOverlay');
+        if (el) el.remove();
     },
 
     // =================================================================
