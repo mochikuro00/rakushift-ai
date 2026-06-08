@@ -1886,7 +1886,7 @@ const app = {
                          <h3 class="font-bold text-gray-800 mb-3 text-sm">クイックメニュー</h3>
                          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             ${this.state.isAdmin ? `
-                            <button onclick="app.openModal('staffModal'); document.getElementById('staffForm').reset(); document.getElementById('staffId').value=''; app.toggleSalaryInputs(); app.togglePrefHoursInputs();" 
+                            <button onclick="app.prepareStaffModal()"
                                 class="w-full text-left px-4 py-3 hover:bg-blue-50 rounded-lg text-sm font-bold text-gray-600 hover:text-blue-700 flex items-center gap-3 transition-colors border border-gray-100 hover:border-blue-200">
                                 <i class="fa-solid fa-user-plus text-blue-500 text-lg"></i> スタッフ追加
                             </button>
@@ -5425,6 +5425,33 @@ const app = {
         }
         // v3.7.77: シフトパターン目標回数 (新規スタッフは空)
         this.renderStaffPatternTargets({});
+
+        // v3.7.101: 前回編集時の値が残るバグ対策。明示的に全フィールドを
+        // デフォルト値に初期化 (form.reset() だけだと placeholder のみ残る
+        // ケースがあり、別スタッフの値が反映されてしまう)
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        setVal('staffName', '');
+        setVal('staffEvaluation', 'B');
+        setVal('staffSalaryType', 'hourly');
+        setVal('staffContractType', 'general');
+        setVal('staffShiftPriority', 'medium');
+        setVal('staffHourlyWage', '');
+        setVal('staffMonthlySalary', '');
+        setVal('staffMaxDaysPerWeek', '5');
+        setVal('staffMaxHoursPerDay', '8');
+        setVal('staffMinDaysPerWeek', '0');
+        setVal('staffMinDaysPerMonth', '0');
+        setVal('staffMaxDaysPerMonth', '31');
+        setVal('staffPrefStartWeekday', '');
+        setVal('staffPrefEndWeekday', '');
+        setVal('staffPrefStartWeekend', '');
+        setVal('staffPrefEndWeekend', '');
+        setVal('staffReqPairs', '');
+        const usePrefCb = document.getElementById('staffUsePrefHours');
+        if (usePrefCb) usePrefCb.checked = false;
+        // 一番下に「役職」select はデフォルト (manager等の最初の選択肢) のまま
+        this.toggleSalaryInputs();
+        this.togglePrefHoursInputs();
     },
 
     // v3.7.77: シフトパターン別月間目標回数の動的描画
