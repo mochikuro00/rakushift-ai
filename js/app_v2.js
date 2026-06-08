@@ -247,6 +247,18 @@ const app = {
 
             // Use native Date to avoid external dependency issues
             this.state.currentDate = new Date();
+
+            // v3.7.82: シフト表表示期間の初期値をモバイル幅では「1週間」に
+            // localStorage に保存された値があればそれを優先 (ユーザー選択を尊重)
+            const savedPeriod = (() => {
+                try { return localStorage.getItem('shiftTablePeriod'); }
+                catch (e) { return null; }
+            })();
+            if (savedPeriod && ['month', 'week', 'day'].includes(savedPeriod)) {
+                this.state.shiftTablePeriod = savedPeriod;
+            } else if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+                this.state.shiftTablePeriod = 'week';
+            }
             this.bindEvents();
 
             // Stripe決済完了時の処理
@@ -2286,6 +2298,8 @@ const app = {
 
     switchShiftTablePeriod(period) {
         this.state.shiftTablePeriod = period;
+        // v3.7.82: ユーザー選択を localStorage に保存して次回開いた時にも維持
+        try { localStorage.setItem('shiftTablePeriod', period); } catch (e) {}
         if (period === 'month') {
             const d = new Date(this.state.currentDate);
             d.setDate(1);
@@ -2336,9 +2350,16 @@ const app = {
             isGanttMode = true;
             days = [new Date(this.state.currentDate)];
         } else {
-            // 1週間ガント (15分目盛り視認のため広く)
-            colWidthClass = `min-w-[${Math.max(600, Math.round(1200 * zoom))}px]`;
-            isGanttMode = true;
+            // 1週間表示
+            const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 768);
+            if (isMobile) {
+                // v3.7.82: モバイル幅では非ガント (コンパクト) で 7日を画面内に
+                colWidthClass = `min-w-[${Math.max(38, Math.round(45 * zoom))}px]`;
+                isGanttMode = false;
+            } else {
+                colWidthClass = `min-w-[${Math.max(600, Math.round(1200 * zoom))}px]`;
+                isGanttMode = true;
+            }
             const start = new Date(this.state.currentDate);
             days = Array.from({length: 7}, (_, i) => {
                 const d = new Date(start);
@@ -4960,8 +4981,14 @@ const app = {
                         「印刷」ボタンを押し、送信先で<strong>「PDFに保存」</strong>を選択すると、全期間を含むPDFファイルが作成できます。<br>
                         ※ 紙に印刷する場合も、A4横サイズで綺麗にページ分けされます。
                     </p>
-                    <div style="margin-top: 15px;">
-                        <button onclick="window.print()">🖨 印刷 / PDF保存</button>
+                    <div style="margin-top: 15px; display:flex; flex-wrap:wrap; gap:10px;">
+                        <button onclick="window.print()" style="flex:1; min-width:180px;">🖨 印刷 / PDF保存</button>
+                        <!-- v3.7.82: スマホで元画面に戻れない問題の対処。
+                             window.close が拒否された場合は history.back にフォールバック -->
+                        <button onclick="(function(){try{window.close();}catch(e){};setTimeout(function(){if(!window.closed){try{history.back();}catch(_){window.location.href='/';}}},150);})()"
+                                style="flex:1; min-width:180px; background:#64748b;">
+                            ✕ 閉じて戻る
+                        </button>
                     </div>
                 </div>
 
