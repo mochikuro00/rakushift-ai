@@ -3857,17 +3857,19 @@ const app = {
                         </button>
                     </div>
                     <div class="p-6">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left">
+                        <!-- v3.7.100: モバイル幅対応 - 横スクロール最低 720px 保証 + ヒント -->
+                        <p class="text-[10px] text-gray-400 mb-2 sm:hidden">👆 横にスワイプして全列を編集できます</p>
+                        <div class="overflow-x-auto" style="-webkit-overflow-scrolling: touch;">
+                            <table class="text-left" style="min-width: 720px; width: 100%;">
                                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
                                     <tr>
-                                        <th class="p-3 rounded-l-lg">パターン名</th>
-                                        <th class="p-3">開始</th>
-                                        <th class="p-3">終了</th>
-                                        <th class="p-3 text-center">平日<br><span class="text-[9px] text-gray-400">人数</span></th>
-                                        <th class="p-3 text-center text-blue-600">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
-                                        <th class="p-3 text-center text-red-600">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
-                                        <th class="p-3 text-right rounded-r-lg">操作</th>
+                                        <th class="p-2 sm:p-3 rounded-l-lg" style="min-width:120px;">パターン名</th>
+                                        <th class="p-2 sm:p-3" style="min-width:100px;">開始</th>
+                                        <th class="p-2 sm:p-3" style="min-width:100px;">終了</th>
+                                        <th class="p-2 sm:p-3 text-center" style="min-width:70px;">平日<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-2 sm:p-3 text-center text-blue-600" style="min-width:70px;">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-2 sm:p-3 text-center text-red-600" style="min-width:70px;">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-2 sm:p-3 text-right rounded-r-lg" style="min-width:50px;">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100" id="shiftPatternsBody">
@@ -3879,23 +3881,23 @@ const app = {
                                         const chd = shift.count_holiday != null ? shift.count_holiday : cwe;
                                         return `
                                         <tr class="group hover:bg-gray-50">
-                                            <td class="p-2">
-                                                <input type="text" class="setting-shift-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${shift.name}" placeholder="例: 早番">
+                                            <td class="p-1 sm:p-2">
+                                                <input type="text" class="setting-shift-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${this._sanitize(shift.name || '')}" placeholder="例: 早番">
                                             </td>
-                                            <td class="p-2">
+                                            <td class="p-1 sm:p-2">
                                                 ${this.get15MinTimeSelect(shift.start, '', 'setting-shift-start w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
-                                            <td class="p-2">
+                                            <td class="p-1 sm:p-2">
                                                 ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
-                                            <td class="p-2 text-center">
-                                                <input type="number" required min="1" max="50" step="1" class="setting-shift-count-wd w-14 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
+                                            <td class="p-1 sm:p-2 text-center">
+                                                <input type="number" required min="1" max="50" step="1" inputmode="numeric" class="setting-shift-count-wd w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
                                             </td>
-                                            <td class="p-2 text-center">
-                                                <input type="number" required min="1" max="50" step="1" class="setting-shift-count-we w-14 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
+                                            <td class="p-1 sm:p-2 text-center">
+                                                <input type="number" required min="1" max="50" step="1" inputmode="numeric" class="setting-shift-count-we w-16 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
                                             </td>
-                                            <td class="p-2 text-center">
-                                                <input type="number" required min="1" max="50" step="1" class="setting-shift-count-hd w-14 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
+                                            <td class="p-1 sm:p-2 text-center">
+                                                <input type="number" required min="1" max="50" step="1" inputmode="numeric" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
                                             </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
