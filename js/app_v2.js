@@ -2642,9 +2642,7 @@ const app = {
                 // 時間帯別の必要人数ルール適用（days配列の型を数値に統一して安全にフィルタ）
                 const timeRules = (this.state.config.time_staff_req || []).filter(r => (r.days || []).map(Number).includes(jsDow));
 
-                // v3.7.74: シフトパターン人数優先方式 (scheduler.py と仕様揃え)
-                // パターン人数が指定された時間帯はそれを必要人数とし、
-                // パターン外時間帯のみベース必要人数 (required) を使う
+                // v3.7.80: シフトパターン登録時はパターン外時間帯を「要件0」(scheduler.py と仕様揃え)
                 const customShifts = this.state.config.custom_shifts || [];
                 const dayTypeForUi = (this.state.config.special_holidays || []).includes(dateStr)
                     ? 'holiday'
@@ -2652,6 +2650,12 @@ const app = {
                 const patCountKey = dayTypeForUi === 'holiday' ? 'count_holiday'
                                   : dayTypeForUi === 'weekend' ? 'count_weekend'
                                   : 'count_weekday';
+                // パターンが1つ以上 count>0 で登録されているか
+                const hasPatterns = customShifts.some(p => {
+                    const c = Number(p[patCountKey] != null ? p[patCountKey]
+                                    : (p.count != null ? p.count : 0));
+                    return Number.isFinite(c) && c > 0;
+                });
 
                 // 15分スロットごとに「同時在籍人数」vs「そのスロットの要件」を比較
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
@@ -2681,8 +2685,17 @@ const app = {
                             patternSum += cnt;
                         }
                     });
-                    // パターン人数あり: それのみ要件 / なし: ベース
-                    let slotReq = patternSum > 0 ? patternSum : required;
+                    // v3.7.80: パターンあり時間帯 → patternSum
+                    //          パターン未登録のユーザー → ベース要件
+                    //          パターン登録あり + この時間帯はパターン外 → 0 (不足判定しない)
+                    let slotReq;
+                    if (patternSum > 0) {
+                        slotReq = patternSum;
+                    } else if (hasPatterns) {
+                        slotReq = 0;
+                    } else {
+                        slotReq = required;
+                    }
                     // time_staff_req (UI 廃止済みだが旧データ互換): max で上書き
                     timeRules.forEach(rule => {
                         const rs = toMins(rule.start);
@@ -4233,66 +4246,58 @@ const app = {
     },
 
     /**
-     * 「常時 N 名」設定が現実的に達成可能か推測し、無理がある場合は推奨値を表示する。
+     * v3.7.80: 人員配置の現実性チェック (シフトパターン人数優先方式)
+     *   シフトパターンに count_weekday/we/hd が指定されていれば、その合計を
+     *   1日に必要な配置人数として、登録スタッフ数 (× 週勤務日数考慮) と比較。
+     *   パターン人数が指定されていなければ警告を出さない。
      *
-     * ロジック:
-     *   シフトパターンの「重ならない帯数」× 必要人数 > 登録スタッフ数 → 警告。
-     *   例: 早番(9-15) + 遅番(15-22) は重ならない 2 帯。
-     *       「平日 4 名」だと 2帯×4 = 8 名/日が必要だが、スタッフ 5名 → 厳しい。
-     *       推奨は floor(5 / 2) = 2 名に下げるか、シフトパターンを追加する。
+     *   例: 早番3名 (wd=3) + 遅番4名 (wd=4) = 平日 7名/日 必要
+     *       在籍 5名 / 週5日 → 月間 100名・日 < 必要 210 (7×30) → 警告
      */
     _renderStaffingFeasibilityTip() {
-        const reqs = this.state.config.staff_req || {};
         const shifts = this.state.config.custom_shifts || [];
         const staff = this.state.staff || [];
-        if (shifts.length < 2 || staff.length === 0) return '';
+        if (shifts.length === 0 || staff.length === 0) return '';
 
-        // 重ならないシフト帯数を計算 (開始時刻ソート → 前帯の終了≦次帯の開始 ならカウントアップ)
-        const toMin = (t) => {
-            const [h, m] = (t || '00:00').split(':').map(Number);
-            return h * 60 + m;
-        };
-        const sorted = [...shifts]
-            .filter(s => s.start && s.end)
-            .sort((a, b) => toMin(a.start) - toMin(b.start));
-        if (sorted.length < 2) return '';
-        let bands = 1;
-        let lastEnd = toMin(sorted[0].end);
-        if (lastEnd <= toMin(sorted[0].start)) lastEnd += 24 * 60;
-        for (let i = 1; i < sorted.length; i++) {
-            const s = toMin(sorted[i].start);
-            let e = toMin(sorted[i].end);
-            if (e <= s) e += 24 * 60;
-            if (s >= lastEnd) {
-                bands++;
-                lastEnd = e;
-            } else if (e > lastEnd) {
-                lastEnd = e;
-            }
-        }
-        if (bands < 2) return '';  // 重なるシフトがある → 余裕がある可能性が高いので警告しない
-
-        // 各曜日種別で「N帯×min = 必要人数 vs 登録数」をチェック
-        const tips = [];
         const dayTypes = [
-            { key: 'weekday', label: '平日' },
-            { key: 'weekend', label: '土曜日' },
-            { key: 'holiday', label: '日祝日' },
+            { key: 'weekday', label: '平日',    days_per_month: 22 },
+            { key: 'weekend', label: '土曜日',  days_per_month: 4 },
+            { key: 'holiday', label: '日祝日',  days_per_month: 4 },
         ];
+        // 平均週勤務日数を在籍スタッフから算出 (デフォルト 5)
+        const avgMaxDaysWeek = staff.reduce((sum, s) =>
+            sum + (Number(s.max_days_week) || 5), 0) / staff.length;
+        const monthlyCapacity = staff.length * (avgMaxDaysWeek * 4.33);
+
+        const tips = [];
         dayTypes.forEach(d => {
-            const cur = parseInt(reqs[`min_${d.key}`] || 0);
-            if (cur <= 0) return;
-            const need = cur * bands;
-            if (need > staff.length) {
-                const suggested = Math.max(1, Math.floor(staff.length / bands));
-                tips.push({ label: d.label, cur, need, suggested });
+            const dayTotal = shifts.reduce((sum, sh) => {
+                const key = 'count_' + d.key;
+                const raw = sh[key] != null ? sh[key]
+                          : (sh.count != null ? sh.count : 0);
+                const c = Number(raw);
+                return sum + (Number.isFinite(c) && c > 0 ? c : 0);
+            }, 0);
+            if (dayTotal <= 0) return;
+            // この曜日種別で 1ヶ月で必要な総人日 (人×日)
+            const monthlyDemand = dayTotal * d.days_per_month;
+            // 在籍スタッフの月間総勤務可能日数のうち、この曜日種別の割合
+            const capacityForThisDayType = monthlyCapacity *
+                (d.days_per_month / 30);
+            if (monthlyDemand > capacityForThisDayType * 1.05) { // 5% マージン
+                tips.push({
+                    label: d.label,
+                    dayTotal,
+                    monthlyDemand,
+                    capacityForThisDayType: Math.round(capacityForThisDayType),
+                });
             }
         });
 
         if (tips.length === 0) return '';
 
         const list = tips.map(t =>
-            `<li><b>${t.label} ${t.cur}名</b>: シフト ${bands} 帯 × ${t.cur} = <b class="text-amber-700">${t.need}名/日</b>必要ですが、登録スタッフは <b>${staff.length}名</b>。<b class="text-green-700">「${t.suggested}名」</b>に下げるか、シフトパターンを重ねるのがおすすめです。</li>`
+            `<li><b>${t.label}</b>: シフトパターン合計 <b class="text-amber-700">${t.dayTotal}名/日</b> → 月間 ${t.monthlyDemand}人日が必要ですが、現在の在籍 ${staff.length}名 (平均週${Math.round(avgMaxDaysWeek*10)/10}日) の月間供給は約 ${t.capacityForThisDayType}人日 です。シフトパターン人数を下げるか、スタッフを増やしてください。</li>`
         ).join('');
 
         return `
@@ -4301,7 +4306,7 @@ const app = {
                 <ul class="text-xs text-amber-900 space-y-1 list-disc list-inside">
                     ${list}
                 </ul>
-                <p class="text-[10px] text-amber-600 mt-2">※「常時 N 名」を維持するには、重ならないシフト帯ごとに N 人が必要です。シフトパターンを重ねる (例: 中番 11-19) と少人数で済みます。</p>
+                <p class="text-[10px] text-amber-600 mt-2">※ シフトパターン (平日/土曜/日祝の人数) と在籍スタッフ数・週勤務日数から算出。シフトパターン人数を下げるかスタッフを追加すれば解消します。</p>
             </div>
         `;
     },
@@ -6647,13 +6652,16 @@ const app = {
             timeReqManager.set(t, Number(reqManager));
         }
 
-        // v3.7.74: シフトパターン人数優先方式 (scheduler.py と仕様揃え)
-        // パターン人数が指定された時間帯はそれを必要人数とし、
-        // パターン外時間帯のみベース必要人数を使う
+        // v3.7.80: シフトパターン登録時はパターン外時間帯を要件 0 に (scheduler.py 揃え)
         const customShifts = config.custom_shifts || [];
         const patCountKey = isHoliday ? 'count_holiday'
                           : (dayOfWeek === 0 ? 'count_holiday'
                           : (dayOfWeek === 6 ? 'count_weekend' : 'count_weekday'));
+        const hasPatterns2 = customShifts.some(p => {
+            const c = Number(p[patCountKey] != null ? p[patCountKey]
+                            : (p.count != null ? p.count : 0));
+            return Number.isFinite(c) && c > 0;
+        });
         for (let t = startMins; t < effectiveEndMins; t += 15) {
             let patternSum = 0;
             customShifts.forEach(pat => {
@@ -6670,7 +6678,11 @@ const app = {
             });
             if (patternSum > 0) {
                 timeReqs.set(t, patternSum);
+            } else if (hasPatterns2) {
+                // パターン登録あり + パターン外時間帯 → 不足判定しない
+                timeReqs.set(t, 0);
             }
+            // パターン未登録ユーザーは初期化済みベース要件を維持
         }
 
         // 時間帯別ルールの適用 (time_staff_req)（days配列の型を数値に統一）

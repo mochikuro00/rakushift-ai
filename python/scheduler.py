@@ -773,25 +773,29 @@ class ShiftScheduler:
                     if bp_s_min <= t < bp_e_min:
                         slots[t]["base"] = 0
 
+        # v3.7.80: シフトパターン登録時はパターン外時間帯を「要件0」に
+        # 旧 v3.7.73: pattern_sum=0 の時間帯はベース要件を使っていた
+        #   → 営業 09:00-22:00、パターン 早番09:30-18:45 / 遅番09:45-19:15 の場合、
+        #     09:00-09:29 と 19:15-22:00 がパターン外 → ベース要件 4 が適用
+        #     → 4名不足 と表示される (現実には誰も入れない時間帯のはず)
+        # 新: ユーザーが意図的にシフトパターンを登録した = その時間帯外は不要 と解釈。
+        #   shift_patterns が空のユーザーは従来通りベース要件を使う。
+        has_patterns = bool(self.shift_patterns) and any(
+            int(p.get("count_weekday", p.get("count", 0)) or 0) > 0
+            or int(p.get("count_weekend", p.get("count", 0)) or 0) > 0
+            or int(p.get("count_holiday", p.get("count", 0)) or 0) > 0
+            for p in self.shift_patterns)
         final_slots = {}
         for t, counts in slots.items():
-            # v3.7.73: シフトパターン人数優先方式に変更
-            # 旧設計 (max(base, role) + pattern_sum) では、
-            #   ベース 7名 + 早番 3名 → 全時間帯で 7+3=10 名 という不自然な要件になり、
-            #   結果として MILP は「全員通しシフト」を選んで 7名以上を確保する戦略を取る。
-            #   これではユーザーの「早番3名+遅番4名=日合計7名」という意図と乖離する。
-            # 新設計:
-            #   パターン人数 (count_weekday 等) が指定されていれば、その時間帯は
-            #   パターン人数 (重ねがけ可) のみを必要人数とする。
-            #   パターン人数が指定されていない時間帯 (パターン外の余り時間) は
-            #   従来通り max(base, role) を必要人数とする。
-            # これでユーザーが「早番3 + 遅番4」と指定すれば、各時間帯で 3 名 or 4 名
-            # (重複帯は合算 7 名) が必要人数となり、MILP が早番/遅番を選ぶようになる。
             base_or_rule = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
             pattern_sum = counts.get("pattern_sum", 0)
             if pattern_sum > 0:
                 final_slots[t] = pattern_sum
+            elif has_patterns:
+                # パターン登録あり + この時間帯はパターン外 → 要件 0
+                final_slots[t] = 0
             else:
+                # パターン未登録 → 従来通りベース要件
                 final_slots[t] = base_or_rule
         return final_slots
 
