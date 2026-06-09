@@ -6841,85 +6841,80 @@ const app = {
 
     async submitMultiRequest() { return this.submitRequest(); },
 
+    // v3.7.138: 連続クリック防止フラグ
+    _requestInFlight: new Set(),
+
     async handleRequest(id, status) {
+        // v3.7.138: 連続クリック / 同時処理を阻止
+        if (this._requestInFlight.has(id)) {
+            this.showToast('処理中です。少しお待ちください', 'warning');
+            return;
+        }
         if (!confirm(status === 'approved' ? '承認しますか？' : '却下しますか？')) return;
+        this._requestInFlight.add(id);
         this.showLoading(true);
         try {
-            await this._requestUpdateStatus(id, status);
-            
-            // 承認時の追加処理
             if (status === 'approved') {
-                const req = this.state.requests.find(r => r.id == id);
-                if (req) {
-                    // 1. 勤務希望ならシフト作成
-                    if (req.type === 'work') {
-                        // 開始・終了時間が指定されていない場合は店舗設定から取得などのロジックが必要だが
-                        // ここではリクエストになければデフォルト値を入れる
-                        const start = req.start_time || this.state.config.opening_time || '09:00';
-                        const end = req.end_time || this.state.config.closing_time || '18:00';
-                        await this._shiftUpsert(null, {
-                            staff_id: req.staff_id,
-                            date: req.dates,
-                            start_time: start,
-                            end_time: end,
-                            break_minutes: 60
-                        });
-                    }
-                    // 2. 休み希望なら unavailable_dates を更新
-                    else if (req.type === 'off' || req.type === 'holiday') {
-                        const staff = this.getStaff(req.staff_id);
-                        if (staff) {
-                            // 複数日カンマ区切り対応
-                            const reqDates = String(req.dates).split(',').map(d => d.trim()).filter(d => d);
-                            let uDates = [];
-                            if (staff.unavailable_dates) {
-                                uDates = Array.isArray(staff.unavailable_dates)
-                                    ? [...staff.unavailable_dates]
-                                    : String(staff.unavailable_dates).split(',').map(d => d.trim()).filter(d => d);
-                            }
-                            let changed = false;
-                            for (const dateStr of reqDates) {
-                                if (!uDates.includes(dateStr)) {
-                                    uDates.push(dateStr);
-                                    changed = true;
-                                }
-                            }
-                            if (changed) {
-                                const cid = this._getContractId();
-                                if (cid) {
-                                    await API.rpc('upsert_staff_by_contract', {
-                                        p_contract_id: cid,
-                                        p_staff_id: staff.id,
-                                        p_data: { unavailable_dates: uDates }
-                                    });
-                                }
-                                staff.unavailable_dates = uDates;
-                            }
-                        }
-                    }
+                // v3.7.138: アトミック RPC で requests + shifts + staff を 1 トランザクション
+                const cid = this._getContractId();
+                if (!cid) throw new Error('contract_id 未取得');
+                const r = await API.rpc('approve_request_atomic_by_contract', {
+                    p_contract_id: cid,
+                    p_request_id: id,
+                });
+                if (!r || r.success !== true) {
+                    throw new Error(r?.message || '承認に失敗しました');
                 }
+            } else {
+                // 却下は単純ステータス更新のみ
+                await this._requestUpdateStatus(id, status);
             }
             await this.loadData();
             this.renderRequests(document.getElementById('viewContainer'));
-            this.showToast('処理完了', 'success');
-        } catch(e) { this.showToast('エラー発生', 'error'); } finally { this.showLoading(false); }
+            this.showToast(status === 'approved' ? '承認しました' : '却下しました', 'success');
+        } catch(e) {
+            console.error('[handleRequest]', e);
+            this.showToast(e.message || 'エラー発生', 'error');
+        } finally {
+            this._requestInFlight.delete(id);
+            this.showLoading(false);
+        }
     },
 
     async handleBatchApprove() {
         const pending = this.state.requests.filter(r => r.status === 'pending');
         if (pending.length === 0) return;
         if (!confirm(`承認待ち ${pending.length}件 を全て承認しますか？`)) return;
-
         this.showLoading(true);
-        try {
-            for (const req of pending) {
-                await this.handleRequest(req.id, 'approved');
-            }
-        } catch (e) {
-            this.showToast('一括承認中にエラーが発生しました', 'error');
-        } finally {
+        // v3.7.138: 失敗件を記録して最後にまとめて報告
+        let okCount = 0, failCount = 0;
+        const cid = this._getContractId();
+        if (!cid) {
+            this.showToast('contract_id 未取得', 'error');
             this.showLoading(false);
+            return;
         }
+        for (const req of pending) {
+            try {
+                const r = await API.rpc('approve_request_atomic_by_contract', {
+                    p_contract_id: cid,
+                    p_request_id: req.id,
+                });
+                if (r && r.success) okCount++;
+                else failCount++;
+            } catch (e) {
+                console.error('[batchApprove]', req.id, e);
+                failCount++;
+            }
+        }
+        await this.loadData();
+        this.renderRequests(document.getElementById('viewContainer'));
+        if (failCount === 0) {
+            this.showToast(`${okCount}件 すべて承認しました`, 'success');
+        } else {
+            this.showToast(`${okCount}件 承認 / ${failCount}件 失敗`, failCount > 0 ? 'warning' : 'success');
+        }
+        this.showLoading(false);
     },
 
     updateRequestBadge() {
