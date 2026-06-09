@@ -1547,7 +1547,9 @@ class ShiftScheduler:
                         # ただしスロットレベルの要件が日次ベースより大きい場合は、
                         # スロット要件の最大値を基準にして矛盾を防ぐ
                         slot_reqs_for_day = self._build_slot_requirements(d)
-                        # キャッシュしてスロットループでの再計算を防ぐ
+                        # v3.7.125: キャッシュは Tier ごとに初期化 (Tier 間 汚染防止)
+                        # 旧版は __init__ 後に初回作成、Tier 1 失敗で Tier 2 再試行時に
+                        # 前 Tier の値が残るリスクがあった
                         if not hasattr(self, '_slot_reqs_cache'):
                             self._slot_reqs_cache = {}
                         self._slot_reqs_cache[d] = slot_reqs_for_day
@@ -1573,8 +1575,9 @@ class ShiftScheduler:
                                     workers.append(x[(sid, d, oi)])
                         if workers:
                             workers_sum = pulp.lpSum(workers)
-                            # 全営業スロットで最低1名は必ず確保
-                            if not force:
+                            # v3.7.125: req=0 (パターン外時間帯) では最低1名要求しない
+                            # フロント側の人員状況計算 (v3.7.80) と整合
+                            if not force and req > 0:
                                 min1_slack = pulp.LpVariable(
                                     "min1_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                                 prob += workers_sum + min1_slack >= 1

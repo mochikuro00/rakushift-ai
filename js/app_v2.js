@@ -2571,7 +2571,12 @@ const app = {
                         // === Month Style (Block) === v3.7.94: 開始時刻のみ HH:MM 表示してオーバーフロー回避
                         const stShort = (shift.start_time || '').slice(0, 5);
                         const etShort = (shift.end_time || '').slice(0, 5);
-                        const monthDrag = this.state.isAdmin ? `draggable="true" ondragstart="app.onShiftDragStart(event)" ondragend="app.onShiftDragEnd(event)" data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="cursor:grab;"` : '';
+                        // v3.7.125: Month モードでバーの onclick を td の onclick と分離
+                        //   バーをクリック → openEditShift / セル空きをクリック → 同じく編集
+                        //   ドラッグ時は onclick 発火しない (mouseup なし) ので衝突なし
+                        const monthDrag = this.state.isAdmin
+                            ? `draggable="true" ondragstart="app.onShiftDragStart(event)" ondragend="app.onShiftDragEnd(event)" data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="cursor:grab;" onclick="event.stopPropagation(); app.openEditShift('${shift.id}')"`
+                            : '';
                         content = `<div class="w-full h-full p-0.5"><div ${monthDrag} class="${barColor} border-l-2 rounded text-[9px] sm:text-[10px] font-bold text-center leading-tight py-1 shadow-sm" style="overflow:hidden;">${stShort}<br>${etShort}</div></div>`;
                     }
                 } else if (isSpecialHoliday) {
@@ -3707,10 +3712,10 @@ const app = {
                                         return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-2">
-                                                <input type="text" class="setting-role-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${role.name}" placeholder="役職名">
+                                                <input type="text" class="setting-role-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${this._sanitize(role.name)}" placeholder="役職名">
                                             </td>
                                             <td class="p-2">
-                                                <input type="text" class="setting-role-id w-full border-gray-300 rounded px-2 py-1.5 text-sm bg-gray-50" value="${role.id}" readonly title="IDは変更できません">
+                                                <input type="text" class="setting-role-id w-full border-gray-300 rounded px-2 py-1.5 text-sm bg-gray-50" value="${this._sanitize(role.id)}" readonly title="IDは変更できません">
                                             </td>
                                             <td class="p-2">
                                                 <select class="setting-role-color w-full border-gray-300 rounded px-2 py-1.5 text-sm">
@@ -5277,14 +5282,17 @@ const app = {
         return true;
     },
 
-    // v3.7.118: シフト入れ替え (swap) - DnD ドロップ先に既存シフトがあるとき
+    // v3.7.125: シフト入れ替え (swap) - 完全なロールバック実装
     async swapShifts(shiftA, shiftB) {
         const aId = shiftA.id, bId = shiftB.id;
         const origA = { staff_id: shiftA.staff_id, date: shiftA.date };
         const origB = { staff_id: shiftB.staff_id, date: shiftB.date };
+        let firstSucceeded = false;
         try {
             await this._shiftUpsert(aId, { staff_id: origB.staff_id, date: origB.date });
+            firstSucceeded = true;
             await this._shiftUpsert(bId, { staff_id: origA.staff_id, date: origA.date });
+            // 両方成功 → state 反映
             shiftA.staff_id = origB.staff_id; shiftA.date = origB.date;
             shiftB.staff_id = origA.staff_id; shiftB.date = origA.date;
             this.renderCurrentView();
@@ -5293,46 +5301,68 @@ const app = {
             const nameB = this.getStaff(shiftB.staff_id)?.name || '?';
             this.showToast(`入れ替え完了 (${nameA} ⇄ ${nameB})`, 'success');
         } catch (err) {
-            console.error('swap failed:', err);
-            this.showToast('入れ替えに失敗しました', 'error');
-            // 最善努力ロールバック (1件目だけ成功した場合)
-            try { await this._shiftUpsert(aId, origA); } catch {}
-            try { await this._shiftUpsert(bId, origB); } catch {}
+            console.error('[swapShifts] failed:', err);
+            // 1件目だけ成功していたらロールバック (確実に元に戻す)
+            if (firstSucceeded) {
+                try {
+                    await this._shiftUpsert(aId, origA);
+                    this.showToast('入れ替え失敗 → 元の状態に戻しました', 'warning');
+                } catch (rollbackErr) {
+                    console.error('[swapShifts] ROLLBACK FAILED:', rollbackErr);
+                    this.showToast(
+                        '入れ替え失敗 + ロールバック失敗。手動で確認してください',
+                        'error'
+                    );
+                }
+            } else {
+                this.showToast('入れ替え失敗 (変更なし)', 'error');
+            }
             this.renderCurrentView();
         }
     },
 
+    // v3.7.125: ローカル state 復旧つき DnD 更新
     async updateShiftDrag(shiftId, updates) {
+        const shift = this.state.shifts.find(s => s.id === shiftId);
+        if (!shift) {
+            console.warn('[updateShiftDrag] shift not found:', shiftId);
+            return;
+        }
+        // 元の値をスナップショット (失敗時の復旧用)
+        const snapshot = { ...shift };
         try {
             await this._shiftUpsert(shiftId, updates);
-            // ローカルステートも更新
-            const shift = this.state.shifts.find(s => s.id === shiftId);
-            if (shift) {
-                Object.assign(shift, updates);
-            }
+            Object.assign(shift, updates);
             // 休憩時間を再計算
-            if (shift && (updates.start_time || updates.end_time)) {
+            if (updates.start_time || updates.end_time) {
                 const [sh, sm] = shift.start_time.split(':').map(Number);
                 const [eh, em] = shift.end_time.split(':').map(Number);
                 let hours = (eh + em / 60) - (sh + sm / 60);
-                if (hours <= 0) hours += 24; // 日またぎ対応
+                if (hours <= 0) hours += 24;
                 const breakRules = this.state.config.break_rules || this.state.defaultConfig.break_rules || [];
                 let brk = 0;
                 for (const rule of breakRules.sort((a, b) => a.min_hours - b.min_hours)) {
                     if (hours >= rule.min_hours) brk = rule.break_minutes;
                 }
                 if (shift.break_minutes !== brk) {
-                    shift.break_minutes = brk;
-                    await this._shiftUpsert(shiftId, { break_minutes: brk });
+                    try {
+                        await this._shiftUpsert(shiftId, { break_minutes: brk });
+                        shift.break_minutes = brk;
+                    } catch (brkErr) {
+                        // 休憩時間更新失敗は致命的ではない (memo に記録)
+                        console.warn('[updateShiftDrag] break_minutes update failed:', brkErr);
+                    }
                 }
             }
             this.renderCurrentView();
             this.updateHeader();
-            const staff = this.getStaff(updates.staff_id || shift?.staff_id);
+            const staff = this.getStaff(updates.staff_id || shift.staff_id);
             this.showToast(`シフトを更新しました${staff ? ' (' + staff.name + ')' : ''}`, 'success');
         } catch (e) {
-            console.error('Drag update failed:', e);
-            this.showToast('シフト更新に失敗しました', 'error');
+            console.error('[updateShiftDrag] failed:', e);
+            // スナップショットから復旧
+            Object.assign(shift, snapshot);
+            this.showToast('シフト更新失敗 → 元に戻しました', 'error');
             this.renderCurrentView();
         }
     },
@@ -5837,17 +5867,25 @@ const app = {
             if (Object.keys(patternTargets[k]).length === 0) delete patternTargets[k];
         });
 
+        // v3.7.125: 数値フィールドの sanitize 強化 (空文字/NaN → デフォルト値)
+        const safeNum = (id, def, min, max) => {
+            const v = Number(document.getElementById(id)?.value);
+            if (!Number.isFinite(v)) return def;
+            if (min != null && v < min) return def;
+            if (max != null && v > max) return def;
+            return v;
+        };
         const data = {
             name: (document.getElementById('staffName')?.value || ''),
             role: (document.getElementById('staffRole')?.value || ''),
             evaluation: (document.getElementById('staffEvaluation')?.value || ''),
             salary_type: (document.getElementById('staffSalaryType')?.value || ''),
-            hourly_wage: Number((document.getElementById('staffHourlyWage')?.value || '')),
-            monthly_salary: Number((document.getElementById('staffMonthlySalary')?.value || '')),
-            max_days_week: Number((document.getElementById('staffMaxDaysPerWeek')?.value || '')),
-            max_hours_day: Number((document.getElementById('staffMaxHoursPerDay')?.value || '')),
-            min_days_week: Number((document.getElementById('staffMinDaysPerWeek')?.value || '')) || 0,
-            min_days_month: Number((document.getElementById('staffMinDaysPerMonth')?.value || '')) || 0,
+            hourly_wage: safeNum('staffHourlyWage', 1100, 0, 100000),
+            monthly_salary: safeNum('staffMonthlySalary', 0, 0, 10000000),
+            max_days_week: safeNum('staffMaxDaysPerWeek', 5, 1, 7),
+            max_hours_day: safeNum('staffMaxHoursPerDay', 8, 1, 24),
+            min_days_week: safeNum('staffMinDaysPerWeek', 0, 0, 7),
+            min_days_month: safeNum('staffMinDaysPerMonth', 0, 0, 31),
             // v3.7.91: 月の最大出勤日数 (デフォルト 31 = 制限なし)
             max_days_month: (() => {
                 const v = Number(document.getElementById('staffMaxDaysPerMonth')?.value);
@@ -7001,63 +7039,81 @@ const app = {
 
 
     // 一括保存 (大量データの保存)
-            async saveAllShifts(shifts) {
+    // v3.7.125: ロールバック対応 - DB 操作失敗時に state を元に戻す
+    async saveAllShifts(shifts) {
         if (!shifts || shifts.length === 0) return;
 
-        var targetDates = [...new Set(shifts.map(function(s){ return s.date; }))];
-
-        // v17 重複シフト累積バグ修正:
-        // 旧版: REST 直接 DELETE → RLS で無音失敗 → 既存削除されず → INSERT で累積
-        // 新版: session-less RPC で日付指定削除
-        console.log("Deleting existing shifts for " + targetDates.length + " days (session-less RPC)...");
-        try {
-            const cid = this._getContractId();
-            if (cid) {
-                const r = await API.rpc('delete_shifts_by_dates_by_contract', {
-                    p_contract_id: cid,
-                    p_dates: targetDates
-                });
-                console.log('[saveAllShifts] bulk delete result:', r);
-            } else {
-                console.warn('[saveAllShifts] contract_id 未取得 → 既存削除スキップ (重複の恐れ)');
-            }
-        } catch(e) {
-            console.error("Bulk delete error:", e);
+        const targetDates = [...new Set(shifts.map(s => s.date))];
+        const cid = this._getContractId();
+        if (!cid) {
+            this.showToast('contract_id 未取得 → 保存中止 (重複防止)', 'error');
+            throw new Error('contract_id not available');
         }
 
-        this.state.shifts = this.state.shifts.filter(function(s){ return targetDates.indexOf(s.date) === -1; });
+        // 元の state を スナップショット (失敗時のロールバック用)
+        const snapshot = this.state.shifts.slice();
 
-        var cleanShifts = shifts.map(function(s){
-            var obj = {
+        // === 1. 既存日のシフトを DB から削除 (失敗したら中止) ===
+        try {
+            const r = await API.rpc('delete_shifts_by_dates_by_contract', {
+                p_contract_id: cid,
+                p_dates: targetDates
+            });
+            if (!r || r.success === false) {
+                throw new Error(r?.message || 'bulk delete returned failure');
+            }
+        } catch (e) {
+            console.error('[saveAllShifts] bulk delete failed:', e);
+            this.showToast('シフト保存失敗 (既存削除エラー): ' + (e.message || e), 'error');
+            throw e;  // state は変更せず終了
+        }
+
+        // 削除成功 → state をフィルタ
+        this.state.shifts = this.state.shifts.filter(s => targetDates.indexOf(s.date) === -1);
+
+        // === 2. INSERT 用ペイロード構築 ===
+        const cleanShifts = shifts.map(s => {
+            const obj = {
                 organization_id: this.state.organization_id,
                 staff_id: s.staff_id,
                 date: s.date,
                 start_time: s.start_time,
                 end_time: s.end_time,
-                break_minutes: s.break_minutes || 0
+                break_minutes: s.break_minutes || 0,
             };
-            // イレギュラーフラグがある場合のみ保存
             if (s.is_irregular) obj.is_irregular = true;
-            // v3.7.102: memo を保存 (scheduler 補完シフトの識別用)
-            // 補完シフトの memo を保存しないと UI で人員状況計算時に
-            // 「補完分」を slot_req に加算できず、過剰判定が乱発する
             if (s.memo) obj.memo = s.memo;
             return obj;
-        }.bind(this));
+        });
 
-        // RLS バイパスのため session-less RPC で一括 INSERT
-        var batchSize = 200;
-        for (var i = 0; i < cleanShifts.length; i += batchSize) {
-            var batch = cleanShifts.slice(i, i + batchSize);
+        // === 3. バッチ INSERT (失敗バッチを記録) ===
+        const batchSize = 200;
+        const failedBatches = [];
+        let insertedCount = 0;
+        for (let i = 0; i < cleanShifts.length; i += batchSize) {
+            const batch = cleanShifts.slice(i, i + batchSize);
             try {
                 await this._shiftBulkInsert(batch);
-            } catch(e) {
-                console.error("Batch save error:", e);
+                insertedCount += batch.length;
+            } catch (e) {
+                console.error(`[saveAllShifts] batch ${i / batchSize} failed:`, e);
+                failedBatches.push({ index: i, size: batch.length, error: e.message });
             }
         }
 
+        if (failedBatches.length > 0) {
+            // 部分失敗: ロールバックは複雑なので、ユーザーに明示通知
+            this.showToast(
+                `保存一部失敗: ${insertedCount}/${cleanShifts.length}件成功、${failedBatches.length}バッチ失敗。再保存してください`,
+                'error'
+            );
+            // 成功した分だけ state に追加 (= insertedCount 分は反映)
+            this.state.shifts.push.apply(this.state.shifts, cleanShifts.slice(0, insertedCount));
+            throw new Error(`partial save: ${failedBatches.length} batches failed`);
+        }
+
+        // 全成功
         this.state.shifts.push.apply(this.state.shifts, cleanShifts);
-        console.log("All shifts saved.");
     },
 
 
