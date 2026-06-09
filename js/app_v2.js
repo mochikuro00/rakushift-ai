@@ -3803,33 +3803,6 @@ const app = {
                                 `).join('')}
                                 ${specialHolidays.length === 0 ? '<span class="text-xs text-gray-400">設定なし</span>' : ''}
                             </div>
-                            
-                            <!-- 特定日の営業時間（短縮営業など） -->
-                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-3">特定日の営業時間変更 (短縮営業など)</h4>
-                            <div class="space-y-3" id="specialDaysContainer">
-                                <div class="flex items-center gap-2 flex-wrap bg-yellow-50 p-2 rounded-lg border border-yellow-100">
-                                    <input type="date" id="newSpecialDayDate" class="border-gray-300 rounded px-2 py-1 text-sm">
-                                    <div class="w-24">${this.get15MinTimeSelect('', 'newSpecialDayStart', 'border-gray-300 rounded px-2 py-1 text-sm w-full')}</div>
-                                    <span class="text-gray-400 text-xs">～</span>
-                                    <div class="w-24">${this.get15MinTimeSelect('', 'newSpecialDayEnd', 'border-gray-300 rounded px-2 py-1 text-sm w-full')}</div>
-                                    <input type="text" id="newSpecialDayNote" class="border-gray-300 rounded px-2 py-1 text-sm w-24" placeholder="メモ (例: 短縮)">
-                                    <button onclick="app.addSpecialDay()" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded text-xs font-bold hover:bg-yellow-200 transition">追加</button>
-                                </div>
-                                
-                                <div class="space-y-2">
-                                    ${Object.entries(specialDays).map(([date, conf]) => `
-                                        <div class="flex items-center justify-between bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm">
-                                            <div class="flex items-center gap-3">
-                                                <span class="font-bold text-gray-800">${this._sanitize(date)}</span>
-                                                <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs font-mono">${this._sanitize(conf.start)} - ${this._sanitize(conf.end)}</span>
-                                                <span class="text-gray-500 text-xs">${this._sanitize(conf.note || '')}</span>
-                                            </div>
-                                            <button onclick="app.removeSpecialDay('${date}')" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
-                                        </div>
-                                    `).join('')}
-                                    ${Object.keys(specialDays).length === 0 ? '<p class="text-xs text-gray-400 pl-2">設定なし</p>' : ''}
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -3898,35 +3871,7 @@ const app = {
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-xs text-gray-400 mt-3">💡 ここで登録したパターンの中からAIが最適な組み合わせを選びます。パターンが多いほどAIの選択肢が広がります。</p>
-                        <div class="mt-4 pt-4 border-t border-gray-100">
-                            <p class="text-xs font-bold text-gray-500 mb-2"><i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-1"></i>プリセットから一括追加</p>
-                            <div class="flex flex-wrap gap-2">
-                                <button onclick="app.applyShiftPreset('restaurant')" class="text-xs bg-orange-50 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-lg font-bold hover:bg-orange-100 transition">
-                                    <i class="fa-solid fa-utensils mr-1"></i>飲食店向け
-                                </button>
-                                <!-- v3.7.58: 2部営業 (中抜き) プリセット -->
-                                <button onclick="app.applyShiftPreset('lunch_dinner')" class="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition">
-                                    <i class="fa-solid fa-bell-concierge mr-1"></i>2部営業 (ランチ+ディナー)
-                                </button>
-                                <button onclick="app.applyShiftPreset('lunch_only')" class="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-1.5 rounded-lg font-bold hover:bg-yellow-100 transition">
-                                    <i class="fa-solid fa-mug-hot mr-1"></i>ランチのみ
-                                </button>
-                                <button onclick="app.applyShiftPreset('dinner_only')" class="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 transition">
-                                    <i class="fa-solid fa-wine-glass mr-1"></i>ディナーのみ
-                                </button>
-                                <button onclick="app.applyShiftPreset('office')" class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition">
-                                    <i class="fa-solid fa-building mr-1"></i>オフィス向け
-                                </button>
-                                <button onclick="app.applyShiftPreset('retail')" class="text-xs bg-green-50 text-green-600 border border-green-200 px-3 py-1.5 rounded-lg font-bold hover:bg-green-100 transition">
-                                    <i class="fa-solid fa-store mr-1"></i>小売店向け
-                                </button>
-                                <button onclick="app.applyShiftPreset('medical')" class="text-xs bg-pink-50 text-pink-600 border border-pink-200 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition">
-                                    <i class="fa-solid fa-hospital mr-1"></i>医療・介護向け
-                                </button>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-3">💡 平日・土曜・日祝でシフトパターンごとの必要人数を分けて設定できます。</p>
-                        </div>
+                        <p class="text-xs text-gray-400 mt-3">💡 ここで登録したパターンの中からAIが最適な組み合わせを選びます。平日・土曜・日祝でパターンごとの必要人数を分けて設定できます。</p>
                     </div>
                 </div>
 

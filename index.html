@@ -913,60 +913,13 @@
                 </div>
                 
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">契約区分</label>
-                        <select id="staffContractType" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                            <option value="regular">レギュラー</option>
-                            <option value="general" selected>一般</option>
-                            <option value="spot">スポット・ヘルプ</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">シフト優先度</label>
-                        <select id="staffShiftPriority" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                            <option value="high">高 (最優先)</option>
-                            <option value="medium" selected>中 (通常)</option>
-                            <option value="low">低 (穴埋めのみ)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div class="flex items-center justify-between mb-1">
-                        <div class="text-sm font-bold text-gray-800">シフト希望時間</div>
-                        <label class="flex items-center cursor-pointer">
-                            <input type="checkbox" id="staffUsePrefHours" class="sr-only peer" onchange="app.togglePrefHoursInputs()">
-                            <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 relative"></div>
-                            <span class="ml-2 text-xs font-bold text-gray-600">希望時間を指定する</span>
-                        </label>
-                    </div>
-                    <p class="text-[10px] text-gray-500 leading-tight mb-2">※社員など、希望時間に関わらず店舗状況に合わせて柔軟にシフトに入ってほしいスタッフは「OFF」にしてください。</p>
-                    
-                    <div id="prefHoursInputGroup" class="hidden mt-3 pt-3 border-t border-gray-200">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-600 mb-1">平日 基本出勤時間</label>
-                                <input type="time" id="staffPrefStartWeekday" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-600 mb-1">平日 基本退勤時間</label>
-                                <input type="time" id="staffPrefEndWeekday" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-600 mb-1">土日祝 基本出勤時間</label>
-                                <input type="time" id="staffPrefStartWeekend" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-600 mb-1">土日祝 基本退勤時間</label>
-                                <input type="time" id="staffPrefEndWeekend" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            </div>
-                        </div>
-                        <p class="text-[10px] text-blue-600 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>土日希望時間が空欄の場合、保存時に平日希望時間が自動補完されます (時給制スタッフのみ)。土日に出勤させたくない場合は、上の「基本出勤曜日」で土・日のチェックを外してください。</p>
-                    </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">シフト優先度</label>
+                    <select id="staffShiftPriority" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                        <option value="high">高 (最優先)</option>
+                        <option value="medium" selected>中 (通常)</option>
+                        <option value="low">低 (穴埋めのみ)</option>
+                    </select>
                 </div>
 
                 <div class="mt-4">
