@@ -2840,8 +2840,8 @@ const app = {
                 }).join('');
 
                 // 要約テキスト (1 行)
-                // v3.7.126-127: 過剰時は「スタッフ総数要件 + 過剰導入分」の内訳を明示
-                //   v3.7.127: 1スロットでも過剰があれば過剰表示 (旧: 1/3以上で表示)
+                // v3.7.126-128: 要件と実配置の両方を明示
+                //   v3.7.128: ぴったり時も「要N名 配置M名」形式で数字の整合を可視化
                 let summary, summaryColor;
                 if (shortageSlots > 0) {
                     cellBg = 'bg-red-50';
@@ -2850,11 +2850,10 @@ const app = {
                 } else if (surplusSlots > 0) {
                     cellBg = 'bg-amber-50';
                     summaryColor = 'text-amber-600';
-                    // 要件 N + 過剰 M = 実配置 (N+M)
                     summary = `⚡ 要${maxSlotReq}+過剰${worstSurplus}=${maxConcurrent}名`;
                 } else {
                     summaryColor = 'text-green-600';
-                    summary = `✓ ${maxConcurrent}名配置`;
+                    summary = `✓ 要${maxSlotReq}名/配置${maxConcurrent}名`;
                 }
 
                 const animateCls = shortageSlots > 0 ? 'animate-pulse' : '';
