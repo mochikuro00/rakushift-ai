@@ -635,7 +635,16 @@ class ShiftScheduler:
         options = []
         seen = set()
 
-        patterns_to_use = self.shift_patterns.copy()
+        # v3.7.109: 該当シフトパターンチェックでフィルタ
+        # staff.eligible_patterns が空配列 or null → 全パターン該当 (デフォルト)
+        # staff.eligible_patterns が配列 → 該当するパターン名のみ使用
+        eligible = staff.get("eligible_patterns")
+        if isinstance(eligible, list) and len(eligible) > 0:
+            eligible_set = set(str(e) for e in eligible)
+            patterns_to_use = [p for p in self.shift_patterns
+                               if (p.get("name") or "") in eligible_set]
+        else:
+            patterns_to_use = self.shift_patterns.copy()
 
         # v3.7.62: ユーザー要望「シフト生成時はシフトパターンのみで考えて展開」
         # 旧 v3.6: スタッフ希望時間 (pref_start_wd 等) を pref_pat として追加していた

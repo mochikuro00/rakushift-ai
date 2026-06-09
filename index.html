@@ -1072,10 +1072,20 @@
                     </div>
                 </div>
 
+                <!-- v3.7.109: 該当シフトパターン (チェックで割り当て可否) -->
+                <div class="border-t border-gray-100 pt-4 mt-2">
+                    <h4 class="text-sm font-bold text-indigo-600 mb-2"><i class="fa-solid fa-list-check"></i> 該当シフトパターン</h4>
+                    <p class="text-xs text-gray-500 mb-3">このスタッフが入れる (=該当する) シフトパターンにチェックを入れてください。<strong>全て未チェック</strong> または初期状態 = 全パターン該当 (デフォルト)。</p>
+                    <div id="staffEligiblePatternsContainer" class="space-y-1">
+                        <!-- JS で config.custom_shifts に基づき動的描画 -->
+                        <p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>
+                    </div>
+                </div>
+
                 <!-- v3.7.77: シフトパターン別 月間目標回数 -->
                 <div class="border-t border-gray-100 pt-4 mt-2">
-                    <h4 class="text-sm font-bold text-teal-600 mb-2"><i class="fa-solid fa-shuffle"></i> シフトパターン別 月間目標回数</h4>
-                    <p class="text-xs text-gray-500 mb-3">このスタッフを、各シフトパターンに月何回入れたいかを指定します。例: 早番 3回、遅番 3回、夜勤 3回。空欄なら自動配置 (制約なし)。</p>
+                    <h4 class="text-sm font-bold text-teal-600 mb-2"><i class="fa-solid fa-shuffle"></i> シフトパターン別 月間目標回数 (最低/最高)</h4>
+                    <p class="text-xs text-gray-500 mb-3">該当パターンの中で「月N回〜M回入れたい」を指定します。空欄なら制約なし。</p>
                     <div id="staffPatternTargetsContainer" class="space-y-2">
                         <!-- JS で config.custom_shifts に基づき動的描画 -->
                         <p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>

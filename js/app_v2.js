@@ -5412,6 +5412,8 @@ const app = {
         }
         // v3.7.77: シフトパターン目標回数 (新規スタッフは空)
         this.renderStaffPatternTargets({});
+        // v3.7.109: 該当シフトパターン (新規スタッフは全該当 = 配列空)
+        this.renderStaffEligiblePatterns([]);
 
         // v3.7.101: 前回編集時の値が残るバグ対策。明示的に全フィールドを
         // デフォルト値に初期化 (form.reset() だけだと placeholder のみ残る
@@ -5439,6 +5441,68 @@ const app = {
         // 一番下に「役職」select はデフォルト (manager等の最初の選択肢) のまま
         this.toggleSalaryInputs();
         this.togglePrefHoursInputs();
+    },
+
+    // v3.7.109: 該当シフトパターンチェックの動的描画
+    renderStaffEligiblePatterns(eligible) {
+        const container = document.getElementById('staffEligiblePatternsContainer');
+        if (!container) return;
+        const patterns = this.state.config.custom_shifts || [];
+        if (patterns.length === 0) {
+            container.innerHTML = `<p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>`;
+            return;
+        }
+        const eligibleArr = Array.isArray(eligible) ? eligible : [];
+        const isDefault = eligibleArr.length === 0; // 空 = 全該当 (デフォルト)
+        container.innerHTML = `
+            <div class="flex items-center justify-between mb-2 bg-indigo-50 px-3 py-1.5 rounded">
+                <label class="text-xs flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="staffEligibleAll" class="w-4 h-4" ${isDefault ? 'checked' : ''}>
+                    <span class="font-bold text-indigo-700">全パターン該当 (デフォルト)</span>
+                </label>
+                <button type="button" onclick="app.toggleAllEligible(false)" class="text-[10px] text-indigo-600 hover:underline">個別に選択 →</button>
+            </div>
+            <div id="staffEligibleRows" class="space-y-1" style="${isDefault ? 'opacity:0.5;' : ''}">
+                ${patterns.map((pat, idx) => {
+                    const name = this._sanitize(pat.name || `パターン${idx+1}`);
+                    const start = this._sanitize(pat.start || '');
+                    const end = this._sanitize(pat.end || '');
+                    const key = pat.name || `pattern_${idx}`;
+                    const checked = isDefault ? true : eligibleArr.includes(key);
+                    return `
+                        <label class="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-indigo-50">
+                            <input type="checkbox" class="setting-staff-eligible w-5 h-5"
+                                data-pattern-key="${this._sanitize(key)}"
+                                ${checked ? 'checked' : ''}
+                                ${isDefault ? 'disabled' : ''}>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm font-bold text-gray-800 truncate">${name}</div>
+                                <div class="text-[10px] text-gray-500">${start} 〜 ${end}</div>
+                            </div>
+                            <span class="text-[10px] text-gray-400">${checked ? '☑ 該当' : '☐ 該当外'}</span>
+                        </label>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        // 全パターン該当のチェック切替時の挙動
+        const allCb = document.getElementById('staffEligibleAll');
+        if (allCb) {
+            allCb.addEventListener('change', (e) => this.toggleAllEligible(e.target.checked));
+        }
+    },
+
+    // v3.7.109: 「全パターン該当」 ON/OFF の切替
+    toggleAllEligible(useAll) {
+        const allCb = document.getElementById('staffEligibleAll');
+        const rows = document.getElementById('staffEligibleRows');
+        if (allCb) allCb.checked = useAll;
+        if (!rows) return;
+        rows.style.opacity = useAll ? '0.5' : '1';
+        rows.querySelectorAll('.setting-staff-eligible').forEach(cb => {
+            cb.disabled = useAll;
+            if (useAll) cb.checked = true;
+        });
     },
 
     // v3.7.77: シフトパターン別月間目標回数の動的描画
@@ -5643,6 +5707,24 @@ const app = {
             if (cb && !cb.checked) ngWeekdays.push(i);
         }
 
+        // v3.7.109: 該当シフトパターン (チェック) を収集
+        //   「全パターン該当」が ON か、個別チェックが全部 ON なら 空配列 (= 全該当)
+        //   一部だけチェックなら 該当パターン名の配列
+        let eligiblePatterns = [];
+        const allCb = document.getElementById('staffEligibleAll');
+        if (allCb && allCb.checked) {
+            eligiblePatterns = []; // 全該当 デフォルト
+        } else {
+            const checks = Array.from(document.querySelectorAll('.setting-staff-eligible'));
+            const checked = checks.filter(c => c.checked).map(c => c.getAttribute('data-pattern-key')).filter(Boolean);
+            // 全部チェック されているなら空配列 (= 全該当 と同じなので保存スペース節約)
+            if (checks.length > 0 && checked.length === checks.length) {
+                eligiblePatterns = [];
+            } else {
+                eligiblePatterns = checked;
+            }
+        }
+
         // v3.7.106: シフトパターン別 月間 最低/最高 回数を収集
         //   { name: { min: N, max: M } } 形式で保存
         //   min/max のいずれかが空欄なら null として保存 (制約なし)
@@ -5698,6 +5780,8 @@ const app = {
             ng_weekdays: ngWeekdays,
             // v3.7.77: シフトパターン別月間目標回数
             pattern_target_counts: patternTargets,
+            // v3.7.109: 該当シフトパターン (空配列 = 全パターン該当)
+            eligible_patterns: eligiblePatterns,
             contract_id: contractId
         };
 
@@ -5881,6 +5965,8 @@ const app = {
         }
         // v3.7.77: シフトパターン目標回数を復元
         this.renderStaffPatternTargets(s.pattern_target_counts || {});
+        // v3.7.109: 該当シフトパターン (チェック) を復元
+        this.renderStaffEligiblePatterns(Array.isArray(s.eligible_patterns) ? s.eligible_patterns : []);
         this.toggleSalaryInputs();
         this.togglePrefHoursInputs();
         this.openModal('staffModal');
