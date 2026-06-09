@@ -2753,9 +2753,10 @@ const app = {
 
                     totalSlots++;
                     const slotDeficit = slotReq - concurrent;
-                    // v3.7.105: OFF/ON 共通で過剰閾値 +1 に統一
-                    // ON でも「⚡ 過剰 +N」と表示するため (ユーザー要望)
-                    const overThreshold = 1;
+                    // v3.7.127: 過剰閾値を 0 に厳格化
+                    //   旧 (+1): slotReq+1 までは「ぴったり」扱い → 補完1名が見逃された
+                    //   新 (0): slotReq を 1名でも超えたら「過剰」として計上
+                    const overThreshold = 0;
                     let status = 'ok';
                     if (slotDeficit > 0) {
                         status = 'under';
@@ -2839,14 +2840,14 @@ const app = {
                 }).join('');
 
                 // 要約テキスト (1 行)
-                // v3.7.126: 過剰時は「スタッフ総数要件 + 過剰導入分」の内訳を明示
-                //   ユーザー要望: 過剰ON時の補完シフトを要件と分けて表示
+                // v3.7.126-127: 過剰時は「スタッフ総数要件 + 過剰導入分」の内訳を明示
+                //   v3.7.127: 1スロットでも過剰があれば過剰表示 (旧: 1/3以上で表示)
                 let summary, summaryColor;
                 if (shortageSlots > 0) {
                     cellBg = 'bg-red-50';
                     summaryColor = 'text-red-600';
                     summary = `⚠ 不足${worstDeficit}名 (${minConcurrentTime})`;
-                } else if (surplusSlots > totalSlots / 3) {
+                } else if (surplusSlots > 0) {
                     cellBg = 'bg-amber-50';
                     summaryColor = 'text-amber-600';
                     // 要件 N + 過剰 M = 実配置 (N+M)
