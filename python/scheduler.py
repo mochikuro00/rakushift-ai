@@ -435,6 +435,17 @@ class ShiftScheduler:
         m = int(mins) % 1440
         return "{:02d}:{:02d}".format(m // 60, m % 60)
 
+    def _get_staff_max_consec(self, staff):
+        """スタッフ別 max_consecutive_days を安全に取得 (1〜7 範囲外/不正値はデフォルト6)"""
+        raw = staff.get("max_consecutive_days") if isinstance(staff, dict) else None
+        try:
+            v = int(raw) if raw not in (None, "") else self.LEGAL_MAX_CONSECUTIVE_DAYS
+        except (ValueError, TypeError):
+            return self.LEGAL_MAX_CONSECUTIVE_DAYS
+        if not (1 <= v <= 7):
+            return self.LEGAL_MAX_CONSECUTIVE_DAYS
+        return v
+
     def _get_day_type(self, date_str):
         """日付の種別を判定: weekday / weekend / holiday / closed"""
         if not date_str:
@@ -1440,9 +1451,7 @@ class ShiftScheduler:
                 #         → 「月～土 6連勤 + 日(休業) + 月～土 6連勤」を許容してしまう (12連勤)
                 #   新版: self._operational_dates (営業日) で max_consec+1 個連続を禁止
                 #         → 休業日を挟んでも実出勤の連続性を厳密にカウント
-                _staff_max_consec = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
-                if not (1 <= _staff_max_consec <= 7):
-                    _staff_max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS
+                _staff_max_consec = self._get_staff_max_consec(s)
                 max_consec = _staff_max_consec
                 op_d = self._operational_dates
                 if len(op_d) > max_consec:
@@ -2381,9 +2390,7 @@ class ShiftScheduler:
                     pass
 
             # v3.7.120: 連勤上限も尊重 (営業日ベース)
-            _smc = int(staff.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
-            if not (1 <= _smc <= 7):
-                _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+            _smc = self._get_staff_max_consec(staff)
 
             picked = 0
             for d in candidates:
@@ -2532,9 +2539,7 @@ class ShiftScheduler:
         sorted_d = sorted(self.dates)
         for s in self.staff_list:
             sid = s["id"]
-            _smc = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
-            if not (1 <= _smc <= 7):
-                _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+            _smc = self._get_staff_max_consec(s)
             consec = 0
             for d in sorted_d:
                 if any(sh["staff_id"] == sid and sh["date"] == d for sh in shifts):
@@ -2607,9 +2612,7 @@ class ShiftScheduler:
             if not opts:
                 continue
             # v3.7.121: 出勤希望でも連勤上限は厳守
-            _smc = int(staff.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
-            if not (1 <= _smc <= 7):
-                _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+            _smc = self._get_staff_max_consec(staff)
             op_idx = self._operational_index.get(wd)
             already_dates = {sh["date"] for sh in shifts if sh["staff_id"] == wsid}
             consec_violation = False
@@ -2850,9 +2853,7 @@ class ShiftScheduler:
 
                     # v3.7.119: 連勤チェック (営業日ベース)
                     # 営業日リスト上で d を含む _smc+1 個窓に出勤数 > _smc がないか確認
-                    _smc = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
-                    if not (1 <= _smc <= 7):
-                        _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+                    _smc = self._get_staff_max_consec(s)
                     consec_violation = False
                     op_idx = self._operational_index.get(d)
                     if op_idx is not None:
@@ -2947,9 +2948,7 @@ class ShiftScheduler:
 
         cur_consec = consecutive.get(sid, 0)
         # v3.7.116: スタッフ別 max_consecutive_days を尊重
-        _smc = int(staff.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
-        if not (1 <= _smc <= 7):
-            _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+        _smc = self._get_staff_max_consec(staff)
         if cur_consec >= _smc:
             return True  # 連続勤務超過
 
