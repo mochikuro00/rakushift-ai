@@ -2331,6 +2331,11 @@ class ShiftScheduler:
                 except ValueError:
                     pass
 
+            # v3.7.120: 連勤上限も尊重 (営業日ベース)
+            _smc = int(staff.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+            if not (1 <= _smc <= 7):
+                _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+
             picked = 0
             for d in candidates:
                 if picked >= shortage:
@@ -2342,6 +2347,22 @@ class ShiftScheduler:
                     continue
                 if week_count.get(wk, 0) >= max_dw:
                     continue  # 週最大日数 超え
+
+                # v3.7.120: 連勤窓チェック (営業日ベース)
+                op_idx = self._operational_index.get(d)
+                if op_idx is None:
+                    continue
+                consec_violation = False
+                for start in range(max(0, op_idx - _smc), op_idx + 1):
+                    if start + _smc + 1 > len(self._operational_dates):
+                        continue
+                    win = self._operational_dates[start:start + _smc + 1]
+                    in_win = sum(1 for w in win if w in already or w == d)
+                    if in_win > _smc:
+                        consec_violation = True
+                        break
+                if consec_violation:
+                    continue
 
                 # v3.7.98: 「パターン時間ぴったり一致」する opt のみを優先採用。
                 # 分割版 opt (通し 09-22 → 09-18 / 12-22) を使うと UI の
