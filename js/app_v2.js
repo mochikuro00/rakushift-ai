@@ -3432,10 +3432,17 @@ const app = {
         const ratioWeekend = demandWeekend > 0 ? supplyWeekend / demandWeekend : 0;
         const ratio = demand > 0 ? supply / demand : 0;
 
-        // ステータス判定: 平日と土日のどちらか一方でも問題があれば警告
+        // v3.7.129: allow_overstaffing ON/OFF で判定を切り替え
+        //   OFF (デフォルト): 過剰も警告 (店舗が必要人数ぴったりに合わせるため)
+        //   ON: 過剰は許容範囲扱い、不足のみ警告 (過剰補完を意図的に許可しているため)
+        const allowOverstaff = !!cfg.allow_overstaffing;
         const statusOf = (r) => {
             if (r === 0) return 'good';
-            if (r < 0.95) return 'bad-under';   // 不足
+            if (r < 0.95) return 'bad-under';   // 不足は両モードで警告
+            if (allowOverstaff) {
+                // 過剰許容モード: 過剰でも全て適正扱い
+                return 'good';
+            }
             if (r <= 1.05) return 'good';
             if (r <= 1.2) return 'warn';
             return 'bad-over';
@@ -3461,20 +3468,38 @@ const app = {
             minWeekday, minWeekend, minHoliday,
             demand, supply, supplyMax,
             ratio, status,
+            allowOverstaff,
             overDays: Math.max(0, supply - demand)
         };
     },
 
     _renderBalanceBanner(b) {
         // v3.7.44: 平日/土日別バランス表示で「全体過剰だが土日不足」の矛盾を解消
+        // v3.7.129: 過剰配置 ON/OFF でメッセージとラベルを切り替え
+        const allowOverstaff = !!b.allowOverstaff;
         const palette = {
-            good: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', icon: 'fa-circle-check', label: '適正' },
-            warn: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: 'fa-triangle-exclamation', label: 'やや過剰' },
-            bad:  { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-700', icon: 'fa-circle-exclamation', label: '要注意' }
+            good: {
+                bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700',
+                icon: 'fa-circle-check',
+                label: allowOverstaff ? '適正 (過剰許容モード)' : '適正',
+            },
+            warn: {
+                bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700',
+                icon: 'fa-triangle-exclamation',
+                label: 'やや過剰',
+            },
+            bad: {
+                bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-700',
+                icon: 'fa-circle-exclamation',
+                label: '要注意',
+            }
         };
         const p = palette[b.status];
         const subStatusLabel = (s) => ({
-            'good': '適正', 'warn': 'やや過剰', 'bad-over': '過剰', 'bad-under': '不足'
+            'good': allowOverstaff ? '許容' : '適正',
+            'warn': 'やや過剰',
+            'bad-over': '過剰',
+            'bad-under': '不足'
         }[s] || s);
         const subStatusColor = (s) => ({
             'good': 'text-emerald-600',
@@ -3489,14 +3514,32 @@ const app = {
             'bad-under': 'bg-orange-100 text-orange-700'
         }[s] || 'bg-gray-100 text-gray-600');
 
+        // v3.7.129: 全体感サマリ (一文で現状を要約)
+        const overallSummary = (() => {
+            const wd = b.statusWeekday, we = b.statusWeekend;
+            if (wd === 'bad-under' && we === 'bad-under') return '平日・土日とも スタッフ不足';
+            if (wd === 'bad-under') return '平日のスタッフが不足';
+            if (we === 'bad-under') return '土日祝のスタッフが不足';
+            if (allowOverstaff) {
+                if (wd === 'good' && we === 'good') return '過剰許容モードで稼働中 (過剰補完あり、不足なし)';
+                return '過剰許容モードで稼働中';
+            }
+            if (wd === 'bad-over' || we === 'bad-over') return '過剰登録あり (人件費過大の可能性)';
+            if (wd === 'warn' || we === 'warn') return 'やや過剰 (許容範囲)';
+            return '需給バランスは適正';
+        })();
+
         // 矛盾検出 (全体は過剰だが土日不足、など)
         const mismatchMsg = (b.statusWeekday !== b.statusWeekend && (b.statusWeekday === 'bad-under' || b.statusWeekend === 'bad-under'))
             ? `<div class="mt-2 p-2 bg-orange-50 rounded border border-orange-200 text-xs leading-relaxed text-orange-800"><i class="fa-solid fa-triangle-exclamation mr-1"></i><strong>注意:</strong> 全体は過剰でも、${b.statusWeekday === 'bad-under' ? '<strong>平日</strong>' : '<strong>土日</strong>'}に出勤可能なスタッフが不足しています。シフト生成時に一部不足が発生する可能性があります。</div>`
             : '';
 
-        const policyNote = b.status !== 'good'
-            ? `<div class="mt-2 p-2 bg-white/70 rounded border border-current/20 text-xs leading-relaxed"><i class="fa-solid fa-shield-halved mr-1"></i><strong>過剰絶対回避ポリシー (v3.7.31〜):</strong> 過剰になる場合、AIは<strong>最低出勤日数を犠牲にしてでも店舗必要人数ぴったりに合わせる</strong>よう設定されています。</div>`
-            : '';
+        // v3.7.129: ポリシー説明を ON/OFF で切替
+        const policyNote = allowOverstaff
+            ? `<div class="mt-2 p-2 bg-blue-50 rounded border border-blue-200 text-xs leading-relaxed text-blue-800"><i class="fa-solid fa-toggle-on mr-1"></i><strong>過剰配置許容モード (ON):</strong> スタッフの最低出勤日数を満たすため、店舗必要人数を超えても補完配置します。不足のみ警告対象です。</div>`
+            : (b.status !== 'good'
+                ? `<div class="mt-2 p-2 bg-white/70 rounded border border-current/20 text-xs leading-relaxed"><i class="fa-solid fa-shield-halved mr-1"></i><strong>過剰絶対回避ポリシー (OFF):</strong> 過剰になる場合、AIは<strong>最低出勤日数を犠牲にしてでも店舗必要人数ぴったりに合わせる</strong>よう設定されています。</div>`
+                : '');
 
         return `
             <div class="${p.bg} ${p.border} border-2 rounded-xl p-4 ${p.text}">
@@ -3504,6 +3547,7 @@ const app = {
                     <i class="fa-solid ${p.icon} text-xl mt-0.5"></i>
                     <div class="flex-1 min-w-0">
                         <div class="font-bold text-base mb-1">需給バランス: ${p.label}</div>
+                        <div class="text-xs ${p.text} opacity-80 mb-2">${overallSummary}</div>
                         ${mismatchMsg}
                         ${policyNote}
                         <!-- 平日/土日別パネル -->
