@@ -1470,14 +1470,22 @@
           ETag/Last-Modified による条件付きリクエストで実体的な負荷は最小化される) -->
     <script>
         (function () {
-            // HTML はサーバ側 Cache-Control: no-cache で常に最新なので、
-            // この時刻は実質「リロードのたびに更新される」。
-            // 15 分単位に丸めて同一セッション内の連続リロードでブラウザキャッシュも効くようにする。
             var v = Math.floor(Date.now() / (15 * 60 * 1000));
-            ['js/holidays.js', 'js/config.js', 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js']
-                .forEach(function (src) {
-                    document.write('<script src="' + src + '?v=' + v + '"><\/script>');
-                });
+            // v3.7.131: ステージング環境を host 名で自動判定
+            //   - staging.* / *-staging.pages.dev / preview ブランチ → staging config
+            //   - それ以外 → 本番 config
+            var host = (location.hostname || '').toLowerCase();
+            var isStaging = host.startsWith('staging.') || host.indexOf('-staging.') >= 0
+                || host.indexOf('.staging.') >= 0
+                || /^[a-z0-9]+\.rakushift-ai\.pages\.dev$/.test(host) && host.indexOf('preview') >= 0;
+            var configFile = isStaging ? 'js/config.staging.js' : 'js/config.js';
+            var scripts = ['js/holidays.js', configFile, 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js'];
+            scripts.forEach(function (src) {
+                document.write('<script src="' + src + '?v=' + v + '"><\/script>');
+            });
+            if (isStaging) {
+                document.write('<style>body::before{content:"⚠ STAGING ENV - DO NOT USE FOR PRODUCTION DATA ⚠";position:fixed;top:0;left:0;right:0;z-index:9999;background:#f59e0b;color:#000;text-align:center;font-weight:bold;font-size:11px;padding:3px;}body{padding-top:22px !important;}</style>');
+            }
         })();
     </script>
     

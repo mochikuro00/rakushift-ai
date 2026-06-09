@@ -1,3 +1,6 @@
+# ステージング設定 (実 key を含むためコミットしない)
+js/config.staging.js
+
 # Python
 __pycache__/
 *.pyc
