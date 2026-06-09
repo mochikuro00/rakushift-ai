@@ -113,21 +113,23 @@
                テキストノードがない場合だけ min-width を当てる。
                v3.7.107: クリック可能リンクとテキスト付きボタンも 38px 高に。 */
             button, a[role='button'], [onclick] {
-                min-height: 38px;
+                min-height: 38px !important;
             }
-            button:has(> i:only-child) {
-                min-width: 38px;
-                padding-left: 8px;
-                padding-right: 8px;
+            /* v3.7.108: Tailwind の w-8 h-8 (32px) より優先するため !important
+               (CSS specificity だけだと Tailwind の utility class に負ける) */
+            button:has(> i:only-child),
+            button[aria-label*="閉じる"],
+            button[aria-label*="close" i] {
+                min-width: 38px !important;
+                min-height: 38px !important;
+                padding-left: 8px !important;
+                padding-right: 8px !important;
             }
-            /* v3.7.107: テキスト付きボタンも min-width で 38px 以上に */
             button {
-                min-width: 38px;
+                min-width: 38px !important;
             }
-            /* v3.7.107: フッター/ナビ系の inline-link を 36px 高に
-               (本文中の通常テキストリンクは role/onclick がないので除外) */
             a[role='button'], a[onclick], footer a, nav a {
-                min-height: 36px;
+                min-height: 36px !important;
                 display: inline-flex;
                 align-items: center;
                 padding: 4px 6px;
