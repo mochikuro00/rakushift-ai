@@ -4623,8 +4623,9 @@ const app = {
                 return;
             }
             const parseCount = (input) => {
+                // v3.7.112: 0 も許容 (この曜日はこのパターンを使わない)
                 const v = Number(input?.value);
-                return Number.isFinite(v) && v >= 1 ? Math.min(v, 50) : 1;
+                return Number.isFinite(v) && v >= 0 ? Math.min(v, 50) : 1;
             };
             const cwd = parseCount(shiftCountsWd[i]);
             const cwe = parseCount(shiftCountsWe[i]);
