@@ -2543,7 +2543,7 @@ const app = {
                         const oneFifteen = oneHour / 4;
                         const bgGuides = '';
                         
-                        const adminDrag = this.state.isAdmin ? `data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px; cursor: grab;"` : `style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px;"`;
+                        const adminDrag = this.state.isAdmin ? `draggable="true" ondragstart="app.onShiftDragStart(event)" ondragend="app.onShiftDragEnd(event)" data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px; cursor: grab;"` : `style="left: ${startPct}%; width: ${Math.max(widthPct, 0.5)}%; min-width: 2px;"`;
                         const resizeHandles = this.state.isAdmin ? `
                                     <div class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-20 hover:bg-black/10 rounded-l" style="touch-action:none;"></div>
                                     <div class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-20 hover:bg-black/10 rounded-r" style="touch-action:none;"></div>
@@ -2571,7 +2571,8 @@ const app = {
                         // === Month Style (Block) === v3.7.94: 開始時刻のみ HH:MM 表示してオーバーフロー回避
                         const stShort = (shift.start_time || '').slice(0, 5);
                         const etShort = (shift.end_time || '').slice(0, 5);
-                        content = `<div class="w-full h-full p-0.5"><div class="${barColor} border-l-2 rounded text-[9px] sm:text-[10px] font-bold text-center leading-tight py-1 shadow-sm" style="overflow:hidden;">${stShort}<br>${etShort}</div></div>`;
+                        const monthDrag = this.state.isAdmin ? `draggable="true" ondragstart="app.onShiftDragStart(event)" ondragend="app.onShiftDragEnd(event)" data-shift-id="${shift.id}" data-staff-id="${staff.id}" data-date="${dateStr}" style="cursor:grab;"` : '';
+                        content = `<div class="w-full h-full p-0.5"><div ${monthDrag} class="${barColor} border-l-2 rounded text-[9px] sm:text-[10px] font-bold text-center leading-tight py-1 shadow-sm" style="overflow:hidden;">${stShort}<br>${etShort}</div></div>`;
                     }
                 } else if (isSpecialHoliday) {
                     content = `<div class="w-full h-full flex items-center justify-center"><span class="text-[10px] text-red-300 font-bold">休</span></div>`;
@@ -2592,7 +2593,8 @@ const app = {
                     content = `<div class="w-full h-full relative group overflow-hidden bg-transparent">${guides}</div>`;
                 }
 
-                bodyHtml += `<td class="p-0 border-b border-r border-gray-100 h-14 relative transition-colors ${bgClass} ${cursor}" ${action}>${content}</td>`;
+                const dropAttrs = this.state.isAdmin ? `ondragover="app.onShiftDragOver(event)" ondragleave="app.onShiftDragLeave(event)" ondrop="app.onShiftDrop(event,'${dateStr}','${staff.id}')"` : '';
+                bodyHtml += `<td class="p-0 border-b border-r border-gray-100 h-14 relative transition-colors ${bgClass} ${cursor}" ${action} ${dropAttrs}>${content}</td>`;
             });
             bodyHtml += `</tr>`;
         });
@@ -5169,6 +5171,62 @@ const app = {
         const newSaveBtn = saveBtn.cloneNode(true);
         saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
         newSaveBtn.addEventListener('click', () => this.saveShift());
+    },
+
+    // v3.7.117: シフト表 ドラッグ&ドロップ
+    onShiftDragStart(e) {
+        if (!this.state.isAdmin) { e.preventDefault(); return; }
+        const bar = e.currentTarget;
+        const shiftId = bar?.dataset?.shiftId;
+        if (!shiftId) { e.preventDefault(); return; }
+        e.dataTransfer.setData('text/plain', shiftId);
+        e.dataTransfer.effectAllowed = 'move';
+        bar.classList.add('opacity-50');
+        this._dragSourceBar = bar;
+    },
+
+    onShiftDragEnd(e) {
+        if (this._dragSourceBar) {
+            this._dragSourceBar.classList.remove('opacity-50');
+            this._dragSourceBar = null;
+        }
+        document.querySelectorAll('td.dnd-drop-target').forEach(td => td.classList.remove('dnd-drop-target', 'ring-2', 'ring-blue-400', 'ring-inset'));
+    },
+
+    onShiftDragOver(e) {
+        if (!this.state.isAdmin) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const td = e.currentTarget;
+        if (!td.classList.contains('dnd-drop-target')) {
+            td.classList.add('dnd-drop-target', 'ring-2', 'ring-blue-400', 'ring-inset');
+        }
+    },
+
+    onShiftDragLeave(e) {
+        const td = e.currentTarget;
+        td.classList.remove('dnd-drop-target', 'ring-2', 'ring-blue-400', 'ring-inset');
+    },
+
+    async onShiftDrop(e, dateStr, staffId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const td = e.currentTarget;
+        td.classList.remove('dnd-drop-target', 'ring-2', 'ring-blue-400', 'ring-inset');
+        if (!this.state.isAdmin) return;
+        const shiftId = e.dataTransfer.getData('text/plain');
+        if (!shiftId) return;
+        const shift = (this.state.shifts || []).find(s => String(s.id) === String(shiftId));
+        if (!shift) return;
+        if (shift.staff_id === staffId && shift.date === dateStr) return;
+        // 移動先に既存シフトがあるか
+        const existing = (this.state.shifts || []).find(s =>
+            s.staff_id === staffId && s.date === dateStr && String(s.id) !== String(shiftId));
+        if (existing) {
+            this.showToast('移動先に既にシフトがあります', 'warning');
+            return;
+        }
+        await this.updateShiftDrag(shiftId, { staff_id: staffId, date: dateStr });
     },
 
     async updateShiftDrag(shiftId, updates) {
