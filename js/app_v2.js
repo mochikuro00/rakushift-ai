@@ -2261,15 +2261,15 @@ const app = {
                                 <i class="fa-regular fa-calendar-days mr-1"></i>カレンダー
                             </button>
                         </div>
+                        <!-- v3.7.103: 印刷ボタンをヘッダに移動して Android でも常時表示 -->
+                        <button onclick="app.printShiftTable()" aria-label="印刷"
+                                class="flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition shrink-0">
+                            <i class="fa-solid fa-print sm:mr-1"></i><span class="hidden sm:inline">印刷</span>
+                        </button>
                     </div>
                 </div>
                 <div id="shiftViewContent" class="flex-1 overflow-x-auto overflow-y-hidden bg-white rounded-xl shadow-sm border border-gray-200 relative">
                     <!-- Content injected here -->
-                </div>
-                <div class="flex justify-end pt-2">
-                    <button onclick="app.printShiftTable()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
-                        <i class="fa-solid fa-print mr-2"></i>印刷
-                    </button>
                 </div>
             </div>
         `;
