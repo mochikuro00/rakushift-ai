@@ -5219,14 +5219,39 @@ const app = {
         const shift = (this.state.shifts || []).find(s => String(s.id) === String(shiftId));
         if (!shift) return;
         if (shift.staff_id === staffId && shift.date === dateStr) return;
-        // 移動先に既存シフトがあるか
+        // 移動先に既存シフトがあれば「入れ替え」(swap)
         const existing = (this.state.shifts || []).find(s =>
             s.staff_id === staffId && s.date === dateStr && String(s.id) !== String(shiftId));
         if (existing) {
-            this.showToast('移動先に既にシフトがあります', 'warning');
-            return;
+            await this.swapShifts(shift, existing);
+        } else {
+            await this.updateShiftDrag(shiftId, { staff_id: staffId, date: dateStr });
         }
-        await this.updateShiftDrag(shiftId, { staff_id: staffId, date: dateStr });
+    },
+
+    // v3.7.118: シフト入れ替え (swap) - DnD ドロップ先に既存シフトがあるとき
+    async swapShifts(shiftA, shiftB) {
+        const aId = shiftA.id, bId = shiftB.id;
+        const origA = { staff_id: shiftA.staff_id, date: shiftA.date };
+        const origB = { staff_id: shiftB.staff_id, date: shiftB.date };
+        try {
+            await this._shiftUpsert(aId, { staff_id: origB.staff_id, date: origB.date });
+            await this._shiftUpsert(bId, { staff_id: origA.staff_id, date: origA.date });
+            shiftA.staff_id = origB.staff_id; shiftA.date = origB.date;
+            shiftB.staff_id = origA.staff_id; shiftB.date = origA.date;
+            this.renderCurrentView();
+            this.updateHeader();
+            const nameA = this.getStaff(shiftA.staff_id)?.name || '?';
+            const nameB = this.getStaff(shiftB.staff_id)?.name || '?';
+            this.showToast(`入れ替え完了 (${nameA} ⇄ ${nameB})`, 'success');
+        } catch (err) {
+            console.error('swap failed:', err);
+            this.showToast('入れ替えに失敗しました', 'error');
+            // 最善努力ロールバック (1件目だけ成功した場合)
+            try { await this._shiftUpsert(aId, origA); } catch {}
+            try { await this._shiftUpsert(bId, origB); } catch {}
+            this.renderCurrentView();
+        }
     },
 
     async updateShiftDrag(shiftId, updates) {
