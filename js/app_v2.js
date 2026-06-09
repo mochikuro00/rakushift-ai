@@ -2828,17 +2828,19 @@ const app = {
                 const statusColor = { ok: 'bg-green-400', under: 'bg-red-500', over: 'bg-amber-400' };
                 const statusLabel = { ok: 'ぴったり', under: '不足', over: '過剰' };
 
-                // ストライプ HTML 生成
+                // v3.7.126: ストライプ tooltip も「要件+過剰」内訳表示に統一
                 const stripeHtml = runs.map(r => {
                     const tip = r.status === 'under'
                         ? `${fmtTime(r.startT)}〜${fmtTime(r.endT)} 不足 ${r.maxReq - r.minActual}名 (要${r.maxReq} / 実${r.minActual}-${r.maxActual})`
                         : r.status === 'over'
-                            ? `${fmtTime(r.startT)}〜${fmtTime(r.endT)} 過剰 +${r.maxActual - r.maxReq}名 (要${r.maxReq} / 実${r.minActual}-${r.maxActual})`
+                            ? `${fmtTime(r.startT)}〜${fmtTime(r.endT)} 要件${r.maxReq}+過剰${r.maxActual - r.maxReq}=${r.maxActual}名`
                             : `${fmtTime(r.startT)}〜${fmtTime(r.endT)} ぴったり ${r.maxActual}名 (要${r.maxReq})`;
                     return `<div class="${statusColor[r.status]}" style="flex:${r.len}" title="${this._sanitize(tip)}"></div>`;
                 }).join('');
 
                 // 要約テキスト (1 行)
+                // v3.7.126: 過剰時は「スタッフ総数要件 + 過剰導入分」の内訳を明示
+                //   ユーザー要望: 過剰ON時の補完シフトを要件と分けて表示
                 let summary, summaryColor;
                 if (shortageSlots > 0) {
                     cellBg = 'bg-red-50';
@@ -2847,8 +2849,8 @@ const app = {
                 } else if (surplusSlots > totalSlots / 3) {
                     cellBg = 'bg-amber-50';
                     summaryColor = 'text-amber-600';
-                    // v3.7.85: 過剰スロット内の最大超過数を表示 (旧: maxConcurrent - maxSlotReq で 0 になるケースを修正)
-                    summary = `⚡ 過剰 +${worstSurplus}名`;
+                    // 要件 N + 過剰 M = 実配置 (N+M)
+                    summary = `⚡ 要${maxSlotReq}+過剰${worstSurplus}=${maxConcurrent}名`;
                 } else {
                     summaryColor = 'text-green-600';
                     summary = `✓ ${maxConcurrent}名配置`;
