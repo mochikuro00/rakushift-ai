@@ -1751,22 +1751,88 @@ const app = {
     },
 
     // =========================================================
-    // v3.7.133: オプトイン PIN (セカンドファクター)
+    // v3.7.134: PIN 必須化 (セカンドファクター)
+    //   - 既存ユーザーも次回ログイン時に PIN 設定必須
+    //   - 設定済ユーザーはログイン時に PIN 入力
+    //   - 引き継ぎ時は現 PIN で認証して新 PIN に変更
     // =========================================================
     _pinPendingContractId: null,  // PIN 待機中の contract_id
-    _pinPendingResolve: null,     // PIN 認証完了の Promise resolve
+    _pinPendingResolve: null,     // PIN フロー完了の Promise resolve
 
-    // ログイン成功直後に呼ぶ。PIN 設定があれば検証モーダル → success/cancel
+    // ログイン成功直後に呼ぶ。PIN 未設定 → 初回設定モーダル / 設定済 → 検証モーダル
     async _checkPinIfNeeded(contractId) {
+        let hasPin = false;
         try {
             const r = await API.rpc('has_pin_by_contract', { p_contract_id: contractId });
-            if (!r || r.has_pin !== true) return true;  // PIN なし → そのまま通す
+            hasPin = !!(r && r.has_pin);
         } catch (e) {
             console.warn('[PIN] has_pin check failed:', e);
-            return true;  // RPC 失敗時は通過 (フェイルオープン、可用性優先)
+            return true;  // RPC 失敗時はフェイルオープン
         }
-        // PIN あり → モーダル表示して入力待ち
-        return await this._showPinEntryModal(contractId);
+        this._pinPendingContractId = contractId;
+        if (hasPin) {
+            return await this._showPinEntryModal(contractId);
+        } else {
+            return await this._showPinSetupModal(contractId);
+        }
+    },
+
+    // 初回 PIN 設定モーダル
+    _showPinSetupModal(contractId) {
+        this._pinPendingContractId = contractId;
+        const modal = document.getElementById('pinSetupModal');
+        if (!modal) return Promise.resolve(true);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        const newEl = document.getElementById('pinSetupNew');
+        const confEl = document.getElementById('pinSetupConfirm');
+        if (newEl) { newEl.value = ''; setTimeout(() => newEl.focus(), 100); }
+        if (confEl) confEl.value = '';
+        const err = document.getElementById('pinSetupError');
+        if (err) { err.classList.add('hidden'); err.textContent = ''; }
+        return new Promise(resolve => { this._pinPendingResolve = resolve; });
+    },
+
+    async submitPinSetup() {
+        const np = document.getElementById('pinSetupNew')?.value || '';
+        const nc = document.getElementById('pinSetupConfirm')?.value || '';
+        const errEl = document.getElementById('pinSetupError');
+        const showErr = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } };
+        if (!/^[0-9]{4,8}$/.test(np)) return showErr('PIN は 4〜8桁の数字');
+        if (np !== nc) return showErr('PIN (確認) が一致しません');
+        try {
+            const r = await API.rpc('set_pin_initial_by_contract', {
+                p_contract_id: this._pinPendingContractId,
+                p_new_pin: np,
+            });
+            if (r && r.success) {
+                this._closePinSetupModal();
+                this.showToast('PIN を設定しました', 'success');
+                if (this._pinPendingResolve) { this._pinPendingResolve(true); this._pinPendingResolve = null; }
+            } else {
+                showErr(r?.message || '設定に失敗しました');
+            }
+        } catch (e) {
+            console.error('[PIN] setup error:', e);
+            showErr('PIN 設定に失敗しました');
+        }
+    },
+
+    cancelPinSetup() {
+        if (!confirm('PIN を設定せずログアウトしますか?\nPIN を設定しないとログインを完了できません。')) return;
+        this._closePinSetupModal();
+        if (this._pinPendingResolve) { this._pinPendingResolve(false); this._pinPendingResolve = null; }
+        this.state.isAdmin = false;
+        this.state.isShopLoggedIn = false;
+        try { sessionStorage.removeItem('rakushift_user'); } catch (_) {}
+        try { localStorage.removeItem('rakushift_org_id'); } catch (_) {}
+        this.updateAuthUI();
+        this.openModal('loginModal');
+    },
+
+    _closePinSetupModal() {
+        const modal = document.getElementById('pinSetupModal');
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     },
 
     _showPinEntryModal(contractId) {
@@ -1832,78 +1898,54 @@ const app = {
         this._pinPendingContractId = null;
     },
 
-    // 設定画面から呼ばれる: PIN 設定/変更モーダルを開く
-    openPinSetModal(isUpdate) {
-        const modal = document.getElementById('pinSetModal');
+    // 設定画面から呼ばれる: PIN 変更モーダル (現PIN + 新PIN)
+    openPinChangeModal() {
+        const modal = document.getElementById('pinChangeModal');
         if (!modal) return;
-        const title = document.getElementById('pinSetTitle');
-        if (title) title.textContent = isUpdate ? 'PIN を変更' : 'PIN を設定';
-        ['pinSetCurrentPw', 'pinSetNew', 'pinSetConfirm'].forEach(id => {
+        ['pinChangeCurrent', 'pinChangeNew', 'pinChangeConfirm'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
-        const err = document.getElementById('pinSetError');
+        const err = document.getElementById('pinChangeError');
         if (err) { err.classList.add('hidden'); err.textContent = ''; }
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-        setTimeout(() => document.getElementById('pinSetCurrentPw')?.focus(), 100);
+        setTimeout(() => document.getElementById('pinChangeCurrent')?.focus(), 100);
     },
 
-    closePinSetModal() {
-        const modal = document.getElementById('pinSetModal');
+    closePinChangeModal() {
+        const modal = document.getElementById('pinChangeModal');
         if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     },
 
-    async submitPinSet() {
+    async submitPinChange() {
         const cid = this._getContractId();
-        const cur = document.getElementById('pinSetCurrentPw')?.value || '';
-        const np = document.getElementById('pinSetNew')?.value || '';
-        const nc = document.getElementById('pinSetConfirm')?.value || '';
-        const errEl = document.getElementById('pinSetError');
+        const cur = document.getElementById('pinChangeCurrent')?.value || '';
+        const np = document.getElementById('pinChangeNew')?.value || '';
+        const nc = document.getElementById('pinChangeConfirm')?.value || '';
+        const errEl = document.getElementById('pinChangeError');
         const showErr = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } };
         if (!cid) return showErr('contract_id 未取得');
-        if (!cur) return showErr('現在のパスワードを入力してください');
-        if (!/^[0-9]{4,8}$/.test(np)) return showErr('PIN は 4〜8桁の数字');
-        if (np !== nc) return showErr('PIN (確認) が一致しません');
+        if (!/^[0-9]{4,8}$/.test(cur)) return showErr('現在の PIN は 4〜8桁の数字');
+        if (!/^[0-9]{4,8}$/.test(np)) return showErr('新しい PIN は 4〜8桁の数字');
+        if (np !== nc) return showErr('新 PIN (確認) が一致しません');
+        if (cur === np) return showErr('新しい PIN は現在の PIN と異なる値にしてください');
         try {
-            const r = await API.rpc('set_pin_by_contract', {
+            const r = await API.rpc('change_pin_with_pin_by_contract', {
                 p_contract_id: cid,
-                p_current_password: cur,
+                p_current_pin: cur,
                 p_new_pin: np,
             });
             if (r && r.success) {
-                this.closePinSetModal();
-                this.showToast(r.message || 'PIN を設定しました', 'success');
-                // 設定画面を再描画して状態を更新
+                this.closePinChangeModal();
+                this.showToast(r.message || 'PIN を変更しました', 'success');
                 this.renderSettings(document.getElementById('viewContainer'));
             } else {
-                showErr(r?.message || '設定に失敗しました');
+                showErr(r?.message || '変更に失敗しました');
             }
         } catch (e) {
-            console.error('[PIN] set error:', e);
-            showErr('PIN 設定に失敗しました');
-        }
-    },
-
-    async clearPin() {
-        const cid = this._getContractId();
-        if (!cid) { this.showToast('contract_id 未取得', 'error'); return; }
-        const cur = prompt('PIN を解除します。現在のパスワードを入力してください:');
-        if (cur == null || cur === '') return;
-        try {
-            const r = await API.rpc('clear_pin_by_contract', {
-                p_contract_id: cid,
-                p_current_password: cur,
-            });
-            if (r && r.success) {
-                this.showToast(r.message || 'PIN を解除しました', 'success');
-                this.renderSettings(document.getElementById('viewContainer'));
-            } else {
-                this.showToast(r?.message || '解除に失敗しました', 'error');
-            }
-        } catch (e) {
-            console.error('[PIN] clear error:', e);
-            this.showToast('PIN 解除に失敗しました', 'error');
+            console.error('[PIN] change error:', e);
+            showErr('PIN 変更に失敗しました');
         }
     },
 
@@ -4562,23 +4604,20 @@ const app = {
         if (!badge || !btns) return;
         const hasPin = await this._hasPinSet();
         if (hasPin) {
-            badge.textContent = '✓ 有効';
+            badge.textContent = '✓ 設定済み';
             badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700';
             btns.innerHTML = `
-                <button onclick="app.openPinSetModal(true)" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
-                    <i class="fa-solid fa-rotate mr-1"></i>PIN を変更
+                <button onclick="app.openPinChangeModal()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
+                    <i class="fa-solid fa-rotate mr-1"></i>PIN を変更 (引き継ぎ時)
                 </button>
-                <button onclick="app.clearPin()" class="text-xs bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition">
-                    <i class="fa-solid fa-unlock mr-1"></i>PIN を解除
-                </button>
+                <span class="text-[10px] text-gray-500 self-center ml-2">解除には運営管理 (info@rakushift.jp) への依頼が必要</span>
             `;
         } else {
-            badge.textContent = '未設定';
-            badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-gray-200 text-gray-600';
+            // 必須化のため通常は到達しないが、フォールバック表示
+            badge.textContent = '未設定 (次回ログイン時に必須)';
+            badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-700';
             btns.innerHTML = `
-                <button onclick="app.openPinSetModal(false)" class="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-200 transition">
-                    <i class="fa-solid fa-key mr-1"></i>PIN を設定する
-                </button>
+                <p class="text-xs text-amber-700"><i class="fa-solid fa-circle-info mr-1"></i>次回ログイン時に PIN 設定モーダルが表示されます。</p>
             `;
         }
     },
