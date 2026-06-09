@@ -710,6 +710,10 @@ class ShiftScheduler:
                 return
             brk_mins = self._get_break_minutes(hrs)
             work_hrs = hrs - (brk_mins / 60.0)
+            # v3.7.139: 休憩 > 拘束時間で work_hrs が負になるケースを除外
+            if work_hrs <= 0:
+                logger.warning("[_build_shift_options] negative work_hrs (hrs=%.2f brk=%d) skipped", hrs, brk_mins)
+                return
             key = (ps, pe)
             if key in seen:
                 # 既に存在するオプションだが、もしこれがprefならフラグを立て直す
@@ -738,6 +742,9 @@ class ShiftScheduler:
             hrs = (pe - ps) / 60.0
             brk_mins = self._get_break_minutes(hrs)
             work_hrs = hrs - (brk_mins / 60.0)
+            # v3.7.139: work_hrs <= 0 (休憩が拘束時間以上) なら このパターンは作らない
+            if work_hrs <= 0:
+                continue
 
             is_pref = pat.get("name") == "pref"
             if work_hrs > max_hours and not force:

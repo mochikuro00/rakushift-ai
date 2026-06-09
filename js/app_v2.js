@@ -242,6 +242,17 @@ const app = {
         if (this.checkAppVersion()) return;
 
         console.log("App initializing... (v" + this.APP_VERSION + ")");
+        // v3.7.139: 別タブで logout 等 が起きた場合に同期する storage イベント
+        try {
+            window.addEventListener('storage', (e) => {
+                if (!e.key) return;
+                if (e.key === 'rakushift_org_id' && !e.newValue) {
+                    // 別タブでログアウト → このタブもリロードして整合性確保
+                    console.warn('[storage] org_id removed elsewhere → reload');
+                    location.reload();
+                }
+            });
+        } catch (_) {}
         try {
             await API.init();
 
@@ -360,14 +371,21 @@ const app = {
             }
         };
 
-        document.querySelectorAll('.sidebar-link').forEach(link => {
-            link.addEventListener('click', (e) => {
+        // v3.7.139: 親 (sidebar) に 1個のリスナーで委譲 (累積リーク防止)
+        const sidebarEl = document.querySelector('aside');
+        if (sidebarEl && !sidebarEl.dataset.linkBound) {
+            sidebarEl.addEventListener('click', (e) => {
+                const link = e.target.closest('.sidebar-link');
+                if (!link) return;
                 e.preventDefault();
-                const view = e.currentTarget.dataset.view;
-                this.changeView(view);
-                closeSidebar();
+                const view = link.dataset.view;
+                if (view) {
+                    this.changeView(view);
+                    closeSidebar();
+                }
             });
-        });
+            sidebarEl.dataset.linkBound = '1';
+        }
 
         document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
             const aside = document.querySelector('aside');
@@ -747,6 +765,11 @@ const app = {
 
         if (!inputContractId) {
             this.showToast('契約IDを入力してください', 'error');
+            return;
+        }
+        // v3.7.139: contract_id は英数字+ハイフン/アンダースコアのみ、最大32文字
+        if (!/^[A-Za-z0-9_\-]{1,32}$/.test(inputContractId)) {
+            this.showToast('契約ID は英数字/_/- のみ、最大 32文字で入力してください', 'error');
             return;
         }
         if (!password) {

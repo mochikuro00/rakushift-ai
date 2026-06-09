@@ -416,7 +416,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.138"}
+        return {"status": "ok", "db": "alive", "version": "3.7.139"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -863,15 +863,16 @@ typeは重要度順: danger(労基法違反) > warning(人員不足など重大�
             json.dumps(req.shifts[:500], ensure_ascii=False),  # 最大500件に拡張（月間シフト対応）
         )
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}".format(
-            gemini_model, gemini_key)
+        # v3.7.139: API key を URL クエリ → x-goog-api-key ヘッダーに移動
+        # (URL は Referer / ブラウザ履歴 / プロキシログに残るため)
+        url = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent".format(gemini_model)
         resp = httpx.post(url, json={
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.2,
                 "responseMimeType": "application/json"
             }
-        }, timeout=60)
+        }, headers={"x-goog-api-key": gemini_key}, timeout=60)
 
         if resp.status_code != 200:
             return {"status": "error",
@@ -907,8 +908,9 @@ typeは重要度順: danger(労基法違反) > warning(人員不足など重大�
 def run_gemini_audit(api_key: str, model: str, req: ShiftRequest, shifts: list) -> list:
     """Gemini APIでシフトを監査・修正 (サーバーサイド)"""
     try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}".format(
-            model, api_key)
+        # v3.7.139: API key を URL → x-goog-api-key ヘッダーに移動
+        url = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent".format(model)
+        _gemini_headers = {"x-goog-api-key": api_key}
 
         config = req.config
         staff_req = config.get("staff_req", {})
@@ -927,16 +929,15 @@ def run_gemini_audit(api_key: str, model: str, req: ShiftRequest, shifts: list) 
             if 0 <= cd_int < 7:
                 closed_days_names.append(day_names[cd_int])
 
+        # v3.7.139: スタッフ情報を匿名化して Gemini に送信
+        # name / 給与情報 / 評価ランクを除外し、ID と勤務制約のみ
         staff_info = []
         for s in req.staff_list:
             staff_info.append({
-                "id": s["id"],
-                "name": s.get("name", ""),
+                "id": s["id"],  # 内部 UUID (個人特定性は低い)
                 "role": s.get("role", "staff"),
                 "max_days": s.get("max_days_week", 5),
                 "max_hours": s.get("max_hours_day", 8),
-                "evaluation": s.get("evaluation", "B"),
-                "salary_type": s.get("salary_type", "hourly"),
                 "ng_dates": s.get("unavailable_dates", ""),
             })
 
@@ -1037,7 +1038,7 @@ Pythonシステム(MILPソルバー)が生成した「一次シフト案」を�
                 "temperature": 0.1,
                 "responseMimeType": "application/json"
             }
-        }, timeout=90)
+        }, headers=_gemini_headers, timeout=90)
 
         if resp.status_code != 200:
             logger.info("Gemini API error: {}".format(resp.status_code))
@@ -1692,9 +1693,16 @@ async def stripe_webhook(request: Request):
                         logger.info("[Webhook] Payment failed for: %s", contract_id)
 
     except Exception as e:
-        logger.info("[Webhook Error] {}".format(e))
-        import traceback
-        traceback.print_exc()
+        # v3.7.139: Stripe webhook 例外時は 500 を返して Stripe に再配信させる
+        logger.error("[Webhook Error] %s", type(e).__name__)
+        import traceback as _tb
+        tb_str = _tb.format_exc()
+        logger.error(tb_str)
+        _notify_error_webhook("Stripe webhook handler error", str(e)[:200], tb_str)
+        return JSONResponse(
+            status_code=500,
+            content={"received": False, "error": "Internal server error - will retry"}
+        )
 
     return {"received": True}
 
