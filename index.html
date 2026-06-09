@@ -1000,7 +1000,13 @@
                             <input type="checkbox" id="prefDay0" class="form-checkbox text-blue-600 rounded" checked>
                             <span class="ml-1 text-sm text-red-600">日</span>
                         </label>
+                        <!-- v3.7.111: 祝日 (国民の祝日) チェック -->
+                        <label class="inline-flex items-center bg-purple-50 px-2 py-0.5 rounded border border-purple-200" title="国民の祝日 (海の日/敬老の日 等) にシフトを入れない場合はチェックを外す">
+                            <input type="checkbox" id="prefHoliday" class="form-checkbox text-purple-600 rounded" checked>
+                            <span class="ml-1 text-sm text-purple-700">祝日</span>
+                        </label>
                     </div>
+                    <p class="text-[10px] text-gray-400 mt-1">※ 「祝日」のチェックを外すと、国民の祝日 (海の日・敬老の日 等) にシフトを入れません。</p>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">

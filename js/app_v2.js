@@ -5411,6 +5411,9 @@ const app = {
             const cb = document.getElementById('prefDay'+i);
             if(cb) cb.checked = true;
         }
+        // v3.7.111: 祝日チェックも初期 ON (デフォルト 祝日もOK)
+        const _prefHoliday = document.getElementById('prefHoliday');
+        if (_prefHoliday) _prefHoliday.checked = true;
         // v3.7.77: シフトパターン目標回数 (新規スタッフは空)
         this.renderStaffPatternTargets({});
         // v3.7.109: 該当シフトパターン (新規スタッフは全該当 = 配列空)
@@ -5707,6 +5710,9 @@ const app = {
             const cb = document.getElementById('prefDay' + i);
             if (cb && !cb.checked) ngWeekdays.push(i);
         }
+        // v3.7.111: 祝日 NG (チェックが外れていたら true)
+        const prefHolidayCb = document.getElementById('prefHoliday');
+        const ngHoliday = !!(prefHolidayCb && !prefHolidayCb.checked);
 
         // v3.7.109: 該当シフトパターン (チェック) を収集
         //   「全パターン該当」が ON か、個別チェックが全部 ON なら 空配列 (= 全該当)
@@ -5779,6 +5785,8 @@ const app = {
             req_pairs: reqPairs || null,
             position: position,
             ng_weekdays: ngWeekdays,
+            // v3.7.111: 祝日 NG (true なら国民の祝日にシフトを入れない)
+            ng_holiday: ngHoliday,
             // v3.7.77: シフトパターン別月間目標回数
             pattern_target_counts: patternTargets,
             // v3.7.109: 該当シフトパターン (空配列 = 全パターン該当)
@@ -5953,6 +5961,9 @@ const app = {
             const cb = document.getElementById('prefDay'+i);
             if(cb) cb.checked = !ngDays.includes(String(i));
         }
+        // v3.7.111: 祝日チェック復元 (ng_holiday=true なら チェックを外す)
+        const prefHolidayCb = document.getElementById('prefHoliday');
+        if (prefHolidayCb) prefHolidayCb.checked = !s.ng_holiday;
         document.getElementById('staffSalaryType').value = s.salary_type;
         document.getElementById('staffHourlyWage').value = s.hourly_wage;
         document.getElementById('staffMonthlySalary').value = s.monthly_salary;

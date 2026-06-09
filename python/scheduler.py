@@ -542,8 +542,19 @@ class ShiftScheduler:
             for date_str in self.dates:
                 try:
                     dt = datetime.strptime(date_str, "%Y-%m-%d")
-                    js_dow = (dt.weekday() + 1) % 7  # Python: Mon=0 → JS: Sun=0
+                    js_dow = (dt.weekday() + 1) % 7
                     if js_dow in ng_weekdays:
+                        ng.add(date_str)
+                except ValueError:
+                    pass
+
+        # v3.7.111: ng_holiday=True なら国民の祝日 (jpholiday) を NG に追加
+        ng_holiday = bool(staff.get("ng_holiday", False))
+        if ng_holiday and _JP_HOLIDAY_AVAILABLE:
+            for date_str in self.dates:
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    if jpholiday.is_holiday(dt.date()):
                         ng.add(date_str)
                 except ValueError:
                     pass
