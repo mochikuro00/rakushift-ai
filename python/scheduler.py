@@ -2457,17 +2457,20 @@ class ShiftScheduler:
             logger.info("  [FAIRNESS] Staff days: avg={:.1f}, min={}, max={}, spread={}".format(
                 avg_days, min_days, max_days, max_days - min_days))
 
-        # 連勤検証
+        # 連勤検証 (v3.7.116: スタッフ別 max_consecutive_days を尊重)
         sorted_d = sorted(self.dates)
         for s in self.staff_list:
             sid = s["id"]
+            _smc = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+            if not (1 <= _smc <= 7):
+                _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
             consec = 0
             for d in sorted_d:
                 if any(sh["staff_id"] == sid and sh["date"] == d for sh in shifts):
                     consec += 1
-                    if consec > self.LEGAL_MAX_CONSECUTIVE_DAYS:
-                        logger.info("  VIOLATION: {} consec={} days at {}".format(
-                            s.get("name", sid), consec, d))
+                    if consec > _smc:
+                        logger.info("  VIOLATION: {} consec={} days at {} (limit={})".format(
+                            s.get("name", sid), consec, d, _smc))
                         violations += 1
                 else:
                     consec = 0
@@ -2756,13 +2759,18 @@ class ShiftScheduler:
                     # 作る可能性があった (agent #1 指摘の HIGH バグ)
                     d_dt = datetime.strptime(d, "%Y-%m-%d")
 
-                    # 連勤6日チェック: d を含む 7日窓内の出勤数が 7 にならないか
+                    # 連勤チェック: d を含む N+1 日窓内の出勤数が N+1 にならないか
+                    # v3.7.116: スタッフ別 max_consecutive_days を尊重
+                    _smc = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+                    if not (1 <= _smc <= 7):
+                        _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
                     consec_violation = False
-                    for offset in range(-6, 1):
+                    window_size = _smc + 1
+                    for offset in range(-_smc, 1):
                         win_start = d_dt + timedelta(days=offset)
-                        win_dates = set((win_start + timedelta(days=k)).strftime("%Y-%m-%d") for k in range(7))
+                        win_dates = set((win_start + timedelta(days=k)).strftime("%Y-%m-%d") for k in range(window_size))
                         in_win = sum(1 for sh in shifts if sh["staff_id"] == sid and sh["date"] in win_dates) + 1
-                        if in_win > self.LEGAL_MAX_CONSECUTIVE_DAYS:
+                        if in_win > _smc:
                             consec_violation = True
                             break
                     if consec_violation:
@@ -2847,7 +2855,11 @@ class ShiftScheduler:
         _ = weekly_hours  # 互換のため引数受け取りは継続
 
         cur_consec = consecutive.get(sid, 0)
-        if cur_consec >= self.LEGAL_MAX_CONSECUTIVE_DAYS:
+        # v3.7.116: スタッフ別 max_consecutive_days を尊重
+        _smc = int(staff.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+        if not (1 <= _smc <= 7):
+            _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+        if cur_consec >= _smc:
             return True  # 連続勤務超過
 
         return False
