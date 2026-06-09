@@ -106,19 +106,31 @@
             /* テーブルの横スクロール対応 */
             table { font-size: 12px; }
             .overflow-x-auto { -webkit-overflow-scrolling: touch; }
-            /* v3.7.104: ボタンのタッチ最適化 (min-height だけでなく min-width も保証)
-               テキスト無しの アイコンのみボタン (×閉じる など) を Apple HIG 推奨
+            /* v3.7.104/107: タッチ最適化
+               テキスト無しのアイコンのみボタン (×閉じる など) を Apple HIG 推奨
                44pt 相当のタップ領域に拡大。
-               テキスト付きボタンは既存幅を維持するため、子に <i>要素のみ で
-               テキストノードがない場合だけ min-width を当てる。 */
+               テキスト付きボタンは既存幅を維持するため、子に <i>要素のみで
+               テキストノードがない場合だけ min-width を当てる。
+               v3.7.107: クリック可能リンクとテキスト付きボタンも 38px 高に。 */
             button, a[role='button'], [onclick] {
                 min-height: 38px;
             }
-            /* アイコンのみのボタンを 38x38 以上に保証 */
             button:has(> i:only-child) {
                 min-width: 38px;
                 padding-left: 8px;
                 padding-right: 8px;
+            }
+            /* v3.7.107: テキスト付きボタンも min-width で 38px 以上に */
+            button {
+                min-width: 38px;
+            }
+            /* v3.7.107: フッター/ナビ系の inline-link を 36px 高に
+               (本文中の通常テキストリンクは role/onclick がないので除外) */
+            a[role='button'], a[onclick], footer a, nav a {
+                min-height: 36px;
+                display: inline-flex;
+                align-items: center;
+                padding: 4px 6px;
             }
             /* フォームの入力フィールドをタッチ最適化 */
             input, select, textarea {
