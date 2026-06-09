@@ -1694,7 +1694,9 @@ class ShiftScheduler:
                                 0, None, pulp.LpInteger)
                             prob += cnt_expr + su >= min_v
                             penalty += su * 500_000
-                        # max 制約: cnt <= max_v + slack_over (v3.7.122: max=0 は制約なし)
+                        # max 制約: cnt <= max_v + slack_over
+                        # v3.7.122: max=0 は制約なし (UI 表記「空欄なら制約なし」と整合)
+                        # v3.7.137: max>=31 も「制限なし」扱い (月の物理上限を超える指定は無意味)
                         if max_v is not None and 0 < max_v < 31:
                             so = pulp.LpVariable(
                                 "pat_max_{}_{}".format(sid, ps_min),

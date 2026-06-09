@@ -11,7 +11,7 @@ import stripe
 from fastapi import FastAPI, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -39,38 +39,56 @@ app = FastAPI(title="Rakushift AI Engine", version="3.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# v3.7.132: エラー通知 webhook (Slack/Discord 互換)
+# v3.7.132 / v3.7.137: エラー通知 webhook (Slack/Discord 互換)
 # ERROR_WEBHOOK_URL 環境変数があれば、未捕捉例外を webhook で通知
 _ERROR_WEBHOOK_URL = os.environ.get("ERROR_WEBHOOK_URL", "")
 _WEBHOOK_DEDUPE_CACHE = {}  # {error_signature: last_sent_ts} で重複通知抑制
+_WEBHOOK_REENTRY_GUARD = False  # v3.7.137: 無限ループ防止フラグ
 
 def _notify_error_webhook(label: str, detail: str, traceback_str: str = ""):
-    """Slack/Discord webhook にエラーを通知 (同じ signature は 5分間 抑制)"""
-    if not _ERROR_WEBHOOK_URL:
+    """Slack/Discord webhook にエラーを通知 (同じ signature は 5分間 抑制)
+
+    v3.7.137: webhook 通知自体が例外を起こした場合、global_exception_handler が
+    再度この関数を呼ぶことで無限ループになるのを防ぐ。
+    """
+    global _WEBHOOK_REENTRY_GUARD
+    if not _ERROR_WEBHOOK_URL or _WEBHOOK_REENTRY_GUARD:
         return
-    import time as _t
-    sig = (label + detail[:100]).encode("utf-8", errors="ignore")[:200]
-    sig_key = hash(sig)
-    now = _t.time()
-    last = _WEBHOOK_DEDUPE_CACHE.get(sig_key, 0)
-    if now - last < 300:  # 5分以内は同じエラーをスキップ
-        return
-    _WEBHOOK_DEDUPE_CACHE[sig_key] = now
-    # 古いエントリを掃除 (5分超のものは削除)
-    for k in list(_WEBHOOK_DEDUPE_CACHE.keys()):
-        if now - _WEBHOOK_DEDUPE_CACHE[k] > 600:
-            _WEBHOOK_DEDUPE_CACHE.pop(k, None)
-    body = (f":rotating_light: *Rakushift Backend Error*\n"
-            f"*Label:* {label}\n"
-            f"*Detail:* {detail[:500]}\n")
-    if traceback_str:
-        body += f"```\n{traceback_str[:1500]}\n```"
-    payload = {"text": body, "content": body}  # Slack/Discord 両対応
+    _WEBHOOK_REENTRY_GUARD = True
     try:
-        with httpx.Client(timeout=5.0) as client:
-            client.post(_ERROR_WEBHOOK_URL, json=payload)
-    except Exception as e:
-        logger.warning("error webhook delivery failed: %s", e)
+        import time as _t
+        # sig は abs() で正規化して負数の hash 衝突を避ける
+        sig = (label + detail[:100]).encode("utf-8", errors="ignore")[:200]
+        sig_key = abs(hash(sig))
+        now = _t.time()
+        last = _WEBHOOK_DEDUPE_CACHE.get(sig_key, 0)
+        if now - last < 300:  # 5分以内は同じエラーをスキップ
+            return
+        _WEBHOOK_DEDUPE_CACHE[sig_key] = now
+        # 古いエントリを掃除 (10分超のものは削除)
+        for k in list(_WEBHOOK_DEDUPE_CACHE.keys()):
+            if now - _WEBHOOK_DEDUPE_CACHE[k] > 600:
+                _WEBHOOK_DEDUPE_CACHE.pop(k, None)
+        body = (f":rotating_light: *Rakushift Backend Error*\n"
+                f"*Label:* {label}\n"
+                f"*Detail:* {detail[:500]}\n")
+        if traceback_str:
+            body += f"```\n{traceback_str[:1500]}\n```"
+        payload = {"text": body, "content": body}  # Slack/Discord 両対応
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                client.post(_ERROR_WEBHOOK_URL, json=payload)
+        except Exception as e:
+            # webhook 失敗は logger だけ、絶対に例外を上げない
+            try:
+                logger.warning("error webhook delivery failed: %s", e)
+            except Exception:
+                pass
+    except Exception:
+        # 万が一の例外もここで握りつぶす (絶対に再エントリさせない)
+        pass
+    finally:
+        _WEBHOOK_REENTRY_GUARD = False
 
 # CORS設定: 本番ドメインのみ許可
 # 環境変数で固定オリジン (CSV) を上書き可。それと別に Cloudflare Pages の preview
@@ -161,7 +179,9 @@ def _load_platform_settings():
                 if sk:
                     stripe.api_key = sk
     except Exception as e:
-        logger.info("[Settings] Load failed: {}".format(e))
+        # v3.7.137: 例外メッセージにレスポンス本文が含まれる可能性があるため
+        # 型名のみログ出力 (SERVICE_KEY 等のヘッダー漏洩防止)
+        logger.info("[Settings] Load failed: %s", type(e).__name__)
 
 
 # 起動時に設定読み込み
@@ -191,22 +211,25 @@ class DiagnoseRequest(BaseModel):
 
 
 class InquiryRequest(BaseModel):
-    """法人お問い合わせフォーム"""
-    company_name: str
-    company_address: str = ""
-    phone: str
-    contact_name: str
-    contact_phone: str = ""  # 担当者個別連絡先 (DB スキーマと整合)
-    plan_summary: str = ""
+    """法人お問い合わせフォーム
+
+    v3.7.137: max_length / 範囲制限を追加 (DoS / 異常入力対策)
+    """
+    company_name: str = Field(min_length=1, max_length=200)
+    company_address: str = Field(default="", max_length=300)
+    phone: str = Field(min_length=1, max_length=40)
+    contact_name: str = Field(min_length=1, max_length=100)
+    contact_phone: str = Field(default="", max_length=40)
+    plan_summary: str = Field(default="", max_length=200)
     # フロントは <input type="number"> の文字列値を送信するため str で受け、
     # DB INSERT 時に int に変換する。Pydantic v2 では Union/Strict が複雑なので str のまま保持。
-    light_plan_count: str = "0"
-    standard_plan_count: str = "0"
-    premium_plan_count: str = "0"
-    preferred_days: str = ""
-    preferred_time: str = ""
-    schedule_summary: str = ""
-    message: str = ""
+    light_plan_count: str = Field(default="0", max_length=4)
+    standard_plan_count: str = Field(default="0", max_length=4)
+    premium_plan_count: str = Field(default="0", max_length=4)
+    preferred_days: str = Field(default="", max_length=200)
+    preferred_time: str = Field(default="", max_length=100)
+    schedule_summary: str = Field(default="", max_length=300)
+    message: str = Field(default="", max_length=2000)
 
 
 class CheckoutRequest(BaseModel):
@@ -393,7 +416,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.136"}
+        return {"status": "ok", "db": "alive", "version": "3.7.137"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -896,9 +919,13 @@ def run_gemini_audit(api_key: str, model: str, req: ShiftRequest, shifts: list) 
         closed_days_names = []
         day_names = ["日", "月", "火", "水", "木", "金", "土"]
         for cd in config.get("closed_days", []):
-            cd = int(cd)  # DB経由で文字列になる場合の安全策
-            if 0 <= cd < 7:
-                closed_days_names.append(day_names[cd])
+            # v3.7.137: int 変換失敗を握りつぶさず skip
+            try:
+                cd_int = int(cd)
+            except (ValueError, TypeError):
+                continue
+            if 0 <= cd_int < 7:
+                closed_days_names.append(day_names[cd_int])
 
         staff_info = []
         for s in req.staff_list:
@@ -1785,7 +1812,26 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS", "")
 
-    # メール本文を構築
+    # v3.7.137: メール本文への注入対策 - 制御文字をエスケープ + 長さ制限
+    def _safe_mail_text(s, maxlen=500):
+        if s is None:
+            return ""
+        s = str(s)[:maxlen]
+        # 制御文字 (改行除く) を空白に
+        return "".join(c if c == "\n" or c == "\t" or (ord(c) >= 0x20 and ord(c) != 0x7F) else " " for c in s)
+
+    sc = {
+        "company_name":    _safe_mail_text(req.company_name, 200),
+        "company_address": _safe_mail_text(req.company_address, 300),
+        "phone":           _safe_mail_text(req.phone, 40),
+        "contact_name":    _safe_mail_text(req.contact_name, 100),
+        "plan_summary":    _safe_mail_text(req.plan_summary, 200),
+        "preferred_days":  _safe_mail_text(req.preferred_days, 200),
+        "preferred_time":  _safe_mail_text(req.preferred_time, 100),
+        "message":         _safe_mail_text(req.message, 2000),
+    }
+
+    # メール本文を構築 (sanitize 済みデータを使用)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     body = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1794,34 +1840,33 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ■ 会社情報
-  会社名:     {req.company_name}
-  会社住所:   {req.company_address}
-  連絡先:     {req.phone}
-  担当者名:   {req.contact_name}
+  会社名:     {sc['company_name']}
+  会社住所:   {sc['company_address']}
+  連絡先:     {sc['phone']}
+  担当者名:   {sc['contact_name']}
 
 ■ 契約予定プラン
-  {req.plan_summary or '未選択'}
+  {sc['plan_summary'] or '未選択'}
   ├ ライトプラン:       {req.light_plan_count}件
   ├ スタンダードプラン:  {req.standard_plan_count}件
   └ プレミアムプラン:    {req.premium_plan_count}件
 
 ■ ご連絡希望日程
-  希望曜日:   {req.preferred_days or '指定なし'}
-  希望時間帯: {req.preferred_time or '指定なし'}
+  希望曜日:   {sc['preferred_days'] or '指定なし'}
+  希望時間帯: {sc['preferred_time'] or '指定なし'}
 
 ■ その他ご要望
-  {req.message or 'なし'}
+  {sc['message'] or 'なし'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-    logger.info(f"[Inquiry] Received from {req.company_name} ({req.contact_name})")
-    logger.info(body)
+    logger.info(f"[Inquiry] Received from {sc['company_name']} ({sc['contact_name']})")
 
     # Supabaseにも保存を試行
     def _to_int(v):
         try:
-            return int(v) if v else 0
+            return max(0, int(v) if v else 0)  # v3.7.137: 負値を 0 にクランプ
         except (ValueError, TypeError):
             return 0
 
@@ -1885,8 +1930,21 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
                 else:
                     return JSONResponse(status_code=500, content={"success": False, "message": "お問い合わせの受付に失敗しました。時間をおいて再度お試しください。"})
     else:
-        logger.info("Inquiry email not configured. Set INQUIRY_EMAIL_TO, SMTP_USER, SMTP_PASS env vars.")
-        return {"success": True, "message": "お問い合わせを受け付けました。"}
+        # v3.7.137: SMTP 未設定時の警告強化
+        logger.warning(
+            "[Inquiry] SMTP NOT CONFIGURED. db_saved=%s. Set INQUIRY_EMAIL_TO/SMTP_USER/SMTP_PASS.",
+            db_saved)
+        if db_saved:
+            return {"success": True, "message": "お問い合わせを受け付けました。(管理者通知は別途確認中)"}
+        else:
+            _notify_error_webhook(
+                "Inquiry SMTP unconfigured AND db save failed",
+                f"company={sc['company_name']}, db_saved={db_saved}",
+            )
+            return JSONResponse(status_code=500, content={
+                "success": False,
+                "message": "お問い合わせの受付に失敗しました。時間をおいて再度お試しください。"
+            })
 
 
 # deploy: 20260516-0508

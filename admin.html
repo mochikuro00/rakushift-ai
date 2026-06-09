@@ -857,8 +857,8 @@
                 </div>
             </div>
 
-            <!-- v3.7.136: PIN 初期化モーダル -->
-            <div id="resetPinModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) this.classList.add('hidden')">
+            <!-- v3.7.136/137: PIN 初期化モーダル (背景クリックでも closeResetPinModal を呼ぶ) -->
+            <div id="resetPinModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeResetPinModal()">
                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
                     <div class="bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-4 text-white">
                         <h2 class="text-lg font-bold"><i class="fas fa-key mr-2"></i>テナント PIN 初期化</h2>
@@ -1978,11 +1978,13 @@
         window.open(url, '_blank', 'noopener,noreferrer');
     }
 
-    // v3.7.136: PIN 初期化モーダル制御
-    let _resetPinTargetContractId = null;
+    // v3.7.136/137: PIN 初期化モーダル制御
+    //   v3.7.137: グローバル変数を data-attribute に移管 (連続クリック競合防止)
+    //             パスワードは送信後即時クリア + closeで再度クリア
     function openResetPinModal(contractId, name) {
         if (!contractId) return;
-        _resetPinTargetContractId = contractId;
+        const modal = document.getElementById('resetPinModal');
+        modal.dataset.contractId = contractId;  // ローカル化 (グローバル変数廃止)
         const nameEl = document.getElementById('resetPinTargetName');
         const contractEl = document.getElementById('resetPinTargetContract');
         const pwEl = document.getElementById('resetPinAdminPw');
@@ -1991,43 +1993,53 @@
         if (contractEl) contractEl.textContent = contractId;
         if (pwEl) pwEl.value = '';
         if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
-        document.getElementById('resetPinModal').classList.remove('hidden');
+        modal.classList.remove('hidden');
         setTimeout(() => pwEl?.focus(), 100);
     }
     function closeResetPinModal() {
-        document.getElementById('resetPinModal').classList.add('hidden');
-        _resetPinTargetContractId = null;
+        const modal = document.getElementById('resetPinModal');
+        modal.classList.add('hidden');
+        // v3.7.137: パスワードを必ずクリア (再開時のリーク防止)
+        const pwEl = document.getElementById('resetPinAdminPw');
+        if (pwEl) pwEl.value = '';
+        delete modal.dataset.contractId;
     }
     async function submitResetPin() {
-        const cid = _resetPinTargetContractId;
-        const pw = document.getElementById('resetPinAdminPw')?.value || '';
+        const modal = document.getElementById('resetPinModal');
+        const cid = modal?.dataset.contractId;
+        const pwEl = document.getElementById('resetPinAdminPw');
+        let pw = pwEl?.value || '';
         const errEl = document.getElementById('resetPinError');
-        if (!cid) return;
-        if (!pw) {
-            if (errEl) { errEl.textContent = '管理者パスワードを入力してください'; errEl.classList.remove('hidden'); }
-            return;
-        }
-        if (!confirm(`テナント "${document.getElementById('resetPinTargetName')?.textContent}" の PIN を初期化します。よろしいですか?`)) return;
+        const showErr = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } };
+        if (!cid) { showErr('対象テナントが特定できません'); return; }
+        // v3.7.137: 入力バリデーション強化 (制御文字 / 空白 / 超長)
+        if (!pw || pw.length < 1) return showErr('管理者パスワードを入力してください');
+        if (pw.length > 128) return showErr('パスワードが長すぎます');
+        if (/[\x00\r\n]/.test(pw)) return showErr('パスワードに不正な制御文字が含まれます');
+        const nameTxt = document.getElementById('resetPinTargetName')?.textContent || '?';
+        if (!confirm(`テナント "${nameTxt}" の PIN を初期化します。よろしいですか?`)) return;
         try {
             const result = await rpc('admin_reset_pin_by_contract', {
                 p_contract_id: cid,
                 p_admin_password: pw
             });
+            // v3.7.137: 送信完了後は即時クリア (メモリ残留対策)
+            pw = '';
+            if (pwEl) pwEl.value = '';
             if (result && result.success) {
                 showToast(result.message || 'PIN を初期化しました', 'success');
                 closeResetPinModal();
             } else {
-                if (errEl) {
-                    errEl.textContent = (result && result.message) || '初期化に失敗しました';
-                    errEl.classList.remove('hidden');
-                }
+                // v3.7.137: エラーメッセージを UI 用に正規化
+                const raw = (result && result.message) || '初期化に失敗しました';
+                showErr(raw);
             }
         } catch (e) {
             console.error('Reset PIN error:', e);
-            if (errEl) {
-                errEl.textContent = 'エラー: ' + (e.message || '不明');
-                errEl.classList.remove('hidden');
-            }
+            // v3.7.137: 例外時もパスワードをクリア
+            pw = '';
+            if (pwEl) pwEl.value = '';
+            showErr('通信エラーが発生しました。しばらくしてから再試行してください');
         }
     }
 

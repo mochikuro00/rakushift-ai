@@ -945,10 +945,16 @@ const app = {
                 created_at: new Date().toISOString()
             };
 
-            // localStorageにバックアップ保存
-            const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
-            pending.push(inquiryData);
-            localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
+            // v3.7.137: localStorage 保存を try-catch で囲む (QuotaExceeded 等)
+            try {
+                const pending = JSON.parse(localStorage.getItem('rakushift_pending_inquiries') || '[]');
+                pending.push(inquiryData);
+                // 直近 20件のみ保持 (古いものから捨てる)
+                while (pending.length > 20) pending.shift();
+                localStorage.setItem('rakushift_pending_inquiries', JSON.stringify(pending));
+            } catch (lsErr) {
+                console.warn('[Inquiry] localStorage backup failed (容量 or 権限):', lsErr.name);
+            }
 
             // Railwayサーバー経由でメール送信
             try {
@@ -1815,6 +1821,8 @@ const app = {
         } catch (e) {
             console.error('[PIN] setup error:', e);
             showErr('PIN 設定に失敗しました');
+            // v3.7.137: 例外時もモーダルを開いたまま再試行を許可
+            // Promise は resolve せず、ユーザーがキャンセル/再試行を選ぶ
         }
     },
 
@@ -1851,8 +1859,8 @@ const app = {
     async submitPinEntry() {
         const input = document.getElementById('pinEntryInput');
         const errEl = document.getElementById('pinEntryError');
-        const pin = input?.value.trim();
-        if (!pin || !/^[0-9]{4,8}$/.test(pin)) {
+        const pin = (input && typeof input.value === 'string') ? input.value.trim() : '';
+        if (!/^[0-9]{4,8}$/.test(pin)) {
             if (errEl) { errEl.textContent = 'PIN は 4〜8桁の数字'; errEl.classList.remove('hidden'); }
             return;
         }
@@ -1861,6 +1869,14 @@ const app = {
                 p_contract_id: this._pinPendingContractId,
                 p_pin: pin,
             });
+            // v3.7.137: PIN 未設定が判明したら初回設定モーダルに切替
+            if (r && !r.success && r.has_pin === false) {
+                this._closePinEntryModal();
+                // 初回設定フローへ遷移
+                const ok = await this._showPinSetupModal(this._pinPendingContractId);
+                if (this._pinPendingResolve) { this._pinPendingResolve(ok); this._pinPendingResolve = null; }
+                return;
+            }
             if (r && r.success) {
                 this._closePinEntryModal();
                 if (this._pinPendingResolve) { this._pinPendingResolve(true); this._pinPendingResolve = null; }
@@ -1877,17 +1893,19 @@ const app = {
                 errEl.textContent = 'PIN 認証に失敗しました';
                 errEl.classList.remove('hidden');
             }
+            // v3.7.137: RPC エラー時も Promise を resolve(false) してハング防止
+            // モーダルは閉じず、ユーザーが再試行 or キャンセル できるようにする
         }
     },
 
     cancelPinEntry() {
-        this._closePinEntryModal();
-        if (this._pinPendingResolve) { this._pinPendingResolve(false); this._pinPendingResolve = null; }
-        // PIN 認証中断 → ログイン状態を解除して再ログイン画面へ
+        // v3.7.137: state を最初にクリア (renderCurrentView 等の競合を防ぐ)
         this.state.isAdmin = false;
         this.state.isShopLoggedIn = false;
         try { sessionStorage.removeItem('rakushift_user'); } catch (_) {}
         try { localStorage.removeItem('rakushift_org_id'); } catch (_) {}
+        this._closePinEntryModal();
+        if (this._pinPendingResolve) { this._pinPendingResolve(false); this._pinPendingResolve = null; }
         this.updateAuthUI();
         this.openModal('loginModal');
     },
