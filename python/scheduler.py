@@ -636,8 +636,6 @@ class ShiftScheduler:
         seen = set()
 
         # v3.7.109: 該当シフトパターンチェックでフィルタ
-        # staff.eligible_patterns が空配列 or null → 全パターン該当 (デフォルト)
-        # staff.eligible_patterns が配列 → 該当するパターン名のみ使用
         eligible = staff.get("eligible_patterns")
         if isinstance(eligible, list) and len(eligible) > 0:
             eligible_set = set(str(e) for e in eligible)
@@ -645,6 +643,27 @@ class ShiftScheduler:
                                if (p.get("name") or "") in eligible_set]
         else:
             patterns_to_use = self.shift_patterns.copy()
+
+        # v3.7.110: 当該曜日タイプの count が 0 のパターンは「この曜日では使わない」と
+        # 解釈して opt から除外。これでユーザーが「土曜は早番なし」を表現できる。
+        _day_type = self._get_day_type(date_str)
+        def _pat_count_for_day(p):
+            if _day_type == "holiday":
+                return p.get("count_holiday", p.get("count"))
+            if _day_type == "weekend":
+                return p.get("count_weekend", p.get("count"))
+            return p.get("count_weekday", p.get("count"))
+        filtered = []
+        for p in patterns_to_use:
+            c = _pat_count_for_day(p)
+            if c is not None:
+                try:
+                    if int(c) == 0:
+                        continue  # この曜日タイプでは無効化
+                except (ValueError, TypeError):
+                    pass
+            filtered.append(p)
+        patterns_to_use = filtered
 
         # v3.7.62: ユーザー要望「シフト生成時はシフトパターンのみで考えて展開」
         # 旧 v3.6: スタッフ希望時間 (pref_start_wd 等) を pref_pat として追加していた

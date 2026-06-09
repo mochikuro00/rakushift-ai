@@ -3878,13 +3878,13 @@ const app = {
                                                 ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="1" max="50" step="1" inputmode="numeric" class="setting-shift-count-wd w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
+                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-wd w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="1" max="50" step="1" inputmode="numeric" class="setting-shift-count-we w-16 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
+                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-we w-16 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="1" max="50" step="1" inputmode="numeric" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
+                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
                                             </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
@@ -4487,8 +4487,9 @@ const app = {
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
 
         const parseCount = (input) => {
+            // v3.7.110: 0 も許容 (「この曜日はこのパターン使わない」を表現)
             const v = Number(input?.value);
-            return Number.isFinite(v) && v >= 1 ? Math.min(v, 50) : 1;
+            return Number.isFinite(v) && v >= 0 ? Math.min(v, 50) : 1;
         };
         const all = [];
         shiftNames.forEach((el, i) => {
