@@ -1429,7 +1429,11 @@ class ShiftScheduler:
                 # 修正: 実カレンダー連続性を確認し、連続する 7日間 (= 6日+休日1日) のみに
                 #       制約を貼る。ギャップを跨ぐスパンはスキップ。
                 sorted_d = sorted(self.dates)
-                max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS if not force else 7
+                # v3.7.113: スタッフ別の連続出勤日数上限 (デフォルト 6 = 労基法35条)
+                _staff_max_consec = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+                if not (1 <= _staff_max_consec <= 7):
+                    _staff_max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS
+                max_consec = _staff_max_consec if not force else max(_staff_max_consec, 7)
                 if len(sorted_d) > max_consec:
                     for i in range(len(sorted_d) - max_consec):
                         span = sorted_d[i:i + max_consec + 1]

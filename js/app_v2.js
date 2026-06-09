@@ -5436,6 +5436,7 @@ const app = {
         setVal('staffMinDaysPerWeek', '0');
         setVal('staffMinDaysPerMonth', '0');
         setVal('staffMaxDaysPerMonth', '31');
+        setVal('staffMaxConsecutiveDays', '6');
         setVal('staffPrefStartWeekday', '');
         setVal('staffPrefEndWeekday', '');
         setVal('staffPrefStartWeekend', '');
@@ -5776,6 +5777,11 @@ const app = {
                 const v = Number(document.getElementById('staffMaxDaysPerMonth')?.value);
                 return (Number.isFinite(v) && v >= 1 && v <= 31) ? v : 31;
             })(),
+            // v3.7.113: 連続出勤日数の上限 (1〜7, デフォルト 6=労基法35条)
+            max_consecutive_days: (() => {
+                const v = Number(document.getElementById('staffMaxConsecutiveDays')?.value);
+                return (Number.isFinite(v) && v >= 1 && v <= 7) ? v : 6;
+            })(),
             // 専用カラム (migration 50/51 で追加)
             shift_priority: shiftPriority,
             contract_type: contractType,
@@ -5975,6 +5981,10 @@ const app = {
         // v3.7.91: 月の最大出勤日数 (デフォルト 31)
         if (document.getElementById('staffMaxDaysPerMonth')) {
             document.getElementById('staffMaxDaysPerMonth').value = s.max_days_month || 31;
+        }
+        // v3.7.113: 連続出勤日数 (デフォルト 6)
+        if (document.getElementById('staffMaxConsecutiveDays')) {
+            document.getElementById('staffMaxConsecutiveDays').value = s.max_consecutive_days || 6;
         }
         // v3.7.77: シフトパターン目標回数を復元
         this.renderStaffPatternTargets(s.pattern_target_counts || {});
