@@ -416,7 +416,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.139"}
+        return {"status": "ok", "db": "alive", "version": "3.7.140"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1253,6 +1253,9 @@ async def new_subscription(request: Request, req: NewSubscriptionRequest):
             }
         )
 
+        # v3.7.140: Idempotency-Key で重複課金防止 (customer + plan + 日時)
+        import time as _t
+        _idem_key_new = f"checkout_new:{customer.id}:{req.plan}:{int(_t.time())}"
         # チェックアウトセッション (テナント未作成のため contract_id なし)
         session = stripe.checkout.Session.create(
             customer=customer.id,
@@ -1286,6 +1289,7 @@ async def new_subscription(request: Request, req: NewSubscriptionRequest):
                 }
             },
             allow_promotion_codes=True,
+            idempotency_key=_idem_key_new,
         )
 
         return {"url": session.url, "session_id": session.id}
@@ -1367,6 +1371,9 @@ async def create_checkout_session(request: Request, req: CheckoutRequest):
         if not _validate_redirect_url(success_url) or not _validate_redirect_url(cancel_url):
             return JSONResponse(status_code=400, content={"error": "不正なリダイレクトURLです"})
 
+        # v3.7.140: Idempotency-Key で重複課金防止 (contract + 日時)
+        import time as _t2
+        _idem_key_resume = f"checkout_resume:{req.contract_id}:{int(_t2.time())}"
         session = stripe.checkout.Session.create(
             customer=customer_id,
             payment_method_types=["card"],
@@ -1386,6 +1393,7 @@ async def create_checkout_session(request: Request, req: CheckoutRequest):
                 }
             },
             allow_promotion_codes=True,
+            idempotency_key=_idem_key_resume,
         )
 
         return {"url": session.url, "session_id": session.id}

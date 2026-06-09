@@ -254,6 +254,13 @@ class ShiftScheduler:
         self._operational_dates = sorted([d for d in self.dates if self._get_day_type(d) != "closed"])
         self._operational_dates_set = set(self._operational_dates)
         self._operational_index = {d: i for i, d in enumerate(self._operational_dates)}
+        # v3.7.140: closed_days 設定誤りの早期警告
+        if self.dates and not self._operational_dates:
+            logger.warning(
+                "[Scheduler] 全 %d 日が営業休業日扱いです。closed_days / special_holidays "
+                "の設定を確認してください。シフト生成は空結果になります",
+                len(self.dates),
+            )
 
         # スタッフ分類
         self._mentor_ids = set()
