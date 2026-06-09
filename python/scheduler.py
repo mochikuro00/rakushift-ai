@@ -818,12 +818,24 @@ class ShiftScheduler:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
         for rule in self.time_staff_req:
-            rule_days = [int(d) for d in rule.get("days", [])]
+            if not isinstance(rule, dict):
+                continue
+            # v3.7.124: days/count に文字列や不正値が混ざっていてもクラッシュさせない
+            rule_days = []
+            for d in rule.get("days", []) or []:
+                try:
+                    rule_days.append(int(d))
+                except (ValueError, TypeError):
+                    logger.warning("[time_staff_req] invalid day '%s' skipped", d)
             if js_dow not in rule_days:
                 continue
             rs = self._to_minutes(rule.get("start", "00:00"))
             re_min = self._normalize_end_time(rs, self._to_minutes(rule.get("end", "24:00")))
-            rc = int(rule.get("count", 0))
+            try:
+                rc = int(rule.get("count", 0) or 0)
+            except (ValueError, TypeError):
+                logger.warning("[time_staff_req] invalid count '%s' skipped", rule.get("count"))
+                continue
             pos = rule.get("position", "any")
 
             for t in range(op, cl, 15):
@@ -1194,10 +1206,23 @@ class ShiftScheduler:
                     assignment_reasons[(wsid, wd)] = "承認済み出勤希望"
 
             # ========== 既存シフトを固定 (empty_only モードで空きだけ埋める) ==========
+            # v3.7.124: (staff_id, date) 重複を検出して警告ログ
+            #   旧版は黙って 2件目以降を上書き判定していた (どのレコードが採用された
+            #   か追跡困難)。重複は WARN ログで明示し、1件目を採用する。
             existing_fixed = 0
+            seen_es_keys = set()
             for es in self.existing_shifts:
-                esid = es["staff_id"]
-                ed = es["date"]
+                esid = es.get("staff_id")
+                ed = es.get("date")
+                if not esid or not ed:
+                    continue
+                key = (esid, ed)
+                if key in seen_es_keys:
+                    logger.warning(
+                        "[Existing] duplicate existing_shift (staff={}, date={}) skipped".format(
+                            esid, ed))
+                    continue
+                seen_es_keys.add(key)
                 if ed not in self.dates:
                     continue
                 if (esid, ed) in fixed_assignments:
