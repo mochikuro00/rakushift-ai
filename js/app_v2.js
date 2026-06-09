@@ -832,6 +832,8 @@ const app = {
                 this.updateHeader();
                 this.showToast(`管理者: ${this._sanitize(authResult.name || '管理者')} でログインしました`, 'success');
                 this.updateAnnouncementBadge();
+                // v3.7.130: 初回のみチュートリアル自動表示
+                this._maybeShowTutorial();
             } else {
                 this._recordLoginAttempt('admin_' + inputContractId, false);
                 try { await API.rpc('record_login_failure', { p_identifier: 'admin:' + inputContractId }); } catch (_) {}
@@ -1728,6 +1730,150 @@ const app = {
             this.showToast('店舗情報の読み込みに失敗しました', 'error');
         } finally {
             this.showLoading(false);
+        }
+    },
+
+    // =========================================================
+    // v3.7.130: 店舗管理者 初回チュートリアル (30秒ガイド)
+    // =========================================================
+    _tutorialSteps: [
+        {
+            icon: 'fa-hand-wave',
+            color: 'text-blue-500',
+            title: 'ようこそ ラクシフトAI へ',
+            description: 'AI でシフト作成を自動化、ドラッグ&ドロップで微調整、印刷まで一気通貫。約30秒で主要機能をご案内します。',
+        },
+        {
+            icon: 'fa-users-gear',
+            color: 'text-emerald-500',
+            title: '① スタッフ管理',
+            description: 'スタッフの役割・給与・勤務制約 (週/月の出勤日数・連続出勤日数) を設定します。「該当シフトパターン」で早番のみ等の個別制限も可能。',
+            hint: 'サイドバー [スタッフ] から登録。連続出勤日数 (デフォルト6=労基法35条) を必ず確認',
+        },
+        {
+            icon: 'fa-store',
+            color: 'text-purple-500',
+            title: '② 店舗設定',
+            description: '営業時間、休業曜日、シフトパターン (早番・遅番等)、各パターンの必要人数を設定。土日祝で人数を分けられます。',
+            hint: 'シフトパターン人数を 0 にすると「そのパターン不要」になります',
+        },
+        {
+            icon: 'fa-wand-magic-sparkles',
+            color: 'text-amber-500',
+            title: '③ AI シフト生成',
+            description: 'ダッシュボードの「AIで作成」ボタンで、すべての制約を考慮した最適シフトを 1〜2 分で生成。過剰配置の許容も切替可能。',
+            hint: '過剰配置 OFF: 必要人数ぴったり / ON: 最低出勤日数を優先補完',
+        },
+        {
+            icon: 'fa-arrows-up-down-left-right',
+            color: 'text-indigo-500',
+            title: '④ ドラッグ&ドロップで微調整',
+            description: 'シフトバーを別のセルにドラッグで移動、既存シフトに重ねると入れ替え (swap)。連勤上限超過は自動でブロックされます。',
+            hint: '管理者ログイン中のみ操作可能。失敗時は自動ロールバック',
+        },
+        {
+            icon: 'fa-print',
+            color: 'text-rose-500',
+            title: '⑤ 印刷・公開',
+            description: 'シフト確定後、画面右上の印刷ボタンで PDF/印刷可能。スタッフは個別ログインで自分のシフトのみ閲覧できます。',
+            hint: '人員状況の「⚡ 要N+過剰M=合計名」表示で需給バランスを一目で確認',
+        },
+    ],
+    _tutorialIndex: 0,
+
+    _shouldShowTutorial() {
+        try {
+            return !localStorage.getItem('rakushift_tutorial_v1_seen');
+        } catch (e) {
+            return false;
+        }
+    },
+
+    _maybeShowTutorial() {
+        // 店舗管理者ログイン直後にのみ表示 (本部/閲覧専用モードは除外)
+        if (!this.state.isAdmin || this.state.isHQ) return;
+        if (!this._shouldShowTutorial()) return;
+        setTimeout(() => this.showTutorial(), 600);
+    },
+
+    showTutorial(forceShow) {
+        this._tutorialIndex = 0;
+        const modal = document.getElementById('tutorialModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        this._renderTutorialStep();
+    },
+
+    _renderTutorialStep() {
+        const steps = this._tutorialSteps;
+        const i = this._tutorialIndex;
+        const s = steps[i];
+        if (!s) return;
+        const total = steps.length;
+        // 進捗
+        const ind = document.getElementById('tutorialStepIndicator');
+        if (ind) ind.textContent = `${i + 1}/${total}`;
+        const bar = document.getElementById('tutorialProgressBar');
+        if (bar) bar.style.width = `${((i + 1) / total) * 100}%`;
+        // アイコン
+        const iconEl = document.getElementById('tutorialIcon');
+        if (iconEl) {
+            iconEl.className = `text-5xl mb-3 ${s.color || 'text-blue-500'}`;
+            iconEl.innerHTML = `<i class="fa-solid ${s.icon}"></i>`;
+        }
+        // タイトル/説明
+        const titleEl = document.getElementById('tutorialTitle');
+        if (titleEl) titleEl.textContent = s.title;
+        const descEl = document.getElementById('tutorialDescription');
+        if (descEl) descEl.textContent = s.description;
+        // ヒント
+        const hintWrap = document.getElementById('tutorialHint');
+        const hintTxt = document.getElementById('tutorialHintText');
+        if (s.hint) {
+            if (hintWrap) hintWrap.classList.remove('hidden');
+            if (hintTxt) hintTxt.textContent = s.hint;
+        } else {
+            if (hintWrap) hintWrap.classList.add('hidden');
+        }
+        // ボタン
+        const prevBtn = document.getElementById('tutorialPrevBtn');
+        if (prevBtn) prevBtn.disabled = (i === 0);
+        const nextBtn = document.getElementById('tutorialNextBtn');
+        if (nextBtn) {
+            nextBtn.innerHTML = (i === total - 1)
+                ? '使ってみる<i class="fa-solid fa-check ml-1"></i>'
+                : '次へ<i class="fa-solid fa-chevron-right ml-1"></i>';
+        }
+    },
+
+    nextTutorialStep() {
+        if (this._tutorialIndex < this._tutorialSteps.length - 1) {
+            this._tutorialIndex++;
+            this._renderTutorialStep();
+        } else {
+            this.dismissTutorial(true);
+        }
+    },
+
+    prevTutorialStep() {
+        if (this._tutorialIndex > 0) {
+            this._tutorialIndex--;
+            this._renderTutorialStep();
+        }
+    },
+
+    dismissTutorial(completed) {
+        const modal = document.getElementById('tutorialModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        try {
+            localStorage.setItem('rakushift_tutorial_v1_seen', completed ? 'completed' : 'skipped');
+        } catch (e) {}
+        if (completed) {
+            this.showToast('チュートリアル完了。困ったら設定 → 使い方ガイドから再表示できます', 'success');
         }
     },
 
@@ -3708,14 +3854,20 @@ const app = {
 
         container.innerHTML = `
             <div class="max-w-4xl mx-auto space-y-8 pb-24">
-                <div class="flex items-center justify-between border-b border-gray-200 pb-4">
-                    <div>
+                <div class="flex items-center justify-between border-b border-gray-200 pb-4 gap-2 flex-wrap">
+                    <div class="min-w-0">
                         <h2 class="text-2xl font-bold text-gray-800">店舗設定</h2>
                         <p class="text-sm text-gray-500 mt-1">AIシフト生成に使われるルールです。</p>
                     </div>
-                    <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap shrink-0">
-                        <i class="fa-solid fa-save mr-2"></i>設定を保存
-                    </button>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <!-- v3.7.130: チュートリアル再表示 -->
+                        <button onclick="app.showTutorial(true)" class="bg-white border border-blue-300 text-blue-700 font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-50 transition flex items-center whitespace-nowrap" title="使い方ガイドをもう一度見る">
+                            <i class="fa-solid fa-circle-question mr-1.5"></i>使い方ガイド
+                        </button>
+                        <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap">
+                            <i class="fa-solid fa-save mr-2"></i>設定を保存
+                        </button>
+                    </div>
                 </div>
 
                 <div class="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-lg text-sm text-purple-900 leading-relaxed shadow-sm">

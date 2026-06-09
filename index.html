@@ -463,6 +463,46 @@
         </div>
     </div>
 
+    <!-- v3.7.130: 店舗管理者初回チュートリアル モーダル -->
+    <div id="tutorialModal" class="modal fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-2 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+            <!-- ヘッダー (進捗バー) -->
+            <div class="bg-gradient-to-r from-blue-500 to-indigo-600 px-5 py-3 text-white">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold opacity-90"><span id="tutorialStepIndicator">1/6</span> ステップ</span>
+                    <button onclick="app.dismissTutorial()" class="text-white/80 hover:text-white text-xs font-bold" aria-label="スキップ">
+                        <i class="fa-solid fa-times mr-1"></i>スキップ
+                    </button>
+                </div>
+                <div class="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                    <div id="tutorialProgressBar" class="h-full bg-white rounded-full transition-all duration-300" style="width: 16.6%"></div>
+                </div>
+            </div>
+            <!-- 本文 -->
+            <div class="px-5 py-6 text-center">
+                <div id="tutorialIcon" class="text-5xl mb-3 text-blue-500">
+                    <i class="fa-solid fa-hand-wave"></i>
+                </div>
+                <h2 id="tutorialTitle" class="text-xl font-bold text-gray-800 mb-2">ようこそ ラクシフトAI へ</h2>
+                <p id="tutorialDescription" class="text-sm text-gray-600 leading-relaxed mb-2">
+                    AI でシフト作成を自動化、ドラッグ&ドロップで微調整、印刷まで一気通貫。
+                </p>
+                <div id="tutorialHint" class="hidden text-xs text-blue-600 bg-blue-50 rounded-lg p-2 mt-3 leading-relaxed">
+                    <i class="fa-solid fa-lightbulb mr-1"></i><span id="tutorialHintText"></span>
+                </div>
+            </div>
+            <!-- フッター (ナビゲーション) -->
+            <div class="px-5 py-4 bg-gray-50 flex items-center justify-between gap-3">
+                <button id="tutorialPrevBtn" onclick="app.prevTutorialStep()" class="flex-1 px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-chevron-left mr-1"></i>戻る
+                </button>
+                <button id="tutorialNextBtn" onclick="app.nextTutorialStep()" class="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg hover:brightness-105 transition shadow-sm">
+                    次へ<i class="fa-solid fa-chevron-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 3店舗以上お問い合わせモーダル -->
     <div id="multiStoreInquiryModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-2 sm:p-4">
         <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden mx-auto flex flex-col" style="max-height: 95vh;">
