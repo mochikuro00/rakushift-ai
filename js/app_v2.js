@@ -830,6 +830,12 @@ const app = {
                 await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
+                // v3.7.133: 設定 PIN があれば追加検証 (失敗時はログイン取消)
+                const pinOk = await this._checkPinIfNeeded(inputContractId);
+                if (!pinOk) {
+                    this.showLoading(false);
+                    return;
+                }
                 this.showToast(`管理者: ${this._sanitize(authResult.name || '管理者')} でログインしました`, 'success');
                 this.updateAnnouncementBadge();
                 // v3.7.130: 初回のみチュートリアル自動表示
@@ -1288,6 +1294,9 @@ const app = {
             case 'manual':
                 this.renderManual(container);
                 break;
+            case 'handover':
+                this.renderHandover(container);
+                break;
             case 'hq_manual':
                 this.renderHQManual(container);
                 break;
@@ -1739,6 +1748,172 @@ const app = {
         } finally {
             this.showLoading(false);
         }
+    },
+
+    // =========================================================
+    // v3.7.133: オプトイン PIN (セカンドファクター)
+    // =========================================================
+    _pinPendingContractId: null,  // PIN 待機中の contract_id
+    _pinPendingResolve: null,     // PIN 認証完了の Promise resolve
+
+    // ログイン成功直後に呼ぶ。PIN 設定があれば検証モーダル → success/cancel
+    async _checkPinIfNeeded(contractId) {
+        try {
+            const r = await API.rpc('has_pin_by_contract', { p_contract_id: contractId });
+            if (!r || r.has_pin !== true) return true;  // PIN なし → そのまま通す
+        } catch (e) {
+            console.warn('[PIN] has_pin check failed:', e);
+            return true;  // RPC 失敗時は通過 (フェイルオープン、可用性優先)
+        }
+        // PIN あり → モーダル表示して入力待ち
+        return await this._showPinEntryModal(contractId);
+    },
+
+    _showPinEntryModal(contractId) {
+        this._pinPendingContractId = contractId;
+        const modal = document.getElementById('pinEntryModal');
+        if (!modal) return Promise.resolve(true);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        const input = document.getElementById('pinEntryInput');
+        if (input) { input.value = ''; setTimeout(() => input.focus(), 100); }
+        const err = document.getElementById('pinEntryError');
+        if (err) { err.classList.add('hidden'); err.textContent = ''; }
+        return new Promise(resolve => { this._pinPendingResolve = resolve; });
+    },
+
+    async submitPinEntry() {
+        const input = document.getElementById('pinEntryInput');
+        const errEl = document.getElementById('pinEntryError');
+        const pin = input?.value.trim();
+        if (!pin || !/^[0-9]{4,8}$/.test(pin)) {
+            if (errEl) { errEl.textContent = 'PIN は 4〜8桁の数字'; errEl.classList.remove('hidden'); }
+            return;
+        }
+        try {
+            const r = await API.rpc('verify_pin_by_contract', {
+                p_contract_id: this._pinPendingContractId,
+                p_pin: pin,
+            });
+            if (r && r.success) {
+                this._closePinEntryModal();
+                if (this._pinPendingResolve) { this._pinPendingResolve(true); this._pinPendingResolve = null; }
+            } else {
+                if (errEl) {
+                    errEl.textContent = r?.message || 'PIN が正しくありません';
+                    errEl.classList.remove('hidden');
+                }
+                if (input) input.value = '';
+            }
+        } catch (e) {
+            console.error('[PIN] verify error:', e);
+            if (errEl) {
+                errEl.textContent = 'PIN 認証に失敗しました';
+                errEl.classList.remove('hidden');
+            }
+        }
+    },
+
+    cancelPinEntry() {
+        this._closePinEntryModal();
+        if (this._pinPendingResolve) { this._pinPendingResolve(false); this._pinPendingResolve = null; }
+        // PIN 認証中断 → ログイン状態を解除して再ログイン画面へ
+        this.state.isAdmin = false;
+        this.state.isShopLoggedIn = false;
+        try { sessionStorage.removeItem('rakushift_user'); } catch (_) {}
+        try { localStorage.removeItem('rakushift_org_id'); } catch (_) {}
+        this.updateAuthUI();
+        this.openModal('loginModal');
+    },
+
+    _closePinEntryModal() {
+        const modal = document.getElementById('pinEntryModal');
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+        this._pinPendingContractId = null;
+    },
+
+    // 設定画面から呼ばれる: PIN 設定/変更モーダルを開く
+    openPinSetModal(isUpdate) {
+        const modal = document.getElementById('pinSetModal');
+        if (!modal) return;
+        const title = document.getElementById('pinSetTitle');
+        if (title) title.textContent = isUpdate ? 'PIN を変更' : 'PIN を設定';
+        ['pinSetCurrentPw', 'pinSetNew', 'pinSetConfirm'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const err = document.getElementById('pinSetError');
+        if (err) { err.classList.add('hidden'); err.textContent = ''; }
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => document.getElementById('pinSetCurrentPw')?.focus(), 100);
+    },
+
+    closePinSetModal() {
+        const modal = document.getElementById('pinSetModal');
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    },
+
+    async submitPinSet() {
+        const cid = this._getContractId();
+        const cur = document.getElementById('pinSetCurrentPw')?.value || '';
+        const np = document.getElementById('pinSetNew')?.value || '';
+        const nc = document.getElementById('pinSetConfirm')?.value || '';
+        const errEl = document.getElementById('pinSetError');
+        const showErr = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } };
+        if (!cid) return showErr('contract_id 未取得');
+        if (!cur) return showErr('現在のパスワードを入力してください');
+        if (!/^[0-9]{4,8}$/.test(np)) return showErr('PIN は 4〜8桁の数字');
+        if (np !== nc) return showErr('PIN (確認) が一致しません');
+        try {
+            const r = await API.rpc('set_pin_by_contract', {
+                p_contract_id: cid,
+                p_current_password: cur,
+                p_new_pin: np,
+            });
+            if (r && r.success) {
+                this.closePinSetModal();
+                this.showToast(r.message || 'PIN を設定しました', 'success');
+                // 設定画面を再描画して状態を更新
+                this.renderSettings(document.getElementById('viewContainer'));
+            } else {
+                showErr(r?.message || '設定に失敗しました');
+            }
+        } catch (e) {
+            console.error('[PIN] set error:', e);
+            showErr('PIN 設定に失敗しました');
+        }
+    },
+
+    async clearPin() {
+        const cid = this._getContractId();
+        if (!cid) { this.showToast('contract_id 未取得', 'error'); return; }
+        const cur = prompt('PIN を解除します。現在のパスワードを入力してください:');
+        if (cur == null || cur === '') return;
+        try {
+            const r = await API.rpc('clear_pin_by_contract', {
+                p_contract_id: cid,
+                p_current_password: cur,
+            });
+            if (r && r.success) {
+                this.showToast(r.message || 'PIN を解除しました', 'success');
+                this.renderSettings(document.getElementById('viewContainer'));
+            } else {
+                this.showToast(r?.message || '解除に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('[PIN] clear error:', e);
+            this.showToast('PIN 解除に失敗しました', 'error');
+        }
+    },
+
+    async _hasPinSet() {
+        const cid = this._getContractId();
+        if (!cid) return false;
+        try {
+            const r = await API.rpc('has_pin_by_contract', { p_contract_id: cid });
+            return !!(r && r.has_pin);
+        } catch (e) { return false; }
     },
 
     // =========================================================
@@ -3888,6 +4063,45 @@ const app = {
                     </div>
                 </div>
 
+                <!-- v3.7.133: セキュリティ (PIN / 責任者引き継ぎ) -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-shield-halved text-indigo-500"></i> セキュリティ・責任者引き継ぎ</h3>
+                        <p class="text-xs text-gray-500 mt-1">セカンドファクター PIN 設定と、責任者交代時の引き継ぎ手順</p>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <!-- PIN セクション -->
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                <div>
+                                    <div class="font-bold text-sm text-gray-800"><i class="fa-solid fa-key text-amber-500 mr-1"></i>セカンドファクター PIN</div>
+                                    <p class="text-xs text-gray-500 mt-0.5">設定すると、契約ID/パスワードに加えて 4〜8桁の PIN 入力が必須になります</p>
+                                </div>
+                                <div id="pinStatusBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-gray-200 text-gray-600">読み込み中...</div>
+                            </div>
+                            <div class="flex gap-2 mt-3 flex-wrap" id="pinActionButtons">
+                                <!-- _renderPinStatus が動的に挿入 -->
+                            </div>
+                        </div>
+
+                        <!-- 責任者引き継ぎ (重要) -->
+                        <div class="border-l-4 border-amber-500 bg-amber-50 p-4 rounded-r-lg">
+                            <h4 class="font-bold text-amber-900 mb-2"><i class="fa-solid fa-people-arrows mr-1"></i>責任者引き継ぎに関して (重要)</h4>
+                            <div class="text-xs text-amber-900 leading-relaxed space-y-2">
+                                <p>店舗管理者を交代する際、新責任者がログインできなくなるトラブルを防ぐため、以下を必ず引き継いでください:</p>
+                                <ol class="list-decimal list-inside space-y-1 ml-2">
+                                    <li><strong>契約 ID</strong> (ログイン画面に入力する識別子)</li>
+                                    <li><strong>管理者パスワード</strong> (上記の「パスワード変更」から新責任者の希望に変更可能)</li>
+                                    <li><strong>セカンドファクター PIN</strong> (上で設定している場合のみ。<u>未引き継ぎだと新責任者がログイン不能</u>)</li>
+                                    <li><strong>本部ログイン情報</strong> (本部から店舗を観覧している場合)</li>
+                                </ol>
+                                <p class="font-bold mt-2 text-amber-950">⚠ PIN を忘れた / 引き継ぎ漏れた場合は、運営管理 (info@rakushift.jp) にリセット依頼が必要です。即時対応はできない場合があります。</p>
+                                <p>引き継ぎ前のチェックリストは サイドバーの「責任者引き継ぎ」メニューから確認できます。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 1. 役職・ロール設定 -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -4338,6 +4552,35 @@ const app = {
                 </div>
             </div>
         `;
+        // v3.7.133: PIN 状態を非同期で読み込んで表示更新
+        this._renderPinStatus();
+    },
+
+    async _renderPinStatus() {
+        const badge = document.getElementById('pinStatusBadge');
+        const btns = document.getElementById('pinActionButtons');
+        if (!badge || !btns) return;
+        const hasPin = await this._hasPinSet();
+        if (hasPin) {
+            badge.textContent = '✓ 有効';
+            badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-700';
+            btns.innerHTML = `
+                <button onclick="app.openPinSetModal(true)" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
+                    <i class="fa-solid fa-rotate mr-1"></i>PIN を変更
+                </button>
+                <button onclick="app.clearPin()" class="text-xs bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 transition">
+                    <i class="fa-solid fa-unlock mr-1"></i>PIN を解除
+                </button>
+            `;
+        } else {
+            badge.textContent = '未設定';
+            badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-gray-200 text-gray-600';
+            btns.innerHTML = `
+                <button onclick="app.openPinSetModal(false)" class="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-200 transition">
+                    <i class="fa-solid fa-key mr-1"></i>PIN を設定する
+                </button>
+            `;
+        }
     },
 
     toggleLlmSettings() {
@@ -7844,6 +8087,101 @@ const app = {
         }
         
         return { staff_id: staffId, date, start_time: start, end_time: end, break_minutes: breakMins };
+    },
+
+    // v3.7.133: 責任者引き継ぎビュー
+    renderHandover(container) {
+        if (!this.state.isAdmin) return;
+        container.innerHTML = `
+            <div class="max-w-4xl mx-auto space-y-6 pb-24">
+                <div class="border-b border-gray-200 pb-4">
+                    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <i class="fa-solid fa-people-arrows text-amber-500"></i>責任者引き継ぎ
+                        <span class="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">重要</span>
+                    </h2>
+                    <p class="text-sm text-gray-500 mt-1">店舗管理者を交代する際の手順とチェックリスト</p>
+                </div>
+
+                <!-- なぜ重要か -->
+                <div class="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-5">
+                    <h3 class="font-bold text-red-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>引き継ぎ漏れによるリスク</h3>
+                    <ul class="text-sm text-red-900 leading-relaxed space-y-1 list-disc list-inside">
+                        <li>新責任者がログインできず、シフト作成が完全に止まる</li>
+                        <li>セカンドファクター PIN を知らないと、パスワードを知っていてもログイン不能</li>
+                        <li>運営管理にリセット依頼が必要となり、復旧まで時間がかかる</li>
+                        <li>本部から店舗を観覧している場合、本部の連絡先も引き継ぎ必須</li>
+                    </ul>
+                </div>
+
+                <!-- ステップ1: 引き継ぎ前のチェックリスト -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gray-50">
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list-check text-blue-500 mr-1"></i>引き継ぎチェックリスト</h3>
+                    </div>
+                    <div class="p-5 space-y-3 text-sm">
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
+                            <div>
+                                <div class="font-bold text-gray-800">1. 契約 ID を新責任者に伝える</div>
+                                <p class="text-xs text-gray-500 mt-0.5">店舗ログイン画面で入力する識別子。再確認は「店舗設定 → 店舗情報」から可能</p>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
+                            <div>
+                                <div class="font-bold text-gray-800">2. 管理者パスワードを変更または共有</div>
+                                <p class="text-xs text-gray-500 mt-0.5">右上メニュー「パスワード変更」から新責任者の希望パスワードに設定 (推奨)、もしくは現在のパスワードを共有</p>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded bg-amber-50 border border-amber-200">
+                            <input type="checkbox" class="mt-1 form-checkbox text-amber-600 rounded">
+                            <div>
+                                <div class="font-bold text-amber-900">3. セカンドファクター PIN を引き継ぐ <span class="text-[10px] bg-amber-200 text-amber-800 px-1.5 rounded">PIN設定時のみ</span></div>
+                                <p class="text-xs text-amber-700 mt-0.5">PIN を設定している場合、未引き継ぎだと新責任者がログイン不能。PIN を解除する選択肢もあり (店舗設定 → セキュリティ)</p>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
+                            <div>
+                                <div class="font-bold text-gray-800">4. スタッフ全員に責任者交代を周知</div>
+                                <p class="text-xs text-gray-500 mt-0.5">サイドバー「お知らせ」から全スタッフに通知可能</p>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
+                            <div>
+                                <div class="font-bold text-gray-800">5. 本部・運営管理の連絡先を伝える</div>
+                                <p class="text-xs text-gray-500 mt-0.5">本部から観覧している店舗の場合、本部担当者の連絡先も併せて引き継ぎ</p>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                            <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
+                            <div>
+                                <div class="font-bold text-gray-800">6. 初回ログインの動作確認</div>
+                                <p class="text-xs text-gray-500 mt-0.5">新責任者が実際にログインしてダッシュボードを開けることを引き継ぎ前に確認</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 緊急時の連絡先 -->
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-5">
+                    <h3 class="font-bold text-blue-900 mb-2"><i class="fa-solid fa-phone mr-1"></i>引き継ぎ漏れ・PIN紛失時の連絡先</h3>
+                    <p class="text-sm text-blue-900">運営管理: <a href="mailto:info@rakushift.jp" class="font-bold underline">info@rakushift.jp</a></p>
+                    <p class="text-xs text-blue-700 mt-2">契約 ID と本人確認情報を添えてご連絡ください。即時対応はできない場合があります (営業時間内)。</p>
+                </div>
+
+                <!-- クイックリンク -->
+                <div class="flex flex-wrap gap-2 pt-2">
+                    <button onclick="app.changeView('settings')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50">
+                        <i class="fa-solid fa-sliders mr-1"></i>店舗設定へ
+                    </button>
+                    <button onclick="app.openPasswordChange()" class="bg-amber-50 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-100">
+                        <i class="fa-solid fa-key mr-1"></i>パスワード変更
+                    </button>
+                </div>
+            </div>
+        `;
     },
 
     // --- マニュアル ---

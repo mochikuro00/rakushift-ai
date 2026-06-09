@@ -290,6 +290,12 @@
             <a href="#" data-view="settings" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
                 <i class="fa-solid fa-sliders w-6 text-center"></i> 店舗設定
             </a>
+            <!-- v3.7.133: 責任者引き継ぎ (重要) -->
+            <a href="#" data-view="handover" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-amber-50 hover:text-amber-700 transition-colors border-l-2 border-amber-300 ml-1">
+                <i class="fa-solid fa-people-arrows w-6 text-center text-amber-500"></i>
+                <span>責任者引き継ぎ</span>
+                <span class="ml-auto text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">重要</span>
+            </a>
             <a href="#" data-view="manual" class="sidebar-link admin-link hidden flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
                 <i class="fa-solid fa-book w-6 text-center"></i> マニュアル
             </a>
@@ -465,6 +471,75 @@
     </div>
 
 
+        </div>
+    </div>
+
+    <!-- v3.7.133: PIN 入力モーダル (ログイン後の追加認証) -->
+    <div id="pinEntryModal" class="modal fixed inset-0 z-[210] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden">
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 text-white text-center">
+                <i class="fa-solid fa-shield-halved text-3xl mb-1"></i>
+                <h2 class="text-lg font-bold">セカンドファクター認証</h2>
+                <p class="text-xs opacity-90 mt-1">PIN を入力してください (4〜8桁の数字)</p>
+            </div>
+            <div class="px-5 py-6">
+                <input type="password" id="pinEntryInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+                       maxlength="8" minlength="4"
+                       class="w-full px-4 py-3 text-center text-2xl font-bold tracking-widest border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                       placeholder="••••" autofocus
+                       onkeydown="if(event.key==='Enter') app.submitPinEntry()">
+                <div id="pinEntryError" class="hidden text-xs text-red-600 mt-2 text-center"></div>
+                <button onclick="app.submitPinEntry()" class="w-full mt-4 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">
+                    <i class="fa-solid fa-arrow-right mr-1"></i>認証する
+                </button>
+                <button onclick="app.cancelPinEntry()" class="w-full mt-2 text-sm text-gray-500 hover:text-red-600 transition">
+                    キャンセル (再ログインに戻る)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- v3.7.133: PIN 設定/変更 モーダル -->
+    <div id="pinSetModal" class="modal fixed inset-0 z-[210] hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+            <div class="bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-4 text-white">
+                <h2 class="text-lg font-bold"><i class="fa-solid fa-key mr-2"></i><span id="pinSetTitle">PIN を設定</span></h2>
+                <p class="text-xs opacity-90 mt-1">追加のセカンドファクター認証を有効化します</p>
+            </div>
+            <div class="px-5 py-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">現在のパスワード <span class="text-red-500">*</span></label>
+                    <input type="password" id="pinSetCurrentPw" maxlength="128" autocomplete="current-password"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">新しい PIN (4〜8桁の数字) <span class="text-red-500">*</span></label>
+                    <input type="password" id="pinSetNew" inputmode="numeric" pattern="[0-9]*" maxlength="8" minlength="4"
+                           autocomplete="new-password"
+                           class="w-full px-3 py-2 text-center text-xl font-bold tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">PIN (確認) <span class="text-red-500">*</span></label>
+                    <input type="password" id="pinSetConfirm" inputmode="numeric" pattern="[0-9]*" maxlength="8" minlength="4"
+                           autocomplete="new-password"
+                           class="w-full px-3 py-2 text-center text-xl font-bold tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                    <strong>重要</strong>: PIN を忘れると<strong>自分でログインできなくなります</strong>。
+                    安全な場所に控えておくか、運営管理にリセット依頼が必要です。
+                    責任者引き継ぎ時は必ず PIN も新責任者に伝達してください。
+                </div>
+                <div id="pinSetError" class="hidden text-xs text-red-600"></div>
+                <div class="flex gap-2">
+                    <button onclick="app.closePinSetModal()" class="flex-1 px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition">
+                        キャンセル
+                    </button>
+                    <button onclick="app.submitPinSet()" class="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">
+                        <i class="fa-solid fa-check mr-1"></i>設定する
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
