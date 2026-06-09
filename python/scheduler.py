@@ -1629,7 +1629,11 @@ class ShiftScheduler:
                                     max_v = int(target_raw["max"])
                         except (ValueError, TypeError):
                             continue
-                        if min_v is None and max_v is None:
+                        # v3.7.122: 0 を「制約なし」として扱う
+                        # UI 表記「空欄なら制約なし」と整合させるため、min=0 / max=0
+                        # は未設定として無視する。「このパターン0回限定」が必要なら
+                        # eligible_patterns で「該当外」を選ぶ。
+                        if (min_v is None or min_v <= 0) and (max_v is None or max_v <= 0):
                             continue
                         ps_min = self._to_minutes(pat["start"])
                         pe_min = self._normalize_end_time(
@@ -1653,8 +1657,8 @@ class ShiftScheduler:
                                 0, None, pulp.LpInteger)
                             prob += cnt_expr + su >= min_v
                             penalty += su * 500_000
-                        # max 制約: cnt <= max_v + slack_over
-                        if max_v is not None and max_v < 31:
+                        # max 制約: cnt <= max_v + slack_over (v3.7.122: max=0 は制約なし)
+                        if max_v is not None and 0 < max_v < 31:
                             so = pulp.LpVariable(
                                 "pat_max_{}_{}".format(sid, ps_min),
                                 0, None, pulp.LpInteger)

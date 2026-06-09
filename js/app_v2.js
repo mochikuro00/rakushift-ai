@@ -5222,11 +5222,59 @@ const app = {
         // 移動先に既存シフトがあれば「入れ替え」(swap)
         const existing = (this.state.shifts || []).find(s =>
             s.staff_id === staffId && s.date === dateStr && String(s.id) !== String(shiftId));
+        // v3.7.122: DnD でも連勤上限を厳守 (移動先スタッフをチェック)
+        if (!this._checkConsecLimit(staffId, dateStr, shiftId)) {
+            this.showToast('連続出勤日数の上限を超えるため移動できません', 'warning');
+            return;
+        }
+        if (existing && !this._checkConsecLimit(shift.staff_id, shift.date, existing.id)) {
+            this.showToast('入れ替えで連続出勤日数の上限を超えるため移動できません', 'warning');
+            return;
+        }
         if (existing) {
             await this.swapShifts(shift, existing);
         } else {
             await this.updateShiftDrag(shiftId, { staff_id: staffId, date: dateStr });
         }
+    },
+
+    // v3.7.122: 仮想配置が連勤上限を超えないかチェック (営業日ベース)
+    _checkConsecLimit(staffId, dateStr, excludeShiftId) {
+        const staff = this.getStaff(staffId);
+        if (!staff) return true;
+        let limit = Number(staff.max_consecutive_days);
+        if (!Number.isFinite(limit) || limit < 1 || limit > 7) limit = 6;
+        const closedDays = (this.state.config?.closed_days || []).map(Number);
+        const specialHolidays = this.state.config?.special_holidays || [];
+        const isClosed = (d) => {
+            if (specialHolidays.includes(d)) return true;
+            const dt = new Date(d);
+            return closedDays.includes(dt.getDay());
+        };
+        const target = new Date(dateStr);
+        const allAttended = new Set(
+            (this.state.shifts || [])
+                .filter(s => s.staff_id === staffId && String(s.id) !== String(excludeShiftId || ''))
+                .map(s => s.date)
+        );
+        allAttended.add(dateStr);
+        // 営業日のみで limit+1 個窓を構築 (target を含む)
+        let cur = new Date(target); cur.setDate(cur.getDate() - limit * 2);
+        let opDates = [];
+        for (let i = 0; i < limit * 4 + 1; i++) {
+            const ds = cur.toISOString().slice(0, 10);
+            if (!isClosed(ds)) opDates.push(ds);
+            cur.setDate(cur.getDate() + 1);
+        }
+        const ti = opDates.indexOf(dateStr);
+        if (ti < 0) return true;
+        for (let start = Math.max(0, ti - limit); start <= ti; start++) {
+            if (start + limit + 1 > opDates.length) continue;
+            const win = opDates.slice(start, start + limit + 1);
+            const inWin = win.filter(d => allAttended.has(d)).length;
+            if (inWin > limit) return false;
+        }
+        return true;
     },
 
     // v3.7.118: シフト入れ替え (swap) - DnD ドロップ先に既存シフトがあるとき
