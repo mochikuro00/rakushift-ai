@@ -249,6 +249,12 @@ class ShiftScheduler:
         self.special_holidays = self.config.get("special_holidays", [])
         self.special_days = self.config.get("special_days", {})
 
+        # v3.7.119: 営業日 (closed以外) のソート済みリスト + set
+        # 連勤判定で「店舗休業日を挟んでも連続出勤扱い」にするため使用
+        self._operational_dates = sorted([d for d in self.dates if self._get_day_type(d) != "closed"])
+        self._operational_dates_set = set(self._operational_dates)
+        self._operational_index = {d: i for i, d in enumerate(self._operational_dates)}
+
         # スタッフ分類
         self._mentor_ids = set()
         self._rookie_ids = set()
@@ -1428,25 +1434,20 @@ class ShiftScheduler:
                 # 正確性を欠いていた。
                 # 修正: 実カレンダー連続性を確認し、連続する 7日間 (= 6日+休日1日) のみに
                 #       制約を貼る。ギャップを跨ぐスパンはスキップ。
-                sorted_d = sorted(self.dates)
-                # v3.7.113: スタッフ別の連続出勤日数上限 (デフォルト 6 = 労基法35条)
+                sorted_d = sorted(self.dates)  # インターバル制約で使用
+                # v3.7.119: 営業日 (closed以外) ベースで連続出勤窓を判定
+                #   旧版: カレンダー連続性チェック → closed_days を挟むスパンを除外
+                #         → 「月～土 6連勤 + 日(休業) + 月～土 6連勤」を許容してしまう (12連勤)
+                #   新版: self._operational_dates (営業日) で max_consec+1 個連続を禁止
+                #         → 休業日を挟んでも実出勤の連続性を厳密にカウント
                 _staff_max_consec = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
                 if not (1 <= _staff_max_consec <= 7):
                     _staff_max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS
-                # v3.7.114: force モードでもスタッフ設定を尊重 (緩和すると「設定より連勤多い」バグ)
                 max_consec = _staff_max_consec
-                if len(sorted_d) > max_consec:
-                    for i in range(len(sorted_d) - max_consec):
-                        span = sorted_d[i:i + max_consec + 1]
-                        # span が実カレンダーで連続している (= max_consec日連続) か確認
-                        try:
-                            d_start = datetime.strptime(span[0], "%Y-%m-%d")
-                            d_end = datetime.strptime(span[-1], "%Y-%m-%d")
-                        except ValueError:
-                            continue
-                        if (d_end - d_start).days != max_consec:
-                            # ギャップを含むスパンは制約対象外 (休日を挟むので連勤超過にならない)
-                            continue
+                op_d = self._operational_dates
+                if len(op_d) > max_consec:
+                    for i in range(len(op_d) - max_consec):
+                        span = op_d[i:i + max_consec + 1]
                         sv = []
                         for d in span:
                             for oi in range(len(staff_opts.get((sid, d), []))):
@@ -2562,10 +2563,8 @@ class ShiftScheduler:
         # 日付順にスタッフを配置
         for d in sorted(self.dates):
             if self._get_day_type(d) == "closed":
-                # 休業日は連勤カウントをリセット
-                for sid in consecutive:
-                    if last_work_date.get(sid) != d:
-                        consecutive[sid] = 0
+                # v3.7.119: 休業日でも連勤カウントをリセットしない
+                # (店舗休業日を挟んでも連続出勤扱いにするため)
                 continue
             slot_reqs = self._build_slot_requirements(d)
             if not slot_reqs:
@@ -2759,20 +2758,22 @@ class ShiftScheduler:
                     # 作る可能性があった (agent #1 指摘の HIGH バグ)
                     d_dt = datetime.strptime(d, "%Y-%m-%d")
 
-                    # 連勤チェック: d を含む N+1 日窓内の出勤数が N+1 にならないか
-                    # v3.7.116: スタッフ別 max_consecutive_days を尊重
+                    # v3.7.119: 連勤チェック (営業日ベース)
+                    # 営業日リスト上で d を含む _smc+1 個窓に出勤数 > _smc がないか確認
                     _smc = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
                     if not (1 <= _smc <= 7):
                         _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
                     consec_violation = False
-                    window_size = _smc + 1
-                    for offset in range(-_smc, 1):
-                        win_start = d_dt + timedelta(days=offset)
-                        win_dates = set((win_start + timedelta(days=k)).strftime("%Y-%m-%d") for k in range(window_size))
-                        in_win = sum(1 for sh in shifts if sh["staff_id"] == sid and sh["date"] in win_dates) + 1
-                        if in_win > _smc:
-                            consec_violation = True
-                            break
+                    op_idx = self._operational_index.get(d)
+                    if op_idx is not None:
+                        for start in range(max(0, op_idx - _smc), op_idx + 1):
+                            if start + _smc + 1 > len(self._operational_dates):
+                                continue
+                            win = self._operational_dates[start:start + _smc + 1]
+                            in_win = sum(1 for sh in shifts if sh["staff_id"] == sid and sh["date"] in win) + 1
+                            if in_win > _smc:
+                                consec_violation = True
+                                break
                     if consec_violation:
                         continue
 
@@ -2874,15 +2875,24 @@ class ShiftScheduler:
         weekly_hours.setdefault(sid, {})
         weekly_hours[sid][wk] = weekly_hours[sid].get(wk, 0) + hours
 
-        # 連勤チェック
+        # v3.7.119: 連勤チェック (営業日ベース)
+        # 前回の出勤日と今日の間に「営業日 (closed以外) で休んだ日」があるかで判定。
+        # 休業日のみを挟む連続出勤は連勤扱い (週またぎリセット問題の修正)
         prev = last_work_date.get(sid)
         if prev:
             prev_dt = datetime.strptime(prev, "%Y-%m-%d")
             cur_dt = datetime.strptime(date_str, "%Y-%m-%d")
-            if (cur_dt - prev_dt).days == 1:
-                consecutive[sid] = consecutive.get(sid, 0) + 1
-            else:
+            gap = (cur_dt - prev_dt).days
+            has_workable_gap = False
+            for k in range(1, gap):
+                mid = (prev_dt + timedelta(days=k)).strftime("%Y-%m-%d")
+                if mid in self._operational_dates_set:
+                    has_workable_gap = True
+                    break
+            if has_workable_gap:
                 consecutive[sid] = 1
+            else:
+                consecutive[sid] = consecutive.get(sid, 0) + 1
         else:
             consecutive[sid] = 1
         last_work_date[sid] = date_str
