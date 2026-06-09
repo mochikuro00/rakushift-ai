@@ -1433,7 +1433,8 @@ class ShiftScheduler:
                 _staff_max_consec = int(s.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
                 if not (1 <= _staff_max_consec <= 7):
                     _staff_max_consec = self.LEGAL_MAX_CONSECUTIVE_DAYS
-                max_consec = _staff_max_consec if not force else max(_staff_max_consec, 7)
+                # v3.7.114: force モードでもスタッフ設定を尊重 (緩和すると「設定より連勤多い」バグ)
+                max_consec = _staff_max_consec
                 if len(sorted_d) > max_consec:
                     for i in range(len(sorted_d) - max_consec):
                         span = sorted_d[i:i + max_consec + 1]
