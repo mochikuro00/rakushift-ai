@@ -1,0 +1,98 @@
+name: Security Audit (依存脆弱性スキャン)
+
+# v3.7.132: 依存ライブラリ脆弱性を週次でスキャン
+# - pip-audit: Python パッケージの既知 CVE を検出
+# - 重大度 HIGH/CRITICAL があれば Issue を自動作成
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # 毎週月曜 10:00 JST (UTC 01:00)
+  push:
+    paths:
+      - 'python/requirements.txt'
+      - '.github/workflows/security_audit.yml'
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit (JSON output)
+        id: audit
+        continue-on-error: true
+        run: |
+          pip-audit -r python/requirements.txt \
+            --desc \
+            --format json \
+            --output audit_report.json || true
+          # サマリ表示
+          pip-audit -r python/requirements.txt --desc || true
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: audit_report.json
+          retention-days: 30
+
+      - name: Create issue on critical findings
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('audit_report.json')) return;
+            const report = JSON.parse(fs.readFileSync('audit_report.json', 'utf8'));
+            const deps = report.dependencies || [];
+            const vulns = [];
+            for (const d of deps) {
+              for (const v of (d.vulns || [])) {
+                vulns.push(`- **${d.name} ${d.version}**: ${v.id} - ${v.description ? v.description.slice(0, 200) : 'N/A'}`);
+              }
+            }
+            if (vulns.length === 0) {
+              console.log('No vulnerabilities found.');
+              return;
+            }
+            const title = `🔒 pip-audit: ${vulns.length} vulnerabilities found`;
+            const body = `## 脆弱性スキャン結果\n\n${vulns.join('\n')}\n\n` +
+                         `[ワークフロー実行詳細](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`;
+            // 重複 Issue 作成を避けるため、既存の同タイトルがないかチェック
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security'
+            });
+            const dup = existing.data.find(i => i.title.startsWith('🔒 pip-audit'));
+            if (dup) {
+              console.log('Existing security issue:', dup.number);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: dup.number,
+                body: `### 再スキャン結果 (${new Date().toISOString()})\n\n${vulns.join('\n')}`
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security']
+              });
+            }

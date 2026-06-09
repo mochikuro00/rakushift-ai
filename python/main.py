@@ -39,6 +39,39 @@ app = FastAPI(title="Rakushift AI Engine", version="3.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# v3.7.132: エラー通知 webhook (Slack/Discord 互換)
+# ERROR_WEBHOOK_URL 環境変数があれば、未捕捉例外を webhook で通知
+_ERROR_WEBHOOK_URL = os.environ.get("ERROR_WEBHOOK_URL", "")
+_WEBHOOK_DEDUPE_CACHE = {}  # {error_signature: last_sent_ts} で重複通知抑制
+
+def _notify_error_webhook(label: str, detail: str, traceback_str: str = ""):
+    """Slack/Discord webhook にエラーを通知 (同じ signature は 5分間 抑制)"""
+    if not _ERROR_WEBHOOK_URL:
+        return
+    import time as _t
+    sig = (label + detail[:100]).encode("utf-8", errors="ignore")[:200]
+    sig_key = hash(sig)
+    now = _t.time()
+    last = _WEBHOOK_DEDUPE_CACHE.get(sig_key, 0)
+    if now - last < 300:  # 5分以内は同じエラーをスキップ
+        return
+    _WEBHOOK_DEDUPE_CACHE[sig_key] = now
+    # 古いエントリを掃除 (5分超のものは削除)
+    for k in list(_WEBHOOK_DEDUPE_CACHE.keys()):
+        if now - _WEBHOOK_DEDUPE_CACHE[k] > 600:
+            _WEBHOOK_DEDUPE_CACHE.pop(k, None)
+    body = (f":rotating_light: *Rakushift Backend Error*\n"
+            f"*Label:* {label}\n"
+            f"*Detail:* {detail[:500]}\n")
+    if traceback_str:
+        body += f"```\n{traceback_str[:1500]}\n```"
+    payload = {"text": body, "content": body}  # Slack/Discord 両対応
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            client.post(_ERROR_WEBHOOK_URL, json=payload)
+    except Exception as e:
+        logger.warning("error webhook delivery failed: %s", e)
+
 # CORS設定: 本番ドメインのみ許可
 # 環境変数で固定オリジン (CSV) を上書き可。それと別に Cloudflare Pages の preview
 # (xxx.rakushift-ai.pages.dev) 等のワイルドカードドメインは allow_origin_regex で対応
@@ -314,6 +347,24 @@ async def verify_session_org_id(session_id: Optional[str]) -> Optional[Dict[str,
         return None
 
 
+# v3.7.132: グローバル例外ハンドラ - 未捕捉例外を webhook で通知
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback as _tb
+    tb_str = _tb.format_exc()
+    path = str(request.url.path) if request and request.url else "?"
+    logger.error("[Unhandled] %s at %s\n%s", type(exc).__name__, path, tb_str)
+    _notify_error_webhook(
+        label=f"{type(exc).__name__} at {path}",
+        detail=str(exc),
+        traceback_str=tb_str,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Administrators have been notified."},
+    )
+
+
 # === ヘルスチェック ===
 
 @app.get("/")
@@ -342,7 +393,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.131"}
+        return {"status": "ok", "db": "alive", "version": "3.7.132"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})

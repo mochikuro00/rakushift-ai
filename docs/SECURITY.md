@@ -1,6 +1,6 @@
 # セキュリティ運用ガイド
 
-最終更新: 2026-06-10 (v3.7.131 短期軽減策追加)
+最終更新: 2026-06-10 (v3.7.132 追加軽減策 + 既存ログイン保護の確認)
 
 このドキュメントはラクシフトAIの**セキュリティ設計と運用上の責務**をまとめた納品時参考資料です。
 コード変更時・運用開始時に必ず一読してください。
@@ -20,6 +20,30 @@
 | **入力長制限の徹底** | 全主要フォーム input に maxlength | DoS / バッファ攻撃の軽減 |
 | **電話番号 pattern** | `[0-9\-\+\(\)\s]+` 制限 | SQLi / インジェクション試行の入力段階での阻止 |
 | **パスワード autocomplete** | `current-password` / `new-password` | パスワードマネージャー連携、誤入力防止 |
+
+## 🆕 v3.7.132 追加対策
+
+| 対策 | 実装 | 効果 |
+|---|---|---|
+| **SRI** (Subresource Integrity) | font-awesome / chart.js に `integrity` 属性 (sha384) | CDN 改竄時にスクリプト/CSSをブラウザが拒否 |
+| **Honeypot field** | 問い合わせフォームに hidden input `inquiryWebsiteUrl` | bot が入力した場合は静かに破棄 (UX 影響なし) |
+| **robots.txt** | AI クローラー (GPTBot/ChatGPT/Claude/Perplexity/Bytespider) 明示拒否 | LLM 学習からの個人情報吸い上げ防止 |
+| **admin.html noindex** | `<meta name="robots" content="noindex,nofollow,noarchive">` | 管理画面が検索結果に出ない |
+| **エラー通知 webhook** | 環境変数 `ERROR_WEBHOOK_URL` を設定すると未捕捉例外を Slack/Discord に通知 (5分間 重複抑制) | 本番障害の即時検知 |
+| **依存脆弱性スキャン** | `.github/workflows/security_audit.yml` で pip-audit を週次 + push 時実行 | 既知 CVE を自動検出、Issue 化 |
+| **既存ログイン保護の検証** | shop/admin/hq の全 3 経路で `can_attempt_login` を事前チェック確認済 | 10回失敗で5分ロック (migration 26 で実装済) |
+
+### 次フェーズ候補: オプトイン PIN (大規模改修)
+
+**ユーザー要望としてはあったが、リスクと工数を考慮し別セッションで実装予定**
+
+設計案:
+- `config` テーブルに `pin_hash TEXT NULL` 追加
+- 既存ユーザーは `pin_hash=NULL` で従来通り (オプトイン)
+- PIN 設定済ユーザーはログイン後に PIN 入力モーダル
+- RPC 3つ: `verify_pin_by_contract / set_pin_by_contract / clear_pin_by_contract`
+- 工数: 2-3セッション
+- リスク: ログインフロー変更のため、既存ユーザーへの影響テスト必要
 
 ### Cloudflare 側で手動設定すべき項目 (ダッシュボードで実施)
 

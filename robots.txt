@@ -1,0 +1,44 @@
+# ラクシフトAI robots.txt (v3.7.132)
+# 管理画面・テナント領域は検索エンジンに露出させない
+
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /privacy.html
+
+# 管理画面・内部ファイルは noindex
+Disallow: /admin.html
+Disallow: /js/
+Disallow: /python/
+Disallow: /supabase/
+Disallow: /scripts/
+Disallow: /docs/
+
+# AI クローラー (LLM 学習用) の明示拒否
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+# Bytespider (TikTok) 拒否
+User-agent: Bytespider
+Disallow: /
+
+# Sitemap
+# Sitemap: https://rakushift-ai.pages.dev/sitemap.xml

@@ -858,6 +858,14 @@ const app = {
     },
 
     async submitMultiStoreInquiry() {
+        // v3.7.132: Honeypot 検出 (bot のみ入力される hidden field)
+        const honeypot = document.getElementById('inquiryWebsiteUrl');
+        if (honeypot && honeypot.value && honeypot.value.length > 0) {
+            // bot 検出: 何もエラーを返さず無視 (成功風レスポンスでステルス)
+            console.warn('[Inquiry] honeypot triggered, silently dropping');
+            this.showToast('お問い合わせを受け付けました。担当者より1営業日以内にご連絡いたします。', 'success');
+            return;
+        }
         // 個人情報取得の同意確認 (個人情報保護法 第17条)
         const consent = document.getElementById('inquiryConsent');
         if (consent && !consent.checked) {
