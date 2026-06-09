@@ -1555,10 +1555,11 @@ class ShiftScheduler:
                             pat_over_weight = 1_000_000 if self.allow_overstaffing else 100_000_000
                             penalty += pat_over * pat_over_weight
 
-                # --- v3.7.77: スタッフ別シフトパターン月間目標回数 (Tier 4 ソフト制約) ---
-                # staff.pattern_target_counts = { "早番": 3, "遅番": 3, ... }
-                # 各スタッフが当該パターンに配置される回数と目標値の差分にペナルティ
-                # 集計対象は MILP の対象日付範囲のみ (= ユーザーが「今月」を生成する場合の月間)
+                # --- v3.7.106: スタッフ別シフトパターン 月間 最低/最高 制約 (Tier 4) ---
+                # staff.pattern_target_counts = { "早番": {"min":2,"max":5}, ... }
+                # 旧データ互換: { "早番": 3 } (整数) は { min:3, max:3 } として扱う
+                # 各スタッフが当該パターンに配置される回数 が [min, max] の範囲に
+                # 収まるようソフト制約 (範囲外なら 500k/回 ペナルティ)
                 for staff in self.staff_list:
                     targets = staff.get("pattern_target_counts") or {}
                     if not isinstance(targets, dict) or not targets:
@@ -1569,11 +1570,21 @@ class ShiftScheduler:
                         target_raw = targets.get(key)
                         if target_raw is None:
                             continue
+                        # 旧データ (整数) / 新データ ({min,max}) を統一形式に
+                        min_v = None
+                        max_v = None
                         try:
-                            target = int(target_raw)
+                            if isinstance(target_raw, (int, float)):
+                                # 旧: 整数 = min=max
+                                min_v = max_v = int(target_raw)
+                            elif isinstance(target_raw, dict):
+                                if target_raw.get("min") is not None:
+                                    min_v = int(target_raw["min"])
+                                if target_raw.get("max") is not None:
+                                    max_v = int(target_raw["max"])
                         except (ValueError, TypeError):
                             continue
-                        if target <= 0:
+                        if min_v is None and max_v is None:
                             continue
                         ps_min = self._to_minutes(pat["start"])
                         pe_min = self._normalize_end_time(
@@ -1589,15 +1600,21 @@ class ShiftScheduler:
                                     pat_vars.append(x[(sid, d, oi)])
                         if not pat_vars:
                             continue
-                        diff_pos = pulp.LpVariable(
-                            "pat_tgt_pos_{}_{}".format(sid, ps_min),
-                            0, None, pulp.LpInteger)
-                        diff_neg = pulp.LpVariable(
-                            "pat_tgt_neg_{}_{}".format(sid, ps_min),
-                            0, None, pulp.LpInteger)
-                        prob += pulp.lpSum(pat_vars) - target == diff_pos - diff_neg
-                        # Tier 4 (500k): 目標値からの差分 1 回あたりのペナルティ
-                        penalty += (diff_pos + diff_neg) * 500_000
+                        cnt_expr = pulp.lpSum(pat_vars)
+                        # min 制約: cnt >= min_v - slack_under
+                        if min_v is not None and min_v > 0:
+                            su = pulp.LpVariable(
+                                "pat_min_{}_{}".format(sid, ps_min),
+                                0, None, pulp.LpInteger)
+                            prob += cnt_expr + su >= min_v
+                            penalty += su * 500_000
+                        # max 制約: cnt <= max_v + slack_over
+                        if max_v is not None and max_v < 31:
+                            so = pulp.LpVariable(
+                                "pat_max_{}_{}".format(sid, ps_min),
+                                0, None, pulp.LpInteger)
+                            prob += cnt_expr - so <= max_v
+                            penalty += so * 500_000
 
                 # --- 社員常駐制約 (v3.7.16: 管理者限定→「社員 (月給+店長) 1名以上」に変更) ---
                 # 全時間帯で月給制 or 店長のうち1名以上を出勤させる

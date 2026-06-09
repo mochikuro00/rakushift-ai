@@ -5450,29 +5450,54 @@ const app = {
             container.innerHTML = `<p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>`;
             return;
         }
+        // v3.7.106: { name: 整数 } も { name: { min, max } } も両対応で読み込み
         const safeTargets = (targets && typeof targets === 'object') ? targets : {};
-        container.innerHTML = patterns.map((pat, idx) => {
-            const name = this._sanitize(pat.name || `パターン${idx+1}`);
-            const start = this._sanitize(pat.start || '');
-            const end = this._sanitize(pat.end || '');
-            const key = pat.name || `pattern_${idx}`;
-            const val = safeTargets[key] != null ? Number(safeTargets[key]) : '';
-            return `
-                <div class="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
-                    <div class="flex-1">
-                        <div class="text-sm font-bold text-teal-700">${name}</div>
-                        <div class="text-[10px] text-gray-500">${start} - ${end}</div>
+        const getRange = (key) => {
+            const v = safeTargets[key];
+            if (v == null) return { min: '', max: '' };
+            if (typeof v === 'number') return { min: v, max: v }; // 旧データ互換
+            if (typeof v === 'object') return {
+                min: v.min != null ? Number(v.min) : '',
+                max: v.max != null ? Number(v.max) : '',
+            };
+            return { min: '', max: '' };
+        };
+        container.innerHTML = `
+            <p class="text-xs text-gray-500 mb-2">各シフトパターンに対し、月間の <strong>最低</strong> / <strong>最高</strong> 回数を指定できます。空欄なら制約なし。</p>
+            ${patterns.map((pat, idx) => {
+                const name = this._sanitize(pat.name || `パターン${idx+1}`);
+                const start = this._sanitize(pat.start || '');
+                const end = this._sanitize(pat.end || '');
+                const key = pat.name || `pattern_${idx}`;
+                const range = getRange(key);
+                return `
+                    <div class="flex items-center gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-bold text-teal-700 truncate">${name}</div>
+                            <div class="text-[10px] text-gray-500">${start} - ${end}</div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <div class="flex flex-col items-center">
+                                <span class="text-[9px] text-gray-500">最低</span>
+                                <input type="number" min="0" max="31" step="1" inputmode="numeric"
+                                    data-pattern-min="${this._sanitize(key)}"
+                                    class="setting-staff-pattern-min w-14 px-1 py-1.5 text-sm font-bold text-center border border-gray-300 rounded-lg"
+                                    value="${range.min}" placeholder="-">
+                            </div>
+                            <span class="text-xs text-gray-400">〜</span>
+                            <div class="flex flex-col items-center">
+                                <span class="text-[9px] text-gray-500">最高</span>
+                                <input type="number" min="0" max="31" step="1" inputmode="numeric"
+                                    data-pattern-max="${this._sanitize(key)}"
+                                    class="setting-staff-pattern-max w-14 px-1 py-1.5 text-sm font-bold text-center border border-gray-300 rounded-lg"
+                                    value="${range.max}" placeholder="-">
+                            </div>
+                            <span class="text-xs text-gray-500">回/月</span>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <input type="number" min="0" max="31" step="1"
-                            data-pattern-target="${this._sanitize(key)}"
-                            class="setting-staff-pattern-target w-16 px-2 py-1.5 text-sm font-bold text-center border border-gray-300 rounded-lg"
-                            value="${val}" placeholder="0">
-                        <span class="text-xs text-gray-500">回/月</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('')}
+        `;
     },
     
     updateStaffRoleSelect() {
@@ -5618,14 +5643,31 @@ const app = {
             if (cb && !cb.checked) ngWeekdays.push(i);
         }
 
-        // v3.7.77: シフトパターン別月間目標回数を収集
+        // v3.7.106: シフトパターン別 月間 最低/最高 回数を収集
+        //   { name: { min: N, max: M } } 形式で保存
+        //   min/max のいずれかが空欄なら null として保存 (制約なし)
         const patternTargets = {};
-        document.querySelectorAll('.setting-staff-pattern-target').forEach(el => {
-            const key = el.getAttribute('data-pattern-target');
-            const v = Number(el.value);
-            if (key && Number.isFinite(v) && v > 0) {
-                patternTargets[key] = Math.min(Math.floor(v), 31);
-            }
+        const parseN = (s) => {
+            const v = Number(s);
+            return Number.isFinite(v) && v >= 0 && v <= 31 ? Math.floor(v) : null;
+        };
+        document.querySelectorAll('.setting-staff-pattern-min').forEach(el => {
+            const key = el.getAttribute('data-pattern-min');
+            if (!key) return;
+            const minV = parseN(el.value);
+            if (!patternTargets[key]) patternTargets[key] = {};
+            if (minV != null) patternTargets[key].min = minV;
+        });
+        document.querySelectorAll('.setting-staff-pattern-max').forEach(el => {
+            const key = el.getAttribute('data-pattern-max');
+            if (!key) return;
+            const maxV = parseN(el.value);
+            if (!patternTargets[key]) patternTargets[key] = {};
+            if (maxV != null) patternTargets[key].max = maxV;
+        });
+        // 空オブジェクトは削除
+        Object.keys(patternTargets).forEach(k => {
+            if (Object.keys(patternTargets[k]).length === 0) delete patternTargets[k];
         });
 
         const data = {
