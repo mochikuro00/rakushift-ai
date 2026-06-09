@@ -538,7 +538,7 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">
                         会社名 <span class="text-red-500">*</span>
                     </label>
-                    <input id="inquiryCompany" type="text" placeholder="例: 株式会社ラクシフト" 
+                    <input id="inquiryCompany" type="text" placeholder="例: 株式会社ラクシフト" maxlength="100"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
 
@@ -547,7 +547,7 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">
                         会社住所 <span class="text-red-500">*</span>
                     </label>
-                    <input id="inquiryAddress" type="text" placeholder="例: 東京都渋谷区神宮前1-2-3 ○○ビル5F"
+                    <input id="inquiryAddress" type="text" placeholder="例: 東京都渋谷区神宮前1-2-3 ○○ビル5F" maxlength="200"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
 
@@ -556,7 +556,7 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">
                         会社連絡先（電話番号） <span class="text-red-500">*</span>
                     </label>
-                    <input id="inquiryPhone" type="tel" placeholder="例: 03-1234-5678"
+                    <input id="inquiryPhone" type="tel" placeholder="例: 03-1234-5678" maxlength="20" pattern="[0-9\-\+\(\)\s]+"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
 
@@ -565,7 +565,7 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">
                         ご担当者名 <span class="text-red-500">*</span>
                     </label>
-                    <input id="inquiryName" type="text" placeholder="例: 山田 太郎"
+                    <input id="inquiryName" type="text" placeholder="例: 山田 太郎" maxlength="50"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 </div>
 
@@ -704,7 +704,7 @@
                     <label class="block text-sm font-bold text-gray-700 mb-1">
                         その他ご要望・備考
                     </label>
-                    <textarea id="inquiryMessage" rows="2" placeholder="ご質問やご要望があればご自由にご記入ください"
+                    <textarea id="inquiryMessage" rows="2" maxlength="2000" placeholder="ご質問やご要望があればご自由にご記入ください"
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"></textarea>
                 </div>
             </div>
@@ -930,7 +930,7 @@
                 <input type="hidden" id="staffId">
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">名前</label>
-                    <input type="text" id="staffName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="山田 太郎">
+                    <input type="text" id="staffName" maxlength="50" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="山田 太郎">
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -1242,15 +1242,15 @@
             <div class="p-6 space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">現在のパスワード</label>
-                    <input type="password" id="currentPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="現在のパスワード">
+                    <input type="password" id="currentPassword" maxlength="128" autocomplete="current-password" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="現在のパスワード">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">新しいパスワード</label>
-                    <input type="password" id="newPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="新しいパスワード (6文字以上)">
+                    <input type="password" id="newPassword" maxlength="128" autocomplete="new-password" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="新しいパスワード (6文字以上)">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 mb-1">新しいパスワード（確認）</label>
-                    <input type="password" id="confirmPassword" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="もう一度入力">
+                    <input type="password" id="confirmPassword" maxlength="128" autocomplete="new-password" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="もう一度入力">
                 </div>
             </div>
             <div class="p-4 bg-gray-50 border-t border-gray-100 flex gap-3 justify-end">
@@ -1470,22 +1470,14 @@
           ETag/Last-Modified による条件付きリクエストで実体的な負荷は最小化される) -->
     <script>
         (function () {
+            // HTML はサーバ側 Cache-Control: no-cache で常に最新なので、
+            // この時刻は実質「リロードのたびに更新される」。
+            // 15 分単位に丸めて同一セッション内の連続リロードでブラウザキャッシュも効くようにする。
             var v = Math.floor(Date.now() / (15 * 60 * 1000));
-            // v3.7.131: ステージング環境を host 名で自動判定
-            //   - staging.* / *-staging.pages.dev / preview ブランチ → staging config
-            //   - それ以外 → 本番 config
-            var host = (location.hostname || '').toLowerCase();
-            var isStaging = host.startsWith('staging.') || host.indexOf('-staging.') >= 0
-                || host.indexOf('.staging.') >= 0
-                || /^[a-z0-9]+\.rakushift-ai\.pages\.dev$/.test(host) && host.indexOf('preview') >= 0;
-            var configFile = isStaging ? 'js/config.staging.js' : 'js/config.js';
-            var scripts = ['js/holidays.js', configFile, 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js'];
-            scripts.forEach(function (src) {
-                document.write('<script src="' + src + '?v=' + v + '"><\/script>');
-            });
-            if (isStaging) {
-                document.write('<style>body::before{content:"⚠ STAGING ENV - DO NOT USE FOR PRODUCTION DATA ⚠";position:fixed;top:0;left:0;right:0;z-index:9999;background:#f59e0b;color:#000;text-align:center;font-weight:bold;font-size:11px;padding:3px;}body{padding-top:22px !important;}</style>');
-            }
+            ['js/holidays.js', 'js/config.js', 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js']
+                .forEach(function (src) {
+                    document.write('<script src="' + src + '?v=' + v + '"><\/script>');
+                });
         })();
     </script>
     

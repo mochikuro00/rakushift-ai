@@ -1,9 +1,50 @@
 # セキュリティ運用ガイド
 
-最終更新: 2026-05-22
+最終更新: 2026-06-10 (v3.7.131 短期軽減策追加)
 
 このドキュメントはラクシフトAIの**セキュリティ設計と運用上の責務**をまとめた納品時参考資料です。
 コード変更時・運用開始時に必ず一読してください。
+
+---
+
+## 🆕 v3.7.131 短期セキュリティ軽減策
+
+### 実装済み (フロント/ヘッダーのみ、本番運用に影響なし)
+
+| 対策 | 実装 | 効果 |
+|---|---|---|
+| **CSP (Content-Security-Policy)** | `_headers` で全ページに付与 | XSS でスクリプト実行を遮断 (Supabase / Stripe / CDN のみ許可) |
+| **HSTS** | `max-age=31536000; preload` | ダウングレード攻撃防止、HTTPS強制 |
+| **Permissions-Policy** | geolocation/camera/mic 等を禁止 | 不要な API へのアクセス遮断 |
+| **本番 console.log 抑制** | `RAKUSHIFT_CONFIG.DEBUG=false` で log/info/debug を no-op に | デバッグ情報の漏洩防止。warn/error は残し障害時の捕捉可能 (ローカル開発は `?debug=1` で有効化) |
+| **入力長制限の徹底** | 全主要フォーム input に maxlength | DoS / バッファ攻撃の軽減 |
+| **電話番号 pattern** | `[0-9\-\+\(\)\s]+` 制限 | SQLi / インジェクション試行の入力段階での阻止 |
+| **パスワード autocomplete** | `current-password` / `new-password` | パスワードマネージャー連携、誤入力防止 |
+
+### Cloudflare 側で手動設定すべき項目 (ダッシュボードで実施)
+
+```
+Cloudflare ダッシュボード > Security > WAF / Rate Limiting:
+
+1. Rate Limiting Rules (推奨設定)
+   - /api/inquiry        : 5 req/min/IP
+   - /auth/*             : 10 req/min/IP
+   - /rest/v1/rpc/*      : 60 req/min/IP
+   - /rest/v1/*          : 200 req/min/IP
+
+2. Bot Fight Mode: ON
+3. Browser Integrity Check: ON
+4. Challenge Passage: 30 分
+5. (任意) Country block: 海外からのアクセス遮断
+```
+
+### 既知の制限 (次フェーズで根本対応予定)
+
+| 制限 | 影響 | 対策候補 |
+|---|---|---|
+| RPC が `contract_id` 単一認証 | 攻撃者が contract_id を入手すれば操作可能 | PIN/JWT 追加 (大改修 1-2ヶ月) |
+| `localStorage` に `organization_id` を平文保存 | ブラウザ侵害時のテナント情報漏洩 | Web Crypto API で暗号化 |
+| Supabase Anon Key がフロントに露出 | 仕様 (公開前提)。RLS で本人以外触れない | 変更不要 (現状で正解) |
 
 ---
 
