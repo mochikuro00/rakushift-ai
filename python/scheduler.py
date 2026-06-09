@@ -2254,6 +2254,42 @@ class ShiftScheduler:
             return None
 
     # ===========================================================
+    # v3.7.121: 各営業日の人員不足量を計算 (補完優先順位用)
+    def _compute_date_shortages(self, shifts):
+        """各営業日について {必要人員総数 - 実配置数} を計算し、
+        不足が大きい順にソートしたリストを返す。
+
+        必要人員総数 = その日の day_type における全シフトパターン count 合計
+        実配置数 = その日に既に配置されている shifts 数
+        """
+        result = []
+        shifts_by_date = {}
+        for s in shifts:
+            d = s.get("date")
+            if d:
+                shifts_by_date.setdefault(d, []).append(s)
+        for d in self._operational_dates:
+            day_type = self._get_day_type(d)
+            count_key = "count_holiday" if day_type == "holiday" else (
+                "count_weekend" if day_type == "weekend" else "count_weekday")
+            needed = 0
+            for pat in self.shift_patterns:
+                c = pat.get(count_key)
+                if c is None:
+                    c = pat.get("count")
+                try:
+                    n = int(c) if c is not None else 0
+                except (ValueError, TypeError):
+                    n = 0
+                if n > 0:
+                    needed += n
+            assigned = len(shifts_by_date.get(d, []))
+            shortage = needed - assigned
+            if shortage > 0:
+                result.append((d, shortage))
+        result.sort(key=lambda x: -x[1])
+        return result
+
     # v3.7.97: 過剰配置許容モード時の最低出勤日数 ランダム補完
     # ===========================================================
     def _fill_to_min_days_random(self, shifts):
@@ -2307,6 +2343,11 @@ class ShiftScheduler:
         # 3) 営業日のみのリスト
         op_dates = [d for d in self.dates if self._get_day_type(d) != "closed"]
 
+        # v3.7.121: 不足日 (人員不足が大きい営業日) を計算して優先割当
+        # ユーザー要望: 「過剰補完はまず不足部分を優先、余ったら従来通り別の所に」
+        shortage_dates = self._compute_date_shortages(shifts)
+        shortage_date_set = {d for d, _ in shortage_dates}
+
         added = 0
         for sid, shortage in shortage_list:
             staff = self._staff_map.get(sid)
@@ -2316,9 +2357,13 @@ class ShiftScheduler:
             already = by_staff.get(sid, set())
 
             # 候補日: 営業日 - NG - 既存出勤
-            candidates = [d for d in op_dates
+            base_cands = [d for d in op_dates
                           if d not in already and d not in ng_set]
-            random.shuffle(candidates)
+            # v3.7.121: 不足日を優先、それ以外はランダム
+            priority = [d for d, _ in shortage_dates if d in base_cands]
+            others = [d for d in base_cands if d not in shortage_date_set]
+            random.shuffle(others)
+            candidates = priority + others
 
             # 週最大日数も尊重
             max_dw = int(staff.get("max_days_week") or 5)
@@ -2556,6 +2601,26 @@ class ShiftScheduler:
                 continue
             opts = self._build_shift_options(staff, wd, force=True)
             if not opts:
+                continue
+            # v3.7.121: 出勤希望でも連勤上限は厳守
+            _smc = int(staff.get("max_consecutive_days") or self.LEGAL_MAX_CONSECUTIVE_DAYS)
+            if not (1 <= _smc <= 7):
+                _smc = self.LEGAL_MAX_CONSECUTIVE_DAYS
+            op_idx = self._operational_index.get(wd)
+            already_dates = {sh["date"] for sh in shifts if sh["staff_id"] == wsid}
+            consec_violation = False
+            if op_idx is not None:
+                for start in range(max(0, op_idx - _smc), op_idx + 1):
+                    if start + _smc + 1 > len(self._operational_dates):
+                        continue
+                    win = self._operational_dates[start:start + _smc + 1]
+                    in_win = sum(1 for w in win if w in already_dates or w == wd)
+                    if in_win > _smc:
+                        consec_violation = True
+                        break
+            if consec_violation:
+                logger.info("[Greedy] skip work_request {} {} (consec limit {})".format(
+                    staff.get("name", wsid), wd, _smc))
                 continue
             best_opt = opts[0]
             if wr.get("start_time") and wr.get("end_time"):
