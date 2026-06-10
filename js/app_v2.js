@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.150-requests-list',
+    APP_VERSION: '20260610-v3.7.151-requested-off-mark',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2967,14 +2967,22 @@ const app = {
 
                 // シフト検索 (O(1) Map アクセス)
                 const shift = shiftsByKey.get(staff.id + ':' + dateStr);
-                
+
                 // セル背景色
                 const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
-                let bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines' : 'bg-white';
-                
+                // v3.7.151: 承認済 希望休 (staff.unavailable_dates) かを判定
+                const _udArr = Array.isArray(staff.unavailable_dates) ? staff.unavailable_dates
+                              : (typeof staff.unavailable_dates === 'string' ? staff.unavailable_dates.split(',').map(s => s.trim()) : []);
+                const isRequestedOff = !shift && _udArr.includes(dateStr);
+                let bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines'
+                            : isRequestedOff ? 'bg-rose-50'
+                            : 'bg-white';
+
                 if (isPast) {
-                    bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines opacity-75' : 'bg-gray-50/30';
-                } else if (!shift && !isSpecialHoliday) {
+                    bgClass = isSpecialHoliday ? 'bg-red-50 pattern-diagonal-lines opacity-75'
+                            : isRequestedOff ? 'bg-rose-50 opacity-70'
+                            : 'bg-gray-50/30';
+                } else if (!shift && !isSpecialHoliday && !isRequestedOff) {
                     bgClass = 'hover:bg-gray-50';
                 }
 
@@ -3103,6 +3111,14 @@ const app = {
                     }
                 } else if (isSpecialHoliday) {
                     content = `<div class="w-full h-full flex items-center justify-center"><span class="text-[10px] text-red-300 font-bold">休</span></div>`;
+                } else if (isRequestedOff) {
+                    // v3.7.151: 承認済 希望休
+                    content = `<div class="w-full h-full flex items-center justify-center" title="本人の希望休 (承認済)">
+                        <div class="flex flex-col items-center leading-none">
+                            <i class="fa-solid fa-mug-hot text-rose-400 text-[10px]"></i>
+                            <span class="text-[8px] text-rose-600 font-bold mt-0.5">希望休</span>
+                        </div>
+                    </div>`;
                 }
 
                 // Ganttモードの場合は空セルにもガイド線を表示
@@ -5640,10 +5656,20 @@ const app = {
                     `;
 
                     const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
-                    const bgStyle = isSpecialHoliday ? 'background-color: #ffebee;' : ''; 
+                    // v3.7.151: 承認済 希望休の印刷表示
+                    const _udArr = Array.isArray(staff.unavailable_dates) ? staff.unavailable_dates
+                                  : (typeof staff.unavailable_dates === 'string' ? staff.unavailable_dates.split(',').map(s => s.trim()) : []);
+                    const isRequestedOff = !shift && _udArr.includes(dateStr);
+                    const bgStyle = isSpecialHoliday ? 'background-color: #ffebee; background-image: linear-gradient(#ffebee, #ffebee);'
+                                  : isRequestedOff ? 'background-color: #fff1f2; background-image: linear-gradient(#fff1f2, #fff1f2);'
+                                  : '';
+                    const offMark = isRequestedOff && !shift ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:5;">
+                        <span style="font-size:9px; color:#be123c; font-weight:bold; background:rgba(255,255,255,0.7); padding:1px 4px; border:1px dashed #be123c; border-radius:3px;">希望休</span>
+                    </div>` : '';
 
                     return `<td style="position: relative; padding: 0; height: 38px; border: 1px solid #666; ${bgStyle}">
                         ${gridLines}
+                        ${offMark}
                         ${cellContent}
                     </td>`;
                 }).join('');
