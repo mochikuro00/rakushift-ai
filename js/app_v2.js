@@ -2516,12 +2516,33 @@ const app = {
             <div class="grid lg:grid-cols-2 gap-8">
                 <!-- Pending -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="p-4 border-b border-gray-100 bg-blue-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2">
-                            <i class="fa-solid fa-inbox text-blue-600"></i> 承認待ち
-                            <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">${pending.length}</span>
-                        </h3>
-                        ${pending.length > 1 ? `<button onclick="app.handleBatchApprove()" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><i class="fa-solid fa-check-double"></i> 全て承認</button>` : ''}
+                    <div class="p-4 border-b border-gray-100 bg-blue-50">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                                <i class="fa-solid fa-inbox text-blue-600"></i> 承認待ち
+                                <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">${pending.length}</span>
+                            </h3>
+                        </div>
+                        ${pending.length > 0 ? `
+                            <!-- v3.7.143: 選択して一括承認/拒否 -->
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <div class="flex items-center gap-3 text-xs">
+                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="checkbox" id="reqSelectAll" onclick="app.toggleAllRequests(this.checked)" class="form-checkbox text-blue-600 rounded">
+                                        <span class="font-bold text-gray-700">全選択</span>
+                                    </label>
+                                    <span class="text-gray-500" id="reqSelectedCount">0 件選択</span>
+                                </div>
+                                <div class="flex gap-1.5">
+                                    <button onclick="app.handleBatchAction('approved')" class="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" id="batchApproveBtn" disabled>
+                                        <i class="fa-solid fa-check-double"></i>選択を承認
+                                    </button>
+                                    <button onclick="app.handleBatchAction('rejected')" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded text-xs font-bold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" id="batchRejectBtn" disabled>
+                                        <i class="fa-solid fa-xmark"></i>選択を拒否
+                                    </button>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                     <div class="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
                         ${pending.length === 0 ? '<div class="p-8 text-center text-gray-400">現在、承認待ちの申請はありません</div>' : ''}
@@ -2531,6 +2552,8 @@ const app = {
                                 <div class="p-4 hover:bg-gray-50 transition-colors">
                                     <div class="flex justify-between items-start mb-2">
                                         <div class="flex items-center gap-2">
+                                            <!-- v3.7.143: 個別チェックボックス -->
+                                            <input type="checkbox" class="req-select-cb form-checkbox text-blue-600 rounded mr-1" data-req-id="${req.id}" onclick="app.updateRequestSelectionUI()">
                                             <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-500 text-xs">
                                                 ${staff ? this._sanitize(staff.name.charAt(0)) : '?'}
                                             </div>
@@ -2549,7 +2572,7 @@ const app = {
                                             ${req.type === 'work' ? `<span class="ml-2 text-gray-600">${this._sanitize(req.start_time)} - ${this._sanitize(req.end_time)}</span>` : ''}
                                         </div>
                                         ${req.reason ? `<div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-3">"${this._sanitize(req.reason)}"</div>` : ''}
-                                        
+
                                         <div class="flex gap-3 mt-3 justify-end">
                                             <button onclick="app.handleRequest('${req.id}', 'rejected')" class="px-4 py-1.5 border border-gray-300 rounded text-gray-600 text-xs font-bold hover:bg-gray-50 shadow-sm transition-colors">
                                                 却下
@@ -6904,40 +6927,77 @@ const app = {
         }
     },
 
-    async handleBatchApprove() {
-        const pending = this.state.requests.filter(r => r.status === 'pending');
-        if (pending.length === 0) return;
-        if (!confirm(`承認待ち ${pending.length}件 を全て承認しますか？`)) return;
+    // v3.7.143: 全選択 / 個別選択チェック / 一括承認・拒否
+    toggleAllRequests(checked) {
+        document.querySelectorAll('.req-select-cb').forEach(cb => { cb.checked = checked; });
+        this.updateRequestSelectionUI();
+    },
+
+    updateRequestSelectionUI() {
+        const all = document.querySelectorAll('.req-select-cb');
+        const checked = document.querySelectorAll('.req-select-cb:checked');
+        const cnt = checked.length;
+        const countEl = document.getElementById('reqSelectedCount');
+        if (countEl) countEl.textContent = `${cnt} 件選択`;
+        const approveBtn = document.getElementById('batchApproveBtn');
+        const rejectBtn = document.getElementById('batchRejectBtn');
+        if (approveBtn) approveBtn.disabled = cnt === 0;
+        if (rejectBtn) rejectBtn.disabled = cnt === 0;
+        const selectAllCb = document.getElementById('reqSelectAll');
+        if (selectAllCb) {
+            selectAllCb.checked = all.length > 0 && cnt === all.length;
+            selectAllCb.indeterminate = cnt > 0 && cnt < all.length;
+        }
+    },
+
+    async handleBatchAction(action) {
+        // action: 'approved' | 'rejected'
+        const ids = Array.from(document.querySelectorAll('.req-select-cb:checked'))
+                         .map(cb => cb.dataset.reqId).filter(Boolean);
+        if (ids.length === 0) {
+            this.showToast('対象を1件以上 選択してください', 'warning');
+            return;
+        }
+        const label = action === 'approved' ? '承認' : '却下';
+        if (!confirm(`選択した ${ids.length}件 を ${label} しますか?`)) return;
         this.showLoading(true);
-        // v3.7.138: 失敗件を記録して最後にまとめて報告
-        let okCount = 0, failCount = 0;
         const cid = this._getContractId();
         if (!cid) {
             this.showToast('contract_id 未取得', 'error');
             this.showLoading(false);
             return;
         }
-        for (const req of pending) {
+        let okCount = 0, failCount = 0;
+        for (const id of ids) {
             try {
-                const r = await API.rpc('approve_request_atomic_by_contract', {
-                    p_contract_id: cid,
-                    p_request_id: req.id,
-                });
-                if (r && r.success) okCount++;
-                else failCount++;
+                if (action === 'approved') {
+                    const r = await API.rpc('approve_request_atomic_by_contract', {
+                        p_contract_id: cid,
+                        p_request_id: id,
+                    });
+                    if (r && r.success) okCount++; else failCount++;
+                } else {
+                    await this._requestUpdateStatus(id, 'rejected');
+                    okCount++;
+                }
             } catch (e) {
-                console.error('[batchApprove]', req.id, e);
+                console.error('[batchAction]', id, action, e);
                 failCount++;
             }
         }
         await this.loadData();
         this.renderRequests(document.getElementById('viewContainer'));
         if (failCount === 0) {
-            this.showToast(`${okCount}件 すべて承認しました`, 'success');
+            this.showToast(`${okCount}件 ${label} しました`, 'success');
         } else {
-            this.showToast(`${okCount}件 承認 / ${failCount}件 失敗`, failCount > 0 ? 'warning' : 'success');
+            this.showToast(`${okCount}件 ${label} / ${failCount}件 失敗`, 'warning');
         }
         this.showLoading(false);
+    },
+
+    // v3.7.138 互換: 既存呼び出しから残す可能性に備えてエイリアス
+    async handleBatchApprove() {
+        await this.handleBatchAction('approved');
     },
 
     updateRequestBadge() {
