@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.149-print-empty-row',
+    APP_VERSION: '20260610-v3.7.150-requests-list',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2493,7 +2493,43 @@ const app = {
         }
 
         const pending = this.state.requests.filter(r => r.status === 'pending');
-        const history = this.state.requests.filter(r => r.status !== 'pending').sort((a, b) => b.id - a.id).slice(0, 10);
+        // v3.7.150: 全申請一覧 (フィルタ + ソート可能)
+        if (!this.state.requestsFilter) {
+            this.state.requestsFilter = { status: 'all', type: 'all', staff: 'all', q: '' };
+        }
+        if (!this.state.requestsSort) {
+            this.state.requestsSort = { key: 'created_at', dir: 'desc' };
+        }
+        const f = this.state.requestsFilter;
+        const sort = this.state.requestsSort;
+        const norm = (s) => (s == null ? '' : String(s).toLowerCase());
+        const all = (this.state.requests || []).filter(r => {
+            if (f.status !== 'all' && r.status !== f.status) return false;
+            if (f.type !== 'all') {
+                const t = r.type === 'off' || r.type === 'holiday' ? 'off' : 'work';
+                if (t !== f.type) return false;
+            }
+            if (f.staff !== 'all' && String(r.staff_id) !== String(f.staff)) return false;
+            if (f.q) {
+                const s = this.getStaff(r.staff_id);
+                const hay = norm((s && s.name) || '') + ' ' + norm(r.dates) + ' ' + norm(r.reason);
+                if (!hay.includes(norm(f.q))) return false;
+            }
+            return true;
+        });
+        const getKey = (r) => {
+            if (sort.key === 'staff') return norm((this.getStaff(r.staff_id) || {}).name);
+            if (sort.key === 'dates') return norm(r.dates);
+            if (sort.key === 'status') return norm(r.status);
+            if (sort.key === 'type') return norm(r.type);
+            return norm(r.created_at || '');
+        };
+        all.sort((a, b) => {
+            const ka = getKey(a), kb = getKey(b);
+            const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+            return sort.dir === 'asc' ? cmp : -cmp;
+        });
+        const uniqStaff = Array.from(new Set((this.state.requests || []).map(r => r.staff_id))).filter(Boolean);
 
         // v3.7.32 [B]: 承認希望が SOFT 化されたことを管理者に明示
         const softPolicyBanner = `
@@ -2588,32 +2624,81 @@ const app = {
                     </div>
                 </div>
 
-                <!-- History -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden opacity-80">
+                <!-- v3.7.150: 全申請一覧 (検索/フィルタ/ソート) -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2">
-                            <i class="fa-solid fa-clock-rotate-left text-gray-500"></i> 処理履歴 (直近10件)
-                        </h3>
+                        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                            <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-gray-500"></i> 全申請一覧
+                                <span class="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full">${all.length}件</span>
+                            </h3>
+                            <span class="text-[10px] text-gray-500">全 ${(this.state.requests || []).length} 件中</span>
+                        </div>
+                        <!-- 検索 + フィルタ -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                            <input type="search" maxlength="100" placeholder="名前/日付/理由で検索" value="${this._sanitize(f.q)}"
+                                onchange="app.setRequestsFilter('q', this.value)"
+                                class="col-span-2 md:col-span-1 px-2.5 py-1.5 text-xs border border-gray-300 rounded">
+                            <select onchange="app.setRequestsFilter('status', this.value)" class="px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white">
+                                <option value="all" ${f.status==='all'?'selected':''}>状態: すべて</option>
+                                <option value="pending" ${f.status==='pending'?'selected':''}>承認待ち</option>
+                                <option value="approved" ${f.status==='approved'?'selected':''}>承認済</option>
+                                <option value="rejected" ${f.status==='rejected'?'selected':''}>却下</option>
+                            </select>
+                            <select onchange="app.setRequestsFilter('type', this.value)" class="px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white">
+                                <option value="all" ${f.type==='all'?'selected':''}>種類: すべて</option>
+                                <option value="work" ${f.type==='work'?'selected':''}>勤務希望</option>
+                                <option value="off" ${f.type==='off'?'selected':''}>休み希望</option>
+                            </select>
+                            <select onchange="app.setRequestsFilter('staff', this.value)" class="px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white">
+                                <option value="all" ${f.staff==='all'?'selected':''}>スタッフ: すべて</option>
+                                ${uniqStaff.map(sid => {
+                                    const s = this.getStaff(sid);
+                                    const name = s ? s.name : '不明';
+                                    return `<option value="${this._sanitize(sid)}" ${String(f.staff)===String(sid)?'selected':''}>${this._sanitize(name)}</option>`;
+                                }).join('')}
+                            </select>
+                        </div>
+                        <!-- ソート -->
+                        <div class="flex items-center gap-2 text-[11px] text-gray-600">
+                            <span>並び替え:</span>
+                            <button onclick="app.setRequestsSort('created_at')" class="px-2 py-0.5 rounded ${sort.key==='created_at'?'bg-blue-600 text-white font-bold':'bg-white border border-gray-300 hover:bg-gray-100'}">申請日 ${sort.key==='created_at'?(sort.dir==='asc'?'↑':'↓'):''}</button>
+                            <button onclick="app.setRequestsSort('staff')" class="px-2 py-0.5 rounded ${sort.key==='staff'?'bg-blue-600 text-white font-bold':'bg-white border border-gray-300 hover:bg-gray-100'}">スタッフ ${sort.key==='staff'?(sort.dir==='asc'?'↑':'↓'):''}</button>
+                            <button onclick="app.setRequestsSort('dates')" class="px-2 py-0.5 rounded ${sort.key==='dates'?'bg-blue-600 text-white font-bold':'bg-white border border-gray-300 hover:bg-gray-100'}">対象日 ${sort.key==='dates'?(sort.dir==='asc'?'↑':'↓'):''}</button>
+                            <button onclick="app.setRequestsSort('status')" class="px-2 py-0.5 rounded ${sort.key==='status'?'bg-blue-600 text-white font-bold':'bg-white border border-gray-300 hover:bg-gray-100'}">状態 ${sort.key==='status'?(sort.dir==='asc'?'↑':'↓'):''}</button>
+                            <button onclick="app.resetRequestsFilter()" class="ml-auto px-2 py-0.5 rounded bg-white border border-gray-300 hover:bg-gray-100 text-gray-500">条件リセット</button>
+                        </div>
                     </div>
-                    <div class="divide-y divide-gray-100">
-                        ${history.map(req => {
-                             const staff = this.getStaff(req.staff_id);
-                             const isApproved = req.status === 'approved';
-                             return `
-                                <div class="p-3 flex justify-between items-center text-sm">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-2 h-2 rounded-full ${isApproved ? 'bg-green-500' : 'bg-red-500'}"></div>
-                                        <div>
-                                            <span class="font-bold text-gray-700">${staff ? this._sanitize(staff.name) : '不明'}</span>
-                                            <span class="text-gray-400 mx-1">|</span>
-                                            <span class="text-gray-600">${this._sanitize(req.dates)}</span>
+                    <div class="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+                        ${all.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm">条件に一致する申請はありません</div>' : ''}
+                        ${all.map(req => {
+                            const staff = this.getStaff(req.staff_id);
+                            const statusClass = req.status === 'approved' ? 'bg-green-100 text-green-700'
+                                              : req.status === 'rejected' ? 'bg-red-100 text-red-700'
+                                              : 'bg-yellow-100 text-yellow-700';
+                            const statusLabel = req.status === 'approved' ? '承認済'
+                                              : req.status === 'rejected' ? '却下'
+                                              : '承認待ち';
+                            const typeLabel = (req.type === 'off' || req.type === 'holiday') ? '休み希望' : '勤務希望';
+                            const typeClass = (req.type === 'off' || req.type === 'holiday') ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700';
+                            const dt = req.created_at ? new Date(req.created_at).toLocaleString('ja-JP', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '-';
+                            return `
+                                <div class="p-3 hover:bg-gray-50 text-sm">
+                                    <div class="flex items-center justify-between gap-2 flex-wrap mb-1">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <span class="font-bold text-gray-800 truncate">${staff ? this._sanitize(staff.name) : '不明スタッフ'}</span>
+                                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${typeClass}">${typeLabel}</span>
+                                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${statusClass}">${statusLabel}</span>
                                         </div>
+                                        <span class="text-[10px] text-gray-400 whitespace-nowrap">申請: ${dt}</span>
                                     </div>
-                                    <span class="font-bold text-xs ${isApproved ? 'text-green-600' : 'text-red-500'}">
-                                        ${isApproved ? '承認済' : '却下'}
-                                    </span>
+                                    <div class="text-xs text-gray-700">
+                                        <i class="fa-regular fa-calendar mr-1 text-gray-400"></i>${this._sanitize(req.dates)}
+                                        ${req.start_time && req.type === 'work' ? `<span class="ml-2 text-gray-500">${this._sanitize(req.start_time)} - ${this._sanitize(req.end_time)}</span>` : ''}
+                                    </div>
+                                    ${req.reason ? `<div class="mt-1 text-[11px] text-gray-500 italic">"${this._sanitize(req.reason)}"</div>` : ''}
                                 </div>
-                             `;
+                            `;
                         }).join('')}
                     </div>
                 </div>
@@ -6935,6 +7020,31 @@ const app = {
     },
 
     async submitMultiRequest() { return this.submitRequest(); },
+
+    // v3.7.150: 申請一覧 フィルタ/ソート
+    setRequestsFilter(key, value) {
+        if (!this.state.requestsFilter) {
+            this.state.requestsFilter = { status: 'all', type: 'all', staff: 'all', q: '' };
+        }
+        this.state.requestsFilter[key] = value;
+        this.renderRequests(document.getElementById('viewContainer'));
+    },
+    setRequestsSort(key) {
+        if (!this.state.requestsSort) this.state.requestsSort = { key: 'created_at', dir: 'desc' };
+        const cur = this.state.requestsSort;
+        if (cur.key === key) {
+            cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            cur.key = key;
+            cur.dir = (key === 'staff' || key === 'dates') ? 'asc' : 'desc';
+        }
+        this.renderRequests(document.getElementById('viewContainer'));
+    },
+    resetRequestsFilter() {
+        this.state.requestsFilter = { status: 'all', type: 'all', staff: 'all', q: '' };
+        this.state.requestsSort = { key: 'created_at', dir: 'desc' };
+        this.renderRequests(document.getElementById('viewContainer'));
+    },
 
     // v3.7.138: 連続クリック防止フラグ
     _requestInFlight: new Set(),
