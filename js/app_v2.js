@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260611-v3.7.163-print-quality-pattern-fallback',
+    APP_VERSION: '20260611-v3.7.164-fallback-edge-guard',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5990,18 +5990,22 @@ const app = {
             usingFallback = true;
             const openT = (this.state.config.opening_time || '09:00').slice(0,5);
             const closeT = (this.state.config.closing_time || '22:00').slice(0,5);
-            // 営業時間を半分で分割して 早番/遅番 を推定
             const [oh, om] = openT.split(':').map(Number);
             const [ch, cm] = closeT.split(':').map(Number);
             const openMin = oh * 60 + (om || 0);
             const closeMin = ch * 60 + (cm || 0);
-            const midMin = Math.round((openMin + closeMin) / 2);
-            const fmt = (mins) => `${String(Math.floor(mins / 60) % 24).padStart(2,'0')}:${String(mins % 60).padStart(2,'0')}`;
-            customShifts = [
-                { name: '早番', start: openT, end: fmt(midMin) },
-                { name: '遅番', start: fmt(midMin), end: closeT },
-                { name: '通し', start: openT, end: closeT },
-            ];
+            // v3.7.164: open >= close (24h営業/未設定) の edge case では汎用1パターンのみ
+            if (closeMin - openMin < 120) {
+                customShifts = [{ name: '基本', start: openT, end: closeT }];
+            } else {
+                const midMin = Math.round((openMin + closeMin) / 2);
+                const fmt = (mins) => `${String(Math.floor(mins / 60) % 24).padStart(2,'0')}:${String(mins % 60).padStart(2,'0')}`;
+                customShifts = [
+                    { name: '早番', start: openT, end: fmt(midMin) },
+                    { name: '遅番', start: fmt(midMin), end: closeT },
+                    { name: '通し', start: openT, end: closeT },
+                ];
+            }
         }
         const btns = customShifts.map(p => {
             const st = ((p.start || p.start_time) || '').slice(0,5);
