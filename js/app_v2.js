@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.157-zoom-inline-style',
+    APP_VERSION: '20260610-v3.7.158-print-borders',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5576,10 +5576,7 @@ const app = {
                     print-color-adjust: exact !important;
                     color-adjust: exact !important;
                 }
-                /* v3.7.152: 印刷時に真っ白になる問題を visibility ベースで根本対策
-                   display:none だと Tailwind や別 CSS が body 全体を非表示にする
-                   場合があり、overlay も巻き込まれる。visibility: hidden で消し、
-                   overlay のみ visibility: visible に戻す方式 */
+                /* v3.7.152/157: 印刷時に真っ白問題対策 + 線途切れ防止 */
                 @media print {
                     @page { size: landscape; margin: 8mm; }
                     html, body {
@@ -5607,12 +5604,33 @@ const app = {
                     }
                     #printOverlay .no-print { display: none !important; visibility: hidden !important; }
                     .table-chunk:last-child { page-break-after: auto !important; }
-                    /* 全要素に色保持を再宣言 (Safari/Firefox 互換) */
+                    /* 全要素に色保持を再宣言 */
                     #printOverlay, #printOverlay *,
                     #printOverlay th, #printOverlay td, #printOverlay div, #printOverlay span {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                         color-adjust: exact !important;
+                    }
+                    /* v3.7.157: 罫線途切れ防止 */
+                    #printOverlay table {
+                        border-collapse: collapse !important;
+                        table-layout: fixed !important;
+                        width: 100% !important;
+                        page-break-inside: auto !important;
+                    }
+                    #printOverlay thead { display: table-header-group !important; }
+                    #printOverlay tbody { display: table-row-group !important; }
+                    #printOverlay tr {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }
+                    #printOverlay th, #printOverlay td {
+                        border: 1px solid #333 !important;
+                        border-color: #333 !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        /* CSS の border が消えるブラウザ向けに box-shadow 内側で代替 */
+                        box-shadow: inset 0 0 0 0.5px #333 !important;
                     }
                 }
                 @page { size: landscape; margin: 8mm; }
