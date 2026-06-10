@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.144-mobile-toolbar',
+    APP_VERSION: '20260610-v3.7.145-pin-btn-fix',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -8270,16 +8270,20 @@ const app = {
                                 <p class="text-xs text-gray-500 mt-0.5">右上メニュー「パスワード変更」から新責任者の希望パスワードに設定 (推奨)、もしくは現在のパスワードを共有</p>
                             </div>
                         </label>
-                        <label class="flex items-start gap-3 cursor-pointer hover:bg-red-50 p-2 rounded bg-red-50 border-2 border-red-300">
-                            <input type="checkbox" class="mt-1 form-checkbox text-red-600 rounded">
-                            <div>
-                                <div class="font-bold text-red-900">3. セカンドファクター PIN を必ず変更する <span class="text-[10px] bg-red-600 text-white px-1.5 rounded font-bold">必須</span></div>
-                                <p class="text-xs text-red-700 mt-0.5">下の「<strong>PIN を変更</strong>」ボタンから、新責任者の希望 PIN に変更してください。旧 PIN を旧責任者が記憶していると、引き継ぎ後も旧責任者がログイン可能になり情報漏洩リスクがあります。</p>
-                                <button onclick="event.stopPropagation(); event.preventDefault(); app.openPinChangeModal();" class="mt-2 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition">
+                        <div class="bg-red-50 border-2 border-red-300 rounded p-2">
+                            <label class="flex items-start gap-3 cursor-pointer hover:bg-red-100/40 p-1 rounded">
+                                <input type="checkbox" class="mt-1 form-checkbox text-red-600 rounded">
+                                <div>
+                                    <div class="font-bold text-red-900">3. セカンドファクター PIN を必ず変更する <span class="text-[10px] bg-red-600 text-white px-1.5 rounded font-bold">必須</span></div>
+                                    <p class="text-xs text-red-700 mt-0.5">下の「<strong>PIN を変更</strong>」ボタンから、新責任者の希望 PIN に変更してください。旧 PIN を旧責任者が記憶していると、引き継ぎ後も旧責任者がログイン可能になり情報漏洩リスクがあります。</p>
+                                </div>
+                            </label>
+                            <div class="pl-9 mt-2">
+                                <button type="button" onclick="app.openPinChangeModal()" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm">
                                     <i class="fa-solid fa-rotate mr-1"></i>PIN を変更する
                                 </button>
                             </div>
-                        </label>
+                        </div>
                         <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                             <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
                             <div>
@@ -8313,13 +8317,13 @@ const app = {
 
                 <!-- クイックリンク -->
                 <div class="flex flex-wrap gap-2 pt-2">
-                    <button onclick="app.openPinChangeModal()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">
+                    <button type="button" onclick="app.openPinChangeModal()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">
                         <i class="fa-solid fa-rotate mr-1"></i>PIN を変更 (必須)
                     </button>
-                    <button onclick="app.openModal('changePasswordModal')" class="bg-amber-50 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-100">
+                    <button type="button" onclick="app.openModal('changePasswordModal')" class="bg-amber-50 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-100">
                         <i class="fa-solid fa-key mr-1"></i>パスワード変更
                     </button>
-                    <button onclick="app.changeView('settings')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50">
+                    <button type="button" onclick="app.changeView('settings')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50">
                         <i class="fa-solid fa-sliders mr-1"></i>店舗設定へ
                     </button>
                 </div>
