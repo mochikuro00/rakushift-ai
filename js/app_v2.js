@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260527-immediate-save-delete-v20',
+    APP_VERSION: '20260610-v3.7.144-mobile-toolbar',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2637,16 +2637,17 @@ const app = {
         let periodControls = '';
         if (isTable) {
             // v3.7.63: 縮小/拡大ボタン (シフト表のズーム機能)
+            // v3.7.144: モバイルでも横並びで収まるよう ml→gap、shrink-0 付与
             const zoom = this.state.shiftZoom || 1.0;
             periodControls = `
-                <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg ml-4">
-                    <button onclick="app.switchShiftTablePeriod('month')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='month')}">月間</button>
-                    <button onclick="app.switchShiftTablePeriod('week')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='week')}">1週間</button>
-                    <button onclick="app.switchShiftTablePeriod('day')" class="px-3 py-1 text-xs rounded transition-all ${getBtnClass(p==='day')}">1日</button>
+                <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg shrink-0">
+                    <button onclick="app.switchShiftTablePeriod('month')" class="px-2.5 py-1 text-xs rounded transition-all ${getBtnClass(p==='month')}">月</button>
+                    <button onclick="app.switchShiftTablePeriod('week')" class="px-2.5 py-1 text-xs rounded transition-all ${getBtnClass(p==='week')}">週</button>
+                    <button onclick="app.switchShiftTablePeriod('day')" class="px-2.5 py-1 text-xs rounded transition-all ${getBtnClass(p==='day')}">日</button>
                 </div>
-                <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg ml-2">
+                <div class="flex items-center bg-white border border-gray-200 p-1 rounded-lg shrink-0">
                     <button onclick="app.changeShiftZoom(-0.25)" class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 transition" title="縮小"><i class="fa-solid fa-magnifying-glass-minus text-xs"></i></button>
-                    <span class="px-2 text-[10px] font-bold text-gray-500 font-mono w-10 text-center">${Math.round(zoom*100)}%</span>
+                    <span class="px-1.5 text-[10px] font-bold text-gray-500 font-mono w-9 text-center">${Math.round(zoom*100)}%</span>
                     <button onclick="app.changeShiftZoom(0.25)" class="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 transition" title="拡大"><i class="fa-solid fa-magnifying-glass-plus text-xs"></i></button>
                 </div>
             `;
@@ -2681,19 +2682,20 @@ const app = {
                         ${navControls}
                     </div>
                     
-                    <div class="flex items-center gap-2">
+                    <!-- v3.7.144: モバイル幅で折り返し可能なツールバー -->
+                    <div class="flex items-center gap-2 flex-wrap">
                         ${this.state.isAdmin ? `
-                        <button onclick="app.openModal('autoFillModal')" class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> AIシフト作成
+                        <button onclick="app.openModal('autoFillModal')" class="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 shrink-0 whitespace-nowrap">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i><span>AIシフト作成</span>
                         </button>
                         ` : ''}
                         ${periodControls}
-                        <div class="flex bg-white border border-gray-200 p-1 rounded-lg">
-                            <button onclick="app.switchShiftViewMode('table')" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all ${isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
-                                <i class="fa-solid fa-table-list mr-1"></i>表
+                        <div class="flex bg-white border border-gray-200 p-1 rounded-lg shrink-0">
+                            <button onclick="app.switchShiftViewMode('table')" aria-label="表" class="px-2.5 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+                                <i class="fa-solid fa-table-list sm:mr-1"></i><span class="hidden sm:inline">表</span>
                             </button>
-                            <button onclick="app.switchShiftViewMode('calendar')" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
-                                <i class="fa-regular fa-calendar-days mr-1"></i>カレンダー
+                            <button onclick="app.switchShiftViewMode('calendar')" aria-label="カレンダー" class="px-2.5 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${!isTable ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+                                <i class="fa-regular fa-calendar-days sm:mr-1"></i><span class="hidden sm:inline">カレンダー</span>
                             </button>
                         </div>
                         <!-- v3.7.103: 印刷ボタンをヘッダに移動して Android でも常時表示 -->
