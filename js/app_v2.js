@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.152-delete-purge-print',
+    APP_VERSION: '20260610-v3.7.153-batch-delete-undo',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2643,6 +2643,21 @@ const app = {
                             </h3>
                             <span class="text-[10px] text-gray-500">全 ${(this.state.requests || []).length} 件中</span>
                         </div>
+                        <!-- v3.7.153: 一括削除 UI -->
+                        ${all.length > 0 ? `
+                        <div class="flex items-center justify-between gap-2 flex-wrap mb-2 bg-red-50 border border-red-200 p-2 rounded">
+                            <div class="flex items-center gap-3 text-xs">
+                                <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" id="reqDelSelectAll" onclick="app.toggleAllDeleteRequests(this.checked)" class="form-checkbox text-red-600 rounded">
+                                    <span class="font-bold text-gray-700">全選択 (削除用)</span>
+                                </label>
+                                <span class="text-gray-500" id="reqDelSelectedCount">0 件選択</span>
+                            </div>
+                            <button type="button" onclick="app.deleteSelectedRequests()" class="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" id="batchDeleteBtn" disabled>
+                                <i class="fa-solid fa-trash"></i>選択を削除
+                            </button>
+                        </div>
+                        ` : ''}
                         <!-- 検索 + フィルタ -->
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
                             <input type="search" maxlength="100" placeholder="名前/日付/理由で検索" value="${this._sanitize(f.q)}"
@@ -2695,13 +2710,14 @@ const app = {
                                 <div class="p-3 hover:bg-gray-50 text-sm">
                                     <div class="flex items-center justify-between gap-2 flex-wrap mb-1">
                                         <div class="flex items-center gap-2 min-w-0">
+                                            <!-- v3.7.153: 一括削除チェック -->
+                                            <input type="checkbox" class="req-del-cb form-checkbox text-red-600 rounded" data-req-id="${req.id}" onclick="app.updateDeleteSelectionUI()" title="削除対象に追加">
                                             <span class="font-bold text-gray-800 truncate">${staff ? this._sanitize(staff.name) : '不明スタッフ'}</span>
                                             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${typeClass}">${typeLabel}</span>
                                             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${statusClass}">${statusLabel}</span>
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <span class="text-[10px] text-gray-400 whitespace-nowrap">申請: ${dt}</span>
-                                            <!-- v3.7.152: 削除ボタン (どの状態でも可) -->
                                             <button type="button" onclick="app.deleteRequest('${req.id}')" title="この申請を削除" class="text-gray-300 hover:text-red-600 transition px-1 py-0.5 rounded hover:bg-red-50">
                                                 <i class="fa-solid fa-trash text-xs"></i>
                                             </button>
@@ -2921,23 +2937,28 @@ const app = {
             const label = period === 'month' ? d : `${m}/${d}`;
             
             // 時間スケールをヘッダーに追加 (ガントチャート用)
+            // v3.7.153: モバイルでは数字を間引いて重なり (文字化け) 防止
             let timeScale = '';
             if (isGanttMode) {
-                // 1時間おきに数字を表示
+                // 列幅から表示する時刻を選択: 600px未満=6時間おき / 600-1000=3時間 / 以上=1時間
+                const colW = period === 'day' ? Math.max(800, Math.round(1600 * zoom))
+                           : Math.max(600, Math.round(1200 * zoom));
+                const step = colW < 600 ? 6 : colW < 1000 ? 3 : 1;
                 let scaleHtml = '';
-                for (let i = 0; i <= 24; i++) {
+                for (let i = 0; i <= 24; i += step) {
                     const left = (i / 24) * 100;
                     scaleHtml += `<span class="absolute -translate-x-1/2 font-mono" style="left: ${left}%">${String(i).padStart(2,'0')}</span>`;
-
-                    // 15分刻みの目盛り (week / day モード)
-                    if ((period === 'week' || period === 'day') && i < 24) {
-                        for(let m=1; m<4; m++) {
+                }
+                // 15分刻みの目盛り (week / day モードかつ列幅 800px 以上のみ)
+                if ((period === 'week' || period === 'day') && colW >= 800) {
+                    for (let i = 0; i < 24; i++) {
+                        for (let m = 1; m < 4; m++) {
                             const mLeft = ((i + m/4) / 24) * 100;
                             scaleHtml += `<span class="absolute -translate-x-1/2 text-[8px] text-gray-300 top-1" style="left: ${mLeft}%">|</span>`;
                         }
                     }
                 }
-                
+
                 timeScale = `
                     <div class="relative h-5 text-[10px] text-gray-400 font-bold mt-1 border-t border-gray-100 pt-0.5 select-none">
                         ${scaleHtml}
@@ -7072,10 +7093,10 @@ const app = {
 
     async submitMultiRequest() { return this.submitRequest(); },
 
-    // v3.7.152: 申請を個別削除
+    // v3.7.152/153: 申請を個別削除 (承認済なら shifts / unavailable_dates も undo)
     async deleteRequest(requestId) {
         if (!requestId) return;
-        if (!confirm('この申請を削除します。よろしいですか？\n(承認/却下に関わらず削除されます)')) return;
+        if (!confirm('この申請を削除します。よろしいですか？\n承認済みの場合は関連シフトや休み設定も自動で元に戻ります。')) return;
         const cid = this._getContractId();
         if (!cid) { this.showToast('contract_id 未取得', 'error'); return; }
         this.showLoading(true);
@@ -7085,8 +7106,8 @@ const app = {
                 p_request_id: requestId,
             });
             if (r && r.success) {
-                // ローカル state からも除外 (リクエスト不要)
-                this.state.requests = (this.state.requests || []).filter(x => String(x.id) !== String(requestId));
+                // v3.7.153: DB 更新後に loadData で全データ再取得 → シフト表/スタッフも自動反映
+                await this.loadData();
                 this.renderRequests(document.getElementById('viewContainer'));
                 this.showToast('削除しました', 'success');
             } else {
@@ -7097,6 +7118,61 @@ const app = {
             this.showToast('削除に失敗しました', 'error');
         } finally {
             this.showLoading(false);
+        }
+    },
+
+    // v3.7.153: 一括削除 (チェックボックスで選択された申請を全削除)
+    async deleteSelectedRequests() {
+        const ids = Array.from(document.querySelectorAll('.req-del-cb:checked'))
+                         .map(cb => cb.dataset.reqId).filter(Boolean);
+        if (ids.length === 0) {
+            this.showToast('削除対象を選択してください', 'warning');
+            return;
+        }
+        if (!confirm(`選択した ${ids.length}件 を削除します。\n承認済みの申請は関連シフト/休み設定も元に戻ります。\nよろしいですか？`)) return;
+        const cid = this._getContractId();
+        if (!cid) { this.showToast('contract_id 未取得', 'error'); return; }
+        this.showLoading(true);
+        let okCount = 0, failCount = 0;
+        for (const id of ids) {
+            try {
+                const r = await API.rpc('delete_request_by_contract', {
+                    p_contract_id: cid,
+                    p_request_id: id,
+                });
+                if (r && r.success) okCount++; else failCount++;
+            } catch (e) {
+                console.error('[batchDelete]', id, e);
+                failCount++;
+            }
+        }
+        await this.loadData();
+        this.renderRequests(document.getElementById('viewContainer'));
+        if (failCount === 0) {
+            this.showToast(`${okCount}件 削除しました`, 'success');
+        } else {
+            this.showToast(`${okCount}件 削除 / ${failCount}件 失敗`, 'warning');
+        }
+        this.showLoading(false);
+    },
+
+    toggleAllDeleteRequests(checked) {
+        document.querySelectorAll('.req-del-cb').forEach(cb => { cb.checked = checked; });
+        this.updateDeleteSelectionUI();
+    },
+
+    updateDeleteSelectionUI() {
+        const all = document.querySelectorAll('.req-del-cb');
+        const checked = document.querySelectorAll('.req-del-cb:checked');
+        const cnt = checked.length;
+        const countEl = document.getElementById('reqDelSelectedCount');
+        if (countEl) countEl.textContent = `${cnt} 件選択`;
+        const btn = document.getElementById('batchDeleteBtn');
+        if (btn) btn.disabled = cnt === 0;
+        const selectAll = document.getElementById('reqDelSelectAll');
+        if (selectAll) {
+            selectAll.checked = all.length > 0 && cnt === all.length;
+            selectAll.indeterminate = cnt > 0 && cnt < all.length;
         }
     },
 
