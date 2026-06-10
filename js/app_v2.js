@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.155-mobile-nav-month',
+    APP_VERSION: '20260610-v3.7.156-shift-time-2line',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -3127,19 +3127,19 @@ const app = {
                         content = `
                             <div class="w-full h-full relative group bg-transparent overflow-hidden">
                                 ${bgGuides}
-                                <!-- Bar with text -->
-                                <div class="absolute top-1/2 -translate-y-1/2 h-8 ${period==='week'?'':'h-6'} rounded ${barColor} border shadow-sm flex items-center justify-center overflow-hidden z-10 hover:brightness-95 transition-all px-1"
+                                <!-- v3.7.156: 時刻表示を HH:MM に短縮、改行で開始/終了の両方を確実に出す -->
+                                <div class="absolute top-1/2 -translate-y-1/2 h-9 ${period==='week'?'':'h-7'} rounded ${barColor} border shadow-sm flex items-center justify-center overflow-hidden z-10 hover:brightness-95 transition-all px-1"
                                      ${adminDrag}
                                      ${this.state.isHQ ? '' : `ondblclick="app.openEditShift('${shift.id}')"`}>
                                      ${resizeHandles}
-                                     <span class="text-[9px] md:text-[10px] font-bold whitespace-nowrap overflow-hidden text-ellipsis pointer-events-none select-none">
-                                        ${shift.start_time} - ${shift.end_time}
+                                     <span class="text-[8px] sm:text-[9px] md:text-[10px] font-bold whitespace-nowrap pointer-events-none select-none leading-tight text-center">
+                                        ${(shift.start_time || '').slice(0,5)}<br>${(shift.end_time || '').slice(0,5)}
                                      </span>
                                 </div>
 
                                 <!-- Tooltip on hover -->
                                 <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 z-20 pointer-events-none whitespace-nowrap shadow-lg">
-                                    ${shift.start_time} - ${shift.end_time}
+                                    ${(shift.start_time || '').slice(0,5)} - ${(shift.end_time || '').slice(0,5)}
                                 </div>
                             </div>
                         `;
