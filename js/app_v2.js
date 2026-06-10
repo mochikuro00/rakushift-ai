@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.151-requested-off-mark',
+    APP_VERSION: '20260610-v3.7.152-delete-purge-print',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -571,10 +571,19 @@ const app = {
 
                 this.state.staff = staffRows;
                 this.state.shifts = shiftRows;
-                this.state.requests = requestRows;
+                // v3.7.152: 3ヶ月超の 承認済/却下 申請はキャッシュからも除外
+                const _cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+                this.state.requests = requestRows.filter(req => {
+                    if (req.status === 'pending') return true;
+                    const t = req.created_at ? new Date(req.created_at).getTime() : Date.now();
+                    return t >= _cutoff;
+                });
             }
 
             console.log(`Loaded: ${this.state.staff.length} staff, ${this.state.shifts.length} shifts, ${this.state.requests.length} requests.`);
+
+            // v3.7.152: 古い申請を DB から自動 purge (非同期、エラーは無視)
+            this._purgeOldRequestsIfNeeded().catch(() => {});
 
             this.updateRequestBadge();
 
@@ -2690,7 +2699,13 @@ const app = {
                                             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${typeClass}">${typeLabel}</span>
                                             <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${statusClass}">${statusLabel}</span>
                                         </div>
-                                        <span class="text-[10px] text-gray-400 whitespace-nowrap">申請: ${dt}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] text-gray-400 whitespace-nowrap">申請: ${dt}</span>
+                                            <!-- v3.7.152: 削除ボタン (どの状態でも可) -->
+                                            <button type="button" onclick="app.deleteRequest('${req.id}')" title="この申請を削除" class="text-gray-300 hover:text-red-600 transition px-1 py-0.5 rounded hover:bg-red-50">
+                                                <i class="fa-solid fa-trash text-xs"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="text-xs text-gray-700">
                                         <i class="fa-regular fa-calendar mr-1 text-gray-400"></i>${this._sanitize(req.dates)}
@@ -5521,26 +5536,45 @@ const app = {
                     background: white; overflow-y: auto;
                     padding: 16px; -webkit-overflow-scrolling: touch;
                 }
-                /* v3.7.146: 印刷時にシフトバーの色を保持
-                   Chrome/Edge の「背景グラフィック」設定 OFF でも色を出すため、
-                   印刷対象要素に color-adjust: exact を強制 */
+                /* v3.7.146/152: 印刷時にシフトバーの色を保持 */
                 #printOverlay,
                 #printOverlay * {
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                     color-adjust: exact !important;
                 }
-                /* 印刷時: overlay 以外を非表示、overlay は通常文書扱い */
+                /* v3.7.152: 印刷時に真っ白になる問題を visibility ベースで根本対策
+                   display:none だと Tailwind や別 CSS が body 全体を非表示にする
+                   場合があり、overlay も巻き込まれる。visibility: hidden で消し、
+                   overlay のみ visibility: visible に戻す方式 */
                 @media print {
-                    body > *:not(#printOverlay) { display: none !important; }
-                    #printOverlay {
-                        position: static !important;
+                    @page { size: landscape; margin: 8mm; }
+                    html, body {
+                        background: white !important;
+                        margin: 0 !important;
                         padding: 0 !important;
+                        height: auto !important;
                         overflow: visible !important;
                     }
-                    #printOverlay .no-print { display: none !important; }
+                    body * { visibility: hidden !important; }
+                    #printOverlay, #printOverlay * { visibility: visible !important; }
+                    #printOverlay {
+                        display: block !important;
+                        position: absolute !important;
+                        inset: 0 !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        max-width: none !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        overflow: visible !important;
+                        background: white !important;
+                        z-index: 9999 !important;
+                    }
+                    #printOverlay .no-print { display: none !important; visibility: hidden !important; }
                     .table-chunk:last-child { page-break-after: auto !important; }
-                    /* 念のため全要素に色保持を再宣言 (Safari/Firefox 互換) */
+                    /* 全要素に色保持を再宣言 (Safari/Firefox 互換) */
                     #printOverlay, #printOverlay *,
                     #printOverlay th, #printOverlay td, #printOverlay div, #printOverlay span {
                         -webkit-print-color-adjust: exact !important;
@@ -5656,20 +5690,11 @@ const app = {
                     `;
 
                     const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
-                    // v3.7.151: 承認済 希望休の印刷表示
-                    const _udArr = Array.isArray(staff.unavailable_dates) ? staff.unavailable_dates
-                                  : (typeof staff.unavailable_dates === 'string' ? staff.unavailable_dates.split(',').map(s => s.trim()) : []);
-                    const isRequestedOff = !shift && _udArr.includes(dateStr);
-                    const bgStyle = isSpecialHoliday ? 'background-color: #ffebee; background-image: linear-gradient(#ffebee, #ffebee);'
-                                  : isRequestedOff ? 'background-color: #fff1f2; background-image: linear-gradient(#fff1f2, #fff1f2);'
-                                  : '';
-                    const offMark = isRequestedOff && !shift ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:5;">
-                        <span style="font-size:9px; color:#be123c; font-weight:bold; background:rgba(255,255,255,0.7); padding:1px 4px; border:1px dashed #be123c; border-radius:3px;">希望休</span>
-                    </div>` : '';
+                    // v3.7.152: ユーザー要望「印刷プレビューだけ希望休を消す」 → 印刷では希望休マークを出さない
+                    const bgStyle = isSpecialHoliday ? 'background-color: #ffebee; background-image: linear-gradient(#ffebee, #ffebee);' : '';
 
                     return `<td style="position: relative; padding: 0; height: 38px; border: 1px solid #666; ${bgStyle}">
                         ${gridLines}
-                        ${offMark}
                         ${cellContent}
                     </td>`;
                 }).join('');
@@ -5728,7 +5753,7 @@ const app = {
                     7日ごとに分割して表示しています。「印刷 / PDF保存」を押すとブラウザの印刷ダイアログが開きます。
                 </p>
                 <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px;">
-                    <button onclick="window.print()"
+                    <button onclick="setTimeout(() => window.print(), 200)"
                             style="flex: 1; min-width: 180px; padding: 12px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer;">
                         🖨 印刷 / PDF保存
                     </button>
@@ -7046,6 +7071,58 @@ const app = {
     },
 
     async submitMultiRequest() { return this.submitRequest(); },
+
+    // v3.7.152: 申請を個別削除
+    async deleteRequest(requestId) {
+        if (!requestId) return;
+        if (!confirm('この申請を削除します。よろしいですか？\n(承認/却下に関わらず削除されます)')) return;
+        const cid = this._getContractId();
+        if (!cid) { this.showToast('contract_id 未取得', 'error'); return; }
+        this.showLoading(true);
+        try {
+            const r = await API.rpc('delete_request_by_contract', {
+                p_contract_id: cid,
+                p_request_id: requestId,
+            });
+            if (r && r.success) {
+                // ローカル state からも除外 (リクエスト不要)
+                this.state.requests = (this.state.requests || []).filter(x => String(x.id) !== String(requestId));
+                this.renderRequests(document.getElementById('viewContainer'));
+                this.showToast('削除しました', 'success');
+            } else {
+                this.showToast(r?.message || '削除に失敗しました', 'error');
+            }
+        } catch (e) {
+            console.error('[deleteRequest]', e);
+            this.showToast('削除に失敗しました', 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    // v3.7.152: 3ヶ月超の 承認済/却下 申請を自動 purge (loadData 後に呼ぶ)
+    async _purgeOldRequestsIfNeeded() {
+        const cid = this._getContractId();
+        if (!cid) return;
+        try {
+            const r = await API.rpc('purge_old_requests_by_contract', {
+                p_contract_id: cid,
+                p_days: 90,
+            });
+            if (r && r.success && (r.deleted || 0) > 0) {
+                // ローカルキャッシュからも 90日以上前の approved/rejected を除外
+                const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+                this.state.requests = (this.state.requests || []).filter(req => {
+                    if (req.status === 'pending') return true;
+                    const t = req.created_at ? new Date(req.created_at).getTime() : Date.now();
+                    return t >= cutoff;
+                });
+                console.log('[purge] removed', r.deleted, 'old requests');
+            }
+        } catch (e) {
+            console.warn('[purge] failed (non-fatal):', e);
+        }
+    },
 
     // v3.7.150: 申請一覧 フィルタ/ソート
     setRequestsFilter(key, value) {
