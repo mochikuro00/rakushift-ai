@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.156-shift-time-2line',
+    APP_VERSION: '20260610-v3.7.157-zoom-inline-style',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2896,9 +2896,11 @@ const app = {
 
         let days = [];
         // v3.7.94: モバイルでは最低 56px (時刻 09:45 が読める幅) を確保
+        // v3.7.157: Tailwind Play CDN は動的 class (min-w-[XXXpx]) を生成しないため
+        //           inline style で min-width を指定して zoom を確実に反映
         const isMobileTable = (typeof window !== 'undefined' && window.innerWidth <= 768);
         const minCellPx = isMobileTable ? 56 : 40;
-        let colWidthClass = `min-w-[${Math.max(minCellPx, Math.round(minCellPx * zoom))}px]`;
+        let _colW = Math.max(minCellPx, Math.round(minCellPx * zoom));
         let isGanttMode = false;
 
         if (period === 'month') {
@@ -2907,16 +2909,15 @@ const app = {
                 return new Date(year, month, i + 1);
             });
         } else if (period === 'day') {
-            colWidthClass = `min-w-[${Math.max(800, Math.round(1600 * zoom))}px]`;
+            _colW = Math.max(800, Math.round(1600 * zoom));
             isGanttMode = true;
             days = [new Date(this.state.currentDate)];
         } else {
             if (isMobileTable) {
-                // v3.7.94: モバイル週モードのセル幅を 56px に増やして時刻が読めるように
-                colWidthClass = `min-w-[${Math.max(56, Math.round(56 * zoom))}px]`;
+                _colW = Math.max(56, Math.round(56 * zoom));
                 isGanttMode = false;
             } else {
-                colWidthClass = `min-w-[${Math.max(600, Math.round(1200 * zoom))}px]`;
+                _colW = Math.max(600, Math.round(1200 * zoom));
                 isGanttMode = true;
             }
             const start = new Date(this.state.currentDate);
@@ -2926,6 +2927,7 @@ const app = {
                 return d;
             });
         }
+        const colWidthStyle = `min-width: ${_colW}px; width: ${_colW}px;`;
         
         // v3.7.63: 日付ヘッダーを縦スクロール時も固定 (sticky top-0 追加)
         let headerHtml = `<th class="p-3 sticky left-0 top-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>`;
@@ -2976,7 +2978,7 @@ const app = {
                 `;
             }
             
-            headerHtml += `<th class="p-2 ${colWidthClass} text-center border-b border-gray-200 bg-gray-50 text-xs font-bold ${colorClass} sticky top-0 z-30">
+            headerHtml += `<th class="p-2 text-center border-b border-gray-200 bg-gray-50 text-xs font-bold ${colorClass} sticky top-0 z-30" style="${colWidthStyle}">
                 <div class="flex flex-col items-center justify-center leading-tight">
                     <span class="text-sm block">${label}</span>
                     <span class="text-[10px] font-normal block">${['日','月','火','水','木','金','土'][dayOfWeek]}</span>
@@ -3183,7 +3185,7 @@ const app = {
                 }
 
                 const dropAttrs = this.state.isAdmin ? `ondragover="app.onShiftDragOver(event)" ondragleave="app.onShiftDragLeave(event)" ondrop="app.onShiftDrop(event,'${dateStr}','${staff.id}')"` : '';
-                bodyHtml += `<td class="p-0 border-b border-r border-gray-100 h-14 relative transition-colors ${bgClass} ${cursor}" ${action} ${dropAttrs}>${content}</td>`;
+                bodyHtml += `<td class="p-0 border-b border-r border-gray-100 h-14 relative transition-colors ${bgClass} ${cursor}" style="${colWidthStyle}" ${action} ${dropAttrs}>${content}</td>`;
             });
             bodyHtml += `</tr>`;
         });
@@ -3211,7 +3213,7 @@ const app = {
                 const isSpecialHoliday = specialHolidays.includes(dateStr);
                 const isClosedDay = closedDays.map(Number).includes(jsDow);
                 if (isSpecialHoliday || isClosedDay) {
-                    alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 bg-gray-50 text-center">
+                    alertRowHtml += `<td class="p-0 border-b border-r border-gray-100 h-10 bg-gray-50 text-center" style="${colWidthStyle}">
                         <span class="text-[10px] text-gray-300">-</span>
                     </td>`;
                     return;
@@ -3455,7 +3457,7 @@ const app = {
                 </div>`;
                 const cellStyle = isShort ? 'cursor:pointer;' : '';
                 const cellAttr = isShort ? `onclick="${clickHandler}" title="クリックで不足原因を表示"` : '';
-                alertRowHtml += `<td style="${cellStyle}" class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center" ${cellAttr}>${cellContent}</td>`;
+                alertRowHtml += `<td style="${cellStyle}${colWidthStyle}" class="p-0 border-b border-r border-gray-100 h-12 ${cellBg} text-center" ${cellAttr}>${cellContent}</td>`;
             });
             alertRowHtml += `</tr>`;
         }
