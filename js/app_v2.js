@@ -8208,18 +8208,21 @@ const app = {
                                 <p class="text-xs text-gray-500 mt-0.5">右上メニュー「パスワード変更」から新責任者の希望パスワードに設定 (推奨)、もしくは現在のパスワードを共有</p>
                             </div>
                         </label>
-                        <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded bg-amber-50 border border-amber-200">
-                            <input type="checkbox" class="mt-1 form-checkbox text-amber-600 rounded">
+                        <label class="flex items-start gap-3 cursor-pointer hover:bg-red-50 p-2 rounded bg-red-50 border-2 border-red-300">
+                            <input type="checkbox" class="mt-1 form-checkbox text-red-600 rounded">
                             <div>
-                                <div class="font-bold text-amber-900">3. セカンドファクター PIN を引き継ぐ <span class="text-[10px] bg-amber-200 text-amber-800 px-1.5 rounded">PIN設定時のみ</span></div>
-                                <p class="text-xs text-amber-700 mt-0.5">PIN を設定している場合、未引き継ぎだと新責任者がログイン不能。PIN を解除する選択肢もあり (店舗設定 → セキュリティ)</p>
+                                <div class="font-bold text-red-900">3. セカンドファクター PIN を必ず変更する <span class="text-[10px] bg-red-600 text-white px-1.5 rounded font-bold">必須</span></div>
+                                <p class="text-xs text-red-700 mt-0.5">下の「<strong>PIN を変更</strong>」ボタンから、新責任者の希望 PIN に変更してください。旧 PIN を旧責任者が記憶していると、引き継ぎ後も旧責任者がログイン可能になり情報漏洩リスクがあります。</p>
+                                <button onclick="event.stopPropagation(); event.preventDefault(); app.openPinChangeModal();" class="mt-2 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition">
+                                    <i class="fa-solid fa-rotate mr-1"></i>PIN を変更する
+                                </button>
                             </div>
                         </label>
                         <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                             <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
                             <div>
                                 <div class="font-bold text-gray-800">4. スタッフ全員に責任者交代を周知</div>
-                                <p class="text-xs text-gray-500 mt-0.5">サイドバー「お知らせ」から全スタッフに通知可能</p>
+                                <p class="text-xs text-gray-500 mt-0.5">朝礼・LINE グループ・掲示・個別連絡 等、店舗運用で使っている連絡手段で旧責任者の交代をスタッフ全員に伝えてください (現状システム内通知機能はありません)</p>
                             </div>
                         </label>
                         <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
@@ -8248,11 +8251,14 @@ const app = {
 
                 <!-- クイックリンク -->
                 <div class="flex flex-wrap gap-2 pt-2">
-                    <button onclick="app.changeView('settings')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50">
-                        <i class="fa-solid fa-sliders mr-1"></i>店舗設定へ
+                    <button onclick="app.openPinChangeModal()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 shadow-sm">
+                        <i class="fa-solid fa-rotate mr-1"></i>PIN を変更 (必須)
                     </button>
                     <button onclick="app.openModal('changePasswordModal')" class="bg-amber-50 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-100">
                         <i class="fa-solid fa-key mr-1"></i>パスワード変更
+                    </button>
+                    <button onclick="app.changeView('settings')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50">
+                        <i class="fa-solid fa-sliders mr-1"></i>店舗設定へ
                     </button>
                 </div>
             </div>
