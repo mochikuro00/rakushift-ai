@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.158-print-borders',
+    APP_VERSION: '20260611-v3.7.161-shift-cell-multi',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5518,14 +5518,19 @@ const app = {
 
     // --- 印刷機能 (完全版 v7・分割レイアウト & PDF対応) ---
     // Fixed syntax error
-    printShiftTable() {
+    printShiftTable(format) {
+        // v3.7.159: format 引数で印刷フォーマットを切替
+        //   'detailed': Gantt 風 (現状) - 時間軸 + 視覚化バー
+        //   'compact':  シンプル (時間軸なし) - テキストのみ、1ページに 14日収容
+        this._printFormat = format || this._printFormat || 'detailed';
+        const fmt = this._printFormat;
         // 現在の表示モードと期間を取得
         const period = this.state.shiftTablePeriod || 'month';
         const year = this.state.currentDate.getFullYear();
         const month = this.state.currentDate.getMonth();
-        
+
         let allDays = [];
-        
+
         // 1. 全期間の日付リスト生成
         if (period === 'month') {
             const lastDay = new Date(year, month + 1, 0).getDate();
@@ -5542,8 +5547,8 @@ const app = {
             });
         }
 
-        // 2. 期間分割 (A4横に収まるよう 7日区切り でテーブルを生成)
-        const CHUNK_SIZE = 7; // 1週間ずつ
+        // 2. 期間分割: compact は 1チャンク 14日、detailed は 7日
+        const CHUNK_SIZE = fmt === 'compact' ? 14 : 7;
         const dayChunks = [];
         for (let i = 0; i < allDays.length; i += CHUNK_SIZE) {
             dayChunks.push(allDays.slice(i, i + CHUNK_SIZE));
@@ -5640,14 +5645,16 @@ const app = {
 
         // --- コンテンツ生成関数 ---
         const generateTableHTML = (days, chunkIndex, totalChunks) => {
-            // 時間目盛り
-            const timeScaleHtml = `
+            const isCompact = fmt === 'compact';
+            // 時間目盛り (detailed のみ)
+            const timeScaleHtml = isCompact ? '' : `
                 <div style="display: flex; justify-content: space-between; font-size: 8px; color: #555; margin-top: 2px; border-top: 1px solid #ccc;">
                     <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
                 </div>
             `;
 
             // ヘッダー生成
+            const colW = isCompact ? 56 : 130;
             const headerCols = days.map(date => {
                 const d = date.getDate();
                 const m = date.getMonth() + 1;
@@ -5655,11 +5662,13 @@ const app = {
                 const isSun = date.getDay() === 0;
                 const isSat = date.getDay() === 6;
                 const colorStyle = isSun ? 'color:#d32f2f;' : isSat ? 'color:#1976d2;' : 'color:#111;';
-                const bgStyle = isSun ? 'background-color:#fff5f5;' : isSat ? 'background-color:#f0f9ff;' : 'background-color:#f9fafb;';
-                
+                const bgStyle = isSun ? 'background-color:#fff5f5; background-image:linear-gradient(#fff5f5,#fff5f5);'
+                              : isSat ? 'background-color:#f0f9ff; background-image:linear-gradient(#f0f9ff,#f0f9ff);'
+                              : 'background-color:#f9fafb; background-image:linear-gradient(#f9fafb,#f9fafb);';
+
                 return `
-                    <th style="${bgStyle} border: 1px solid #666; padding: 4px; width: 130px; min-width: 130px;">
-                        <div style="${colorStyle} font-size: 11px; font-weight: bold;">${m}/${d} (${w})</div>
+                    <th style="${bgStyle} border: 1px solid #333; padding: ${isCompact ? '2px' : '4px'}; width: ${colW}px; min-width: ${colW}px;">
+                        <div style="${colorStyle} font-size: ${isCompact ? '10px' : '11px'}; font-weight: bold;">${m}/${d}<br>${w}</div>
                         ${timeScaleHtml}
                     </th>
                 `;
@@ -5672,79 +5681,78 @@ const app = {
                     const shift = this.state.shifts.find(s => s.staff_id === staff.id && s.date === dateStr);
                     
                     let cellContent = '';
-                    
+
                     if (shift) {
-                        const startH = parseInt(shift.start_time.split(':')[0]);
-                        const startM = parseInt(shift.start_time.split(':')[1]);
-                        const endH = parseInt(shift.end_time.split(':')[0]);
-                        const endM = parseInt(shift.end_time.split(':')[1]);
-                        
-                        const startMin = startH * 60 + startM;
-                        const endMin = endH * 60 + endM;
-                        const endMinAdjusted = endMin < startMin ? endMin + 1440 : endMin;
-                        
-                        // 1日 = 1440分
-                        const startPct = (startMin / 1440) * 100;
-                        const widthPct = ((endMinAdjusted - startMin) / 1440) * 100;
-                        
-                        // v3.7.146: シフトパターン (早番/遅番/夜勤等) と
-                        // 整合する色を _getShiftPrintColor から取得
                         const customShifts = this.state.config.custom_shifts || [];
                         const _col = this._getShiftPrintColor(shift, customShifts);
                         const bgColor = _col.bg;
                         const borderColor = _col.border;
+                        const st = (shift.start_time || '').slice(0,5);
+                        const et = (shift.end_time || '').slice(0,5);
 
-                        const timeText = `${shift.start_time} - ${shift.end_time}`;
-
-                        cellContent = `
-                            <div style="
-                                position: absolute;
-                                left: ${startPct}%;
-                                width: ${Math.max(widthPct, 1)}%;
-                                top: 6px;
-                                bottom: 6px;
-                                background-color: ${bgColor};
-                                /* v3.7.148: 印刷時に background-color が消えるブラウザ対策で
-                                   gradient で塗りつぶしを重ねる (background-image は印刷で残る) */
-                                background-image: linear-gradient(${bgColor}, ${bgColor});
-                                border: 2px solid ${borderColor};
-                                /* 左側に太い色帯 (border 自体は印刷で出るため確実) */
-                                border-left: 6px solid ${borderColor};
-                                border-radius: 3px;
-                                z-index: 10;
-                                overflow: visible; /* 文字はみ出し許可 */
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                -webkit-print-color-adjust: exact;
-                                print-color-adjust: exact;
-                            ">
-                                <span style="
-                                    font-size: 10px; 
-                                    font-weight: bold; 
-                                    color: #000; 
-                                    white-space: nowrap; 
-                                    text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
-                                    pointer-events: none;
-                                    position: relative;
-                                    z-index: 20;
-                                ">${timeText}</span>
-                            </div>
-                        `;
+                        if (isCompact) {
+                            // === Compact: シンプルテキスト表示 (時間軸なし) ===
+                            cellContent = `
+                                <div style="
+                                    position: absolute; inset: 2px;
+                                    background-color: ${bgColor};
+                                    background-image: linear-gradient(${bgColor}, ${bgColor});
+                                    border-left: 4px solid ${borderColor};
+                                    border-radius: 2px;
+                                    display: flex; align-items: center; justify-content: center;
+                                    font-size: 9px; font-weight: bold; color: #111;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact;
+                                ">${st}<br>${et}</div>
+                            `;
+                        } else {
+                            // === Detailed: Gantt 風 (時間軸 + 視覚バー) ===
+                            const startH = parseInt(shift.start_time.split(':')[0]);
+                            const startM = parseInt(shift.start_time.split(':')[1]);
+                            const endH = parseInt(shift.end_time.split(':')[0]);
+                            const endM = parseInt(shift.end_time.split(':')[1]);
+                            const startMin = startH * 60 + startM;
+                            const endMin = endH * 60 + endM;
+                            const endMinAdjusted = endMin < startMin ? endMin + 1440 : endMin;
+                            const startPct = (startMin / 1440) * 100;
+                            const widthPct = ((endMinAdjusted - startMin) / 1440) * 100;
+                            const timeText = `${st} - ${et}`;
+                            cellContent = `
+                                <div style="
+                                    position: absolute;
+                                    left: ${startPct}%;
+                                    width: ${Math.max(widthPct, 1)}%;
+                                    top: 6px; bottom: 6px;
+                                    background-color: ${bgColor};
+                                    background-image: linear-gradient(${bgColor}, ${bgColor});
+                                    border: 2px solid ${borderColor};
+                                    border-left: 6px solid ${borderColor};
+                                    border-radius: 3px;
+                                    z-index: 10;
+                                    display: flex; align-items: center; justify-content: center;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact;
+                                ">
+                                    <span style="font-size: 10px; font-weight: bold; color: #000; white-space: nowrap;
+                                                 text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+                                                 position: relative; z-index: 20;">${timeText}</span>
+                                </div>
+                            `;
+                        }
                     }
-                    
-                    // 背景グリッド
-                    const gridLines = `
+
+                    // 背景グリッド (detailed のみ)
+                    const gridLines = isCompact ? '' : `
                         <div style="position:absolute; left:25%; top:0; bottom:0; border-left:1px dotted #ccc; z-index:0;"></div>
                         <div style="position:absolute; left:50%; top:0; bottom:0; border-left:1px solid #ccc; z-index:0;"></div>
                         <div style="position:absolute; left:75%; top:0; bottom:0; border-left:1px dotted #ccc; z-index:0;"></div>
                     `;
 
                     const isSpecialHoliday = (this.state.config.special_holidays || []).includes(dateStr);
-                    // v3.7.152: ユーザー要望「印刷プレビューだけ希望休を消す」 → 印刷では希望休マークを出さない
                     const bgStyle = isSpecialHoliday ? 'background-color: #ffebee; background-image: linear-gradient(#ffebee, #ffebee);' : '';
+                    const cellHeight = isCompact ? '28px' : '38px';
 
-                    return `<td style="position: relative; padding: 0; height: 38px; border: 1px solid #666; ${bgStyle}">
+                    return `<td style="position: relative; padding: 0; height: ${cellHeight}; border: 1px solid #333; ${bgStyle}">
                         ${gridLines}
                         ${cellContent}
                     </td>`;
@@ -5801,8 +5809,24 @@ const app = {
                 </button>
                 <h2 style="margin: 0 0 8px 0; padding-right: 48px; font-size: 18px;">🖨 印刷プレビュー</h2>
                 <p style="font-size: 13px; line-height: 1.6; margin: 0;">
-                    7日ごとに分割して表示しています。「印刷 / PDF保存」を押すとブラウザの印刷ダイアログが開きます。
+                    ${fmt === 'compact' ? '14日ごと' : '7日ごと'}に分割して表示しています。「印刷 / PDF保存」を押すとブラウザの印刷ダイアログが開きます。
                 </p>
+                <div style="margin-top: 10px; padding: 8px; background:#fff; border:1px solid #bae6fd; border-radius:6px;">
+                    <div style="font-size:12px; color:#0369a1; margin-bottom:6px; font-weight:bold;">📋 レイアウト</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                        <button onclick="app.printShiftTable('detailed')"
+                                style="flex:1; min-width:160px; padding:8px 12px; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; border:2px solid ${fmt==='detailed'?'#0284c7':'#cbd5e1'}; background:${fmt==='detailed'?'#0284c7':'#fff'}; color:${fmt==='detailed'?'#fff':'#334155'};">
+                            📊 詳細版 (時間軸あり)
+                        </button>
+                        <button onclick="app.printShiftTable('compact')"
+                                style="flex:1; min-width:160px; padding:8px 12px; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; border:2px solid ${fmt==='compact'?'#0284c7':'#cbd5e1'}; background:${fmt==='compact'?'#0284c7':'#fff'}; color:${fmt==='compact'?'#fff':'#334155'};">
+                            📃 シンプル版 (コンパクト)
+                        </button>
+                    </div>
+                    <div style="font-size:11px; color:#64748b; margin-top:6px;">
+                        ${fmt === 'compact' ? '時間軸を省き、開始-終了時刻のみ表示。1ページに14日収まります。' : 'シフトを Gantt 風の時間軸で視覚化。1ページ7日。'}
+                    </div>
+                </div>
                 <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px;">
                     <button onclick="setTimeout(() => window.print(), 200)"
                             style="flex: 1; min-width: 180px; padding: 12px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer;">
@@ -5937,17 +5961,61 @@ const app = {
     },
 
 
+    // v3.7.161: シフト編集モーダル内に「シフトパターンからクイック選択」UI を描画
+    //   - custom_shifts (早番/中番/遅番...) のボタンをタップ → 開始/終了/休憩を一括反映
+    //   - 「✏ 手入力」を押すと現在値を残したまま input にフォーカスする
+    _renderShiftPatternRow() {
+        const row = document.getElementById('editShiftPatternRow');
+        if (!row) return;
+        const customShifts = (this.state.config.custom_shifts || []).filter(p => p && p.start_time && p.end_time);
+        if (!customShifts.length) {
+            row.innerHTML = `<div class="text-xs text-gray-400">シフトパターン未設定 (時間を直接入力してください)</div>`;
+            return;
+        }
+        const btns = customShifts.map(p => {
+            const col = this._getShiftPrintColor({ start_time: p.start_time, end_time: p.end_time }, customShifts);
+            const st = (p.start_time || '').slice(0,5);
+            const et = (p.end_time || '').slice(0,5);
+            const brk = Number(p.break_minutes) || 60;
+            const name = this._sanitize(p.name || '');
+            return `<button type="button"
+                onclick="app._applyShiftPattern('${st}','${et}',${brk})"
+                style="background:${col.bg}; border:2px solid ${col.border};"
+                class="px-3 py-2 rounded-lg text-xs font-bold text-gray-800 hover:opacity-80 transition flex flex-col items-center min-w-[80px]">
+                <span>${name}</span>
+                <span class="text-[10px] font-mono text-gray-700">${st}-${et}</span>
+            </button>`;
+        }).join('');
+        // 手入力ボタン
+        const manualBtn = `<button type="button"
+            onclick="document.getElementById('editShiftStart').focus()"
+            class="px-3 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-700 border-2 border-dashed border-gray-300 hover:bg-gray-200 transition min-w-[80px]">
+            ✏ 手入力
+        </button>`;
+        row.innerHTML = btns + manualBtn;
+    },
+
+    // v3.7.161: パターンボタン押下時 → time input に反映
+    _applyShiftPattern(start, end, breakMins) {
+        const s = document.getElementById('editShiftStart');
+        const e = document.getElementById('editShiftEnd');
+        const b = document.getElementById('editShiftBreak');
+        if (s) s.value = start;
+        if (e) e.value = end;
+        if (b) b.value = breakMins;
+    },
+
     openAddShift(dateStr) {
         document.getElementById('shiftForm')?.reset();
-        document.getElementById('editShiftId').value = ''; 
+        document.getElementById('editShiftId').value = '';
         document.getElementById('editShiftDate').value = dateStr;
         document.getElementById('editShiftTitle').textContent = 'シフト追加';
         document.getElementById('editShiftDateDisplay').textContent = dateStr;
         document.getElementById('deleteShiftBtn').classList.add('hidden');
-        
+
         const staffSelectHtml = `<select id="editShiftStaffSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-2"><option value="">スタッフを選択</option>${this.state.staff.map(s => `<option value="${s.id}">${this._sanitize(s.name)}</option>`).join('')}</select>`;
         document.getElementById('editShiftStaffName').innerHTML = staffSelectHtml;
-        
+
         // v3.7.15: <input type="time"> 化に伴い options 生成は不要。value 設定のみ
         const defStart = (this.state.config.opening_time || '09:00').substr(0, 5);
         const defEnd = (this.state.config.closing_time || '18:00').substr(0, 5);
@@ -5959,6 +6027,7 @@ const app = {
         const memoEl = document.getElementById('editShiftMemo');
         if (memoEl) memoEl.value = '';
 
+        this._renderShiftPatternRow();
         this.openModal('editShiftModal');
         const saveBtn = document.getElementById('saveShiftBtn');
         const newSaveBtn = saveBtn.cloneNode(true);
@@ -6180,6 +6249,7 @@ const app = {
         if (memoEl) memoEl.value = shift.memo || '';
         document.getElementById('deleteShiftBtn').classList.remove('hidden');
 
+        this._renderShiftPatternRow();
         const deleteBtn = document.getElementById('deleteShiftBtn');
         deleteBtn.onclick = () => this.deleteShift(shift.id);
         const saveBtn = document.getElementById('saveShiftBtn');
@@ -8863,9 +8933,8 @@ const app = {
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
                         <p class="text-xs text-blue-700"><strong>作成範囲の選択肢:</strong></p>
                         <ul class="text-xs text-blue-600 mt-1 space-y-0.5">
-                            <li>・今月の空きシフトのみ埋める</li>
+                            <li>・現在のシフトをリセットして再構築 (未来日のみ)</li>
                             <li>・来週分を作成</li>
-                            <li>・現在のシフトをリセットして再構築</li>
                         </ul>
                     </div>
                     <!-- v3.7.96: 不足セルクリック → 原因分析モーダル の説明 -->
