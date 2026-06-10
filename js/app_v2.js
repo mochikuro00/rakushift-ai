@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.154-mobile-timescale-memo',
+    APP_VERSION: '20260610-v3.7.155-mobile-nav-month',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -456,7 +456,13 @@ const app = {
     },
 
     // 表示中ビュー/期間モードに応じた前後送り
+    // v3.7.155: スマホ (vw < 768) では常に月移動のみ (ユーザー要望)
     navigatePeriod(delta) {
+        const isMobile = (typeof window !== 'undefined') && window.innerWidth < 768;
+        if (isMobile) {
+            this.changeMonth(delta);
+            return;
+        }
         if (this.state.view === 'manual-shift' && this.state.shiftTablePeriod && this.state.shiftTablePeriod !== 'month') {
             this.changeTablePeriod(delta);
         } else {
