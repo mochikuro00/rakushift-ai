@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.148-print-gradient',
+    APP_VERSION: '20260610-v3.7.149-print-empty-row',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5479,8 +5479,8 @@ const app = {
                 `;
             }).join('');
 
-            // ボディ生成
-            const bodyRows = this.state.staff.map(staff => {
+            // ボディ生成 (v3.7.149: 名前/IDのない不正なスタッフ entry を除外して空行を防ぐ)
+            const bodyRows = this.state.staff.filter(s => s && s.id && (s.name || '').trim()).map(staff => {
                 const cols = days.map(date => {
                     const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
                     const shift = this.state.shifts.find(s => s.staff_id === staff.id && s.date === dateStr);
