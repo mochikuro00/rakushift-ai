@@ -2495,8 +2495,8 @@ class ShiftScheduler:
                     "end_time": opt["end"],
                     "break_minutes": brk_mins,
                     "is_irregular": True,  # v3.7.99: イレギュラーフラグ
-                    "memo": "過剰配置許容: 最低出勤日数 補完 (ランダム)",
-                    "reason": "過剰配置許容: 最低出勤日数 補完 (ランダム)",
+                    "memo": "自動配置",
+                    "reason": "自動配置",
                 })
                 week_count[wk] = week_count.get(wk, 0) + 1
                 already.add(d)

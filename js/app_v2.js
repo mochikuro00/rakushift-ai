@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.153-batch-delete-undo',
+    APP_VERSION: '20260610-v3.7.154-mobile-timescale-memo',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -2937,20 +2937,24 @@ const app = {
             const label = period === 'month' ? d : `${m}/${d}`;
             
             // 時間スケールをヘッダーに追加 (ガントチャート用)
-            // v3.7.153: モバイルでは数字を間引いて重なり (文字化け) 防止
+            // v3.7.153/154: モバイル/狭幅では大きく間引いて文字重なりを防止
             let timeScale = '';
             if (isGanttMode) {
-                // 列幅から表示する時刻を選択: 600px未満=6時間おき / 600-1000=3時間 / 以上=1時間
+                // 列幅と viewport から表示間隔を決定
                 const colW = period === 'day' ? Math.max(800, Math.round(1600 * zoom))
                            : Math.max(600, Math.round(1200 * zoom));
-                const step = colW < 600 ? 6 : colW < 1000 ? 3 : 1;
+                const vw = (typeof window !== 'undefined') ? window.innerWidth : 1024;
+                const isNarrow = vw < 768;
+                // モバイル/狭幅 → 6時間刻みのみ / 中幅 → 6時間刻み / 広幅 → 3時間刻み / 超広幅 → 1時間
+                const step = isNarrow ? 6 : (colW < 700 ? 6 : colW < 1100 ? 3 : 1);
+                const tickSize = isNarrow ? '9' : '10';
                 let scaleHtml = '';
                 for (let i = 0; i <= 24; i += step) {
                     const left = (i / 24) * 100;
-                    scaleHtml += `<span class="absolute -translate-x-1/2 font-mono" style="left: ${left}%">${String(i).padStart(2,'0')}</span>`;
+                    scaleHtml += `<span class="absolute -translate-x-1/2 font-mono text-[${tickSize}px]" style="left: ${left}%">${i}</span>`;
                 }
-                // 15分刻みの目盛り (week / day モードかつ列幅 800px 以上のみ)
-                if ((period === 'week' || period === 'day') && colW >= 800) {
+                // 15分刻みの細目盛りは超広幅のみ (狭幅では表示しない)
+                if (!isNarrow && (period === 'week' || period === 'day') && colW >= 900) {
                     for (let i = 0; i < 24; i++) {
                         for (let m = 1; m < 4; m++) {
                             const mLeft = ((i + m/4) / 24) * 100;
@@ -2960,7 +2964,7 @@ const app = {
                 }
 
                 timeScale = `
-                    <div class="relative h-5 text-[10px] text-gray-400 font-bold mt-1 border-t border-gray-100 pt-0.5 select-none">
+                    <div class="relative h-4 text-gray-400 font-bold mt-1 border-t border-gray-100 pt-0.5 select-none">
                         ${scaleHtml}
                     </div>
                 `;
