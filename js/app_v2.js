@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.146-print-color',
+    APP_VERSION: '20260610-v3.7.148-print-gradient',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5515,16 +5515,23 @@ const app = {
                                 position: absolute;
                                 left: ${startPct}%;
                                 width: ${Math.max(widthPct, 1)}%;
-                                top: 6px; 
+                                top: 6px;
                                 bottom: 6px;
                                 background-color: ${bgColor};
-                                border: 1px solid ${borderColor};
+                                /* v3.7.148: 印刷時に background-color が消えるブラウザ対策で
+                                   gradient で塗りつぶしを重ねる (background-image は印刷で残る) */
+                                background-image: linear-gradient(${bgColor}, ${bgColor});
+                                border: 2px solid ${borderColor};
+                                /* 左側に太い色帯 (border 自体は印刷で出るため確実) */
+                                border-left: 6px solid ${borderColor};
                                 border-radius: 3px;
                                 z-index: 10;
                                 overflow: visible; /* 文字はみ出し許可 */
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
+                                -webkit-print-color-adjust: exact;
+                                print-color-adjust: exact;
                             ">
                                 <span style="
                                     font-size: 10px; 
