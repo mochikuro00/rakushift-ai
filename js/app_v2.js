@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260611-v3.7.162-pattern-field-fix',
+    APP_VERSION: '20260611-v3.7.163-print-quality-pattern-fallback',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5581,15 +5581,17 @@ const app = {
                     print-color-adjust: exact !important;
                     color-adjust: exact !important;
                 }
-                /* v3.7.152/157: 印刷時に真っ白問題対策 + 線途切れ防止 */
+                /* v3.7.163: 印刷精度強化 - 真っ白/線途切れ/色消え対策の総合版 */
                 @media print {
-                    @page { size: landscape; margin: 8mm; }
+                    @page { size: landscape; margin: 6mm; }
                     html, body {
                         background: white !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         height: auto !important;
                         overflow: visible !important;
+                        font-family: 'Yu Gothic', 'Meiryo', 'Hiragino Sans', sans-serif !important;
+                        -webkit-font-smoothing: antialiased !important;
                     }
                     body * { visibility: hidden !important; }
                     #printOverlay, #printOverlay * { visibility: visible !important; }
@@ -5609,14 +5611,14 @@ const app = {
                     }
                     #printOverlay .no-print { display: none !important; visibility: hidden !important; }
                     .table-chunk:last-child { page-break-after: auto !important; }
-                    /* 全要素に色保持を再宣言 */
+                    /* 全要素 色保持 (Chrome/Edge/Safari/Firefox) */
                     #printOverlay, #printOverlay *,
                     #printOverlay th, #printOverlay td, #printOverlay div, #printOverlay span {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                         color-adjust: exact !important;
                     }
-                    /* v3.7.157: 罫線途切れ防止 */
+                    /* テーブル基本 */
                     #printOverlay table {
                         border-collapse: collapse !important;
                         table-layout: fixed !important;
@@ -5629,16 +5631,29 @@ const app = {
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
                     }
+                    /* セル: 多重罫線 (border + outline + box-shadow inset) で確実に出す */
                     #printOverlay th, #printOverlay td {
-                        border: 1px solid #333 !important;
-                        border-color: #333 !important;
+                        border: 1.2px solid #1f2937 !important;
+                        border-color: #1f2937 !important;
+                        outline: 0.5px solid #1f2937 !important;
+                        outline-offset: -0.5px !important;
                         page-break-inside: avoid !important;
                         break-inside: avoid !important;
-                        /* CSS の border が消えるブラウザ向けに box-shadow 内側で代替 */
-                        box-shadow: inset 0 0 0 0.5px #333 !important;
+                        box-shadow: inset 0 0 0 0.5px #1f2937 !important;
                     }
+                    /* 見出し/曜日列も色を確実に */
+                    #printOverlay thead th {
+                        font-weight: 900 !important;
+                    }
+                    /* シフトバー: 内側 padding 消去で時間目盛と完全位置合わせ */
+                    #printOverlay td > div[style*="position: absolute"] {
+                        border-width: 1.5px !important;
+                    }
+                    /* ページ送りリセット: 最後のチャンクで余白ページが出ないように */
+                    .table-chunk { page-break-after: always !important; }
+                    .table-chunk:last-child { page-break-after: auto !important; }
                 }
-                @page { size: landscape; margin: 8mm; }
+                @page { size: landscape; margin: 6mm; }
             `;
             document.head.appendChild(style);
         }
@@ -5760,7 +5775,7 @@ const app = {
 
                 return `
                     <tr style="page-break-inside: avoid;">
-                        <td style="padding: 4px 8px; font-weight: bold; background-color: #f3f4f6; text-align: left; width: 140px; border: 1px solid #666; font-size: 11px;">
+                        <td style="padding: 4px 8px; font-weight: bold; background-color: #f3f4f6; background-image: linear-gradient(#f3f4f6,#f3f4f6); text-align: left; width: ${isCompact ? '90px' : '120px'}; border: 1.2px solid #1f2937; font-size: ${isCompact ? '10px' : '11px'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             ${this._sanitize(staff.name)}
                         </td>
                         ${cols}
@@ -5773,14 +5788,14 @@ const app = {
             const endStr = `${days[days.length-1].getMonth()+1}/${days[days.length-1].getDate()}`;
 
             return `
-                <div class="table-chunk" style="margin-bottom: 20px; page-break-after: always;">
-                    <h3 style="margin: 0 0 10px 0; font-size: 16px; border-left: 5px solid #2563eb; padding-left: 10px;">
+                <div class="table-chunk" style="margin-bottom: 14px; page-break-after: always;">
+                    <h3 style="margin: 0 0 6px 0; font-size: 14px; border-left: 5px solid #2563eb; padding-left: 8px;">
                         期間: ${startStr} 〜 ${endStr}
                     </h3>
-                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px;">
+                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${isCompact ? '10px' : '11px'};">
                         <thead>
                             <tr>
-                                <th style="width: 140px; background-color: #e5e7eb; border: 1px solid #666; padding: 4px;">スタッフ</th>
+                                <th style="width: ${isCompact ? '90px' : '120px'}; background-color: #e5e7eb; background-image: linear-gradient(#e5e7eb,#e5e7eb); border: 1.2px solid #1f2937; padding: 4px; font-weight: 900;">スタッフ</th>
                                 ${headerCols}
                             </tr>
                         </thead>
@@ -5788,7 +5803,7 @@ const app = {
                             ${bodyRows}
                         </tbody>
                     </table>
-                    <div style="text-align: right; font-size: 10px; color: #666; margin-top: 5px;">
+                    <div style="text-align: right; font-size: 9px; color: #666; margin-top: 3px;">
                         Page ${chunkIndex + 1} / ${totalChunks}
                     </div>
                 </div>
@@ -5967,19 +5982,32 @@ const app = {
     _renderShiftPatternRow() {
         const row = document.getElementById('editShiftPatternRow');
         if (!row) return;
-        // v3.7.162: custom_shifts のフィールド名は { name, start, end } (start_time/end_time ではない)
+        // v3.7.163: custom_shifts が未設定でも 既定の早番/遅番 を即タップできるフォールバックを提供
         const allShifts = this.state.config.custom_shifts || [];
-        const customShifts = allShifts.filter(p => p && (p.start || p.start_time) && (p.end || p.end_time));
+        let customShifts = allShifts.filter(p => p && (p.start || p.start_time) && (p.end || p.end_time));
+        let usingFallback = false;
         if (!customShifts.length) {
-            row.innerHTML = `<div class="text-xs text-gray-400">シフトパターン未設定 (設定画面で追加するか、時間を直接入力)</div>`;
-            return;
+            usingFallback = true;
+            const openT = (this.state.config.opening_time || '09:00').slice(0,5);
+            const closeT = (this.state.config.closing_time || '22:00').slice(0,5);
+            // 営業時間を半分で分割して 早番/遅番 を推定
+            const [oh, om] = openT.split(':').map(Number);
+            const [ch, cm] = closeT.split(':').map(Number);
+            const openMin = oh * 60 + (om || 0);
+            const closeMin = ch * 60 + (cm || 0);
+            const midMin = Math.round((openMin + closeMin) / 2);
+            const fmt = (mins) => `${String(Math.floor(mins / 60) % 24).padStart(2,'0')}:${String(mins % 60).padStart(2,'0')}`;
+            customShifts = [
+                { name: '早番', start: openT, end: fmt(midMin) },
+                { name: '遅番', start: fmt(midMin), end: closeT },
+                { name: '通し', start: openT, end: closeT },
+            ];
         }
         const btns = customShifts.map(p => {
             const st = ((p.start || p.start_time) || '').slice(0,5);
             const et = ((p.end || p.end_time) || '').slice(0,5);
             const brk = Number(p.break_minutes) || 60;
-            // _getShiftPrintColor は内部で _getShiftBarColor を呼び、{start_time,end_time}を読む
-            const col = this._getShiftPrintColor({ start_time: st, end_time: et }, allShifts);
+            const col = this._getShiftPrintColor({ start_time: st, end_time: et }, customShifts);
             const name = this._sanitize(p.name || `${st}-${et}`);
             return `<button type="button"
                 onclick="app._applyShiftPattern('${st}','${et}',${brk})"
@@ -5989,13 +6017,15 @@ const app = {
                 <span class="text-[10px] font-mono text-gray-700">${st}-${et}</span>
             </button>`;
         }).join('');
-        // 手入力ボタン
         const manualBtn = `<button type="button"
             onclick="document.getElementById('editShiftStart').focus()"
             class="px-3 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-700 border-2 border-dashed border-gray-300 hover:bg-gray-200 transition min-w-[80px]">
             ✏ 手入力
         </button>`;
-        row.innerHTML = btns + manualBtn;
+        const fallbackHint = usingFallback
+            ? `<div class="w-full text-[10px] text-amber-600 mt-1">⚠ シフトパターン未登録のため仮の早番/遅番を表示中。設定画面で登録すると配色が固定されます。</div>`
+            : '';
+        row.innerHTML = btns + manualBtn + fallbackHint;
     },
 
     // v3.7.161: パターンボタン押下時 → time input に反映
