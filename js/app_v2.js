@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260610-v3.7.145-pin-btn-fix',
+    APP_VERSION: '20260610-v3.7.146-print-color',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5420,6 +5420,15 @@ const app = {
                     background: white; overflow-y: auto;
                     padding: 16px; -webkit-overflow-scrolling: touch;
                 }
+                /* v3.7.146: 印刷時にシフトバーの色を保持
+                   Chrome/Edge の「背景グラフィック」設定 OFF でも色を出すため、
+                   印刷対象要素に color-adjust: exact を強制 */
+                #printOverlay,
+                #printOverlay * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                }
                 /* 印刷時: overlay 以外を非表示、overlay は通常文書扱い */
                 @media print {
                     body > *:not(#printOverlay) { display: none !important; }
@@ -5430,6 +5439,13 @@ const app = {
                     }
                     #printOverlay .no-print { display: none !important; }
                     .table-chunk:last-child { page-break-after: auto !important; }
+                    /* 念のため全要素に色保持を再宣言 (Safari/Firefox 互換) */
+                    #printOverlay, #printOverlay *,
+                    #printOverlay th, #printOverlay td, #printOverlay div, #printOverlay span {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                        color-adjust: exact !important;
+                    }
                 }
                 @page { size: landscape; margin: 8mm; }
             `;
@@ -5485,10 +5501,12 @@ const app = {
                         const startPct = (startMin / 1440) * 100;
                         const widthPct = ((endMinAdjusted - startMin) / 1440) * 100;
                         
-                        let bgColor = '#dbeafe'; 
-                        let borderColor = '#2563eb';
-                        if (startH < 10) { bgColor = '#fef9c3'; borderColor = '#ca8a04'; }
-                        else if (startH >= 17) { bgColor = '#f3e8ff'; borderColor = '#9333ea'; }
+                        // v3.7.146: シフトパターン (早番/遅番/夜勤等) と
+                        // 整合する色を _getShiftPrintColor から取得
+                        const customShifts = this.state.config.custom_shifts || [];
+                        const _col = this._getShiftPrintColor(shift, customShifts);
+                        const bgColor = _col.bg;
+                        const borderColor = _col.border;
 
                         const timeText = `${shift.start_time} - ${shift.end_time}`;
 
@@ -5638,6 +5656,28 @@ const app = {
      *   3) マッチしなければパターン登録順のパレット
      *   4) パターンが見つからなければ開始時刻ベースのフォールバック
      */
+    // v3.7.146: 印刷用にインライン CSS の色 (背景/枠) を返す
+    // _getShiftBarColor の Tailwind クラスから色名を抽出して RGB に変換
+    _getShiftPrintColor(shift, customShifts) {
+        const cls = this._getShiftBarColor(shift, customShifts) || '';
+        const COLOR_MAP = {
+            yellow:  { bg: '#fef9c3', border: '#ca8a04' },
+            purple:  { bg: '#f3e8ff', border: '#9333ea' },
+            sky:     { bg: '#e0f2fe', border: '#0284c7' },
+            indigo:  { bg: '#e0e7ff', border: '#4f46e5' },
+            emerald: { bg: '#d1fae5', border: '#059669' },
+            pink:    { bg: '#fce7f3', border: '#db2777' },
+            orange:  { bg: '#fed7aa', border: '#ea580c' },
+            teal:    { bg: '#ccfbf1', border: '#0d9488' },
+            red:     { bg: '#fee2e2', border: '#dc2626' },
+            blue:    { bg: '#dbeafe', border: '#2563eb' },
+        };
+        // bg-{color}-NNN を最優先で抽出
+        const m = cls.match(/bg-([a-z]+)-/);
+        const name = m ? m[1] : 'blue';
+        return COLOR_MAP[name] || COLOR_MAP.blue;
+    },
+
     _getShiftBarColor(shift, customShifts) {
         const PALETTE = [
             'bg-yellow-100 text-yellow-800 border-yellow-500',  // 0: 早番想定 (yellow)
