@@ -8251,7 +8251,7 @@ const app = {
                     <button onclick="app.changeView('settings')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50">
                         <i class="fa-solid fa-sliders mr-1"></i>店舗設定へ
                     </button>
-                    <button onclick="app.openPasswordChange()" class="bg-amber-50 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-100">
+                    <button onclick="app.openModal('changePasswordModal')" class="bg-amber-50 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-amber-100">
                         <i class="fa-solid fa-key mr-1"></i>パスワード変更
                     </button>
                 </div>
