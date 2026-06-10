@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260611-v3.7.161-shift-cell-multi',
+    APP_VERSION: '20260611-v3.7.162-pattern-field-fix',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5967,17 +5967,20 @@ const app = {
     _renderShiftPatternRow() {
         const row = document.getElementById('editShiftPatternRow');
         if (!row) return;
-        const customShifts = (this.state.config.custom_shifts || []).filter(p => p && p.start_time && p.end_time);
+        // v3.7.162: custom_shifts のフィールド名は { name, start, end } (start_time/end_time ではない)
+        const allShifts = this.state.config.custom_shifts || [];
+        const customShifts = allShifts.filter(p => p && (p.start || p.start_time) && (p.end || p.end_time));
         if (!customShifts.length) {
-            row.innerHTML = `<div class="text-xs text-gray-400">シフトパターン未設定 (時間を直接入力してください)</div>`;
+            row.innerHTML = `<div class="text-xs text-gray-400">シフトパターン未設定 (設定画面で追加するか、時間を直接入力)</div>`;
             return;
         }
         const btns = customShifts.map(p => {
-            const col = this._getShiftPrintColor({ start_time: p.start_time, end_time: p.end_time }, customShifts);
-            const st = (p.start_time || '').slice(0,5);
-            const et = (p.end_time || '').slice(0,5);
+            const st = ((p.start || p.start_time) || '').slice(0,5);
+            const et = ((p.end || p.end_time) || '').slice(0,5);
             const brk = Number(p.break_minutes) || 60;
-            const name = this._sanitize(p.name || '');
+            // _getShiftPrintColor は内部で _getShiftBarColor を呼び、{start_time,end_time}を読む
+            const col = this._getShiftPrintColor({ start_time: st, end_time: et }, allShifts);
+            const name = this._sanitize(p.name || `${st}-${et}`);
             return `<button type="button"
                 onclick="app._applyShiftPattern('${st}','${et}',${brk})"
                 style="background:${col.bg}; border:2px solid ${col.border};"
