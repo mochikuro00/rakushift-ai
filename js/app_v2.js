@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260611-v3.7.167-plan-change-no-pw',
+    APP_VERSION: '20260611-v3.7.168-plan-refresh',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4725,10 +4725,13 @@ const app = {
                                     <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium'}[config.stripe_plan] || 'Standard'}</p>
                                     <p class="text-white/80 text-sm mt-1">${{standard:'3,380円/月 - スタッフ10名まで', pro:'4,880円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限'}[config.stripe_plan] || '3,380円/月 - スタッフ10名まで'}</p>
                                 </div>
-                                <div class="text-right">
+                                <div class="text-right flex flex-col items-end gap-2">
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-sm font-bold backdrop-blur-sm">
                                         <i class="fa-solid fa-circle-check text-xs"></i> 有効
                                     </span>
+                                    <button onclick="app.refreshPlanInfo()" class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 hover:bg-white/25 rounded-full text-xs font-bold backdrop-blur-sm transition" title="運営側でプラン変更された場合に最新化">
+                                        <i class="fa-solid fa-rotate"></i> プラン情報を最新化
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -5978,6 +5981,46 @@ const app = {
         return `<input type="time" ${idAttr} value="${normalizedVal}" step="60" class="${finalClass}">`;
     },
 
+
+    // v3.7.168: プラン情報を最新化 (運営側のプラン変更を即時反映)
+    //   - check_subscription_status RPC を再呼び出しして state.config を更新
+    //   - 旧プランからの差分があれば トースト+UI再描画
+    async refreshPlanInfo() {
+        const contractId = this._getContractId();
+        if (!contractId) {
+            this.showToast('契約IDが特定できません。再ログインしてください', 'error');
+            return;
+        }
+        try {
+            this.showLoading(true);
+            const prevPlan = this.state.config?.stripe_plan || 'free';
+            const prevStatus = this.state.config?.subscription_status || '';
+            // 1) サブスクリプション状態を再取得
+            const sub = await API.rpc('check_subscription_status', { p_contract_id: contractId });
+            if (sub && sub.plan) {
+                this.state.config.stripe_plan = sub.plan;
+            }
+            if (sub && sub.status) {
+                this.state.config.subscription_status = sub.status;
+            }
+            // 2) config 全体も最新化 (other plan-related fields)
+            try { await this.loadData(); } catch (e) { console.warn('loadData on refresh failed', e); }
+            // 3) 再描画
+            this.renderCurrentView();
+            const newPlan = this.state.config?.stripe_plan || 'free';
+            const newStatus = this.state.config?.subscription_status || '';
+            if (newPlan !== prevPlan || newStatus !== prevStatus) {
+                this.showToast(`プラン情報を更新しました (${prevPlan} → ${newPlan})`, 'success');
+            } else {
+                this.showToast('プラン情報は既に最新です', 'info');
+            }
+        } catch (e) {
+            console.error('refreshPlanInfo error:', e);
+            this.showToast('プラン情報の取得に失敗しました: ' + e.message, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
 
     // v3.7.161: シフト編集モーダル内に「シフトパターンからクイック選択」UI を描画
     //   - custom_shifts (早番/中番/遅番...) のボタンをタップ → 開始/終了/休憩を一括反映

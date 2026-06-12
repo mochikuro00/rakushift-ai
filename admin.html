@@ -2145,7 +2145,7 @@
         try {
             const result = await rpc('update_tenant_metadata', { p_contract_id: cid, p_data: data });
             if (result && result.success) {
-                showToast(`"${nameTxt}" を ${PLAN_NAME_MAP[newPlan]} に変更しました`, 'success');
+                showToast(`"${nameTxt}" を ${PLAN_NAME_MAP[newPlan]} に変更しました (顧客側は再ログイン or 「プラン情報を最新化」ボタンで反映)`, 'success');
                 closeChangePlanModal();
                 // テナント一覧再読み込み
                 if (typeof loadTenants === 'function') await loadTenants();
