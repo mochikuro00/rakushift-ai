@@ -1332,10 +1332,11 @@
         document.getElementById('statSuspended').textContent = suspended;
         document.getElementById('statExpired').textContent = expired;
 
-        // MRR計算（Stripe決済済み + OEMプラン）
+        // MRR計算 (subscription_status=active なら本部手動プランも計上)
+        // v3.7.170: stripe_customer_id 必須を撤廃
         const prices = { standard: 3380, pro: 4880, premium: 9980, oem: 4000 };
         let mrr = 0;
-        allTenants.filter(t => t.subscription_status === 'active' && (t.stripe_customer_id || t.stripe_plan === 'oem')).forEach(t => {
+        allTenants.filter(t => t.subscription_status === 'active').forEach(t => {
             const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : null;
             if (plan && prices[plan]) mrr += prices[plan];
         });
@@ -1379,11 +1380,12 @@
             const changePlanBtn = ` <button onclick="openChangePlanModal('${escapeHtml(t.contract_id)}', '${escapeHtml(t.name||'')}', '${escapeHtml(t.stripe_plan||'free')}')" class="px-2.5 py-1 text-xs bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition font-medium border border-purple-200" title="プラン変更"><i class="fas fa-tags"></i></button>`;
 
             // プラン表示
+            // v3.7.170: stripe_customer_id 必須を撤廃。本部からの手動プラン変更でも
+            // stripe_plan の値をそのまま badge に反映する (Stripe 未連携でも表示)
             const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
             const planNameMap = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
-            const currentPlan = (t.stripe_plan === 'oem')
-                ? 'oem'
-                : ((t.stripe_customer_id && t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : 'free');
+            const rawPlan = (t.stripe_plan || 'free').toLowerCase();
+            const currentPlan = planNameMap[rawPlan] ? rawPlan : 'free';
             const planBadge = `<span class="badge ${planBadgeClass[currentPlan] || 'badge-neutral'}">${planNameMap[currentPlan]}</span>`;
 
             const createdAt = t.created_at ? formatDate(t.created_at) : '-';
