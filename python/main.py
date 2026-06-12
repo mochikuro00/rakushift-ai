@@ -416,7 +416,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.168"}
+        return {"status": "ok", "db": "alive", "version": "3.7.169"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1386,10 +1386,13 @@ async def create_checkout_session(request: Request, req: CheckoutRequest):
             cancel_url=cancel_url,
             metadata={
                 "contract_id": req.contract_id,
+                # v3.7.169: webhook で stripe_plan を更新するために plan を必ず metadata に含める
+                "plan": req.plan,
             },
             subscription_data={
                 "metadata": {
                     "contract_id": req.contract_id,
+                    "plan": req.plan,
                 }
             },
             allow_promotion_codes=True,
@@ -1578,18 +1581,39 @@ async def stripe_webhook(request: Request):
                         contract_id = configs[0].get("contract_id")
 
                 if contract_id:
+                    # v3.7.169: 既存テナントのプラン変更でも stripe_plan を更新する
+                    # 優先順位: 1) metadata.plan  2) subscription.items[0].price.id 逆引き
+                    new_plan = (metadata.get("plan") or "").strip().lower()
+                    if not new_plan and subscription_id:
+                        try:
+                            sub = stripe.Subscription.retrieve(subscription_id)
+                            items = (sub.get("items", {}) or {}).get("data", []) if isinstance(sub, dict) else []
+                            if not items and hasattr(sub, "items"):
+                                items = sub["items"]["data"]
+                            if items:
+                                price_id = items[0].get("price", {}).get("id", "") if isinstance(items[0], dict) else items[0]["price"]["id"]
+                                _load_platform_settings()
+                                for plan_key in ("standard", "pro", "premium"):
+                                    if _get_setting("stripe_price_{}".format(plan_key)) == price_id:
+                                        new_plan = plan_key
+                                        break
+                        except Exception as e:
+                            logger.warning("[Webhook] subscription retrieve failed: %s", e)
+                    update_body = {
+                        "stripe_customer_id": customer_id,
+                        "stripe_subscription_id": subscription_id,
+                        "subscription_status": "active",
+                        "payment_failed_at": None,
+                    }
+                    if new_plan in ("standard", "pro", "premium"):
+                        update_body["stripe_plan"] = new_plan
                     await supabase_query(
                         "config",
                         "contract_id=eq.{}".format(contract_id),
                         method="PATCH",
-                        body={
-                            "stripe_customer_id": customer_id,
-                            "stripe_subscription_id": subscription_id,
-                            "subscription_status": "active",
-                            "payment_failed_at": None,
-                        }
+                        body=update_body
                     )
-                    logger.info("[Webhook] Subscription activated for: {}".format(contract_id))
+                    logger.info("[Webhook] Subscription activated for: %s (plan=%s)", contract_id, new_plan or "unchanged")
                 else:
                     logger.warning("[Webhook] checkout.session.completed: contract_id unresolved (sub=%s cust=%s)", subscription_id, customer_id)
 
