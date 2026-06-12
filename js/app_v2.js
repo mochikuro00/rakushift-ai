@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260611-v3.7.164-fallback-edge-guard',
+    APP_VERSION: '20260611-v3.7.165-staff-duplicate',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4258,6 +4258,9 @@ const app = {
                                             <button onclick="app.editStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" title="編集">
                                                 <i class="fa-solid fa-pen-to-square"></i>
                                             </button>
+                                            <button onclick="app.duplicateStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100" title="複製 (同じ条件で新規作成)">
+                                                <i class="fa-regular fa-copy"></i>
+                                            </button>
                                             <button onclick="app.deleteStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="削除">
                                                 <i class="fa-solid fa-trash"></i>
                                             </button>
@@ -7003,6 +7006,33 @@ const app = {
         this.togglePrefHoursInputs();
         this.openModal('staffModal');
     },
+
+    // v3.7.165: スタッフ複製 (前保存内容を引き継いで新規作成)
+    //   - editStaff で全フィールドをロード後、staffId を空にして保存時に新規作成扱い
+    //   - 名前は「○○ のコピー」に置換 (重複防止 & 視認性)
+    //   - login_id / password / pin は スタッフモーダル内に項目がないため、別途
+    //     ログインID 設定画面で個別に発行する想定 (元スタッフの認証情報は複製しない)
+    duplicateStaff(id) {
+        const src = this.getStaff(id);
+        if (!src) { this.showToast('複製元のスタッフが見つかりません', 'error'); return; }
+        this.editStaff(id);
+        // 新規扱いに変換
+        document.getElementById('staffId').value = '';
+        const nameEl = document.getElementById('staffName');
+        if (nameEl) {
+            const base = (src.name || 'スタッフ').replace(/ のコピー(\d*)$/, '');
+            // 既存複製名と衝突したら通番付与
+            let candidate = `${base} のコピー`;
+            let n = 2;
+            const taken = new Set(this.state.staff.map(s => s.name));
+            while (taken.has(candidate)) { candidate = `${base} のコピー${n++}`; }
+            nameEl.value = candidate;
+            nameEl.focus();
+            nameEl.select();
+        }
+        this.showToast(`「${src.name}」の設定を複製しました。名前を変えて保存してください`, 'info');
+    },
+
     async deleteStaff(id) {
         // 管理者権限チェック
         if (!this.state.isAdmin) {
