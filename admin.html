@@ -857,6 +857,59 @@
                 </div>
             </div>
 
+            <!-- v3.7.166: プラン変更モーダル (本部管理者がテナントのプランを直接変更) -->
+            <div id="changePlanModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeChangePlanModal()">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div class="bg-gradient-to-r from-purple-600 to-indigo-700 px-5 py-4 text-white">
+                        <h2 class="text-lg font-bold"><i class="fas fa-tags mr-2"></i>テナント プラン変更</h2>
+                        <p class="text-xs opacity-90 mt-1">顧客側 Stripe フローと並行して、本部から直接プランを変更します</p>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <div class="p-3 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 leading-relaxed">
+                            <strong><i class="fas fa-info-circle mr-1"></i>注意</strong>
+                            <ul class="list-disc list-inside mt-1 space-y-0.5">
+                                <li>選択したプランに即時切替 (config.stripe_plan を更新)</li>
+                                <li>有料プラン選択時は subscription_status=active も同時設定</li>
+                                <li>Stripe 連動: 既存の Stripe 契約には影響しません (手動同期が必要)</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">対象テナント</label>
+                            <div class="px-3 py-2 bg-gray-100 rounded text-sm">
+                                <div class="font-bold" id="changePlanTargetName">-</div>
+                                <div class="font-mono text-[11px] text-gray-500" id="changePlanTargetContract">-</div>
+                                <div class="text-[11px] text-gray-600 mt-1">現在: <span id="changePlanCurrent" class="font-bold">-</span></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">変更後プラン <span class="text-red-500">*</span></label>
+                            <select id="changePlanSelect" class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 outline-none">
+                                <option value="standard">Standard</option>
+                                <option value="pro">Pro</option>
+                                <option value="premium">Premium</option>
+                                <option value="oem">OEM (代理店プラン・月額¥4,000)</option>
+                                <option value="free">Free (停止)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">運営管理者パスワード <span class="text-red-500">*</span></label>
+                            <input type="password" id="changePlanAdminPw" maxlength="128" autocomplete="current-password"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 outline-none"
+                                   placeholder="マスターパスワード">
+                        </div>
+                        <div id="changePlanError" class="hidden text-xs text-red-600"></div>
+                        <div class="flex gap-2 pt-2">
+                            <button onclick="closeChangePlanModal()" class="flex-1 px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition">
+                                キャンセル
+                            </button>
+                            <button onclick="submitChangePlan()" class="flex-1 px-4 py-2.5 text-sm font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition">
+                                <i class="fas fa-arrows-rotate mr-1"></i>変更する
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- v3.7.136/137: PIN 初期化モーダル (背景クリックでも closeResetPinModal を呼ぶ) -->
             <div id="resetPinModal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="if(event.target===this) closeResetPinModal()">
                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -1327,6 +1380,9 @@
             // v3.7.136: PIN 初期化ボタン (テナントの PIN 忘れ対応、テナント次回ログイン時に再設定)
             const resetPinBtn = ` <button onclick="openResetPinModal('${escapeHtml(t.contract_id)}', '${escapeHtml(t.name||'')}')" class="px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition font-medium border border-amber-200" title="このテナントの PIN を初期化 (次回ログイン時に再設定)"><i class="fas fa-key"></i></button>`;
 
+            // v3.7.166: プラン変更ボタン (本部から直接プランを変更、顧客側 Stripe フローと並行)
+            const changePlanBtn = ` <button onclick="openChangePlanModal('${escapeHtml(t.contract_id)}', '${escapeHtml(t.name||'')}', '${escapeHtml(t.stripe_plan||'free')}')" class="px-2.5 py-1 text-xs bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition font-medium border border-purple-200" title="プラン変更"><i class="fas fa-tags"></i></button>`;
+
             // プラン表示
             const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
             const planNameMap = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
@@ -1353,7 +1409,7 @@
                     <td class="text-center"><span class="text-sm font-medium text-gray-700">${t.staff_count || 0}</span></td>
                     <td class="text-left text-xs text-gray-500">${createdAt}</td>
                     <td class="text-center whitespace-nowrap">
-                        ${viewBtn}${resetPinBtn}${actionBtn}${deleteBtn}
+                        ${viewBtn}${resetPinBtn}${changePlanBtn}${actionBtn}${deleteBtn}
                     </td>
                 </tr>
             `;
@@ -2039,6 +2095,87 @@
             // v3.7.137: 例外時もパスワードをクリア
             pw = '';
             if (pwEl) pwEl.value = '';
+            showErr('通信エラーが発生しました。しばらくしてから再試行してください');
+        }
+    }
+
+    // ============================================================
+    // v3.7.166: プラン変更 (本部管理者 → テナント)
+    //   既存 update_tenant_metadata RPC を使用 (stripe_plan 更新対応済み)
+    //   顧客側 Stripe アップグレードフローはそのまま並行運用
+    // ============================================================
+    const PLAN_NAME_MAP = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: 'Free' };
+
+    function openChangePlanModal(contractId, name, currentPlan) {
+        if (!contractId) return;
+        const modal = document.getElementById('changePlanModal');
+        modal.dataset.contractId = contractId;
+        const nameEl = document.getElementById('changePlanTargetName');
+        const contractEl = document.getElementById('changePlanTargetContract');
+        const currentEl = document.getElementById('changePlanCurrent');
+        const selectEl = document.getElementById('changePlanSelect');
+        const pwEl = document.getElementById('changePlanAdminPw');
+        const errEl = document.getElementById('changePlanError');
+        if (nameEl) nameEl.textContent = name || '(名称なし)';
+        if (contractEl) contractEl.textContent = contractId;
+        if (currentEl) currentEl.textContent = PLAN_NAME_MAP[currentPlan] || currentPlan || 'Free';
+        if (selectEl) selectEl.value = currentPlan && PLAN_NAME_MAP[currentPlan] ? currentPlan : 'standard';
+        if (pwEl) pwEl.value = '';
+        if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
+        modal.classList.remove('hidden');
+        setTimeout(() => selectEl?.focus(), 100);
+    }
+    function closeChangePlanModal() {
+        const modal = document.getElementById('changePlanModal');
+        modal.classList.add('hidden');
+        const pwEl = document.getElementById('changePlanAdminPw');
+        if (pwEl) pwEl.value = '';
+        delete modal.dataset.contractId;
+    }
+    async function submitChangePlan() {
+        const modal = document.getElementById('changePlanModal');
+        const cid = modal?.dataset.contractId;
+        const newPlan = document.getElementById('changePlanSelect')?.value || '';
+        const pwEl = document.getElementById('changePlanAdminPw');
+        let pw = pwEl?.value || '';
+        const errEl = document.getElementById('changePlanError');
+        const showErr = (msg) => { if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); } };
+        if (!cid) { showErr('対象テナントが特定できません'); return; }
+        if (!newPlan || !PLAN_NAME_MAP[newPlan]) { showErr('プランを選択してください'); return; }
+        if (!pw || pw.length < 1) return showErr('管理者パスワードを入力してください');
+        if (pw.length > 128) return showErr('パスワードが長すぎます');
+        if (/[\x00\r\n]/.test(pw)) return showErr('パスワードに不正な制御文字が含まれます');
+
+        // マスターパスワード照合 (resetPin と同じローカル簡易チェックを踏襲)
+        // 本来は server side で照合すべきだが、update_tenant_metadata は hq_admin
+        // セッション必須なので、ログイン状態が認可の主体。pw 入力は誤操作防止用ガード。
+        if (pw !== 'rakushift1234') {
+            return showErr('管理者パスワードが一致しません');
+        }
+        pw = ''; if (pwEl) pwEl.value = '';
+
+        const nameTxt = document.getElementById('changePlanTargetName')?.textContent || '?';
+        if (!confirm(`テナント "${nameTxt}" のプランを "${PLAN_NAME_MAP[newPlan]}" に変更します。よろしいですか?`)) return;
+
+        // 有料プラン → subscription_status = active、Free → cancelled
+        const data = { stripe_plan: newPlan };
+        if (newPlan === 'free') {
+            data.subscription_status = 'cancelled';
+        } else {
+            data.subscription_status = 'active';
+        }
+        try {
+            const result = await rpc('update_tenant_metadata', { p_contract_id: cid, p_data: data });
+            if (result && result.success) {
+                showToast(`"${nameTxt}" を ${PLAN_NAME_MAP[newPlan]} に変更しました`, 'success');
+                closeChangePlanModal();
+                // テナント一覧再読み込み
+                if (typeof loadTenants === 'function') await loadTenants();
+            } else {
+                showErr((result && result.message) || 'プラン変更に失敗しました');
+            }
+        } catch (e) {
+            console.error('Change plan error:', e);
             showErr('通信エラーが発生しました。しばらくしてから再試行してください');
         }
     }
