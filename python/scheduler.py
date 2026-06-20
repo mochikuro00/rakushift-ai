@@ -1846,18 +1846,20 @@ class ShiftScheduler:
 
                 # --- 開け閉め社員常駐 (管理者配置人数を主軸) ---
                 # 旧: 全時間帯で社員(月給+店長)1名以上を要求していた。
-                # 新: 「開け」=その日に使うパターンの最も早い開始、「締め」=最も遅い終了
-                #     で判断し、その開け/締めのパターンに 社員(月給+店長) を1名以上
-                #     配置する。管理者(店長/リーダー)が manager_count でパターンへ
-                #     配置されることで自然に満たされる設計 (= 管理者配置を主軸)。
+                # 新: 「管理者配置人数(manager_count>0)を設定したパターン」の時間帯で
+                #     開け/締めを判断する。開け=それらの最も早い開始、締め=最も遅い終了。
+                #     その時刻に 社員(月給+店長)が在席しているかで判断 (堅牢)。
+                #     manager_count を設定していなければ 社員常駐要件は課さない。
                 employee_ids = self._monthly_ids.union(self._manager_ids)
                 for d in self.dates:
                     day_type_d = self._get_day_type(d)
                     if day_type_d == "closed":
                         continue
-                    # その日に使われる (count>0) パターンを抽出
+                    # manager_count>0 かつ その日に使われる (count>0) パターンを抽出
                     active_pats = []
                     for pat in self.shift_patterns:
+                        if int(pat.get("manager_count") or 0) <= 0:
+                            continue
                         if day_type_d == "holiday":
                             pc = pat.get("count_holiday", pat.get("count"))
                         elif day_type_d == "weekend":
@@ -1872,8 +1874,8 @@ class ShiftScheduler:
                             active_pats.append((ps_min, pe_min))
                     if not active_pats:
                         continue
-                    open_min = min(a[0] for a in active_pats)        # 最も早い開始 = 開け時刻
-                    close_min = max(a[1] for a in active_pats)       # 最も遅い終了 = 締め時刻
+                    open_min = min(a[0] for a in active_pats)        # 管理者パターンの最早開始 = 開け
+                    close_min = max(a[1] for a in active_pats)       # 管理者パターンの最遅終了 = 締め
                     # 開け = 開店時刻のスロット / 締め = 閉店直前(終了-15分)のスロット
                     check_slots = {open_min, max(open_min, close_min - 15)}
                     for slot_min in check_slots:
