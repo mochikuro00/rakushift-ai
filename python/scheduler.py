@@ -1135,11 +1135,62 @@ class ShiftScheduler:
             result = self._solve_milp(force=use_force, tier=current_tier)
             if result:
                 logger.info("[Solve] Tier %d succeeded (force=%s)", current_tier, use_force)
-                return result
+                return self._enforce_force_rest_output(result)
             logger.info("[Fallback] Tier %d failed, trying lower tier...", current_tier)
 
         logger.info("[Fallback] All MILP tiers failed → Greedy")
-        return self._solve_greedy()
+        return self._enforce_force_rest_output(self._solve_greedy())
+
+    def _enforce_force_rest_output(self, shifts):
+        """翌日強制休みの最終ガード (絶対保証)。
+
+        どの経路 (MILP / 強行 force / 過剰配置補完 / グリーディ) で生成されても、
+        force_rest_next_day=ON のパターンに入った翌カレンダー日に同一スタッフの
+        シフトが残っていれば除去する。スタッフごとに日付順で走査し、連続夜勤も
+        正しく解消する (夜勤を残し、翌日側を落とす)。
+        """
+        if not shifts:
+            return shifts
+        fr_keys = set()
+        for pat in self.shift_patterns:
+            if pat.get("force_rest_next_day"):
+                pps = self._to_minutes(pat.get("start", "09:00"))
+                ppe = self._normalize_end_time(pps, self._to_minutes(pat.get("end", "18:00")))
+                if pps < ppe:
+                    fr_keys.add((pps, ppe))
+        if not fr_keys:
+            return shifts
+
+        def _is_fr(sh):
+            ps = self._to_minutes((sh.get("start_time") or "")[:5])
+            pe = self._normalize_end_time(ps, self._to_minutes((sh.get("end_time") or "")[:5]))
+            return (ps, pe) in fr_keys
+
+        by_staff = {}
+        for sh in shifts:
+            by_staff.setdefault(sh.get("staff_id"), []).append(sh)
+
+        kept = []
+        removed = 0
+        for sid, sh_list in by_staff.items():
+            sh_list.sort(key=lambda s: s.get("date") or "")
+            fr_dates = set()  # 実際に残した force_rest シフトの日付
+            for sh in sh_list:
+                d = sh.get("date")
+                if not d:
+                    kept.append(sh)
+                    continue
+                prev = (datetime.strptime(d, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+                if prev in fr_dates:
+                    # 前日に夜勤(force_rest)があるので この日は休み → 除去
+                    removed += 1
+                    continue
+                kept.append(sh)
+                if _is_fr(sh):
+                    fr_dates.add(d)
+        if removed:
+            logger.warning("[ForceRest] 最終ガードで翌日シフト %d 件を除去 (翌休厳守)", removed)
+        return kept if kept else None
 
     def _solve_milp(self, force=False, tier=3):
         try:
