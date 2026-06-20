@@ -202,6 +202,9 @@ class ShiftScheduler:
             [(p.get("name"), p["start"], p["end"],
               p.get("count_weekday"), p.get("count_weekend"),
               p.get("count_holiday")) for p in self.shift_patterns])
+        # 翌日強制休み診断: どのパターンに force_rest_next_day が立っているか
+        _fr = [p.get("name") for p in self.shift_patterns if p.get("force_rest_next_day")]
+        logger.info("force_rest_next_day patterns: %s (count=%d)", _fr, len(_fr))
         if not self.shift_patterns:
             op = self.config.get("opening_time", "09:00")
             cl = self.config.get("closing_time", "22:00")
