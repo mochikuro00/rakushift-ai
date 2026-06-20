@@ -187,6 +187,12 @@ class ShiftScheduler:
                 pat["manager_count"] = _mc if _mc > 0 else 0
             except (ValueError, TypeError):
                 pat["manager_count"] = 0
+            # 管理者配置 ON(人数指定)/OFF(ランダム=制約なし)。
+            # 後方互換: manager_enabled 未指定なら manager_count>0 を ON とみなす。
+            if "manager_enabled" in p:
+                pat["manager_enabled"] = bool(p.get("manager_enabled"))
+            else:
+                pat["manager_enabled"] = pat["manager_count"] > 0
             # v3.7.69: 曜日別必要人数 (v3.7.66 で追加された count_weekday/weekend/holiday
             # を初期化でコピーし忘れていた重大バグ修正)
             # 旧 count は count_weekday 不在時のフォールバック専用
@@ -1747,6 +1753,9 @@ class ShiftScheduler:
                         continue
                     day_type_d = self._get_day_type(d)
                     for pat in self.shift_patterns:
+                        # OFF (manager_enabled=False) は制約なし=ランダム配置
+                        if not pat.get("manager_enabled"):
+                            continue
                         mgr_need = int(pat.get("manager_count") or 0)
                         if mgr_need <= 0:
                             continue

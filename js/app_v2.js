@@ -4582,7 +4582,7 @@ const app = {
                                         <th class="p-2 sm:p-3 text-center text-blue-600" style="min-width:70px;">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-2 sm:p-3 text-center text-red-600" style="min-width:70px;">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-2 sm:p-3 text-center" style="min-width:64px;">翌休<br><span class="text-[9px] text-gray-400">夜勤連勤防止</span></th>
-                                        <th class="p-2 sm:p-3 text-center" style="min-width:64px;">管理者<br><span class="text-[9px] text-gray-400">配置人数</span></th>
+                                        <th class="p-2 sm:p-3 text-center" style="min-width:96px;">管理者<br><span class="text-[9px] text-gray-400">ON=人数/OFF=ﾗﾝﾀﾞﾑ</span></th>
                                         <th class="p-2 sm:p-3 text-right rounded-r-lg" style="min-width:50px;">操作</th>
                                     </tr>
                                 </thead>
@@ -4593,6 +4593,8 @@ const app = {
                                         const cwd = shift.count_weekday != null ? shift.count_weekday : (shift.count != null ? shift.count : 1);
                                         const cwe = shift.count_weekend != null ? shift.count_weekend : cwd;
                                         const chd = shift.count_holiday != null ? shift.count_holiday : cwe;
+                                        // 管理者配置 ON/OFF (後方互換: 未指定なら manager_count>0 を ON)
+                                        const mgrOn = shift.manager_enabled != null ? !!shift.manager_enabled : (Number(shift.manager_count) > 0);
                                         return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-1 sm:p-2">
@@ -4620,7 +4622,13 @@ const app = {
                                                 </button>
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" min="0" max="50" step="1" inputmode="numeric" title="このパターンに必要な管理者(店長/リーダー)の人数" class="setting-shift-mgr w-16 border-green-200 bg-green-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${shift.manager_count != null ? shift.manager_count : 0}">
+                                                <div class="flex items-center justify-center gap-1.5">
+                                                    <input type="hidden" class="setting-shift-mgr-on" value="${mgrOn ? '1' : '0'}">
+                                                    <button type="button" onclick="app.togglePatternMgr(this)" title="ON=管理者を指定人数配置 / OFF=ランダム(管理者の制約なし)" class="setting-shift-mgr-btn w-9 h-5 rounded-full relative transition shrink-0 ${mgrOn ? 'bg-green-500' : 'bg-gray-300'}">
+                                                        <span class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${mgrOn ? 'left-[18px]' : 'left-0.5'}"></span>
+                                                    </button>
+                                                    <input type="number" min="0" max="50" step="1" inputmode="numeric" title="このパターンに必要な管理者(店長/リーダー)の人数" class="setting-shift-mgr w-12 border-green-200 bg-green-50 rounded px-1.5 py-1 text-sm font-bold text-center ${mgrOn ? '' : 'opacity-40 bg-gray-100'}" value="${shift.manager_count != null ? shift.manager_count : 0}" ${mgrOn ? '' : 'disabled'}>
+                                                </div>
                                             </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
@@ -5196,7 +5204,7 @@ const app = {
         this.state.config = this.readSettingsFromDOM();
         // 新しい空行を追加
         if(!this.state.config.custom_shifts) this.state.config.custom_shifts = [];
-        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0 });
+        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0, manager_enabled: false });
         // 再描画
         this.renderSettings(document.getElementById('viewContainer'));
     },
@@ -5219,6 +5227,31 @@ const app = {
         this.state.config = this.readSettingsFromDOM();
     },
 
+    // 管理者配置 ON(人数指定)/OFF(ランダム) トグル。再描画せず DOM 上で切替える。
+    togglePatternMgr(btn) {
+        const cell = btn.parentElement;
+        const hidden = cell.querySelector('.setting-shift-mgr-on');
+        const numInput = cell.querySelector('.setting-shift-mgr');
+        if (!hidden) return;
+        const on = hidden.value !== '1';
+        hidden.value = on ? '1' : '0';
+        btn.classList.toggle('bg-green-500', on);
+        btn.classList.toggle('bg-gray-300', !on);
+        const knob = btn.querySelector('span');
+        if (knob) {
+            knob.classList.toggle('left-[18px]', on);
+            knob.classList.toggle('left-0.5', !on);
+        }
+        if (numInput) {
+            numInput.disabled = !on;
+            numInput.classList.toggle('opacity-40', !on);
+            numInput.classList.toggle('bg-gray-100', !on);
+            numInput.classList.toggle('bg-green-50', on);
+        }
+        // 保存忘れでも生成に反映されるよう in-memory config を即同期
+        this.state.config = this.readSettingsFromDOM();
+    },
+
     async deleteShiftPattern(index) {
         // v3.7.79: readSettingsFromDOM (v3.7.71 で追加されたバリデーション
         // フィルタにより空 name 行が除外される) を経由すると、未入力の新規
@@ -5234,6 +5267,7 @@ const app = {
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
+        const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
 
         const parseCount = (input) => {
             // v3.7.110: 0 も許容 (「この曜日はこのパターン使わない」を表現)
@@ -5257,6 +5291,7 @@ const app = {
                 count: cwd,
                 force_rest_next_day: shiftRests[i]?.value === '1',
                 manager_count: mgrCnt,
+                manager_enabled: shiftMgrOns[i]?.value === '1',
             });
         });
 
@@ -5363,6 +5398,7 @@ const app = {
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
+        const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
@@ -5387,6 +5423,7 @@ const app = {
             const chd = parseCount(shiftCountsHd[i]);
             const mgrRaw = Number(shiftMgrs[i]?.value);
             const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
+            const mgrOn = shiftMgrOns[i]?.value === '1';
             config.custom_shifts.push({
                 name,
                 start,
@@ -5397,6 +5434,7 @@ const app = {
                 count: cwd, // 旧互換
                 force_rest_next_day: shiftRests[i]?.value === '1',
                 manager_count: mgrCnt,
+                manager_enabled: mgrOn,
             });
         });
 
