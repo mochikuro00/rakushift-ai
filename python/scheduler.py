@@ -1844,52 +1844,9 @@ class ShiftScheduler:
                             prob += cnt_expr - so <= max_v
                             penalty += so * 500_000
 
-                # --- 開け閉め社員常駐 (管理者配置人数を主軸) ---
-                # 旧: 全時間帯で社員(月給+店長)1名以上を要求していた。
-                # 新: 「管理者配置人数(manager_count>0)を設定したパターン」の時間帯で
-                #     開け/締めを判断する。開け=それらの最も早い開始、締め=最も遅い終了。
-                #     その時刻に 社員(月給+店長)が在席しているかで判断 (堅牢)。
-                #     manager_count を設定していなければ 社員常駐要件は課さない。
-                employee_ids = self._monthly_ids.union(self._manager_ids)
-                for d in self.dates:
-                    day_type_d = self._get_day_type(d)
-                    if day_type_d == "closed":
-                        continue
-                    # manager_count>0 かつ その日に使われる (count>0) パターンを抽出
-                    active_pats = []
-                    for pat in self.shift_patterns:
-                        if int(pat.get("manager_count") or 0) <= 0:
-                            continue
-                        if day_type_d == "holiday":
-                            pc = pat.get("count_holiday", pat.get("count"))
-                        elif day_type_d == "weekend":
-                            pc = pat.get("count_weekend", pat.get("count"))
-                        else:
-                            pc = pat.get("count_weekday", pat.get("count"))
-                        if pc is None or pc <= 0:
-                            continue
-                        ps_min = self._to_minutes(pat["start"])
-                        pe_min = self._normalize_end_time(ps_min, self._to_minutes(pat["end"]))
-                        if ps_min < pe_min:
-                            active_pats.append((ps_min, pe_min))
-                    if not active_pats:
-                        continue
-                    open_min = min(a[0] for a in active_pats)        # 管理者パターンの最早開始 = 開け
-                    close_min = max(a[1] for a in active_pats)       # 管理者パターンの最遅終了 = 締め
-                    # 開け = 開店時刻のスロット / 締め = 閉店直前(終了-15分)のスロット
-                    check_slots = {open_min, max(open_min, close_min - 15)}
-                    for slot_min in check_slots:
-                        emp_vars = []
-                        for eid in employee_ids:
-                            for oi, opt in enumerate(staff_opts.get((eid, d), [])):
-                                if opt["start_min"] <= slot_min < opt["end_min"]:
-                                    emp_vars.append(x[(eid, d, oi)])
-                        if emp_vars:
-                            slack = pulp.LpVariable(
-                                "oc_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
-                            prob += pulp.lpSum(emp_vars) + slack >= 1
-                            penalty += slack * self.W.OPEN_CLOSE_NO_EMP
-                            tracked_slacks["open_close_under"].append((d, slot_min, slack))
+                # --- 開け閉め社員常駐 制約は廃止 (v3.7.179) ---
+                # 管理者の配置は シフトパターン別 manager_count 制約 (上記) のみで
+                # 制御する。全時間帯/開け閉めの社員常駐要件は課さない。
 
                 # --- v3.7.50: 遅番優先配置 (Tier 3 重要レベル 5M) ---
                 # 履歴:
