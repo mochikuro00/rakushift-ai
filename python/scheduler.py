@@ -323,8 +323,12 @@ class ShiftScheduler:
                         custom_mentor_ids.add(rid)
                     if (isinstance(level, (int, float)) and level >= 3) or color in ("purple", "red", "green"):
                         custom_employee_role_ids.add(rid)
-                # rookie 判定は is_manager に関係なく
-                if (isinstance(level, (int, float)) and level <= 1) or color == "yellow":
+                # v3.7.181: 新人(rookie)判定を厳格化。
+                #   旧: level<=1 を新人扱い → 役職の既定 level=1 のため全役職が新人に
+                #       なり、OJT制約が全スタッフへ誤適用 (メンター=管理者が日勤に張り付き
+                #       夜勤等に入れない副作用)。仕様コメント「新人は明示指定のみ」とも矛盾。
+                #   新: 明示的に色=yellow を付けた役職のみ新人。管理者(is_manager)は除外。
+                if color == "yellow" and is_manager_flag is not True:
                     custom_rookie_ids.add(rid)
         self._mentor_role_ids = custom_mentor_ids
         self._employee_role_ids = custom_employee_role_ids
