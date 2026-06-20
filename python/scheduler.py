@@ -2429,6 +2429,23 @@ class ShiftScheduler:
         # 3) 営業日のみのリスト
         op_dates = [d for d in self.dates if self._get_day_type(d) != "closed"]
 
+        # 翌日強制休み: force_rest パターンの時刻キー集合 (補完が翌休を破らないように)
+        fr_pat_keys = set()
+        for pat in self.shift_patterns:
+            if pat.get("force_rest_next_day"):
+                pps = self._to_minutes(pat.get("start", "09:00"))
+                ppe = self._normalize_end_time(pps, self._to_minutes(pat.get("end", "18:00")))
+                if pps < ppe:
+                    fr_pat_keys.add((pps, ppe))
+
+        def _shift_pair_min(sh):
+            ps = self._to_minutes((sh.get("start_time") or "")[:5])
+            pe = self._normalize_end_time(ps, self._to_minutes((sh.get("end_time") or "")[:5]))
+            return (ps, pe)
+
+        def _cal_shift(date_str, delta):
+            return (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=delta)).strftime("%Y-%m-%d")
+
         # v3.7.121: 不足日 (人員不足が大きい営業日) を計算して優先割当
         # ユーザー要望: 「過剰補完はまず不足部分を優先、余ったら従来通り別の所に」
         shortage_dates = self._compute_date_shortages(shifts)
@@ -2441,6 +2458,13 @@ class ShiftScheduler:
                 continue
             ng_set = self._get_staff_ng_dates(staff)
             already = by_staff.get(sid, set())
+
+            # このスタッフが force_rest パターンに入っている日付 (翌日は休みにすべき)
+            fr_dates = set()
+            if fr_pat_keys:
+                for sh in shifts:
+                    if sh.get("staff_id") == sid and _shift_pair_min(sh) in fr_pat_keys:
+                        fr_dates.add(sh.get("date"))
 
             # 候補日: 営業日 - NG - 既存出勤
             base_cands = [d for d in op_dates
@@ -2476,6 +2500,10 @@ class ShiftScheduler:
                     continue
                 if week_count.get(wk, 0) >= max_dw:
                     continue  # 週最大日数 超え
+
+                # 翌日強制休み R1: 前日が force_rest なら この日は休み (追加しない)
+                if fr_pat_keys and _cal_shift(d, -1) in fr_dates:
+                    continue
 
                 # v3.7.120: 連勤窓チェック (営業日ベース)
                 op_idx = self._operational_index.get(d)
@@ -2516,6 +2544,20 @@ class ShiftScheduler:
                 else:
                     continue
 
+                # 翌日強制休み R2: force_rest パターンを選ぶ場合、翌日が既に
+                # 勤務なら採用しない。可能なら非 force_rest の matched を優先。
+                is_fr_opt = (opt["start_min"], opt["end_min"]) in fr_pat_keys
+                if fr_pat_keys and is_fr_opt:
+                    next_worked = _cal_shift(d, 1) in already
+                    if next_worked:
+                        alt = [o for o in matched
+                               if (o["start_min"], o["end_min"]) not in fr_pat_keys]
+                        if alt:
+                            opt = random.choice(alt)
+                            is_fr_opt = False
+                        else:
+                            continue  # force_rest しか無く翌日勤務 → この日は追加しない
+
                 brk_mins = self._get_break_minutes(opt["hours"])
                 shifts.append({
                     "staff_id": sid,
@@ -2529,6 +2571,8 @@ class ShiftScheduler:
                 })
                 week_count[wk] = week_count.get(wk, 0) + 1
                 already.add(d)
+                if is_fr_opt:
+                    fr_dates.add(d)
                 picked += 1
                 added += 1
 
