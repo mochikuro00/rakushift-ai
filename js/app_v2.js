@@ -5218,6 +5218,9 @@ const app = {
             knob.classList.toggle('left-[18px]', on);
             knob.classList.toggle('left-0.5', !on);
         }
+        // 「設定を保存」を押し忘れてもシフト生成 (payload.config = state.config) に
+        // 反映されるよう、in-memory config を即同期する。
+        this.state.config = this.readSettingsFromDOM();
     },
 
     async deleteShiftPattern(index) {
