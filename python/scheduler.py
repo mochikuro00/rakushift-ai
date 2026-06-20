@@ -177,7 +177,9 @@ class ShiftScheduler:
                     p.get("name"), st, en)
                 continue
             pat = {
-                "start": st, "end": en, "name": p.get("name", "")
+                "start": st, "end": en, "name": p.get("name", ""),
+                # 翌日を強制休みにするパターン (夜勤の2連勤防止など)
+                "force_rest_next_day": bool(p.get("force_rest_next_day")),
             }
             # v3.7.69: 曜日別必要人数 (v3.7.66 で追加された count_weekday/weekend/holiday
             # を初期化でコピーし忘れていた重大バグ修正)
@@ -708,7 +710,7 @@ class ShiftScheduler:
         is_employee = staff.get("salary_type") == "monthly" or str(staff.get("role", "")).lower() in self._employee_role_ids
         day_type = self._get_day_type(date_str)
 
-        def _add_option(ps, pe, is_pref=False):
+        def _add_option(ps, pe, is_pref=False, force_rest=False):
             """オプションを追加するヘルパー（重複チェック含む）"""
             if ps >= pe:
                 return
@@ -724,17 +726,20 @@ class ShiftScheduler:
             key = (ps, pe)
             if key in seen:
                 # 既に存在するオプションだが、もしこれがprefならフラグを立て直す
-                if is_pref:
-                    for opt in options:
-                        if opt["start_min"] == ps and opt["end_min"] == pe:
+                for opt in options:
+                    if opt["start_min"] == ps and opt["end_min"] == pe:
+                        if is_pref:
                             opt["is_pref"] = True
+                        # 同一時間帯のパターンが1つでも翌休なら翌休扱い
+                        if force_rest:
+                            opt["force_rest"] = True
                 return
             seen.add(key)
             options.append({
                 "start": self._from_minutes(ps),
                 "end": self._from_minutes(pe),
                 "start_min": ps, "end_min": pe, "hours": hrs, "work_hours": work_hrs,
-                "is_pref": is_pref
+                "is_pref": is_pref, "force_rest": force_rest
             })
 
         for pat in patterns_to_use:
@@ -754,21 +759,22 @@ class ShiftScheduler:
                 continue
 
             is_pref = pat.get("name") == "pref"
+            force_rest = bool(pat.get("force_rest_next_day"))
             if work_hrs > max_hours and not force:
                 # パターンA: 開始固定で終了を短縮（従来通り）
                 needed_break = self._get_break_minutes(max_hours)
                 allowed_total_hours = max_hours + (needed_break / 60.0)
                 new_pe = ps + int(allowed_total_hours * 60)
                 if new_pe < pe:
-                    _add_option(ps, new_pe, is_pref)
+                    _add_option(ps, new_pe, is_pref, force_rest)
 
                 # パターンB: 終了固定で開始を遅くする（閉店時間カバー用）
                 new_ps = pe - int(allowed_total_hours * 60)
                 if new_ps > ps:
                     new_ps = max(new_ps, open_min)
-                    _add_option(new_ps, pe, is_pref)
+                    _add_option(new_ps, pe, is_pref, force_rest)
             else:
-                _add_option(ps, pe, is_pref)
+                _add_option(ps, pe, is_pref, force_rest)
             # -------------------------------------------------------------------
 
         # v3.7.61: 営業開始時刻の自動シフトオプション追加を撤回
@@ -1530,6 +1536,26 @@ class ShiftScheduler:
                                 interval = (opt2["start_min"] + day_gap_mins) - opt1["end_min"]
                                 if interval < 600:
                                     prob += x[(sid, d1, oi1)] + x[(sid, d2, oi2)] <= 1
+
+                # --- 翌日強制休み (夜勤の2連勤防止など) ---
+                # force_rest フラグ付きパターンに入った翌カレンダー日は、
+                # その日の全オプションを禁止 (= 完全休み) するハード制約。
+                for i in range(len(sorted_d) - 1):
+                    d1 = sorted_d[i]
+                    d2 = sorted_d[i + 1]
+                    # 翌カレンダー日のみ対象 (2日以上空けば自明に休み)
+                    d1_dt = datetime.strptime(d1, "%Y-%m-%d")
+                    d2_dt = datetime.strptime(d2, "%Y-%m-%d")
+                    if (d2_dt - d1_dt).days != 1:
+                        continue
+                    opts1 = staff_opts.get((sid, d1), [])
+                    opts2 = staff_opts.get((sid, d2), [])
+                    if not opts2:
+                        continue
+                    rest_ois = [oi for oi, o in enumerate(opts1) if o.get("force_rest")]
+                    for oi1 in rest_ois:
+                        for oi2 in range(len(opts2)):
+                            prob += x[(sid, d1, oi1)] + x[(sid, d2, oi2)] <= 1
 
             # ====================================================
             # TIER 2: カバレッジ制約 (ソフト制約)
@@ -2638,6 +2664,17 @@ class ShiftScheduler:
         weekly_hours = {}     # {staff_id: {week_key: hours}}
         consecutive = {}      # {staff_id: current_consecutive_days}
         last_work_date = {}   # {staff_id: last_date_str}
+        rest_block = {}       # {staff_id: set(blocked_dates)} 翌日強制休み
+
+        def _rest_blocked(sid, date_str):
+            return date_str in rest_block.get(sid, set())
+
+        def _apply_rest(sid, date_str, opt):
+            # force_rest オプションに入ったら翌カレンダー日を休みにする
+            if opt.get("force_rest"):
+                nxt = (datetime.strptime(date_str, "%Y-%m-%d")
+                       + timedelta(days=1)).strftime("%Y-%m-%d")
+                rest_block.setdefault(sid, set()).add(nxt)
 
         # v3.7.20: NG ペア制約は廃止済み (v3.7.19) のため、Greedy 側のセット構築も削除
 
@@ -2651,6 +2688,8 @@ class ShiftScheduler:
                 continue
             staff = self._staff_map.get(wsid)
             if not staff:
+                continue
+            if _rest_blocked(wsid, wd):
                 continue
             opts = self._build_shift_options(staff, wd, force=True)
             if not opts:
@@ -2690,6 +2729,7 @@ class ShiftScheduler:
                 "break_minutes": brk,
             })
             assigned_days.setdefault(wd, set()).add(wsid)
+            _apply_rest(wsid, wd, best_opt)
             dt = datetime.strptime(wd, "%Y-%m-%d")
             wk = "{}-W{}".format(dt.year, dt.isocalendar()[1])
             weekly_count.setdefault(wsid, {})
@@ -2722,6 +2762,8 @@ class ShiftScheduler:
                         continue
                     if d in self._get_staff_ng_dates(mgr):
                         continue
+                    if _rest_blocked(mid, d):
+                        continue
                     if self._greedy_check_limits(mid, wk, weekly_count, weekly_hours, consecutive, mgr):
                         continue
                     opts = self._build_shift_options(mgr, d, force=False)
@@ -2736,6 +2778,7 @@ class ShiftScheduler:
                         day_shifts.append(entry)
                         shifts.append(entry)
                         assigned.add(mid)
+                        _apply_rest(mid, d, opt)
                         self._greedy_update_counts(mid, wk, d,
                                                    weekly_count, weekly_hours,
                                                    consecutive, last_work_date,
@@ -2783,6 +2826,8 @@ class ShiftScheduler:
                     if sid in assigned:
                         continue
                     if d in self._get_staff_ng_dates(s):
+                        continue
+                    if _rest_blocked(sid, d):
                         continue
                     # v3.7.11: OJT メンター制約 — 旧版は「メンター同日在席」のみ
                     # チェックしていたが、時間帯が重ならない (例: メンター早番 / 新人遅番)
@@ -2850,6 +2895,7 @@ class ShiftScheduler:
                     day_shifts.append(entry)
                     shifts.append(entry)
                     assigned.add(best_s["id"])
+                    _apply_rest(best_s["id"], d, best_o)
                     self._greedy_update_counts(
                         best_s["id"], wk, d,
                         weekly_count, weekly_hours,
@@ -2886,6 +2932,8 @@ class ShiftScheduler:
                     if current >= min_dw:
                         break
                     if d in ng_set or self._get_day_type(d) == "closed":
+                        continue
+                    if _rest_blocked(sid, d):
                         continue
                     if any(sh["staff_id"] == sid and sh["date"] == d for sh in shifts):
                         continue
@@ -2968,6 +3016,7 @@ class ShiftScheduler:
                         "start_time": opt["start"], "end_time": opt["end"],
                         "break_minutes": brk,
                     })
+                    _apply_rest(sid, d, opt)
                     weekly_count.setdefault(sid, {})
                     weekly_count[sid][wk_key] = current + 1
                     current += 1

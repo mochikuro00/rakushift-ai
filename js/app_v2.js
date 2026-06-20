@@ -2659,9 +2659,14 @@ const app = {
                                 </label>
                                 <span class="text-gray-500" id="reqDelSelectedCount">0 件選択</span>
                             </div>
-                            <button type="button" onclick="app.deleteSelectedRequests()" class="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" id="batchDeleteBtn" disabled>
-                                <i class="fa-solid fa-trash"></i>選択を削除
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="app.deleteSelectedRequests()" class="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" id="batchDeleteBtn" disabled>
+                                    <i class="fa-solid fa-trash"></i>選択を削除
+                                </button>
+                                <button type="button" onclick="app.resetAllRequests()" title="この契約の希望シフト申請をすべて削除します" class="px-3 py-1.5 bg-white border border-red-600 text-red-700 rounded text-xs font-bold hover:bg-red-100 flex items-center gap-1">
+                                    <i class="fa-solid fa-rotate-left"></i>すべてリセット
+                                </button>
+                            </div>
                         </div>
                         ` : ''}
                         <!-- 検索 + フィルタ -->
@@ -3791,6 +3796,24 @@ const app = {
                         <h3 class="text-2xl font-bold text-indigo-600 mt-2">${stats.activeStaffCount} <span class="text-lg text-gray-500">名</span></h3>
                     </div>
                 </div>
+                ${(() => {
+                    const entries = Object.entries(stats.typeTotals || {}).sort((a, b) => b[1] - a[1]);
+                    if (entries.length === 0) return '';
+                    const isNight = (l) => /夜|深夜|ナイト|night/i.test(l);
+                    return `
+                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+                        <h3 class="font-bold text-gray-800 mb-1">出勤日数の内訳 (シフトタイプ別)</h3>
+                        <p class="text-xs text-gray-400 mb-4">店舗全体の延べ出勤日数を、登録シフトパターン名ごとに集計しています。</p>
+                        <div class="flex flex-wrap gap-3">
+                            ${entries.map(([label, n]) => `
+                                <div class="flex items-baseline gap-2 px-4 py-2 rounded-lg border ${isNight(label) ? 'bg-indigo-50 border-indigo-200' : 'bg-gray-50 border-gray-200'}">
+                                    <span class="text-sm font-bold ${isNight(label) ? 'text-indigo-700' : 'text-gray-700'}">${this._sanitize(label)}</span>
+                                    <span class="text-xl font-bold ${isNight(label) ? 'text-indigo-700' : 'text-gray-800'}">${n}</span>
+                                    <span class="text-xs text-gray-400">日</span>
+                                </div>`).join('')}
+                        </div>
+                    </div>`;
+                })()}
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">日次コスト推移</h3><div class="h-[200px] sm:h-[300px]"><canvas id="dailyCostChart"></canvas></div></div>
                     <div class="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200"><h3 class="font-bold text-gray-800 mb-4">スタッフ別コスト構成比</h3><div class="h-[200px] sm:h-[300px] flex justify-center"><canvas id="staffShareChart"></canvas></div></div>
@@ -3817,9 +3840,14 @@ const app = {
                                 const staffRec = (this.state.staff || []).find(st => st.id === s.id);
                                 const minMonth = staffRec ? Number(staffRec.min_days_month) || 0 : 0;
                                 const daysShort = minMonth > 0 && s.days < minMonth;
-                                const daysCell = minMonth > 0
+                                // 出勤日数内訳 (早番8/夜勤4 など)
+                                const typeEntries = Object.entries(s.types || {}).sort((a, b) => b[1] - a[1]);
+                                const typeBreakdown = typeEntries.length
+                                    ? `<div class="text-[11px] text-gray-400 mt-0.5">${typeEntries.map(([l, n]) => `${this._sanitize(l)} ${n}`).join(' / ')}</div>`
+                                    : '';
+                                const daysCell = (minMonth > 0
                                     ? `${s.days}日 <span class="${daysShort?'text-red-600 font-bold':'text-gray-400'} text-xs">/ 目標${minMonth}${daysShort?` (${minMonth-s.days}日不足)`:''}</span>`
-                                    : `${s.days}日`;
+                                    : `${s.days}日`) + typeBreakdown;
                                 const rowClass = (isOver || daysShort) ? 'bg-red-50' : 'hover:bg-gray-50';
                                 const textClass = isOver ? 'text-red-600 font-bold' : 'text-green-600';
                                 const icon = isOver ? '<i class="fa-solid fa-triangle-exclamation mr-1"></i>' : '<i class="fa-solid fa-check mr-1"></i>';
@@ -3841,12 +3869,35 @@ const app = {
         setTimeout(() => this.renderAnalyticsCharts(stats), 100);
     },
 
+    // 出勤シフトを「日勤/夜勤」等のタイプに分類 (出勤日数内訳用)。
+    //   1) 時間が一致する登録パターンがあればそのパターン名を採用
+    //   2) 無ければ 日跨ぎ/18時以降開始 を「夜勤」、それ以外を「日勤」
+    _classifyShiftType(shift, customShifts) {
+        const sStart = (shift.start_time || '').slice(0, 5);
+        const sEnd = (shift.end_time || '').slice(0, 5);
+        let matchedName = '';
+        (customShifts || []).forEach(p => {
+            if ((p.start || '').slice(0, 5) === sStart && (p.end || '').slice(0, 5) === sEnd) {
+                matchedName = (p.name || '').trim();
+            }
+        });
+        if (matchedName) return matchedName;
+        // 時刻ベースのフォールバック
+        const toMin = (t) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + m; };
+        const startMin = toMin(sStart);
+        let endMin = toMin(sEnd);
+        const crossesMidnight = endMin <= startMin;
+        const isNight = crossesMidnight || startMin >= 18 * 60;
+        return isNight ? '夜勤' : '日勤';
+    },
+
     calculateMonthlyAnalytics() {
         const year = this.state.currentDate.getFullYear();
         const month = this.state.currentDate.getMonth() + 1;
         const prefix = `${year}-${String(month).padStart(2, '0')}`;
         const monthShifts = this.state.shifts.filter(s => s.date.startsWith(prefix));
         const daysInMonth = new Date(year, month, 0).getDate();
+        const customShifts = this.state.config?.custom_shifts || [];
 
         let totalCost = 0, totalHours = 0;
         const dailyCosts = new Array(daysInMonth).fill(0);
@@ -3904,17 +3955,21 @@ const app = {
             const dayIndex = parseInt(shift.date.split('-')[2]) - 1;
             if (dayIndex >= 0 && dayIndex < dailyCosts.length) dailyCosts[dayIndex] += cost;
 
-            if (!staffMap[staff.id]) staffMap[staff.id] = { id: staff.id, name: staff.name, cost: 0, hours: 0, days: new Set() };
+            if (!staffMap[staff.id]) staffMap[staff.id] = { id: staff.id, name: staff.name, cost: 0, hours: 0, days: new Set(), typeDays: {} };
             staffMap[staff.id].cost += cost;
             staffMap[staff.id].hours += workHours;
             staffMap[staff.id].days.add(shift.date);
+            // 出勤日数内訳: タイプ別に「出勤した日」を集計 (同日複数シフトは1日)
+            const stype = this._classifyShiftType(shift, customShifts);
+            if (!staffMap[staff.id].typeDays[stype]) staffMap[staff.id].typeDays[stype] = new Set();
+            staffMap[staff.id].typeDays[stype].add(shift.date);
         });
 
         this.state.staff.forEach(s => {
             if (s.salary_type === 'monthly') {
                 const salary = s.monthly_salary || 0;
                 totalCost += salary;
-                if (!staffMap[s.id]) staffMap[s.id] = { id: s.id, name: s.name, cost: 0, hours: 0, days: new Set() };
+                if (!staffMap[s.id]) staffMap[s.id] = { id: s.id, name: s.name, cost: 0, hours: 0, days: new Set(), typeDays: {} };
                 staffMap[s.id].cost += salary;
                 // v3.6.3: 月給を日次コストに分散 (旧版は日次グラフから完全脱落していた)
                 if (daysInMonth > 0) {
@@ -3926,8 +3981,18 @@ const app = {
             }
         });
 
-        const staffStats = Object.values(staffMap).map(s => ({ ...s, days: s.days.size })).sort((a, b) => b.cost - a.cost);
-        return { totalCost, totalHours, daysCount: daysInMonth, activeStaffCount: Object.keys(staffMap).length, dailyCosts, dailyLabels, staffStats };
+        // 出勤日数内訳: Set → 件数へ変換 + 店舗全体の合算
+        const typeTotals = {};
+        const staffStats = Object.values(staffMap).map(s => {
+            const types = {};
+            Object.keys(s.typeDays || {}).forEach(label => {
+                const n = s.typeDays[label].size;
+                types[label] = n;
+                typeTotals[label] = (typeTotals[label] || 0) + n;
+            });
+            return { ...s, days: s.days.size, types };
+        }).sort((a, b) => b.cost - a.cost);
+        return { totalCost, totalHours, daysCount: daysInMonth, activeStaffCount: Object.keys(staffMap).length, dailyCosts, dailyLabels, staffStats, typeTotals };
     },
 
     renderAnalyticsCharts(stats) {
@@ -4516,6 +4581,7 @@ const app = {
                                         <th class="p-2 sm:p-3 text-center" style="min-width:70px;">平日<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-2 sm:p-3 text-center text-blue-600" style="min-width:70px;">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-2 sm:p-3 text-center text-red-600" style="min-width:70px;">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-2 sm:p-3 text-center" style="min-width:64px;">翌休<br><span class="text-[9px] text-gray-400">夜勤連勤防止</span></th>
                                         <th class="p-2 sm:p-3 text-right rounded-r-lg" style="min-width:50px;">操作</th>
                                     </tr>
                                 </thead>
@@ -4546,6 +4612,12 @@ const app = {
                                             <td class="p-1 sm:p-2 text-center">
                                                 <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
                                             </td>
+                                            <td class="p-1 sm:p-2 text-center">
+                                                <input type="hidden" class="setting-shift-rest" value="${shift.force_rest_next_day ? '1' : '0'}">
+                                                <button type="button" onclick="app.togglePatternRest(this)" title="このパターンに入った翌日を自動的に休みにします (夜勤の2連勤防止)" class="setting-shift-rest-btn w-10 h-6 rounded-full relative transition ${shift.force_rest_next_day ? 'bg-indigo-500' : 'bg-gray-300'}">
+                                                    <span class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${shift.force_rest_next_day ? 'left-[18px]' : 'left-0.5'}"></span>
+                                                </button>
+                                            </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
                                                     <i class="fa-solid fa-trash"></i>
@@ -4554,7 +4626,7 @@ const app = {
                                         </tr>
                                         `;
                                     }).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="7" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="8" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
@@ -5128,9 +5200,24 @@ const app = {
         this.state.config = this.readSettingsFromDOM();
         // 新しい空行を追加
         if(!this.state.config.custom_shifts) this.state.config.custom_shifts = [];
-        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00' });
+        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00', force_rest_next_day: false });
         // 再描画
         this.renderSettings(document.getElementById('viewContainer'));
+    },
+
+    // 翌日強制休みトグル (夜勤の2連勤防止)。再描画せず DOM 上で状態を切替える。
+    togglePatternRest(btn) {
+        const hidden = btn.parentElement.querySelector('.setting-shift-rest');
+        if (!hidden) return;
+        const on = hidden.value !== '1';
+        hidden.value = on ? '1' : '0';
+        btn.classList.toggle('bg-indigo-500', on);
+        btn.classList.toggle('bg-gray-300', !on);
+        const knob = btn.querySelector('span');
+        if (knob) {
+            knob.classList.toggle('left-[18px]', on);
+            knob.classList.toggle('left-0.5', !on);
+        }
     },
 
     async deleteShiftPattern(index) {
@@ -5146,6 +5233,7 @@ const app = {
         const shiftCountsWd = document.querySelectorAll('.setting-shift-count-wd');
         const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
+        const shiftRests = document.querySelectorAll('.setting-shift-rest');
 
         const parseCount = (input) => {
             // v3.7.110: 0 も許容 (「この曜日はこのパターン使わない」を表現)
@@ -5165,6 +5253,7 @@ const app = {
                 count_weekend: cwe,
                 count_holiday: chd,
                 count: cwd,
+                force_rest_next_day: shiftRests[i]?.value === '1',
             });
         });
 
@@ -5269,6 +5358,7 @@ const app = {
         const shiftCountsWd = document.querySelectorAll('.setting-shift-count-wd');
         const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
+        const shiftRests = document.querySelectorAll('.setting-shift-rest');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
@@ -5299,6 +5389,7 @@ const app = {
                 count_weekend: cwe,
                 count_holiday: chd,
                 count: cwd, // 旧互換
+                force_rest_next_day: shiftRests[i]?.value === '1',
             });
         });
 
@@ -7362,6 +7453,40 @@ const app = {
             this.showToast(`${okCount}件 削除しました`, 'success');
         } else {
             this.showToast(`${okCount}件 削除 / ${failCount}件 失敗`, 'warning');
+        }
+        this.showLoading(false);
+    },
+
+    // 希望シフト申請をすべて削除 (全件リセット)
+    async resetAllRequests() {
+        const ids = (this.state.requests || []).map(r => r.id).filter(Boolean);
+        if (ids.length === 0) {
+            this.showToast('リセット対象の申請がありません', 'info');
+            return;
+        }
+        if (!confirm(`希望シフトの申請 ${ids.length}件 をすべて削除します。\n承認済みの申請は関連シフト/休み設定も元に戻ります。\nこの操作は取り消せません。よろしいですか？`)) return;
+        const cid = this._getContractId();
+        if (!cid) { this.showToast('contract_id 未取得', 'error'); return; }
+        this.showLoading(true);
+        let okCount = 0, failCount = 0;
+        for (const id of ids) {
+            try {
+                const r = await API.rpc('delete_request_by_contract', {
+                    p_contract_id: cid,
+                    p_request_id: id,
+                });
+                if (r && r.success) okCount++; else failCount++;
+            } catch (e) {
+                console.error('[resetAllRequests]', id, e);
+                failCount++;
+            }
+        }
+        await this.loadData();
+        this.renderRequests(document.getElementById('viewContainer'));
+        if (failCount === 0) {
+            this.showToast(`${okCount}件 をリセットしました`, 'success');
+        } else {
+            this.showToast(`${okCount}件 リセット / ${failCount}件 失敗`, 'warning');
         }
         this.showLoading(false);
     },
