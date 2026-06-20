@@ -1844,25 +1844,47 @@ class ShiftScheduler:
                             prob += cnt_expr - so <= max_v
                             penalty += so * 500_000
 
-                # --- 社員常駐制約 (v3.7.16: 管理者限定→「社員 (月給+店長) 1名以上」に変更) ---
-                # 全時間帯で月給制 or 店長のうち1名以上を出勤させる
+                # --- 開け閉め社員常駐 (管理者配置人数を主軸) ---
+                # 旧: 全時間帯で社員(月給+店長)1名以上を要求していた。
+                # 新: 「開け」=その日に使うパターンの最も早い開始、「締め」=最も遅い終了
+                #     で判断し、その開け/締めのパターンに 社員(月給+店長) を1名以上
+                #     配置する。管理者(店長/リーダー)が manager_count でパターンへ
+                #     配置されることで自然に満たされる設計 (= 管理者配置を主軸)。
+                employee_ids = self._monthly_ids.union(self._manager_ids)
                 for d in self.dates:
-                    if self._get_day_type(d) == "closed":
+                    day_type_d = self._get_day_type(d)
+                    if day_type_d == "closed":
                         continue
-                    slot_reqs = self._slot_reqs_cache.get(d) if hasattr(self, '_slot_reqs_cache') else None
-                    if slot_reqs is None:
-                        slot_reqs = self._build_slot_requirements(d)
-                    if not slot_reqs:
+                    # その日に使われる (count>0) パターンを抽出
+                    active_pats = []
+                    for pat in self.shift_patterns:
+                        if day_type_d == "holiday":
+                            pc = pat.get("count_holiday", pat.get("count"))
+                        elif day_type_d == "weekend":
+                            pc = pat.get("count_weekend", pat.get("count"))
+                        else:
+                            pc = pat.get("count_weekday", pat.get("count"))
+                        if pc is None or pc <= 0:
+                            continue
+                        ps_min = self._to_minutes(pat["start"])
+                        pe_min = self._normalize_end_time(ps_min, self._to_minutes(pat["end"]))
+                        if ps_min < pe_min:
+                            active_pats.append((ps_min, pe_min))
+                    if not active_pats:
                         continue
-                    employee_ids = self._monthly_ids.union(self._manager_ids)
-                    for slot_min in slot_reqs:
+                    open_min = min(a[0] for a in active_pats)        # 最も早い開始 = 開け時刻
+                    close_min = max(a[1] for a in active_pats)       # 最も遅い終了 = 締め時刻
+                    # 開け = 開店時刻のスロット / 締め = 閉店直前(終了-15分)のスロット
+                    check_slots = {open_min, max(open_min, close_min - 15)}
+                    for slot_min in check_slots:
                         emp_vars = []
                         for eid in employee_ids:
                             for oi, opt in enumerate(staff_opts.get((eid, d), [])):
                                 if opt["start_min"] <= slot_min < opt["end_min"]:
                                     emp_vars.append(x[(eid, d, oi)])
                         if emp_vars:
-                            slack = pulp.LpVariable("emp_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
+                            slack = pulp.LpVariable(
+                                "oc_{}_{}".format(d, slot_min), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(emp_vars) + slack >= 1
                             penalty += slack * self.W.OPEN_CLOSE_NO_EMP
                             tracked_slacks["open_close_under"].append((d, slot_min, slack))
