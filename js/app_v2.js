@@ -122,7 +122,7 @@ const app = {
             
             // 人員配置ルール（詳細）
             staff_req: {
-                min_manager: 1,
+                min_manager: 0,
                 min_weekday: 2,
                 min_weekend: 3,
                 min_holiday: 3
@@ -4582,6 +4582,7 @@ const app = {
                                         <th class="p-2 sm:p-3 text-center text-blue-600" style="min-width:70px;">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-2 sm:p-3 text-center text-red-600" style="min-width:70px;">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
                                         <th class="p-2 sm:p-3 text-center" style="min-width:64px;">翌休<br><span class="text-[9px] text-gray-400">夜勤連勤防止</span></th>
+                                        <th class="p-2 sm:p-3 text-center" style="min-width:64px;">管理者<br><span class="text-[9px] text-gray-400">配置人数</span></th>
                                         <th class="p-2 sm:p-3 text-right rounded-r-lg" style="min-width:50px;">操作</th>
                                     </tr>
                                 </thead>
@@ -4618,6 +4619,9 @@ const app = {
                                                     <span class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${shift.force_rest_next_day ? 'left-[18px]' : 'left-0.5'}"></span>
                                                 </button>
                                             </td>
+                                            <td class="p-1 sm:p-2 text-center">
+                                                <input type="number" min="0" max="50" step="1" inputmode="numeric" title="このパターンに必要な管理者(店長/リーダー)の人数" class="setting-shift-mgr w-16 border-green-200 bg-green-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${shift.manager_count != null ? shift.manager_count : 0}">
+                                            </td>
                                             <td class="p-2 text-right">
                                                 <button onclick="app.deleteShiftPattern(${index})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition">
                                                     <i class="fa-solid fa-trash"></i>
@@ -4626,7 +4630,7 @@ const app = {
                                         </tr>
                                         `;
                                     }).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="8" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="9" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
@@ -4641,15 +4645,7 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">「最低何人いればお店が回るか」を設定します。AIはこの人数を必ず確保しようとします。</p>
                     </div>
                     <div class="p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-                            <div>
-                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">管理者要件</h4>
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-500 mb-1">最低管理者数 (店長/リーダー)</label>
-                                    <input type="number" id="req_min_manager" min="0" max="50" step="1" class="w-full border-gray-300 rounded-lg px-3 py-2" value="${reqs.min_manager || 1}">
-                                    <p class="text-xs text-gray-400 mt-1">営業中に常に最低1名の管理者(店長/リーダー)がいるように制御します</p>
-                                </div>
-                            </div>
+                        <div class="grid grid-cols-1 gap-8 mb-6">
                             <div>
                                 <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">スタッフ総数要件</h4>
                                 <div class="space-y-4">
@@ -4946,7 +4942,7 @@ const app = {
                 `【警告】「${label}」は AI シフト生成ロジックで内部参照される基本役職です。\n\n` +
                 `削除すると以下の動作が破綻する可能性があります:\n` +
                 (role.id === 'manager'
-                    ? `・「営業中の最低管理者数」制約が機能しなくなる\n・メンター必須配置 (新人とのペア配置) が機能しなくなる\n`
+                    ? `・「シフトパターン別の管理者配置人数」制約が機能しなくなる\n・メンター必須配置 (新人とのペア配置) が機能しなくなる\n`
                     : `・新規スタッフの既定役職として参照される箇所が無効化\n`) +
                 `・既にこの役職が割り当てられているスタッフは「役職なし」扱いになる\n\n` +
                 `通常は「役職名」だけを変更すれば十分です (例: 店長 → MGR)。\n` +
@@ -5200,7 +5196,7 @@ const app = {
         this.state.config = this.readSettingsFromDOM();
         // 新しい空行を追加
         if(!this.state.config.custom_shifts) this.state.config.custom_shifts = [];
-        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00', force_rest_next_day: false });
+        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0 });
         // 再描画
         this.renderSettings(document.getElementById('viewContainer'));
     },
@@ -5237,6 +5233,7 @@ const app = {
         const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
+        const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
 
         const parseCount = (input) => {
             // v3.7.110: 0 も許容 (「この曜日はこのパターン使わない」を表現)
@@ -5248,6 +5245,8 @@ const app = {
             const cwd = parseCount(shiftCountsWd[i]);
             const cwe = parseCount(shiftCountsWe[i]);
             const chd = parseCount(shiftCountsHd[i]);
+            const mgrRaw = Number(shiftMgrs[i]?.value);
+            const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
             all.push({
                 name: (el.value || '').trim(),
                 start: (shiftStarts[i]?.value || '').trim(),
@@ -5257,6 +5256,7 @@ const app = {
                 count_holiday: chd,
                 count: cwd,
                 force_rest_next_day: shiftRests[i]?.value === '1',
+                manager_count: mgrCnt,
             });
         });
 
@@ -5362,6 +5362,7 @@ const app = {
         const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
         const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
+        const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
@@ -5384,6 +5385,8 @@ const app = {
             const cwd = parseCount(shiftCountsWd[i]);
             const cwe = parseCount(shiftCountsWe[i]);
             const chd = parseCount(shiftCountsHd[i]);
+            const mgrRaw = Number(shiftMgrs[i]?.value);
+            const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
             config.custom_shifts.push({
                 name,
                 start,
@@ -5393,6 +5396,7 @@ const app = {
                 count_holiday: chd,
                 count: cwd, // 旧互換
                 force_rest_next_day: shiftRests[i]?.value === '1',
+                manager_count: mgrCnt,
             });
         });
 
@@ -5403,7 +5407,8 @@ const app = {
             return Math.min(n, 50);  // 50名以上の要件は現実的でなく上限化
         };
         config.staff_req = {
-            min_manager: _clampStaff(document.getElementById('req_min_manager')?.value, 1),
+            // 管理者要件は廃止 (パターン別 manager_count に移行)。min_manager は 0 固定。
+            min_manager: 0,
             min_weekday: _clampStaff(document.getElementById('req_min_weekday')?.value, 2),
             min_weekend: _clampStaff(document.getElementById('req_min_weekend')?.value, 3),
             min_holiday: _clampStaff(document.getElementById('req_min_holiday')?.value, 3)
@@ -8438,7 +8443,7 @@ const app = {
         else if (dayOfWeek === 0 || dayOfWeek === 6) baseReq = sReq.min_weekend || 3;
         else baseReq = sReq.min_weekday || 2;
         
-        const reqManager = sReq.min_manager || 1;
+        const reqManager = sReq.min_manager || 0;
 
         // 全スロット初期化 (15分刻み)
         for (let t = startMins; t < effectiveEndMins; t += 15) {
@@ -9254,7 +9259,7 @@ const app = {
 
                     <div class="border-l-4 border-orange-400 pl-4 py-1">
                         <h4 class="font-bold text-orange-700 text-base mb-1">3. 人員配置要件（ベース）</h4>
-                        <p><strong>最低管理者数:</strong> 営業中に常に最低何人の管理者 (店長・リーダー) が必要かを設定します。<br>
+                        <p><strong>管理者の配置人数:</strong> シフトパターンごとに「管理者(店長・リーダー)を何人入れるか」を設定します（シフトパターン表の「管理者」列）。<br>
                         <strong>スタッフ総数要件:</strong> 平日・土曜・日祝の各曜日タイプごとに、1日あたりの最低配置人数を設定します。<br>
                         <span class="text-xs text-gray-500">※ 時間帯別の必要人数 (ランチ・ディナーピーク等) は <strong>シフトパターン</strong> で時間帯と人数を直接指定する方式に統一されました。</span></p>
                     </div>

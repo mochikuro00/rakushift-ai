@@ -181,6 +181,12 @@ class ShiftScheduler:
                 # 翌日を強制休みにするパターン (夜勤の2連勤防止など)
                 "force_rest_next_day": bool(p.get("force_rest_next_day")),
             }
+            # パターンごとの管理者(店長/リーダー)必要人数
+            try:
+                _mc = int(p.get("manager_count") or 0)
+                pat["manager_count"] = _mc if _mc > 0 else 0
+            except (ValueError, TypeError):
+                pat["manager_count"] = 0
             # v3.7.69: 曜日別必要人数 (v3.7.66 で追加された count_weekday/weekend/holiday
             # を初期化でコピーし忘れていた重大バグ修正)
             # 旧 count は count_weekday 不在時のフォールバック専用
@@ -228,7 +234,8 @@ class ShiftScheduler:
         self.min_weekday = int(sr.get("min_weekday", 2))
         self.min_weekend = int(sr.get("min_weekend", 3))
         self.min_holiday = int(sr.get("min_holiday", 3))
-        self.min_manager = int(sr.get("min_manager", 1))
+        # 管理者要件は廃止 (パターン別 manager_count に移行)。デフォルト 0。
+        self.min_manager = int(sr.get("min_manager", 0))
         self.time_staff_req = self.config.get("time_staff_req", [])
         # v3.7.91: 過剰配置を許容するか (false=必要人数ぴったり / true=緩和)
         self.allow_overstaffing = bool(self.config.get("allow_overstaffing", False))
@@ -1730,6 +1737,45 @@ class ShiftScheduler:
                             prob += pulp.lpSum(pat_workers) - pat_over <= pat_count
                             pat_over_weight = 1_000_000 if self.allow_overstaffing else 100_000_000
                             penalty += pat_over * pat_over_weight
+
+                # --- パターン別 管理者(店長/リーダー)必要人数 ---
+                # custom_shifts[].manager_count = そのパターンに必要な管理者数。
+                # 旧「最低管理者数(常時1名)」の代替。各営業日、当該パターンの
+                # 時間帯に入る管理者数 >= manager_count をソフトで満たす (10M)。
+                for d in self.dates:
+                    if self._get_day_type(d) == "closed":
+                        continue
+                    day_type_d = self._get_day_type(d)
+                    for pat in self.shift_patterns:
+                        mgr_need = int(pat.get("manager_count") or 0)
+                        if mgr_need <= 0:
+                            continue
+                        # そのパターンがその曜日タイプで使われているか (count>0)
+                        if day_type_d == "holiday":
+                            pc = pat.get("count_holiday", pat.get("count"))
+                        elif day_type_d == "weekend":
+                            pc = pat.get("count_weekend", pat.get("count"))
+                        else:
+                            pc = pat.get("count_weekday", pat.get("count"))
+                        if pc is None or pc <= 0:
+                            continue
+                        ps_min = self._to_minutes(pat["start"])
+                        pe_min = self._normalize_end_time(ps_min, self._to_minutes(pat["end"]))
+                        if ps_min >= pe_min:
+                            continue
+                        mgr_vars = []
+                        for s in self.staff_list:
+                            sid = s["id"]
+                            if sid not in self._manager_ids:
+                                continue
+                            for oi, opt in enumerate(staff_opts.get((sid, d), [])):
+                                if opt["start_min"] == ps_min and opt["end_min"] == pe_min:
+                                    mgr_vars.append(x[(sid, d, oi)])
+                        if mgr_vars:
+                            mgr_slack = pulp.LpVariable(
+                                "patmgr_{}_{}_{}".format(d, ps_min, pe_min), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(mgr_vars) + mgr_slack >= mgr_need
+                            penalty += mgr_slack * self.W.OPEN_CLOSE_NO_EMP
 
                 # --- v3.7.106: スタッフ別シフトパターン 月間 最低/最高 制約 (Tier 4) ---
                 # staff.pattern_target_counts = { "早番": {"min":2,"max":5}, ... }
