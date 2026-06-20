@@ -346,11 +346,10 @@ class ShiftScheduler:
             # v3.3: 動的セットで判定 (カスタム役職も含む)
             if role in self._mentor_role_ids:
                 self._mentor_ids.add(sid)
-            # v3.7.18: evaluation == "D" を rookie 判定から除外。
-            # 評価D の判定はベテランでも (例: 業務適性が低い等で) 起こりうるが、
-            # その人を新人扱いして OJT 制約を貼るのは実態と乖離。
-            # rookie は明示的に rookie ロールが割り当てられたスタッフのみとする。
-            if role in self._rookie_role_ids:
+            # v3.7.182: 新人(rookie)の定義は「評価ランク D のスタッフのみ」(ユーザー指定)。
+            # 役職レベル/色ベースの判定 (全員が新人になる誤検知) を廃止し、
+            # OJT制約(新人にメンターを重ねる)は評価Dの人だけに適用する。
+            if evaluation == "D":
                 self._rookie_ids.add(sid)
             if role in self._employee_role_ids:
                 self._manager_ids.add(sid)
