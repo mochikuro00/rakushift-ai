@@ -4755,7 +4755,7 @@ const app = {
                     </div>
                     <div class="p-6">
                         <label class="block text-xs font-bold text-gray-500 mb-2">お店のルール・連絡事項</label>
-                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[60px] sm:min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提出期限や注意事項などを入力してください...">${shopRulesText}</textarea>
+                        <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[60px] sm:min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提出期限や注意事項などを入力してください...">${this._sanitize(shopRulesText)}</textarea>
                         <p class="text-xs text-gray-400 mt-2">※ ここに入力した内容は、スタッフ画面の「お店のルール」に表示されます。</p>
                     </div>
                 </div>
@@ -9882,7 +9882,7 @@ const app = {
         const content = document.getElementById('shopRulesContent');
         const rulesText = config.shop_rules_text || this.state.defaultConfig.shop_rules_text;
         // 改行をリストアイテムに変換
-        const rulesList = rulesText.split('\n').filter(line => line.trim() !== '').map(line => `<li>${line}</li>`).join('');
+        const rulesList = rulesText.split('\n').filter(line => line.trim() !== '').map(line => `<li>${this._sanitize(line)}</li>`).join('');
         
         // 金銭情報を完全に削除し、業務ルールのみを表示
         content.innerHTML = `

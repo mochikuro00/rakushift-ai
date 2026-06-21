@@ -341,8 +341,11 @@ async def verify_session_org_id(session_id: Optional[str]) -> Optional[Dict[str,
     if not session_id or not SUPABASE_SERVICE_KEY or not SUPABASE_URL:
         return None
     try:
+        # v3.7.185: session_id は外部ヘッダー由来。生補間だと PostgREST クエリに
+        # `&` 等で別フィルタを注入できてしまうため、値を URL エンコードして渡す。
+        from urllib.parse import quote
         url = "{}/rest/v1/auth_sessions?id=eq.{}&select=organization_id,role,expires_at".format(
-            SUPABASE_URL, session_id)
+            SUPABASE_URL, quote(str(session_id), safe=""))
         client = _get_http_client()
         resp = await client.get(url, headers={
             "apikey": SUPABASE_SERVICE_KEY,
@@ -416,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.184"}
+        return {"status": "ok", "db": "alive", "version": "3.7.185"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -454,7 +457,8 @@ async def run_migration(request: Request):
     if not migration_token:
         return {"status": "error", "message": "MIGRATION_TOKEN not configured. Set it as an environment variable."}
 
-    if token != migration_token:
+    # v3.7.185: 定数時間比較 (タイミング攻撃対策)。SQL を直接実行する重要エンドポイント。
+    if not hmac.compare_digest(str(token), str(migration_token)):
         return {"status": "error", "message": "Invalid migration token"}
 
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
@@ -545,8 +549,12 @@ async def run_migration(request: Request):
 async def hq_get_shops(request: Request):
     """本部用: 全テナント店舗一覧を取得（サービスキーでRLSバイパス）"""
     # セッション認証（HQセッションのみ許可）
+    # v3.7.185: 旧版は session_id の "hq_" プレフィックスのみ確認しており、
+    # 任意の "hq_xxx" ヘッダーで全テナントの contract_id/メールが漏洩していた。
+    # auth_sessions を DB 検証し role=hq_admin のみ許可する。
     session_id = request.headers.get("x-session-id", "")
-    if not session_id or not session_id.startswith("hq_"):
+    session_info = await verify_session_org_id(session_id)
+    if not session_info or session_info.get("role") != "hq_admin":
         return JSONResponse(status_code=403, content={"error": "本部認証が必要です"})
 
     try:
@@ -1752,7 +1760,8 @@ async def admin_send_welcome_email(request: Request, req: SendWelcomeEmailReques
     # セキュリティ: 管理者トークンで認証
     admin_token = os.environ.get("ADMIN_API_TOKEN", "")
     request_token = request.headers.get("x-admin-token", "")
-    if not admin_token or request_token != admin_token:
+    # v3.7.185: 定数時間比較 (タイミング攻撃対策)
+    if not admin_token or not hmac.compare_digest(str(request_token), str(admin_token)):
         return JSONResponse(status_code=403, content={"error": "管理者認証が必要です"})
 
     _load_platform_settings()

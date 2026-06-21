@@ -946,15 +946,28 @@ class ShiftScheduler:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         js_dow = (dt.weekday() + 1) % 7
         for rule in self.time_staff_req:
+            if not isinstance(rule, dict):
+                continue
             pos = rule.get("position", "any")
             if pos not in ("hall", "kitchen"):
                 continue
-            rule_days = [int(d) for d in rule.get("days", [])]
+            # v3.7.185: 不正な days/count でクラッシュ→MILP tier 全滅を防ぐ
+            # (_build_slot_requirements と同等のガードに統一)
+            rule_days = []
+            for d in rule.get("days", []) or []:
+                try:
+                    rule_days.append(int(d))
+                except (ValueError, TypeError):
+                    logger.warning("[pos_req] invalid day '%s' skipped", d)
             if js_dow not in rule_days:
                 continue
             rs = self._to_minutes(rule.get("start", "00:00"))
             re_min = self._normalize_end_time(rs, self._to_minutes(rule.get("end", "24:00")))
-            rc = int(rule.get("count", 0))
+            try:
+                rc = int(rule.get("count", 0) or 0)
+            except (ValueError, TypeError):
+                logger.warning("[pos_req] invalid count '%s' skipped", rule.get("count"))
+                continue
             for t in range(op, cl, 15):
                 in_range = (rs <= t < re_min) if rs <= re_min else (t >= rs or t < re_min)
                 if in_range and t in pos_reqs:
@@ -1704,7 +1717,26 @@ class ShiftScheduler:
                             self._slot_reqs_cache = {}
                         self._slot_reqs_cache[d] = slot_reqs_for_day
                         max_slot_req = max(slot_reqs_for_day.values()) if slot_reqs_for_day else req_daily
-                        daily_upper = max(req_daily, max_slot_req)  # ±0を目指す（旧: +1）
+                        # v3.7.185: 非重複パターン (例 早番09-15 + 遅番15-22) では各スロットの
+                        # pattern_sum は最繁スロットしか見ないため、日次合計人数を過剰扱いし
+                        # 100M ペナルティで歪んでいた。当日に使うパターンの「人数合計」も
+                        # 上限候補に含めて、時間帯が重ならない構成でも過剰判定しないようにする。
+                        _dt_d = self._get_day_type(d)
+                        total_pat_count = 0
+                        for _pat in self.shift_patterns:
+                            if _dt_d == "holiday":
+                                _pc = _pat.get("count_holiday", _pat.get("count"))
+                            elif _dt_d == "weekend":
+                                _pc = _pat.get("count_weekend", _pat.get("count"))
+                            else:
+                                _pc = _pat.get("count_weekday", _pat.get("count"))
+                            try:
+                                _pc = int(_pc) if _pc is not None else 0
+                            except (ValueError, TypeError):
+                                _pc = 0
+                            if _pc > 0:
+                                total_pat_count += _pc
+                        daily_upper = max(req_daily, max_slot_req, total_pat_count)
                         daily_slack_over = pulp.LpVariable(
                             "daily_over_{}".format(d), 0, None, pulp.LpInteger)
                         prob += daily_sum - daily_slack_over <= daily_upper
