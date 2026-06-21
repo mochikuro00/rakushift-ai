@@ -1301,6 +1301,42 @@ class ShiftScheduler:
             #   か追跡困難)。重複は WARN ログで明示し、1件目を採用する。
             existing_fixed = 0
             seen_es_keys = set()
+            # 翌休との矛盾回避: 「夜勤(force_rest)＋その翌日勤務」が既存シフトとして
+            # 両方ハード固定されると force_rest 制約と衝突し Tier 全体が infeasible に
+            # なる。衝突側は固定をスキップ(最適化に委ね)、WARN を出す。
+            _fr_pat_keys = set()
+            for _pat in self.shift_patterns:
+                if _pat.get("force_rest_next_day"):
+                    _pps = self._to_minutes(_pat.get("start", "09:00"))
+                    _ppe = self._normalize_end_time(_pps, self._to_minutes(_pat.get("end", "18:00")))
+                    if _pps < _ppe:
+                        _fr_pat_keys.add((_pps, _ppe))
+            _es_dates, _es_fr_dates = {}, {}
+            for _es in self.existing_shifts:
+                _sid, _d = _es.get("staff_id"), _es.get("date")
+                if not _sid or not _d:
+                    continue
+                _es_dates.setdefault(_sid, set()).add(_d)
+                _s = self._to_minutes(_es.get("start_time") or "00:00")
+                _e = self._normalize_end_time(_s, self._to_minutes(_es.get("end_time") or "00:00"))
+                if (_s, _e) in _fr_pat_keys:
+                    _es_fr_dates.setdefault(_sid, set()).add(_d)
+
+            def _es_conflicts_fr(esid, ed):
+                if not _fr_pat_keys:
+                    return False
+                try:
+                    dt = datetime.strptime(ed, "%Y-%m-%d")
+                except ValueError:
+                    return False
+                prev = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
+                nxt = (dt + timedelta(days=1)).strftime("%Y-%m-%d")
+                if prev in _es_fr_dates.get(esid, ()):  # 前日が夜勤 → この日は休みのはず
+                    return True
+                if ed in _es_fr_dates.get(esid, ()) and nxt in _es_dates.get(esid, ()):
+                    return True  # この日が夜勤 かつ 翌日に既存シフト
+                return False
+
             for es in self.existing_shifts:
                 esid = es.get("staff_id")
                 ed = es.get("date")
@@ -1316,6 +1352,10 @@ class ShiftScheduler:
                 if ed not in self.dates:
                     continue
                 if (esid, ed) in fixed_assignments:
+                    continue
+                if _es_conflicts_fr(esid, ed):
+                    logger.warning(
+                        "[Existing] force_rest 矛盾のため固定をスキップ (staff=%s date=%s)", esid, ed)
                     continue
                 opts = staff_opts.get((esid, ed), [])
                 if not opts:
