@@ -1206,7 +1206,7 @@ class ShiftScheduler:
                     fr_dates.add(d)
         if removed:
             logger.warning("[ForceRest] 最終ガードで翌日シフト %d 件を除去 (翌休厳守)", removed)
-        return kept if kept else None
+        return kept
 
     def _solve_milp(self, force=False, tier=3):
         try:
@@ -1914,7 +1914,8 @@ class ShiftScheduler:
                                     if opt["start_min"] <= slot_min < opt["end_min"]:
                                         if sid in self._rookie_ids:
                                             rookie_vars.append(x[(sid, d, oi)])
-                                        if sid in self._mentor_ids:
+                                        # 新人本人はメンターにできない (自己メンター防止)
+                                        if sid in self._mentor_ids and sid not in self._rookie_ids:
                                             mentor_vars.append(x[(sid, d, oi)])
                             if rookie_vars and mentor_vars:
                                 slack = pulp.LpVariable(
