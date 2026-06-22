@@ -5297,7 +5297,12 @@ const app = {
 
         if (index < 0 || index >= all.length) return;
         all.splice(index, 1);
-        this.state.config.custom_shifts = all;
+        // v3.7.185: 他セクション(役職/時給/営業時間/定休日等)の未保存編集を失わないよう、
+        // 一旦 readSettingsFromDOM で全体を取り込み、custom_shifts だけ index 安全な
+        // all で上書きする (readSettingsFromDOM の空名フィルタによる index ズレを回避)。
+        const merged = this.readSettingsFromDOM();
+        merged.custom_shifts = all;
+        this.state.config = merged;
         this.renderSettings(document.getElementById('viewContainer'));
 
         // 保存時のみ readSettingsFromDOM と同じバリデーションを適用

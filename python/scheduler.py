@@ -2947,6 +2947,25 @@ class ShiftScheduler:
             weekly_hours.setdefault(wsid, {})
             weekly_hours[wsid][wk] = weekly_hours[wsid].get(wk, 0) + best_opt["hours"]
 
+        # v3.7.185: 承認希望の固定配置を consecutive/last_work_date にも反映。
+        # 旧版は weekly_count/hours のみ更新し連勤カウンタへ反映しておらず、
+        # 承認希望が連勤上限チェック (_greedy_check_limits) から漏れていた。
+        for _sid in {sh["staff_id"] for sh in shifts}:
+            _sdates = sorted({sh["date"] for sh in shifts if sh["staff_id"] == _sid})
+            if not _sdates:
+                continue
+            last_work_date[_sid] = _sdates[-1]
+            _sdset = set(_sdates)
+            _idx = self._operational_index.get(_sdates[-1])
+            if _idx is None:
+                consecutive[_sid] = 1
+            else:
+                _c, _j = 0, _idx
+                while _j >= 0 and self._operational_dates[_j] in _sdset:
+                    _c += 1
+                    _j -= 1
+                consecutive[_sid] = _c
+
         # 日付順にスタッフを配置
         for d in sorted(self.dates):
             if self._get_day_type(d) == "closed":
