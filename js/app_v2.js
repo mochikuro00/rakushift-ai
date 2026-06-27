@@ -4323,9 +4323,6 @@ const app = {
                                             <button onclick="app.editStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" title="編集">
                                                 <i class="fa-solid fa-pen-to-square"></i>
                                             </button>
-                                            <button onclick="app.duplicateStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100" title="複製 (同じ条件で新規作成)">
-                                                <i class="fa-regular fa-copy"></i>
-                                            </button>
                                             <button onclick="app.deleteStaff('${s.id}')" class="w-8 h-8 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="削除">
                                                 <i class="fa-solid fa-trash"></i>
                                             </button>
