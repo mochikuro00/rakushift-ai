@@ -4504,9 +4504,13 @@ const app = {
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
                             <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 24時間営業の場合は右のチェックを ON にしてください。</p>
                             ${(() => {
-                                const is24hWd = !!(this.state.config.is_24h?.weekday);
-                                const is24hWe = !!(this.state.config.is_24h?.weekend);
-                                const is24hHd = !!(this.state.config.is_24h?.holiday);
+                                // v3.7.187: is_24h は DB に保存されないため、保存済みの
+                                // opening_times (00:00〜23:45/24:00) からも 24h 状態を復元する。
+                                const _isFullDay = (ot) => !!ot && (ot.start || '').slice(0,5) === '00:00'
+                                    && ['23:45','24:00','00:00'].includes((ot.end || '').slice(0,5));
+                                const is24hWd = !!(this.state.config.is_24h?.weekday) || _isFullDay(times.weekday);
+                                const is24hWe = !!(this.state.config.is_24h?.weekend) || _isFullDay(times.weekend);
+                                const is24hHd = !!(this.state.config.is_24h?.holiday) || _isFullDay(times.holiday);
                                 const renderRow = (dt, label, colorClass, defaultStart, defaultEnd, is24h) => `
                                     <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
                                         <div class="md:col-span-3 font-bold ${colorClass}">${label}</div>
