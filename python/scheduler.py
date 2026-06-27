@@ -2579,7 +2579,14 @@ class ShiftScheduler:
              フィルタしながら追加
         """
         import random
-        random.seed()  # 毎回シード変更 (ランダム性確保)
+        # v3.7.190: 毎回 random.seed() で再シードすると、同一入力でも生成のたびに
+        # 結果が変わり「スマホとPCで違うシフトが出る」「組み直すたびに変わる」
+        # 原因になっていた。入力(対象日)から決定的なシードを作り、
+        # 同じ入力なら必ず同じ結果になるようにする (再現性確保)。
+        _seed = 0
+        for _d in self.dates:
+            _seed = (_seed + int(str(_d).replace("-", "") or 0)) % 2147483647
+        random.seed(_seed)
 
         if not shifts:
             return shifts
