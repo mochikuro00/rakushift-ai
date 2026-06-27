@@ -5060,10 +5060,18 @@ const app = {
     _toggle24h(dayType, enabled) {
         if (!this.state.config.is_24h) this.state.config.is_24h = {};
         this.state.config.is_24h[dayType] = enabled;
-        // チェック時は 00:00 〜 23:45 (営業時間 = 24h)
+        if (!this.state.config.opening_times) this.state.config.opening_times = {};
         if (enabled) {
-            if (!this.state.config.opening_times) this.state.config.opening_times = {};
+            // チェック時は 00:00 〜 23:45 (営業時間 = 24h)
             this.state.config.opening_times[dayType] = { start: '00:00', end: '23:45' };
+        } else {
+            // v3.7.189: 解除時は営業時間を通常値に戻す。
+            // (00:00-23:45 のまま残すと、保存値からの24h復元ロジックで
+            //  チェックが外れない不具合になるため)
+            const def = { weekday: { start: '09:00', end: '22:00' },
+                          weekend: { start: '10:00', end: '20:00' },
+                          holiday: { start: '10:00', end: '20:00' } };
+            this.state.config.opening_times[dayType] = def[dayType] || { start: '09:00', end: '22:00' };
         }
         this.renderSettings(document.getElementById('viewContainer'));
         this.showToast(enabled ? `${dayType} を24時間営業に設定しました` : `${dayType} の24時間設定を解除しました`, 'success');
