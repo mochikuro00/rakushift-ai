@@ -393,17 +393,38 @@ class ShiftScheduler:
         # NGデータキャッシュ (各呼び出しで再計算しないように)
         self._ng_cache = {}
         
-        # 名前からIDへのマッピング作成（相性制約用）
+        # 名前からIDへのマッピング作成（相性=必須ペア制約用）
+        # v3.7.188: 「○○ のコピー」等で先頭トークンが衝突すると、後勝ちで
+        # 別人(コピー)を指してしまい必須ペアの相手を取り違える問題を修正。
+        #   - フルネームは衝突したら曖昧扱いで除外
+        #   - 先頭トークンは「一意なときだけ」採用 (衝突したら採用しない)
         name_to_id = {}
+        _full_ambig = set()
         for s in self.staff_list:
             name = s.get("name", "").strip()
             sid = s.get("id")
-            if name:
-                name_to_id[name] = sid
-                if " " in name:
-                    name_to_id[name.split(" ")[0]] = sid
-                elif "　" in name:
-                    name_to_id[name.split("　")[0]] = sid
+            if not name:
+                continue
+            if name in name_to_id and name_to_id[name] != sid:
+                _full_ambig.add(name)
+            name_to_id[name] = sid
+        for a in _full_ambig:
+            name_to_id.pop(a, None)  # 同名フルネームが複数 → 解決不能なので除外
+        # 先頭トークン (姓など) は一意なものだけ補助キーに
+        _ft_map, _ft_collide = {}, set()
+        for s in self.staff_list:
+            name = s.get("name", "").strip()
+            sid = s.get("id")
+            if not name:
+                continue
+            ft = name.split(" ")[0].split("　")[0]
+            if ft and ft != name:
+                if ft in _ft_map and _ft_map[ft] != sid:
+                    _ft_collide.add(ft)
+                _ft_map[ft] = sid
+        for ft, sid in _ft_map.items():
+            if ft not in _ft_collide and ft not in name_to_id:
+                name_to_id[ft] = sid
 
         self._ng_pair_constraints = []
         self._req_pair_constraints = []
@@ -420,9 +441,13 @@ class ShiftScheduler:
             for target_name in [n.strip() for n in re.split(r'[,、\s　]+', req_pairs_str) if n.strip()]:
                 sid2 = name_to_id.get(target_name)
                 if not sid2:
-                    for n, _sid in name_to_id.items():
-                        if target_name in n or n in target_name:
-                            sid2 = _sid; break
+                    # 部分一致は「候補が一意のときだけ」採用 (取り違え防止)
+                    cands = {_sid for n, _sid in name_to_id.items()
+                             if target_name in n or n in target_name}
+                    if len(cands) == 1:
+                        sid2 = next(iter(cands))
+                    elif len(cands) > 1:
+                        logger.warning("[ReqPair] '%s' が複数スタッフに一致し曖昧なためスキップ", target_name)
                 if sid2 and sid1 != sid2:
                     self._req_pair_constraints.append((sid1, sid2))
 
