@@ -8093,6 +8093,17 @@ const app = {
                 existing_shifts: []
             };
 
+            // v3.7.191: 診断表示 — Android と PC で「版」と「入力」を見比べられるよう、
+            // 生成に使う前提条件を画面に出す。両端末でこの値が同じなら結果も必ず同じ。
+            try {
+                const _y = this.state.currentDate.getFullYear();
+                const _m = this.state.currentDate.getMonth() + 1;
+                this.showToast(
+                    `[v3.7.191] 生成入力 ${_y}年${_m}月 / ${dates.length}日分 / スタッフ${(this.state.staff||[]).length}名 / モード:${targetType || '(未指定)'}`,
+                    'info'
+                );
+            } catch (_) {}
+
             // empty_only モード: 期間内の既存シフトを「固定」として Python に渡し、
             // 空きスロットのみ最適化される。これがないとサーバはゼロから組み直すため
             // 「空きを埋めるをクリックすると人数が減る」現象が発生する。
