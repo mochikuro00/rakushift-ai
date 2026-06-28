@@ -3638,12 +3638,14 @@ const app = {
             // アクションボタン群 (管理者のみ)
             let actionBtns = '';
             if (this.state.isAdmin) {
+                // v3.7.192: ホバー専用だとタッチ端末で押せないため、スマホ(<sm)では
+                // 常時表示。タップしやすいよう w-7 h-7 に拡大。
                 actionBtns = `
-                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onclick="event.stopPropagation(); app.openCalendarNoteModal('${dateStr}')" class="text-gray-400 hover:text-yellow-500 w-5 h-5 flex items-center justify-center rounded hover:bg-yellow-50" title="メモ編集">
+                    <div class="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <button onclick="event.stopPropagation(); app.openCalendarNoteModal('${dateStr}')" class="text-gray-400 hover:text-yellow-500 w-7 h-7 flex items-center justify-center rounded hover:bg-yellow-50" title="メモ編集">
                             <i class="fa-regular fa-note-sticky"></i>
                         </button>
-                        <button onclick="event.stopPropagation(); app.openAddShift('${dateStr}')" class="text-gray-400 hover:text-blue-600 w-5 h-5 flex items-center justify-center rounded hover:bg-blue-50" title="シフト追加">
+                        <button onclick="event.stopPropagation(); app.openAddShift('${dateStr}')" class="text-gray-400 hover:text-blue-600 w-7 h-7 flex items-center justify-center rounded hover:bg-blue-50" title="シフト追加">
                             <i class="fa-solid fa-plus-circle"></i>
                         </button>
                     </div>

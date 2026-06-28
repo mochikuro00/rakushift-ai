@@ -133,6 +133,12 @@
             button {
                 min-width: 38px !important;
             }
+            /* v3.7.192: 翌休/管理者のトグルスイッチは小型ピル。共通の min-height/width で
+               潰れて見えるため除外し、本来の寸法を維持する */
+            button.setting-shift-rest-btn, button.setting-shift-mgr-btn {
+                min-height: 0 !important;
+                min-width: 0 !important;
+            }
             a[role='button'], a[onclick], footer a, nav a {
                 min-height: 36px !important;
                 display: inline-flex;
@@ -350,16 +356,16 @@
     <!-- ================= MODALS ================= -->
 
     <!-- Shop Rules Modal (Read Only) -->
-    <div id="shopRulesModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
-            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+    <div id="shopRulesModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onclick="if(event.target===this)app.closeModal('shopRulesModal')">
+        <div class="modal-content bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height:min(90vh,90dvh)">
+            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-book-open text-blue-500"></i> お店のルール</h3>
                 <button onclick="app.closeModal('shopRulesModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
-            <div class="p-6 space-y-6" id="shopRulesContent">
+            <div class="p-6 space-y-6 overflow-y-auto" id="shopRulesContent">
                 <!-- Content injected by JS -->
             </div>
-            <div class="p-5 bg-gray-50 border-t border-gray-100 text-center">
+            <div class="p-5 bg-gray-50 border-t border-gray-100 text-center shrink-0">
                 <button onclick="app.closeModal('shopRulesModal')" class="px-6 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-100 transition">閉じる</button>
             </div>
         </div>
@@ -979,16 +985,16 @@
 
 
     <!-- Edit Shift Modal -->
-    <div id="editShiftModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+    <div id="editShiftModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onclick="if(event.target===this)app.closeModal('editShiftModal')">
+        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height:min(90vh,90dvh)">
+            <div class="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
                 <div>
                     <h3 id="editShiftTitle" class="font-bold text-gray-800">シフト編集</h3>
                     <p id="editShiftDateDisplay" class="text-xs text-gray-500">YYYY-MM-DD</p>
                 </div>
                 <button onclick="app.closeModal('editShiftModal')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 overflow-y-auto">
                 <form id="shiftForm" onsubmit="return false;">
                 <input type="hidden" id="editShiftId">
                 <input type="hidden" id="editShiftDate">
@@ -1037,7 +1043,7 @@
                 </form>
             </div>
             <!-- v3.7.39: モバイルでフッターボタンが見切れる問題を修正 -->
-            <div class="p-3 sm:p-5 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0">
+            <div class="p-3 sm:p-5 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-0 shrink-0">
                 <button id="deleteShiftBtn" class="text-red-500 font-bold text-sm py-2 sm:py-0 hover:underline order-3 sm:order-1">削除</button>
                 <div class="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2">
                     <button onclick="app.closeModal('editShiftModal')" class="flex-1 sm:flex-none px-4 py-3 sm:py-2 text-sm font-bold text-gray-500 hover:bg-gray-200 rounded-lg transition">キャンセル</button>
