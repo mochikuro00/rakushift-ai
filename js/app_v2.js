@@ -4259,16 +4259,21 @@ const app = {
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 <tr>
-                                    <th class="p-4 whitespace-nowrap min-w-[200px]">名前</th>
-                                    <th class="p-4 whitespace-nowrap">役割</th>
-                                    <th class="p-4 whitespace-nowrap">評価</th>
-                                    <th class="p-4 whitespace-nowrap">給与形態</th>
-                                    <th class="p-4 whitespace-nowrap">勤務制約</th>
-                                    <th class="p-4 text-right whitespace-nowrap">操作</th>
+                                    ${(() => {
+                                        const so = this.state.staffSort || { key: 'role', dir: 'asc' };
+                                        const ind = (k) => so.key === k ? (so.dir === 'asc' ? ' ↑' : ' ↓') : '';
+                                        const sortable = (k, label, extra='') => `<th class="p-4 whitespace-nowrap cursor-pointer select-none hover:text-blue-600 ${extra}" onclick="app.setStaffSort('${k}')">${label}<span class="text-blue-500">${ind(k)}</span></th>`;
+                                        return sortable('name', '名前', 'min-w-[200px]')
+                                             + sortable('role', '役割')
+                                             + sortable('evaluation', '評価')
+                                             + sortable('salary', '給与形態')
+                                             + '<th class="p-4 whitespace-nowrap">勤務制約</th>'
+                                             + '<th class="p-4 text-right whitespace-nowrap">操作</th>';
+                                    })()}
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
-                                ${this.state.staff.map(s => {
+                                ${this._sortedStaff().map(s => {
                                     // 安全策: config.rolesが無い場合はデフォルトを使う
                                     const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
                                     const role = roleList.find(r => r.id === s.role) || { name: '未設定', color: 'gray' };
@@ -4329,13 +4334,49 @@ const app = {
                                         </div>
                                     </td>
                                 </tr>`}).join('')}
-                                ${this.state.staff.length === 0 ? '<tr><td colspan="5" class="p-12 text-center text-gray-400 flex flex-col items-center gap-2"><i class="fa-solid fa-users-slash text-3xl mb-2 text-gray-300"></i><span>スタッフが登録されていません</span></td></tr>' : ''}
+                                ${this.state.staff.length === 0 ? '<tr><td colspan="6" class="p-12 text-center text-gray-400 flex flex-col items-center gap-2"><i class="fa-solid fa-users-slash text-3xl mb-2 text-gray-300"></i><span>スタッフが登録されていません</span></td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         `;
+    },
+
+    // スタッフ一覧のソート (デフォルト: 役職順)。役職は config.roles の並び順 +
+    // 管理者を上位に。同順位は名前(かな)で安定ソート。
+    _sortedStaff() {
+        const staff = [...(this.state.staff || [])];
+        const sort = this.state.staffSort || { key: 'role', dir: 'asc' };
+        const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
+        const roleRank = {};
+        roleList.forEach((r, i) => { roleRank[r.id] = (r.is_manager ? 0 : 1) * 1000 + i; });
+        const evalRank = { A: 0, B: 1, C: 2, D: 3 };
+        const keyVal = (s) => {
+            switch (sort.key) {
+                case 'name': return (s.name || '');
+                case 'evaluation': return evalRank[s.evaluation] != null ? evalRank[s.evaluation] : 99;
+                case 'salary': return s.salary_type === 'monthly' ? 0 : 1;
+                case 'role':
+                default: return roleRank[s.role] != null ? roleRank[s.role] : 9999;
+            }
+        };
+        staff.sort((a, b) => {
+            const va = keyVal(a), vb = keyVal(b);
+            let c = (typeof va === 'string') ? va.localeCompare(vb, 'ja') : (va - vb);
+            if (c === 0) c = (a.name || '').localeCompare(b.name || '', 'ja');  // 安定タイブレーク
+            return sort.dir === 'desc' ? -c : c;
+        });
+        return staff;
+    },
+
+    setStaffSort(key) {
+        const cur = this.state.staffSort || { key: 'role', dir: 'asc' };
+        // 同じ列を再クリックで昇順/降順トグル。別列なら昇順から。
+        this.state.staffSort = (cur.key === key)
+            ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+            : { key, dir: 'asc' };
+        this.renderStaffList(document.getElementById('viewContainer'));
     },
 
     // =================================================================
