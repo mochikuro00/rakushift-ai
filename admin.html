@@ -1669,9 +1669,11 @@
                 address: address,
                 referrer_code: referrerCode || null,
             };
-            // OEMプランは手動で stripe_plan + active 状態を設定
-            if (plan === 'oem') {
-                metadata.stripe_plan = 'oem';
+            // 選択したプランを反映。旧版は OEM のときだけ設定しており、Pro/Premium を
+            // 選んでも送られず create_tenant の既定 (standard) のままになっていた。
+            // free 以外は選択プランを明示設定し、即時 active にする (本部による発行)。
+            if (plan && plan !== 'free') {
+                metadata.stripe_plan = plan;
                 metadata.subscription_status = 'active';
             }
             const metaResult = await rpc('update_tenant_metadata', {
