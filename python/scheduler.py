@@ -2400,7 +2400,16 @@ class ShiftScheduler:
             # MILP 規模をログ出力 (運用監視・スケーラビリティ判断用)
             logger.info("[MILP] tier=%d vars=%d constraints=%d timeLimit=%ds",
                         tier, len(x), len(prob.constraints), tier_time_limits.get(tier, 60))
-            solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=tier_time_limits.get(tier, 60))
+            # v3.7.191: CBC を決定化。同点の最適解が複数あるとき、CBC は内部乱数で
+            # 毎回違う解を返すため「スマホとPCで違うシフト」「組み直すたび変わる」の
+            # 原因になっていた。固定乱数シード + 単一スレッドで、同一入力なら必ず
+            # 同一解を返すようにする。
+            solver = pulp.PULP_CBC_CMD(
+                msg=0,
+                timeLimit=tier_time_limits.get(tier, 60),
+                threads=1,
+                options=["-randomCbcSeed", "42", "-randomSeed", "42"],
+            )
             prob.solve(solver)
 
             status = pulp.LpStatus[prob.status]
@@ -2578,16 +2587,9 @@ class ShiftScheduler:
           4. NG曜日 / 既存シフトと重複 / max_days_month を超えないよう
              フィルタしながら追加
         """
-        import random
-        # v3.7.190: 毎回 random.seed() で再シードすると、同一入力でも生成のたびに
-        # 結果が変わり「スマホとPCで違うシフトが出る」「組み直すたびに変わる」
-        # 原因になっていた。入力(対象日)から決定的なシードを作り、
-        # 同じ入力なら必ず同じ結果になるようにする (再現性確保)。
-        _seed = 0
-        for _d in self.dates:
-            _seed = (_seed + int(str(_d).replace("-", "") or 0)) % 2147483647
-        random.seed(_seed)
-
+        # v3.7.191: 補完処理から乱数を完全排除し、決定的な並び順(日付順/時刻順)で
+        # 配置する。これにより同一入力なら必ず同一結果になり、「スマホとPCで違う
+        # シフト」「組み直すたびに変わる」を解消する。
         if not shifts:
             return shifts
 
@@ -2667,7 +2669,7 @@ class ShiftScheduler:
             # v3.7.121: 不足日を優先、それ以外はランダム
             priority = [d for d, _ in shortage_dates if d in base_cands]
             others = [d for d in base_cands if d not in shortage_date_set]
-            random.shuffle(others)
+            others.sort()  # v3.7.191: 決定化 (random.shuffle を廃止し日付順に固定)
             candidates = priority + others
 
             # 週最大日数も尊重
@@ -2732,7 +2734,8 @@ class ShiftScheduler:
                 matched = [o for o in opts
                            if (o["start_min"], o["end_min"]) in pat_min_set]
                 if matched:
-                    opt = random.choice(matched)
+                    # v3.7.191: 決定化 (random.choice 廃止。時刻順で先頭を選ぶ)
+                    opt = sorted(matched, key=lambda o: (o["start_min"], o["end_min"]))[0]
                 elif opts:
                     # パターン一致が無ければスキップ (分割版を使わない)
                     continue
@@ -2748,7 +2751,7 @@ class ShiftScheduler:
                         alt = [o for o in matched
                                if (o["start_min"], o["end_min"]) not in fr_pat_keys]
                         if alt:
-                            opt = random.choice(alt)
+                            opt = sorted(alt, key=lambda o: (o["start_min"], o["end_min"]))[0]
                             is_fr_opt = False
                         else:
                             continue  # force_rest しか無く翌日勤務 → この日は追加しない
