@@ -4515,6 +4515,7 @@ const app = {
                                         <th class="p-3">識別ID</th>
                                         <th class="p-3">バッジカラー</th>
                                         <th class="p-3 text-center">管理者<br><span class="text-[9px] text-gray-400">として認識</span></th>
+                                        <th class="p-3 text-center">社員<br><span class="text-[9px] text-gray-400">として認識</span></th>
                                         <th class="p-3 text-right rounded-r-lg">操作</th>
                                     </tr>
                                 </thead>
@@ -4524,6 +4525,9 @@ const app = {
                                         const inferred = (role.color === 'purple' || role.color === 'red' || role.color === 'green'
                                                        || role.id === 'manager' || role.id === 'sub_manager' || role.id === 'employee');
                                         const isMgr = role.is_manager != null ? !!role.is_manager : inferred;
+                                        // v3.7.196: 社員フラグ (管理者と独立)。管理者は自動的に社員。未設定は緑/青を社員と推定
+                                        const inferredEmp = isMgr || role.color === 'green' || role.color === 'blue';
+                                        const isEmp = role.is_employee != null ? !!role.is_employee : inferredEmp;
                                         return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-2">
@@ -4545,6 +4549,11 @@ const app = {
                                             <td class="p-2 text-center">
                                                 <label class="inline-flex items-center justify-center cursor-pointer" title="チェックを入れると、この役職のスタッフは「管理者最低人数」の対象になります">
                                                     <input type="checkbox" class="setting-role-is-manager w-5 h-5 accent-indigo-600" ${isMgr?'checked':''}>
+                                                </label>
+                                            </td>
+                                            <td class="p-2 text-center">
+                                                <label class="inline-flex items-center justify-center cursor-pointer" title="チェックを入れると、この役職のスタッフは「社員」として扱われます (給与形態が時給でも社員優先・希望時間尊重の対象になります)">
+                                                    <input type="checkbox" class="setting-role-is-employee w-5 h-5 accent-emerald-600" ${isEmp?'checked':''}>
                                                 </label>
                                             </td>
                                             <td class="p-2 text-right">
@@ -5009,7 +5018,7 @@ const app = {
         if(!this.state.config.roles) this.state.config.roles = [];
         // ユニークID生成
         const newId = 'role_' + Math.random().toString(36).substr(2, 5);
-        this.state.config.roles.push({ id: newId, name: '新規役職', color: 'gray', level: 1 });
+        this.state.config.roles.push({ id: newId, name: '新規役職', color: 'gray', level: 1, is_manager: false, is_employee: false });
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
@@ -5458,6 +5467,7 @@ const app = {
         const roleIds = document.querySelectorAll('.setting-role-id');
         const roleColors = document.querySelectorAll('.setting-role-color');
         const roleIsManagers = document.querySelectorAll('.setting-role-is-manager');
+        const roleIsEmployees = document.querySelectorAll('.setting-role-is-employee');
 
         const existingRoles = this.state.config.roles || [];
         config.roles = [];
@@ -5465,13 +5475,16 @@ const app = {
             if (el.value) {
                 const rId = roleIds[i].value;
                 const prev = existingRoles.find(r => r.id === rId);
+                const isMgr = roleIsManagers[i] ? !!roleIsManagers[i].checked : false;
                 config.roles.push({
                     id: rId,
                     name: el.value,
                     color: roleColors[i].value,
                     level: prev ? prev.level : 1,
                     // v3.7.81: 明示的な管理者フラグ
-                    is_manager: roleIsManagers[i] ? !!roleIsManagers[i].checked : false,
+                    is_manager: isMgr,
+                    // v3.7.196: 社員フラグ (管理者は自動的に社員)
+                    is_employee: isMgr || (roleIsEmployees[i] ? !!roleIsEmployees[i].checked : false),
                 });
             }
         });

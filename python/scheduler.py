@@ -285,6 +285,7 @@ class ShiftScheduler:
         self._rookie_ids = set()
         self._monthly_ids = set()
         self._manager_ids = set()
+        self._employee_ids = set()  # v3.7.196: 社員 (社員ロール ∪ 月給)。管理者とは独立
         self._eval_rank = {}
         self._staff_map = {}  # id -> staff dict
 
@@ -294,7 +295,8 @@ class ShiftScheduler:
         #       UI で「新規役職」追加した役職 (role_v6lei... 等) はメンター扱いされなかった。
         # 新版: config.roles から level >= 4 ならメンター、>= 3 なら社員/管理者扱い
         custom_mentor_ids = set(self.MENTOR_ROLES)  # default
-        custom_employee_role_ids = {"manager", "sub_manager", "employee"}  # default
+        custom_manager_role_ids = {"manager", "sub_manager"}  # v3.7.196: 管理者ロール (manager_count用)
+        custom_employee_role_ids = {"manager", "sub_manager", "employee"}  # 社員ロール
         custom_rookie_ids = set(self.ROOKIE_ROLES)
         roles_cfg = self.config.get("roles") or []
         if isinstance(roles_cfg, list):
@@ -305,24 +307,33 @@ class ShiftScheduler:
                 level = r.get("level")
                 color = str(r.get("color", "")).lower()
                 is_manager_flag = r.get("is_manager")
+                is_employee_flag = r.get("is_employee")  # v3.7.196: 社員フラグ (管理者と独立)
                 if not rid:
                     continue
                 # v3.7.81: 明示的な is_manager フラグが最優先
-                #   True  → メンター + employee に追加
-                #   False → デフォルト判定をスキップ
+                #   True  → メンター + 管理者 + 社員 に追加 (管理者は社員でもある)
+                #   False → 管理者から除外
                 #   None  → 旧データ互換で level/color から推定
                 if is_manager_flag is True:
                     custom_mentor_ids.add(rid)
+                    custom_manager_role_ids.add(rid)
                     custom_employee_role_ids.add(rid)
                 elif is_manager_flag is False:
-                    # 明示的に管理者でないと指定された場合は追加しない
-                    pass
+                    custom_manager_role_ids.discard(rid)
                 else:
                     # 旧データ互換: level/color から推定
                     if (isinstance(level, (int, float)) and level >= 4) or color in ("purple", "red"):
                         custom_mentor_ids.add(rid)
+                        custom_manager_role_ids.add(rid)
                     if (isinstance(level, (int, float)) and level >= 3) or color in ("purple", "red", "green"):
                         custom_employee_role_ids.add(rid)
+                # v3.7.196: 社員フラグ (管理者とは独立の概念)。
+                #   True  → 社員として扱う (月給=社員の換算に依存しない明示指定)
+                #   False → 管理者でない限り社員から除外
+                if is_employee_flag is True:
+                    custom_employee_role_ids.add(rid)
+                elif is_employee_flag is False and is_manager_flag is not True:
+                    custom_employee_role_ids.discard(rid)
                 # v3.7.181: 新人(rookie)判定を厳格化。
                 #   旧: level<=1 を新人扱い → 役職の既定 level=1 のため全役職が新人に
                 #       なり、OJT制約が全スタッフへ誤適用 (メンター=管理者が日勤に張り付き
@@ -331,10 +342,11 @@ class ShiftScheduler:
                 if color == "yellow" and is_manager_flag is not True:
                     custom_rookie_ids.add(rid)
         self._mentor_role_ids = custom_mentor_ids
+        self._manager_role_ids = custom_manager_role_ids  # v3.7.196
         self._employee_role_ids = custom_employee_role_ids
         self._rookie_role_ids = custom_rookie_ids
-        logger.info("[Role] mentor={}, employee={}, rookie={}".format(
-            self._mentor_role_ids, self._employee_role_ids, self._rookie_role_ids))
+        logger.info("[Role] mentor={}, manager={}, employee={}, rookie={}".format(
+            self._mentor_role_ids, self._manager_role_ids, self._employee_role_ids, self._rookie_role_ids))
 
         for s in self.staff_list:
             sid = s["id"]
@@ -351,10 +363,14 @@ class ShiftScheduler:
             # OJT制約(新人にメンターを重ねる)は評価Dの人だけに適用する。
             if evaluation == "D":
                 self._rookie_ids.add(sid)
-            if role in self._employee_role_ids:
+            # v3.7.196: 管理者と社員を分離 (旧: employee_role 全体を manager 扱いしていた)
+            if role in self._manager_role_ids:
                 self._manager_ids.add(sid)
             if salary == "monthly":
                 self._monthly_ids.add(sid)
+            # 社員: 社員ロール または 月給 (月給=社員の換算はここで合流)
+            if role in self._employee_role_ids or salary == "monthly":
+                self._employee_ids.add(sid)
             self._eval_rank[sid] = evaluation if evaluation in self.POWER_SCORE else "B"
 
             # v3.7.1: 新カラム (migration 50/51) を優先し、旧 unavailable_dates タグは
@@ -2275,45 +2291,50 @@ class ShiftScheduler:
             time_rules_cfg = self.config.get("time_staff_req") or []
             has_time_rules = bool(time_rules_cfg)
 
-            # v3.7.45: 月給スタッフ優先配置を強化 (30k → 150k)
-            # ユーザー報告: 名倉/坂本/岩井 (社員) のシフト回数が少ない
-            # 原因: 30k が時給コスト 5k の 6倍だが、複数日分の累積で逆転するケースあり
-            # 修正: 150k に強化、時給 5k の 30倍に。これで「月給を休ませて時給を入れる」
-            #       選択は確実に避けられる (過剰回避 20M は維持)
-            for sid in self._monthly_ids:
-                for d in self.dates:
-                    if self._get_day_type(d) == "closed":
-                        continue
-                    opts = staff_opts.get((sid, d), [])
-                    if opts:
-                        not_working = 1 - pulp.lpSum(
-                            x[(sid, d, oi)] for oi in range(len(opts)))
-                        # v3.7.47 [Tier 4]: 月給未配置 500k (推奨レベル)
-                        penalty += not_working * 500_000
+            # v3.7.195: 月給/時給の「配置コスト優先」は過剰配置トグルで分岐
+            #   過剰配置 OFF (厳格) → 適応 (月給を積極配置・時給を抑制)
+            #   過剰配置 ON  (許容) → 無視 (給与形態で配置コストに差をつけない=公平配置)
+            # ※ 最低出勤日数のハード/ソフト差は給与アルゴリズムの別パートとして常に維持
+            if not self.allow_overstaffing:
+                # v3.7.45: 月給スタッフ優先配置を強化 (30k → 150k)
+                # ユーザー報告: 名倉/坂本/岩井 (社員) のシフト回数が少ない
+                # 原因: 30k が時給コスト 5k の 6倍だが、複数日分の累積で逆転するケースあり
+                # 修正: 150k に強化、時給 5k の 30倍に。これで「月給を休ませて時給を入れる」
+                #       選択は確実に避けられる (過剰回避 20M は維持)
+                for sid in self._monthly_ids:
+                    for d in self.dates:
+                        if self._get_day_type(d) == "closed":
+                            continue
+                        opts = staff_opts.get((sid, d), [])
+                        if opts:
+                            not_working = 1 - pulp.lpSum(
+                                x[(sid, d, oi)] for oi in range(len(opts)))
+                            # v3.7.47 [Tier 4]: 月給未配置 500k (推奨レベル)
+                            penalty += not_working * 500_000
 
-            # 時給スタッフは「働くと小ペナルティ」(控え目配置)。ただしスポット帯は割引
-            hourly_ids = {s["id"] for s in self.staff_list
-                          if str(s.get("salary_type", "hourly")).lower() == "hourly"}
-            for sid in hourly_ids:
-                for d in self.dates:
-                    opts = staff_opts.get((sid, d), [])
-                    if not opts:
-                        continue
-                    # その日に「スポット帯」(time_staff_req で要件が高いスロット) があるか
-                    slot_reqs = self._slot_reqs_cache.get(d, {}) if hasattr(self, '_slot_reqs_cache') else {}
-                    for oi, opt in enumerate(opts):
-                        # opt の時間範囲とスポット帯の重なりを判定
-                        is_spot = False
-                        if has_time_rules and slot_reqs:
-                            # opt 範囲内に高要件スロット (>= 2) があれば「スポット」
-                            for slot_min, req_at_slot in slot_reqs.items():
-                                if opt["start_min"] <= slot_min < opt["end_min"] and req_at_slot >= 2:
-                                    is_spot = True
-                                    break
-                        # v3.7.47 [Tier 5]: 時給通常コスト 10k / スポット帯 0
-                        cost = 0 if is_spot else 10_000
-                        if cost > 0:
-                            penalty += x[(sid, d, oi)] * cost
+                # 時給スタッフは「働くと小ペナルティ」(控え目配置)。ただしスポット帯は割引
+                hourly_ids = {s["id"] for s in self.staff_list
+                              if str(s.get("salary_type", "hourly")).lower() == "hourly"}
+                for sid in hourly_ids:
+                    for d in self.dates:
+                        opts = staff_opts.get((sid, d), [])
+                        if not opts:
+                            continue
+                        # その日に「スポット帯」(time_staff_req で要件が高いスロット) があるか
+                        slot_reqs = self._slot_reqs_cache.get(d, {}) if hasattr(self, '_slot_reqs_cache') else {}
+                        for oi, opt in enumerate(opts):
+                            # opt の時間範囲とスポット帯の重なりを判定
+                            is_spot = False
+                            if has_time_rules and slot_reqs:
+                                # opt 範囲内に高要件スロット (>= 2) があれば「スポット」
+                                for slot_min, req_at_slot in slot_reqs.items():
+                                    if opt["start_min"] <= slot_min < opt["end_min"] and req_at_slot >= 2:
+                                        is_spot = True
+                                        break
+                            # v3.7.47 [Tier 5]: 時給通常コスト 10k / スポット帯 0
+                            cost = 0 if is_spot else 10_000
+                            if cost > 0:
+                                penalty += x[(sid, d, oi)] * cost
 
             # シフト 1 件あたりの基本コスト (不要シフト抑制)
             for s in self.staff_list:
@@ -2334,7 +2355,8 @@ class ShiftScheduler:
 
             # 社員（店長・副店長・社員など）のシフト希望ソフト制約
             # 人員不足時は無視されるが、人が足りている時は本人の希望時間帯を優先する
-            employee_ids = self._monthly_ids.union(self._manager_ids)
+            # v3.7.196: 社員ロール(is_employee) ∪ 月給 を「社員」とみなす (管理者も社員に含む)
+            employee_ids = self._employee_ids.union(self._manager_ids)
             for eid in employee_ids:
                 for d in self.dates:
                     opts = staff_opts.get((eid, d), [])
