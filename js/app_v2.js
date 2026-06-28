@@ -2825,6 +2825,15 @@ const app = {
                                 <i class="fa-regular fa-calendar-days sm:mr-1"></i><span class="hidden sm:inline">カレンダー</span>
                             </button>
                         </div>
+                        <!-- v3.7.193: スタッフ並び順 -->
+                        ${(() => {
+                            const sk = (this.state.staffSort && this.state.staffSort.key) || 'role';
+                            const opt = (v, l) => `<option value="${v}" ${sk===v?'selected':''}>${l}</option>`;
+                            return `<select onchange="app.setStaffSortFromShift(this.value)" title="スタッフの並び順" class="shrink-0 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-600 px-2 py-1.5 h-10 sm:h-auto">
+                                <option disabled>並び順</option>
+                                ${opt('role','役職順')}${opt('name','名前順')}${opt('evaluation','評価順')}${opt('salary','給与形態順')}
+                            </select>`;
+                        })()}
                         <!-- v3.7.103: 印刷ボタンをヘッダに移動して Android でも常時表示 -->
                         <button onclick="app.printShiftTable()" aria-label="印刷"
                                 class="flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition shrink-0">
@@ -3003,9 +3012,9 @@ const app = {
         _today.setHours(0, 0, 0, 0);
         const _todayMs = _today.getTime();
 
-        // ボディ生成
+        // ボディ生成 (v3.7.193: スタッフ行も役職順/選択ソートで並べる)
         let bodyHtml = '';
-        this.state.staff.forEach(staff => {
+        this._sortedStaff().forEach(staff => {
             bodyHtml += `<tr data-staff-id="${staff.id}">`;
             bodyHtml += `<td class="p-3 sticky left-0 z-40 bg-white border-b border-r border-gray-100 font-bold text-sm text-gray-800 truncate h-14">${this._sanitize(staff.name)}</td>`;
 
@@ -4379,6 +4388,12 @@ const app = {
             ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
             : { key, dir: 'asc' };
         this.renderStaffList(document.getElementById('viewContainer'));
+    },
+
+    // シフト表示のスタッフ並び順を変更 (staffSort を共有し、シフト表/カレンダーを再描画)
+    setStaffSortFromShift(key) {
+        this.state.staffSort = { key, dir: 'asc' };
+        this.renderShiftView(document.getElementById('viewContainer'));
     },
 
     // =================================================================
