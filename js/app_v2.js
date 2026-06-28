@@ -5975,8 +5975,8 @@ const app = {
         overlay.id = 'printOverlay';
         overlay.innerHTML = `
             <div class="no-print" style="margin-bottom: 16px; padding: 12px 16px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; position: relative;">
-                <button onclick="app.closePrintOverlay()" aria-label="閉じる"
-                        style="position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: none; background: #ef4444; color: white; border-radius: 50%; font-size: 22px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;">
+                <button onclick="app.closePrintOverlay()" ontouchend="event.preventDefault(); app.closePrintOverlay();" aria-label="閉じる" class="no-print"
+                        style="position: fixed; top: 12px; right: 12px; z-index: 10001; width: 48px; height: 48px; border: none; background: #ef4444; color: white; border-radius: 50%; font-size: 24px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent;">
                     ✕
                 </button>
                 <h2 style="margin: 0 0 8px 0; padding-right: 48px; font-size: 18px;">🖨 印刷プレビュー</h2>
