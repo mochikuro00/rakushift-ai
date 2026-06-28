@@ -6725,7 +6725,6 @@ const app = {
         setVal('staffPrefEndWeekday', '');
         setVal('staffPrefStartWeekend', '');
         setVal('staffPrefEndWeekend', '');
-        setVal('staffReqPairs', '');
         const usePrefCb = document.getElementById('staffUsePrefHours');
         if (usePrefCb) usePrefCb.checked = false;
         // 一番下に「役職」select はデフォルト (manager等の最初の選択肢) のまま
@@ -6986,7 +6985,7 @@ const app = {
             if (!prefStartWe && prefStartWd) { prefStartWe = prefStartWd; _autoFilledNote = '土日希望時間を平日希望時間で自動補完しました'; }
             if (!prefEndWe && prefEndWd) { prefEndWe = prefEndWd; _autoFilledNote = '土日希望時間を平日希望時間で自動補完しました'; }
         }
-        const reqPairs = document.getElementById('staffReqPairs')?.value || '';
+        // v3.7.197: 必須ペア(人間関係コントロール) UI 廃止 → 常に null で保存 (既存値もクリア)
         // v3.7.67: 担当ポジション UI 廃止 → 全員 'any' 固定
         const position = 'any';
 
@@ -7081,7 +7080,7 @@ const app = {
             pref_end_wd: prefEndWd || null,
             pref_start_we: prefStartWe || null,
             pref_end_we: prefEndWe || null,
-            req_pairs: reqPairs || null,
+            req_pairs: null,  // v3.7.197: 必須ペア廃止
             position: position,
             ng_weekdays: ngWeekdays,
             // v3.7.111: 祝日 NG (true なら国民の祝日にシフトを入れない)

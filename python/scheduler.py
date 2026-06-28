@@ -448,24 +448,12 @@ class ShiftScheduler:
         for s in self.staff_list:
             self._ng_cache[s["id"]] = self._compute_staff_ng_dates(s)
 
-            sid1 = s["id"]
             # v3.7.19: NG ペア制約を廃止 (運用者判断)。
             # ng_pairs カラム自体は DB に残るが、scheduler は参照しない。
             # _ng_pair_constraints は空のまま維持され、MILP/Greedy 双方が無視。
-
-            req_pairs_str = s.get("req_pairs") or ""
-            for target_name in [n.strip() for n in re.split(r'[,、\s　]+', req_pairs_str) if n.strip()]:
-                sid2 = name_to_id.get(target_name)
-                if not sid2:
-                    # 部分一致は「候補が一意のときだけ」採用 (取り違え防止)
-                    cands = {_sid for n, _sid in name_to_id.items()
-                             if target_name in n or n in target_name}
-                    if len(cands) == 1:
-                        sid2 = next(iter(cands))
-                    elif len(cands) > 1:
-                        logger.warning("[ReqPair] '%s' が複数スタッフに一致し曖昧なためスキップ", target_name)
-                if sid2 and sid1 != sid2:
-                    self._req_pair_constraints.append((sid1, sid2))
+            # v3.7.197: 必須ペア(人間関係コントロール)も廃止 (ユーザー要望)。
+            # req_pairs カラムは DB に残るが参照しない。_req_pair_constraints は
+            # 空のまま維持され、MILP/Greedy 双方が無視する (既存データも無効化)。
 
         logger.info("[Init] Staff:{} Dates:{} Patterns:{}".format(
             len(self.staff_list), len(self.dates), len(self.shift_patterns)))
