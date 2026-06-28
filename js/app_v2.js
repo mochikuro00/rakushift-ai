@@ -4358,10 +4358,19 @@ const app = {
     // 管理者を上位に。同順位は名前(かな)で安定ソート。
     _sortedStaff() {
         const staff = [...(this.state.staff || [])];
+        // v3.7.194: localStorage から復元 (リロードしても並び順が維持される)
+        if (!this.state.staffSort) {
+            try { this.state.staffSort = JSON.parse(localStorage.getItem('rk_staffSort')) || null; } catch (e) {}
+        }
         const sort = this.state.staffSort || { key: 'role', dir: 'asc' };
-        const roleList = this.state.config.roles || this.state.defaultConfig.roles || [];
+        const roleList = (this.state.config && this.state.config.roles) || this.state.defaultConfig.roles || [];
+        // v3.7.194: staff.role が「ID」でも「名前」でも引けるよう両方をキーにする
         const roleRank = {};
-        roleList.forEach((r, i) => { roleRank[r.id] = (r.is_manager ? 0 : 1) * 1000 + i; });
+        roleList.forEach((r, i) => {
+            const rank = (r.is_manager ? 0 : 1) * 1000 + i;
+            if (r.id != null) roleRank[r.id] = rank;
+            if (r.name != null && roleRank[r.name] == null) roleRank[r.name] = rank;
+        });
         const evalRank = { A: 0, B: 1, C: 2, D: 3 };
         const keyVal = (s) => {
             switch (sort.key) {
@@ -4387,12 +4396,18 @@ const app = {
         this.state.staffSort = (cur.key === key)
             ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
             : { key, dir: 'asc' };
+        try { localStorage.setItem('rk_staffSort', JSON.stringify(this.state.staffSort)); } catch (e) {}
         this.renderStaffList(document.getElementById('viewContainer'));
     },
 
     // シフト表示のスタッフ並び順を変更 (staffSort を共有し、シフト表/カレンダーを再描画)
     setStaffSortFromShift(key) {
-        this.state.staffSort = { key, dir: 'asc' };
+        const cur = this.state.staffSort || { key: 'role', dir: 'asc' };
+        // 同じ項目を再選択したら昇順/降順トグル
+        this.state.staffSort = (cur.key === key)
+            ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+            : { key, dir: 'asc' };
+        try { localStorage.setItem('rk_staffSort', JSON.stringify(this.state.staffSort)); } catch (e) {}
         this.renderShiftView(document.getElementById('viewContainer'));
     },
 
