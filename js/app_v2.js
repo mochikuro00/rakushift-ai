@@ -4422,6 +4422,15 @@ const app = {
         const reqs = config.staff_req || this.state.defaultConfig.staff_req;
         const closedDays = config.closed_days || [];
         const customShifts = config.custom_shifts || [];
+        // v3.7.200: 人員配置要件はシフトパターンの曜日別合計から自動計算
+        const _patSum = (kind) => customShifts.reduce((a, s) => {
+            const cwd = s.count_weekday != null ? s.count_weekday : (s.count != null ? s.count : 1);
+            const cwe = s.count_weekend != null ? s.count_weekend : cwd;
+            const chd = s.count_holiday != null ? s.count_holiday : cwe;
+            const v = kind === 'wd' ? cwd : kind === 'we' ? cwe : chd;
+            return a + (Number(v) || 0);
+        }, 0);
+        const sumWd = _patSum('wd'), sumWe = _patSum('we'), sumHd = _patSum('hd');
         const roles = config.roles || this.state.defaultConfig.roles;
         const breakRules = config.break_rules || this.state.defaultConfig.break_rules;
         const shopRulesText = config.shop_rules_text || this.state.defaultConfig.shop_rules_text;
@@ -4708,13 +4717,13 @@ const app = {
                                                 ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-wd w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
+                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-wd w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-we w-16 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
+                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-we w-16 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
+                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
                                                 <input type="hidden" class="setting-shift-rest" value="${shift.force_rest_next_day ? '1' : '0'}">
@@ -4764,19 +4773,20 @@ const app = {
                         </div>
                         <div class="grid grid-cols-1 gap-8 mb-6">
                             <div>
-                                <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">スタッフ総数要件</h4>
+                                <h4 class="text-sm font-bold text-gray-700 mb-1 border-b border-gray-100 pb-2">スタッフ総数要件 <span class="text-[10px] font-normal text-green-600">(シフトパターンの合計から自動計算)</span></h4>
+                                <p class="text-[11px] text-gray-400 mb-3">下のシフトパターンの「平日／土曜／日祝」人数の合計が自動で入ります。直接編集はできません。</p>
                                 <div class="space-y-4">
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-gray-600">平日</label>
-                                        <input type="number" id="req_min_weekday" min="0" max="50" step="1" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekday || reqs.min_total || 2}">
+                                        <input type="number" id="req_min_weekday" min="0" max="50" step="1" readonly title="シフトパターンの平日人数の合計（自動計算）" class="col-span-2 border-gray-200 bg-gray-100 text-gray-700 font-bold rounded-lg px-3 py-1.5 cursor-not-allowed" value="${sumWd || reqs.min_weekday || reqs.min_total || 2}">
                                     </div>
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-blue-600">土曜日</label>
-                                        <input type="number" id="req_min_weekend" min="0" max="50" step="1" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_weekend || reqs.min_total || 3}">
+                                        <input type="number" id="req_min_weekend" min="0" max="50" step="1" readonly title="シフトパターンの土曜人数の合計（自動計算）" class="col-span-2 border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-lg px-3 py-1.5 cursor-not-allowed" value="${sumWe || reqs.min_weekend || reqs.min_total || 3}">
                                     </div>
                                     <div class="grid grid-cols-3 gap-2 items-center">
                                         <label class="text-xs font-bold text-red-600">日祝日</label>
-                                        <input type="number" id="req_min_holiday" min="0" max="50" step="1" class="col-span-2 border-gray-300 rounded-lg px-3 py-1.5" value="${reqs.min_holiday || reqs.min_total || 3}">
+                                        <input type="number" id="req_min_holiday" min="0" max="50" step="1" readonly title="シフトパターンの日祝人数の合計（自動計算）" class="col-span-2 border-red-200 bg-red-50 text-red-700 font-bold rounded-lg px-3 py-1.5 cursor-not-allowed" value="${sumHd || reqs.min_holiday || reqs.min_total || 3}">
                                     </div>
                                 </div>
                             </div>
@@ -5322,6 +5332,16 @@ const app = {
             console.error('[removeTimeStaffReq] save failed:', e);
             this.showToast('削除の保存に失敗: ' + e.message, 'error');
         }
+    },
+
+    // v3.7.200: シフトパターンの曜日別人数の合計を「人員配置要件」へ自動反映
+    _recalcStaffingFromPatterns() {
+        const sumClass = (cls) => Array.from(document.querySelectorAll(cls))
+            .reduce((a, el) => a + (parseInt(el.value, 10) || 0), 0);
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        set('req_min_weekday', sumClass('.setting-shift-count-wd'));
+        set('req_min_weekend', sumClass('.setting-shift-count-we'));
+        set('req_min_holiday', sumClass('.setting-shift-count-hd'));
     },
 
     addShiftPattern() {
