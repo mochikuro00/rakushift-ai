@@ -368,8 +368,9 @@ class ShiftScheduler:
                 self._manager_ids.add(sid)
             if salary == "monthly":
                 self._monthly_ids.add(sid)
-            # 社員: 社員ロール または 月給 (月給=社員の換算はここで合流)
-            if role in self._employee_role_ids or salary == "monthly":
+            # v3.7.201: 「月給=社員」の自動換算を廃止 (ユーザー要望)。
+            # 社員は役職ロール(社員/管理者)のみで判定する。給与形態(月給/時給)とは独立。
+            if role in self._employee_role_ids:
                 self._employee_ids.add(sid)
             self._eval_rank[sid] = evaluation if evaluation in self.POWER_SCORE else "B"
 
@@ -2343,7 +2344,7 @@ class ShiftScheduler:
 
             # 社員（店長・副店長・社員など）のシフト希望ソフト制約
             # 人員不足時は無視されるが、人が足りている時は本人の希望時間帯を優先する
-            # v3.7.196: 社員ロール(is_employee) ∪ 月給 を「社員」とみなす (管理者も社員に含む)
+            # v3.7.201: 「社員」は役職ロール(社員/管理者)のみで判定 (給与形態は無関係)
             employee_ids = self._employee_ids.union(self._manager_ids)
             for eid in employee_ids:
                 for d in self.dates:
