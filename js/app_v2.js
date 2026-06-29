@@ -4458,45 +4458,6 @@ const app = {
                 </div>
 
 
-                <!-- v3.7.133: セキュリティ (PIN / 責任者引き継ぎ) -->
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
-                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-shield-halved text-indigo-500"></i> セキュリティ・責任者引き継ぎ</h3>
-                        <p class="text-sm text-gray-600 mt-1">セカンドファクター PIN 設定と、責任者交代時の引き継ぎ手順</p>
-                    </div>
-                    <div class="p-5 space-y-4">
-                        <!-- PIN セクション -->
-                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-                                <div>
-                                    <div class="font-bold text-sm text-gray-800"><i class="fa-solid fa-key text-amber-500 mr-1"></i>セカンドファクター PIN</div>
-                                    <p class="text-xs text-gray-500 mt-0.5">設定すると、契約ID/パスワードに加えて 4〜8桁の PIN 入力が必須になります</p>
-                                </div>
-                                <div id="pinStatusBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-gray-200 text-gray-600">読み込み中...</div>
-                            </div>
-                            <div class="flex gap-2 mt-3 flex-wrap" id="pinActionButtons">
-                                <!-- _renderPinStatus が動的に挿入 -->
-                            </div>
-                        </div>
-
-                        <!-- 責任者引き継ぎ (重要) v3.7.205: 文字を大きく見やすく -->
-                        <div class="border-l-4 border-amber-500 bg-amber-50 p-4 rounded-r-lg">
-                            <h4 class="font-bold text-lg text-amber-900 mb-2"><i class="fa-solid fa-people-arrows mr-1"></i>責任者引き継ぎに関して (重要)</h4>
-                            <div class="text-sm text-gray-800 leading-relaxed space-y-2">
-                                <p>店舗管理者を交代する際、新責任者がログインできなくなるトラブルを防ぐため、以下を必ず引き継いでください:</p>
-                                <ol class="list-decimal list-inside space-y-1.5 ml-2">
-                                    <li><strong>契約 ID</strong> (ログイン画面に入力する識別子)</li>
-                                    <li><strong>管理者パスワード</strong> (上記の「パスワード変更」から新責任者の希望に変更可能)</li>
-                                    <li><strong>セカンドファクター PIN</strong> (上で設定している場合のみ。<u>未引き継ぎだと新責任者がログイン不能</u>)</li>
-                                    <li><strong>本部ログイン情報</strong> (本部から店舗を観覧している場合)</li>
-                                </ol>
-                                <p class="font-bold mt-2 text-amber-900">⚠ PIN を忘れた / 引き継ぎ漏れた場合は、運営管理 (info@rakushift.jp) にリセット依頼が必要です。即時対応はできない場合があります。</p>
-                                <p>引き継ぎ前のチェックリストは サイドバーの「責任者引き継ぎ」メニューから確認できます。</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- 1. 役職・ロール設定 -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -4888,6 +4849,45 @@ const app = {
                     </div>
                 </div>
                 
+                <!-- v3.7.207: セキュリティ・責任者引き継ぎ を運用ルールとアカウント情報の間へ移動 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-shield-halved text-indigo-500"></i> セキュリティ・責任者引き継ぎ</h3>
+                        <p class="text-sm text-gray-600 mt-1">セカンドファクター PIN 設定と、責任者交代時の引き継ぎ手順</p>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <!-- PIN セクション -->
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                <div>
+                                    <div class="font-bold text-sm text-gray-800"><i class="fa-solid fa-key text-amber-500 mr-1"></i>セカンドファクター PIN</div>
+                                    <p class="text-xs text-gray-500 mt-0.5">設定すると、契約ID/パスワードに加えて 4〜8桁の PIN 入力が必須になります</p>
+                                </div>
+                                <div id="pinStatusBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-gray-200 text-gray-600">読み込み中...</div>
+                            </div>
+                            <div class="flex gap-2 mt-3 flex-wrap" id="pinActionButtons">
+                                <!-- _renderPinStatus が動的に挿入 -->
+                            </div>
+                        </div>
+
+                        <!-- 責任者引き継ぎ (重要) v3.7.205: 文字を大きく見やすく -->
+                        <div class="border-l-4 border-amber-500 bg-amber-50 p-4 rounded-r-lg">
+                            <h4 class="font-bold text-lg text-amber-900 mb-2"><i class="fa-solid fa-people-arrows mr-1"></i>責任者引き継ぎに関して (重要)</h4>
+                            <div class="text-sm text-gray-800 leading-relaxed space-y-2">
+                                <p>店舗管理者を交代する際、新責任者がログインできなくなるトラブルを防ぐため、以下を必ず引き継いでください:</p>
+                                <ol class="list-decimal list-inside space-y-1.5 ml-2">
+                                    <li><strong>契約 ID</strong> (ログイン画面に入力する識別子)</li>
+                                    <li><strong>管理者パスワード</strong> (上記の「パスワード変更」から新責任者の希望に変更可能)</li>
+                                    <li><strong>セカンドファクター PIN</strong> (上で設定している場合のみ。<u>未引き継ぎだと新責任者がログイン不能</u>)</li>
+                                    <li><strong>本部ログイン情報</strong> (本部から店舗を観覧している場合)</li>
+                                </ol>
+                                <p class="font-bold mt-2 text-amber-900">⚠ PIN を忘れた / 引き継ぎ漏れた場合は、運営管理 (info@rakushift.jp) にリセット依頼が必要です。即時対応はできない場合があります。</p>
+                                <p>引き継ぎ前のチェックリストは サイドバーの「責任者引き継ぎ」メニューから確認できます。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 7. アカウント情報 -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50">
