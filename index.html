@@ -1062,12 +1062,11 @@
             </div>
             <div class="p-6 space-y-4 overflow-y-auto">
                 <form id="staffForm" onsubmit="return false;">
-                <div class="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-xs text-blue-800 leading-relaxed shadow-sm">
-                    <strong><i class="fa-solid fa-lightbulb text-blue-600 mr-1"></i> 📌 かんたん備考（スタッフ設定はなぜ大事？）</strong><br>
-                    AIはここに入力した条件を「絶対のルール」として守ってシフトを組みます。<br>
-                    ・<span class="font-bold text-blue-600">きちんと入れる</span>と：過労を防ぎ、忙しい時間に優秀な人を置いた「店長顔負けの完璧なシフト」になります。<br>
-                    ・<span class="font-bold text-red-500">入力が雑だと</span>：AIは「制限なし＝何でもOK」と判断し、特定の人が連勤になる等、実用的でないシフトになります。<br>
-                    迷ったら<b>最低/最大出勤日数・連勤上限・希望曜日・役割</b>だけでも正確に入れてください。精度が大きく上がります。
+                <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg text-sm text-gray-800 leading-relaxed shadow-sm">
+                    <p class="font-bold text-base text-blue-700 mb-2"><i class="fa-solid fa-lightbulb text-blue-600 mr-1"></i> 📌 かんたん備考（スタッフ設定）</p>
+                    <p>AIはここに入力した条件を「絶対のルール」として守ってシフトを組みます。</p>
+                    <p class="mt-1">・<span class="font-bold text-red-600">入力が雑だと</span>：AIは「制限なし＝何でもOK」と判断し、特定の人が連勤になる等、実用的でないシフトになります。</p>
+                    <p class="mt-1">迷ったら<b>最低/最大出勤日数・連勤上限・希望曜日・役割</b>だけでも正確に入れてください。精度が大きく上がります。</p>
                 </div>
                 <input type="hidden" id="staffId">
                 <div>
@@ -1095,10 +1094,10 @@
                 </div>
                 
 
-                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 leading-relaxed">
-                    <p class="font-bold mb-1">📌 かんたん備考（役割・評価・優先度の違い）</p>
-                    <ul class="list-disc pl-4 space-y-0.5">
-                        <li><b>役割</b>：肩書き（店長/リーダー/スタッフ）。「管理者」設定の役割は、シフトパターンの管理者人数（＝あけしめ等）の対象になります。</li>
+                <div class="p-4 bg-indigo-50 border border-indigo-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                    <p class="font-bold text-base text-indigo-800 mb-2">📌 かんたん備考（役割・評価・優先度の違い）</p>
+                    <ul class="list-disc pl-5 space-y-1.5">
+                        <li><b>役割</b>：肩書き（店長/リーダー/スタッフ）。「管理者」設定の役割は、シフトパターンの管理者人数の対象になります。</li>
                         <li><b>評価ランク</b>：A＝優先的に配置／B＝標準／C＝控えめ／<b>D＝新人(研修)扱い</b>。Dの人は先輩(メンター)と時間が重なるようAIが配慮します。</li>
                         <li><b>シフト優先度</b>：高＝なるべく多く入れる／中＝通常／低＝人手が足りない時の穴埋めだけ。</li>
                     </ul>
@@ -1272,9 +1271,9 @@
                 <button onclick="app.closeModal('requestModal')" class="text-white/60 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             <div class="p-5 space-y-4 overflow-y-auto flex-1">
-                <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900 leading-relaxed">
-                    <p class="font-bold mb-1">📌 かんたん備考（休み希望の出し方）</p>
-                    <ul class="list-disc pl-4 space-y-0.5">
+                <div class="p-4 bg-red-50 border border-red-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                    <p class="font-bold text-base text-red-700 mb-2">📌 かんたん備考（休み希望の出し方）</p>
+                    <ul class="list-disc pl-5 space-y-1.5">
                         <li>カレンダーで<b>休みたい日</b>を選んで提出します（複数選択OK）。</li>
                         <li>提出した休み希望は、AIシフト作成時に<b>できる限り尊重</b>されます。</li>
                         <li>提出後は管理者の承認後にシフトへ反映されます。</li>
@@ -1334,9 +1333,9 @@
                     <p class="text-[10px] text-gray-500 mt-1"><i class="fa-solid fa-circle-info"></i> 過去日の実績シフトは保持されます</p>
                 </div>
 
-                <div class="text-left p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed mb-4">
-                    <p class="font-bold mb-1">📌 かんたん備考（作成のまえに）</p>
-                    <ul class="list-disc pl-4 space-y-0.5">
+                <div class="text-left p-4 bg-amber-50 border border-amber-300 rounded-lg text-sm text-gray-800 leading-relaxed mb-4">
+                    <p class="font-bold text-base text-amber-700 mb-2">📌 かんたん備考（作成のまえに）</p>
+                    <ul class="list-disc pl-5 space-y-1.5">
                         <li>AIは「店舗設定」と「スタッフ設定」のルールを必ず守って自動で組みます。</li>
                         <li>作成後は<b>プレビュー</b>が出ます。「確定して保存」を押すまで本番には反映されません。</li>
                         <li>うまく組めない時は、必要人数を下げる／スタッフの最低日数や希望を見直すと改善します。</li>

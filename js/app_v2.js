@@ -4457,15 +4457,6 @@ const app = {
                     </div>
                 </div>
 
-                <div class="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-lg text-sm text-purple-900 leading-relaxed shadow-sm">
-                    <strong><i class="fa-solid fa-triangle-exclamation text-purple-600 mr-2"></i> 【重要】店舗設定の正確さがAIの精度を決めます</strong><br>
-                    <div class="mt-2 space-y-2">
-                        <p>ラクシフトAIは、ここに入力された条件を「店舗の絶対的なルール」として学習しシフトを組みます。</p>
-                        <p>・<span class="font-bold text-purple-700">正確に設定した場合</span>：時間帯ごとの最適な人員配置、管理者の確実なカバー、休憩の自動付与など「店長が頭を抱えていたパズル」を完璧に解いたシフトを生成します。</p>
-                        <p>・<span class="font-bold text-red-500">設定が甘い場合</span>（例: 必要な人数を全て0にする、管理者を設定しない等）：AIは「何人でも良い」「誰でも良い」と判断するため、人が足りない時間帯ができたり、法律上は問題なくても実用的でないシフトが出来上がってしまいます。</p>
-                        <p class="font-bold mt-2">※特に「管理者の必須人数」と「シフトパターン (平日/土曜/日祝の必要人数)」は、店舗の実態に合わせて正確に入力してください。</p>
-                    </div>
-                </div>
 
                 <!-- v3.7.133: セキュリティ (PIN / 責任者引き継ぎ) -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -4516,11 +4507,11 @@ const app = {
                         </button>
                     </div>
                     <div class="p-6">
-                        <div class="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 leading-relaxed">
-                            <p class="font-bold mb-1">📌 かんたん備考（役職ロールとは）</p>
-                            <ul class="list-disc pl-4 space-y-0.5">
+                        <div class="mb-4 p-4 bg-indigo-50 border border-indigo-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                            <p class="font-bold text-base text-indigo-800 mb-2">📌 かんたん備考（役職ロールとは）</p>
+                            <ul class="list-disc pl-5 space-y-1.5">
                                 <li>スタッフ1人ずつに付ける「肩書き」です（例: 店長・リーダー・一般・パート）。</li>
-                                <li><b>「管理者」にチェック</b>を入れた役職の人だけが、シフトパターンの「管理者人数」の配置対象になります（＝あけしめ等を任せる責任者）。</li>
+                                <li><b>「管理者」にチェック</b>を入れた役職の人だけが、シフトパターンの「管理者人数」の配置対象になります。</li>
                                 <li>色は表示用の目印です（黄色＝新人として一部AIが配慮）。</li>
                                 <li>IDは内部処理用のため変更できません。</li>
                             </ul>
@@ -4587,10 +4578,9 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">AIはこの時間帯の中でだけシフトを生成します。定休日にはシフトを入れません。</p>
                     </div>
                     <div class="p-6 space-y-8">
-                        <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 leading-relaxed">
-                            <p class="font-bold mb-1">📌 かんたん備考（営業時間・定休日）</p>
-                            <ul class="list-disc pl-4 space-y-0.5">
-                                <li>ここで決めた営業時間の<b>外</b>にはシフトは入りません。曜日タイプ（平日／土日／祝日）で時間を変えられます。</li>
+                        <div class="p-4 bg-blue-50 border border-blue-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                            <p class="font-bold text-base text-blue-800 mb-2">📌 かんたん備考（営業時間・定休日）</p>
+                            <ul class="list-disc pl-5 space-y-1.5">
                                 <li><b>24時間営業</b>のお店は右の「24時間」チェックをONにしてください。</li>
                                 <li><b>定休日</b>に指定した曜日・日付には、AIは誰もシフトを入れません。</li>
                             </ul>
@@ -4669,12 +4659,12 @@ const app = {
                         </button>
                     </div>
                     <div class="p-6">
-                        <div class="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900 leading-relaxed">
-                            <p class="font-bold mb-1">📌 かんたん備考（シフトパターンと「あけしめ」）</p>
-                            <ul class="list-disc pl-4 space-y-0.5">
-                                <li>AIが組み合わせる勤務の「型」です（例: 早番 9:00-14:00 / 遅番 17:00-22:00）。</li>
-                                <li>平日／土曜／日祝ごとに必要人数を設定できます。<b>0にするとその曜日はそのパターンを使いません</b>。</li>
-                                <li>🔑 <b>オープン(早番)やラスト(遅番)の「あけしめ」を社員(店長・リーダー)に必ず任せたい場合</b>は、そのパターンの<b>「管理者」をON にして人数を1以上</b>にしてください。→ そのパターンに管理者が指定人数だけ入るようAIが配置します。</li>
+                        <div class="mb-4 p-4 bg-purple-50 border border-purple-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                            <p class="font-bold text-base text-purple-800 mb-2">📌 かんたん備考（シフトパターン）</p>
+                            <ul class="list-disc pl-5 space-y-1.5">
+                                <li>AIが組み合わせる勤務のシフトです（例: 早番 9:00-14:00 / 遅番 17:00-22:00）。</li>
+                                <li>平日／土曜／日祝ごとに必要人数を設定できます。<b>0にするとその曜日はそのシフトは使いません</b>。</li>
+                                <li><b>シフトに管理者が必要な時</b>は、そのシフトの<b>「管理者」をON にして人数を1以上</b>にしてください。→ そのパターンに管理者が指定人数だけ入るようAIが配置します。</li>
                                 <li><b>「翌休」をON</b>にすると、そのパターン(夜勤など)に入った翌日を自動で休みにします（夜勤の2連勤防止）。</li>
                                 <li>管理者が<b>OFF</b>のときは、そのパターンに誰が入るかはAIにおまかせ（管理者の制約なし）。</li>
                             </ul>
@@ -4763,12 +4753,12 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">「最低何人いればお店が回るか」を設定します。AIはこの人数を必ず確保しようとします。</p>
                     </div>
                     <div class="p-6">
-                        <div class="mb-5 p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-900 leading-relaxed">
-                            <p class="font-bold mb-1">📌 かんたん備考（人員配置要件）</p>
-                            <ul class="list-disc pl-4 space-y-0.5">
+                        <div class="mb-5 p-4 bg-green-50 border border-green-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                            <p class="font-bold text-base text-green-800 mb-2">📌 かんたん備考（人員配置要件）</p>
+                            <ul class="list-disc pl-5 space-y-1.5">
                                 <li><b>1日にお店全体で最低何人</b>必要かを、平日／土曜／日祝ごとに設定します。AIは必ずこの人数を確保しようとします。</li>
-                                <li>役職（管理者）ごとの人数は<b>シフトパターンの「管理者」列</b>で設定します（ここは総数）。</li>
-                                <li>下の<b>「⚡ 過剰配置を許容する」</b>: OFF=必要人数ぴったり（推奨）／ON=多めに入れてもOK（全員をたくさん入れたい時）。</li>
+                                <li>役職（管理者）ごとの人数は<b>シフトパターンの「管理者」列</b>で設定します（管理者の人数はスタッフ総数要件の人数に含みます）。</li>
+                                <li>下の<b>「⚡ 過剰配置を許容する」</b>: OFF=必要人数ぴったり／ON=多めに入れてスタッフの出勤日数を優先します。</li>
                             </ul>
                         </div>
                         <div class="grid grid-cols-1 gap-8 mb-6">
@@ -4818,9 +4808,9 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">時給の初期値、管理者パスワード、休憩ルールなどの基本設定です。</p>
                     </div>
                     <div class="p-6 space-y-6">
-                        <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 leading-relaxed">
-                            <p class="font-bold mb-1">📌 かんたん備考（システム設定）</p>
-                            <ul class="list-disc pl-4 space-y-0.5">
+                        <div class="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                            <p class="font-bold text-base text-gray-700 mb-2">📌 かんたん備考（システム設定）</p>
+                            <ul class="list-disc pl-5 space-y-1.5">
                                 <li><b>デフォルト時給</b>: スタッフ個別に時給を入れていない場合に使う初期値（人件費の概算に使用）。</li>
                                 <li><b>店舗パスワード</b>=日常の閲覧用／<b>管理者パスワード</b>=シフト編集など権限が必要な操作用。</li>
                                 <li><b>休憩時間ルール</b>: 「○時間を超えたら△分休憩」を自動で付与します。法令に合わせて設定してください。</li>
@@ -4872,6 +4862,17 @@ const app = {
                             </div>
                             <button onclick="app.addBreakRule()" class="mt-3 text-xs flex items-center gap-1 text-blue-600 font-bold hover:text-blue-800"><i class="fa-solid fa-plus-circle"></i> ルールを追加</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- v3.7.204: 【重要】案内を店舗設定の下部(システム設定の下)へ移動・色と文字を改善 -->
+                <div class="p-5 bg-amber-50 border-l-4 border-amber-500 rounded-lg text-base text-gray-800 leading-relaxed shadow-sm">
+                    <p class="font-bold text-lg text-amber-700 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>【重要】店舗設定の正確さがAIの精度を決めます</p>
+                    <div class="space-y-2">
+                        <p>ラクシフトAIは、ここに入力された条件を元にシフトを作成します。</p>
+                        <p>・<span class="font-bold text-green-700">正確に設定した場合</span>：時間帯ごとの人員配置、管理者の確実なカバーを考えたシフトになります。</p>
+                        <p>・<span class="font-bold text-red-600">設定が甘い場合</span>（例: 必要な人数を全て0にする、管理者を設定しない等）：AIは「何人でも良い」「誰でも良い」と判断するため、人が足りない時間帯ができたりします。</p>
+                        <p class="font-bold mt-1">※特に「管理者の必須人数」と「シフトパターン (平日/土曜/日祝の必要人数)」は、店舗の実態に合わせて正確に入力してください。</p>
                     </div>
                 </div>
 
