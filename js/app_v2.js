@@ -4447,9 +4447,9 @@ const app = {
                         <p class="text-sm text-gray-500 mt-1">AIシフト生成に使われるルールです。</p>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <!-- v3.7.130: チュートリアル再表示 -->
-                        <button onclick="app.showTutorial(true)" class="bg-white border border-blue-300 text-blue-700 font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-50 transition flex items-center whitespace-nowrap" title="使い方ガイドをもう一度見る">
-                            <i class="fa-solid fa-circle-question mr-1.5"></i>使い方ガイド
+                        <!-- v3.7.202: 使い方ガイド → システムマニュアル画面へ遷移 -->
+                        <button onclick="app.changeView('manual')" class="bg-white border border-blue-300 text-blue-700 font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-50 transition flex items-center whitespace-nowrap" title="システムマニュアル（使い方ガイド）を開く">
+                            <i class="fa-solid fa-book mr-1.5"></i>使い方ガイド
                         </button>
                         <button onclick="app.saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 flex items-center whitespace-nowrap">
                             <i class="fa-solid fa-save mr-2"></i>設定を保存
