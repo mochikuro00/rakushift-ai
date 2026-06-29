@@ -1604,7 +1604,12 @@ class ShiftScheduler:
                 # v3.7.51-53 の 5M では COVERAGE_UNDER/OVER (100M) と衝突して
                 # 52件もの制約違反を引き起こしていた
                 # 500k なら過剰回避 (100M) が確実に優先される
-                guarantee_min = 5 if str(s.get("salary_type", "hourly")).lower() == "monthly" else 3
+                # v3.7.203: 過剰配置ON(許容)時は給与形態で最低保証に差をつけない(公平配置)。
+                #   OFF時のみ月給5/時給3。ONは全員3で月給優先を排除。
+                if self.allow_overstaffing:
+                    guarantee_min = 3
+                else:
+                    guarantee_min = 5 if str(s.get("salary_type", "hourly")).lower() == "monthly" else 3
                 _current_target = locals().get("target_min_month", 0)
                 _current_ng_set = self._get_staff_ng_dates(s)
                 if _current_target < guarantee_min:
@@ -3087,10 +3092,12 @@ class ShiftScheduler:
                 best_cov = 0
 
                 # メンター優先、評価順でソート
+                # v3.7.203: 過剰配置ON(許容)時は月給優先キーを外し公平に (OFF時のみ月給優先)
+                _mgr_pri = 0 if self.allow_overstaffing else None
                 sorted_staff = sorted(
                     self.staff_list,
                     key=lambda s: (
-                        0 if s["id"] in self._monthly_ids else 1,  # 月給優先
+                        _mgr_pri if _mgr_pri is not None else (0 if s["id"] in self._monthly_ids else 1),  # 月給優先(OFF時のみ)
                         0 if s["id"] in self._mentor_ids else 1,
                         {"A": 0, "B": 1, "C": 2, "D": 3}.get(
                             self._eval_rank.get(s["id"], "B"), 2)
