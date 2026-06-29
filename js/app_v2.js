@@ -1184,7 +1184,7 @@ const app = {
                     <button onclick="app.changeView('hq_dashboard')" class="px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded bg-white transition-all mr-2 shadow-sm">
                         <i class="fa-solid fa-list mr-1"></i>店舗一覧
                     </button>
-                    <button onclick="app.hqLogout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all shadow-sm">
+                    <button onclick="app.hqLogout()" class="px-3 py-1.5 text-sm font-bold text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all shadow-sm">
                         <i class="fa-solid fa-power-off mr-1"></i>ログアウト
                     </button>
                 `;
@@ -1236,7 +1236,7 @@ const app = {
         if (adminHeader) {
             if (this.state.isAdmin) {
                 adminHeader.innerHTML = `
-                    <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all ml-2">
+                    <button onclick="app.logout()" class="px-3 py-1.5 text-sm font-bold text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all ml-2">
                         <i class="fa-solid fa-power-off mr-1"></i>ログアウト
                     </button>
                 `;
@@ -1247,7 +1247,7 @@ const app = {
                         <div class="hidden md:block px-3 py-1 text-xs font-mono text-gray-400 border border-gray-200 rounded bg-gray-50 mr-2">
                             ID: ${this.state.organization_id}
                         </div>
-                        <button onclick="app.logout()" class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all">
+                        <button onclick="app.logout()" class="px-3 py-1.5 text-sm font-bold text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded bg-white transition-all">
                             <i class="fa-solid fa-power-off mr-1"></i>ログアウト
                         </button>
                      `;
@@ -1644,11 +1644,11 @@ const app = {
                     <div class="p-6">
                         <div class="flex flex-col md:flex-row gap-4 items-end">
                             <div class="flex-1">
-                                <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
+                                <label class="block text-sm font-bold text-gray-600 mb-1">契約ID</label>
                                 <input type="text" id="hqManualContractId" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: 123456789012345">
                             </div>
                             <div class="flex-1">
-                                <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                                <label class="block text-sm font-bold text-gray-600 mb-1">パスワード</label>
                                 <input type="password" id="hqManualPassword" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="店舗用または管理者パスワード" onkeydown="if(event.key==='Enter') app.hqManualShopLogin()">
                             </div>
                             <div>
@@ -1668,13 +1668,13 @@ const app = {
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">店舗名</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">契約ID</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">プラン</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">状態</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">登録日</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">操作</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-sm font-bold text-gray-600 uppercase tracking-wider">店舗名</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-sm font-bold text-gray-600 uppercase tracking-wider">契約ID</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-sm font-bold text-gray-600 uppercase tracking-wider">プラン</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-sm font-bold text-gray-600 uppercase tracking-wider">スタッフ</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-sm font-bold text-gray-600 uppercase tracking-wider">状態</th>
+                                    <th scope="col" class="px-4 py-3 text-left text-sm font-bold text-gray-600 uppercase tracking-wider">登録日</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-sm font-bold text-gray-600 uppercase tracking-wider">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -2255,7 +2255,7 @@ const app = {
                         <div class="bg-white p-4 rounded-xl shadow-sm border ${pendingCount > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200'} ${this.state.isAdmin ? 'cursor-pointer hover:scale-[1.02]' : ''} transition-transform" ${this.state.isAdmin ? `onclick="app.changeView('requests')"` : ''}>
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-bold text-gray-500 uppercase">未承認の申請</p>
+                                    <p class="text-sm font-bold text-gray-600 uppercase">未承認の申請</p>
                                     <h3 class="text-2xl font-bold ${pendingCount > 0 ? 'text-red-600' : 'text-gray-700'}">${pendingCount} <span class="text-sm text-gray-500">件</span></h3>
                                 </div>
                                 <div class="w-10 h-10 rounded-full ${pendingCount > 0 ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-400'} flex items-center justify-center">
@@ -2269,7 +2269,7 @@ const app = {
                         <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                              <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-bold text-gray-500 uppercase">本日の出勤</p>
+                                    <p class="text-sm font-bold text-gray-600 uppercase">本日の出勤</p>
                                     <h3 class="text-2xl font-bold text-blue-600">${todayShiftsInitial.length} <span class="text-sm text-gray-500">名</span></h3>
                                 </div>
                                 <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
@@ -2789,7 +2789,7 @@ const app = {
                     <button onclick="app.changeTablePeriod(-1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
                         <i class="fa-solid fa-chevron-left"></i>
                     </button>
-                    <span class="text-xs font-bold text-gray-500">${label}移動</span>
+                    <span class="text-sm font-bold text-gray-600">${label}移動</span>
                     <button onclick="app.changeTablePeriod(1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600 transition">
                         <i class="fa-solid fa-chevron-right"></i>
                     </button>
@@ -2944,7 +2944,7 @@ const app = {
         const colWidthStyle = `min-width: ${_colW}px; width: ${_colW}px;`;
         
         // v3.7.63: 日付ヘッダーを縦スクロール時も固定 (sticky top-0 追加)
-        let headerHtml = `<th class="p-3 sticky left-0 top-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-xs font-bold text-gray-500 uppercase tracking-wider">スタッフ</th>`;
+        let headerHtml = `<th class="p-3 sticky left-0 top-0 z-50 bg-gray-50 border-b border-r border-gray-200 min-w-[120px] text-left text-sm font-bold text-gray-600 uppercase tracking-wider">スタッフ</th>`;
         days.forEach(date => {
             const d = date.getDate();
             const m = date.getMonth() + 1;
@@ -3212,7 +3212,7 @@ const app = {
             const specialHolidays = this.state.config.special_holidays || [];
 
             alertRowHtml += `<tr>`;
-            alertRowHtml += `<td class="p-2 sticky left-0 z-40 bg-white border-b border-r border-gray-100 text-xs font-bold text-gray-500 h-10 whitespace-nowrap">
+            alertRowHtml += `<td class="p-2 sticky left-0 z-40 bg-white border-b border-r border-gray-100 text-sm font-bold text-gray-600 h-10 whitespace-nowrap">
                 <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i>人員状況
             </td>`;
 
@@ -4268,7 +4268,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
-                            <thead class="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            <thead class="bg-gray-50 border-b border-gray-200 text-sm font-bold text-gray-600 uppercase tracking-wider">
                                 <tr>
                                     ${(() => {
                                         const so = this.state.staffSort || { key: 'role', dir: 'asc' };
@@ -4462,7 +4462,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-shield-halved text-indigo-500"></i> セキュリティ・責任者引き継ぎ</h3>
-                        <p class="text-xs text-gray-500 mt-1">セカンドファクター PIN 設定と、責任者交代時の引き継ぎ手順</p>
+                        <p class="text-sm text-gray-600 mt-1">セカンドファクター PIN 設定と、責任者交代時の引き継ぎ手順</p>
                     </div>
                     <div class="p-5 space-y-4">
                         <!-- PIN セクション -->
@@ -4479,18 +4479,18 @@ const app = {
                             </div>
                         </div>
 
-                        <!-- 責任者引き継ぎ (重要) -->
+                        <!-- 責任者引き継ぎ (重要) v3.7.205: 文字を大きく見やすく -->
                         <div class="border-l-4 border-amber-500 bg-amber-50 p-4 rounded-r-lg">
-                            <h4 class="font-bold text-amber-900 mb-2"><i class="fa-solid fa-people-arrows mr-1"></i>責任者引き継ぎに関して (重要)</h4>
-                            <div class="text-xs text-amber-900 leading-relaxed space-y-2">
+                            <h4 class="font-bold text-lg text-amber-900 mb-2"><i class="fa-solid fa-people-arrows mr-1"></i>責任者引き継ぎに関して (重要)</h4>
+                            <div class="text-sm text-gray-800 leading-relaxed space-y-2">
                                 <p>店舗管理者を交代する際、新責任者がログインできなくなるトラブルを防ぐため、以下を必ず引き継いでください:</p>
-                                <ol class="list-decimal list-inside space-y-1 ml-2">
+                                <ol class="list-decimal list-inside space-y-1.5 ml-2">
                                     <li><strong>契約 ID</strong> (ログイン画面に入力する識別子)</li>
                                     <li><strong>管理者パスワード</strong> (上記の「パスワード変更」から新責任者の希望に変更可能)</li>
                                     <li><strong>セカンドファクター PIN</strong> (上で設定している場合のみ。<u>未引き継ぎだと新責任者がログイン不能</u>)</li>
                                     <li><strong>本部ログイン情報</strong> (本部から店舗を観覧している場合)</li>
                                 </ol>
-                                <p class="font-bold mt-2 text-amber-950">⚠ PIN を忘れた / 引き継ぎ漏れた場合は、運営管理 (info@rakushift.jp) にリセット依頼が必要です。即時対応はできない場合があります。</p>
+                                <p class="font-bold mt-2 text-amber-900">⚠ PIN を忘れた / 引き継ぎ漏れた場合は、運営管理 (info@rakushift.jp) にリセット依頼が必要です。即時対応はできない場合があります。</p>
                                 <p>引き継ぎ前のチェックリストは サイドバーの「責任者引き継ぎ」メニューから確認できます。</p>
                             </div>
                         </div>
@@ -4501,7 +4501,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-id-badge text-indigo-500"></i> 役職・ロール設定</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">スタッフの肩書きを設定します。AIは「Manager」を管理者、「Rookie」を新人として自動判定します。</p>
+                        <p class="text-sm text-gray-600 font-normal ml-6">スタッフの肩書きを設定します。AIは「Manager」を管理者、「Rookie」を新人として自動判定します。</p>
                         <button onclick="app.addRole()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
                             <i class="fa-solid fa-plus mr-1"></i>役職追加
                         </button>
@@ -4575,7 +4575,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-regular fa-clock text-blue-500"></i> 営業時間 & 定休日</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">AIはこの時間帯の中でだけシフトを生成します。定休日にはシフトを入れません。</p>
+                        <p class="text-sm text-gray-600 font-normal ml-6">AIはこの時間帯の中でだけシフトを生成します。定休日にはシフトを入れません。</p>
                     </div>
                     <div class="p-6 space-y-8">
                         <div class="p-4 bg-blue-50 border border-blue-300 rounded-lg text-sm text-gray-800 leading-relaxed">
@@ -4653,7 +4653,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> シフトパターン (早番/遅番など)</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">AIが組み合わせるシフトの「型」です。例：早番9-14時、遅番17-22時など。</p>
+                        <p class="text-sm text-gray-600 font-normal ml-6">AIが組み合わせるシフトの「型」です。例：早番9-14時、遅番17-22時など。</p>
                         <button onclick="app.addShiftPattern()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-200 transition">
                             <i class="fa-solid fa-plus mr-1"></i>追加
                         </button>
@@ -4750,7 +4750,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-users text-green-500"></i> 人員配置要件</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">「最低何人いればお店が回るか」を設定します。AIはこの人数を必ず確保しようとします。</p>
+                        <p class="text-sm text-gray-600 font-normal ml-6">「最低何人いればお店が回るか」を設定します。AIはこの人数を必ず確保しようとします。</p>
                     </div>
                     <div class="p-6">
                         <div class="mb-5 p-4 bg-green-50 border border-green-300 rounded-lg text-sm text-gray-800 leading-relaxed">
@@ -4805,7 +4805,7 @@ const app = {
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-gears text-gray-500"></i> システム設定</h3>
-                        <p class="text-xs text-gray-400 font-normal ml-6">時給の初期値、管理者パスワード、休憩ルールなどの基本設定です。</p>
+                        <p class="text-sm text-gray-600 font-normal ml-6">時給の初期値、管理者パスワード、休憩ルールなどの基本設定です。</p>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="p-4 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 leading-relaxed">
@@ -4818,12 +4818,12 @@ const app = {
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">デフォルト時給 (円)</label>
+                                <label class="block text-sm font-bold text-gray-600 mb-1">デフォルト時給 (円)</label>
                                 <input type="number" id="settingHourlyWage" class="w-full border border-gray-300 rounded-lg px-3 py-2" value="${config.hourly_wage_default || 1100}">
                             </div>
                             
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード</label>
+                                <label class="block text-sm font-bold text-gray-600 mb-1">管理者パスワード</label>
                                 <div class="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 font-mono text-gray-400 tracking-wider select-none">••••••••</div>
                                 <p class="text-[11px] text-gray-400 mt-1">セキュリティのため画面表示しません。変更は下の「管理者パスワードを変更」ボタンから</p>
                             </div>
@@ -4882,7 +4882,7 @@ const app = {
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-clipboard-list text-orange-500"></i> 運用ルール (スタッフ向け表示)</h3>
                     </div>
                     <div class="p-6">
-                        <label class="block text-xs font-bold text-gray-500 mb-2">お店のルール・連絡事項</label>
+                        <label class="block text-sm font-bold text-gray-600 mb-2">お店のルール・連絡事項</label>
                         <textarea id="settingShopRules" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm min-h-[60px] sm:min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="シフト提出期限や注意事項などを入力してください...">${this._sanitize(shopRulesText)}</textarea>
                         <p class="text-xs text-gray-400 mt-2">※ ここに入力した内容は、スタッフ画面の「お店のルール」に表示されます。</p>
                     </div>
@@ -4895,11 +4895,11 @@ const app = {
                     </div>
                     <div class="p-6 space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">契約ID</label>
                             <p class="font-mono text-lg font-bold text-gray-800">${config.contract_id || API.session?.user?.contract_id || '-'}</p>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">登録メールアドレス</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">登録メールアドレス</label>
                             <div class="flex gap-2">
                                 <input type="email" id="settingEmail" value="${config.customer_email || ''}" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="メールアドレスを入力">
                                 <button onclick="app.updateEmail()" class="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
@@ -4966,7 +4966,7 @@ const app = {
 
                                     let btnHtml = '';
                                     if (isCurrent) {
-                                        btnHtml = '<p class="mt-3 text-xs font-bold text-gray-500 text-center py-1.5"><i class="fa-solid fa-circle-check mr-1"></i>ご利用中</p>';
+                                        btnHtml = '<p class="mt-3 text-sm font-bold text-gray-600 text-center py-1.5"><i class="fa-solid fa-circle-check mr-1"></i>ご利用中</p>';
                                     } else if (isUpgrade) {
                                         const btnColor = p.color === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700';
                                         btnHtml = '<button onclick="app.startCheckout(&#39;'+p.key+'&#39;)" class="mt-3 w-full py-2 '+btnColor+' text-white rounded-lg text-xs font-bold transition"><i class="fa-solid fa-arrow-up mr-1"></i>アップグレード</button>';
@@ -9120,8 +9120,8 @@ const app = {
 
                 <!-- なぜ重要か -->
                 <div class="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-5">
-                    <h3 class="font-bold text-red-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>引き継ぎ漏れによるリスク</h3>
-                    <ul class="text-sm text-red-900 leading-relaxed space-y-1 list-disc list-inside">
+                    <h3 class="font-bold text-lg text-red-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>引き継ぎ漏れによるリスク</h3>
+                    <ul class="text-base text-red-900 leading-relaxed space-y-1.5 list-disc list-inside">
                         <li>新責任者がログインできず、シフト作成が完全に止まる</li>
                         <li>セカンドファクター PIN を知らないと、パスワードを知っていてもログイン不能</li>
                         <li>運営管理にリセット依頼が必要となり、復旧まで時間がかかる</li>
@@ -9132,9 +9132,9 @@ const app = {
                 <!-- ステップ1: 引き継ぎ前のチェックリスト -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 bg-gray-50">
-                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-list-check text-blue-500 mr-1"></i>引き継ぎチェックリスト</h3>
+                        <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-list-check text-blue-500 mr-1"></i>引き継ぎチェックリスト</h3>
                     </div>
-                    <div class="p-5 space-y-3 text-sm">
+                    <div class="p-5 space-y-3 text-base">
                         <label class="flex items-start gap-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
                             <input type="checkbox" class="mt-1 form-checkbox text-blue-600 rounded">
                             <div>
@@ -9823,7 +9823,7 @@ const app = {
                     <div>
                         <h4 class="font-bold text-gray-800 mb-1">${this._sanitize(s.title || '')}</h4>
                         <p class="text-sm text-gray-600 mb-3">${this._sanitize(s.desc || '')}</p>
-                        <p class="text-xs font-bold text-gray-500">${this._sanitize(s.action || '')}</p>
+                        <p class="text-sm font-bold text-gray-600">${this._sanitize(s.action || '')}</p>
                     </div>
                 </div>`;
             }).join('');

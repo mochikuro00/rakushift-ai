@@ -2471,9 +2471,10 @@ class ShiftScheduler:
                                     reason = "レギュラー契約優先"
                                 elif sid in self._mentor_ids:
                                     reason = "メンター・管理者ロール"
-                                elif sid in self._monthly_ids:
+                                elif sid in self._monthly_ids and not self.allow_overstaffing:
+                                    # v3.7.205: 過剰配置ON(公平配置)時は「月給優先」ラベルを出さない
                                     reason = "月給スタッフ (固定費活用)"
-                                elif rank in ("A", "B"):
+                                elif rank in ("A", "B") and not self.allow_overstaffing:
                                     reason = "高評価ランク (戦力)"
                                 else:
                                     reason = "公平性に基づく自動配置"

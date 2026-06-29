@@ -391,9 +391,9 @@
                 <!-- Tab Navigation -->
                 <div class="flex border-b border-gray-200 shrink-0">
                     <button onclick="app.switchLoginTab('admin')" id="tab-admin" class="flex-1 py-3 text-[10px] sm:text-xs font-bold text-blue-600 border-b-2 border-blue-600 bg-white hover:bg-gray-50 transition-colors">店舗管理者</button>
-                    <button onclick="app.switchLoginTab('shop')" id="tab-shop" class="flex-1 py-3 text-[10px] sm:text-xs font-bold text-gray-500 border-b-2 border-transparent hover:bg-gray-100 transition-colors">店舗用</button>
-                    <button onclick="app.switchLoginTab('hq')" id="tab-hq" class="flex-1 py-3 text-[10px] sm:text-xs font-bold text-gray-500 border-b-2 border-transparent hover:bg-gray-100 transition-colors">本部・統括</button>
-                    <button onclick="app.switchLoginTab('platform')" id="tab-platform" class="flex-1 py-3 text-[10px] sm:text-xs font-bold text-gray-500 border-b-2 border-transparent hover:bg-gray-100 transition-colors">運営管理</button>
+                    <button onclick="app.switchLoginTab('shop')" id="tab-shop" class="flex-1 py-3 text-[10px] sm:text-sm font-bold text-gray-600 border-b-2 border-transparent hover:bg-gray-100 transition-colors">店舗用</button>
+                    <button onclick="app.switchLoginTab('hq')" id="tab-hq" class="flex-1 py-3 text-[10px] sm:text-sm font-bold text-gray-600 border-b-2 border-transparent hover:bg-gray-100 transition-colors">本部・統括</button>
+                    <button onclick="app.switchLoginTab('platform')" id="tab-platform" class="flex-1 py-3 text-[10px] sm:text-sm font-bold text-gray-600 border-b-2 border-transparent hover:bg-gray-100 transition-colors">運営管理</button>
                 </div>
 
                 <!-- Forms Container -->
@@ -403,11 +403,11 @@
                     <div id="form-admin" class="space-y-4 transition-all duration-300">
                         <h3 class="text-xl font-bold text-gray-800 text-center mb-4">店舗管理者ログイン</h3>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">契約ID</label>
                             <input type="text" id="adminLoginContractId" maxlength="32" pattern="[A-Za-z0-9_\-]+" autocomplete="username" inputmode="text" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="例: demo">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">管理者パスワード</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">管理者パスワード</label>
                             <input type="password" id="adminLoginPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.adminLogin()">
                         </div>
                         <button onclick="app.adminLogin()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
@@ -417,11 +417,11 @@
                     <div id="form-shop" class="space-y-4 hidden transition-all duration-300">
                         <h3 class="text-xl font-bold text-gray-800 text-center mb-4">店舗ログイン</h3>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">契約ID</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">契約ID</label>
                             <input type="text" id="loginContractId" maxlength="32" pattern="[A-Za-z0-9_\-]+" autocomplete="username" inputmode="text" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="例: demo (または 15桁の契約ID)">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">パスワード</label>
                             <input type="password" id="loginShopPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.login()">
                         </div>
                         <button onclick="app.login()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
@@ -431,11 +431,11 @@
                     <div id="form-hq" class="space-y-4 hidden transition-all duration-300">
                         <h3 class="text-xl font-bold text-gray-800 text-center mb-4">本部ログイン</h3>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">本部ID</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">本部ID</label>
                             <input type="text" id="loginHqId" maxlength="32" pattern="[A-Za-z0-9_\-]+" autocomplete="username" inputmode="text" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="例: demo (または 本部ID)">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">パスワード</label>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">パスワード</label>
                             <input type="password" id="loginHqPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.hqLogin()">
                         </div>
                         <button onclick="app.hqLogin()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
@@ -543,7 +543,7 @@
                 <button onclick="app.submitPinSetup()" class="w-full px-4 py-3 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition">
                     <i class="fa-solid fa-check mr-1"></i>PIN を設定してログインを完了
                 </button>
-                <button onclick="app.cancelPinSetup()" class="w-full text-xs text-gray-400 hover:text-red-600 transition">
+                <button onclick="app.cancelPinSetup()" class="w-full text-sm text-gray-600 hover:text-red-600 transition">
                     設定せずログアウト
                 </button>
             </div>
@@ -661,7 +661,7 @@
 
                 <!-- セクション: 会社情報 -->
                 <div class="border-b border-gray-200 pb-1">
-                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <p class="text-sm font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
                         <i class="fa-solid fa-building-columns text-blue-400"></i> 会社情報
                     </p>
                 </div>
@@ -704,7 +704,7 @@
 
                 <!-- セクション: 契約予定プラン -->
                 <div class="border-b border-gray-200 pb-1 pt-2">
-                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <p class="text-sm font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
                         <i class="fa-solid fa-file-contract text-indigo-400"></i> 契約予定プラン
                     </p>
                 </div>
@@ -771,7 +771,7 @@
 
                 <!-- セクション: 連絡希望日程 -->
                 <div class="border-b border-gray-200 pb-1 pt-2">
-                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <p class="text-sm font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
                         <i class="fa-solid fa-calendar-check text-green-400"></i> ご連絡希望日程
                     </p>
                 </div>
@@ -859,7 +859,7 @@
                     <i class="fa-solid fa-paper-plane"></i>
                     お問い合わせを送信
                 </button>
-                <p class="text-center text-xs text-gray-400 mt-3">
+                <p class="text-center text-sm text-gray-600 mt-3">
                     通常1営業日以内にご連絡いたします
                 </p>
             </div>
@@ -1004,7 +1004,7 @@
 
                 <!-- v3.7.161: シフトパターン クイック選択 (custom_shifts から動的描画) -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">
+                    <label class="block text-sm font-bold text-gray-600 mb-1">
                         シフトパターンから選ぶ <span class="font-normal text-gray-400">(タップで時間自動入力)</span>
                     </label>
                     <div id="editShiftPatternRow" class="flex flex-wrap gap-2">
@@ -1015,22 +1015,22 @@
                 <!-- v3.7.15: <select> → <input type="time"> に変更 (打ち込み可能化) -->
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">開始時間 <span class="font-normal text-gray-400">(手入力可)</span></label>
+                        <label class="block text-sm font-bold text-gray-600 mb-1">開始時間 <span class="font-normal text-gray-400">(手入力可)</span></label>
                         <input type="time" id="editShiftStart" step="60" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-mono text-center hover:bg-gray-50">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 mb-1">終了時間 <span class="font-normal text-gray-400">(手入力可)</span></label>
+                        <label class="block text-sm font-bold text-gray-600 mb-1">終了時間 <span class="font-normal text-gray-400">(手入力可)</span></label>
                         <input type="time" id="editShiftEnd" step="60" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-lg font-mono text-center hover:bg-gray-50">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">休憩時間 (分)</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">休憩時間 (分)</label>
                     <input type="number" id="editShiftBreak" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-right" value="60">
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">メモ <span class="font-normal text-gray-400">(任意・引継ぎ事項など)</span></label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">メモ <span class="font-normal text-gray-400">(任意・引継ぎ事項など)</span></label>
                     <textarea id="editShiftMemo" rows="2" maxlength="500" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-y" placeholder="例: レジ閉め担当 / 新人指導付き"></textarea>
                 </div>
 
@@ -1113,7 +1113,7 @@
                 </div>
 
                 <div class="mt-4">
-                    <label class="block text-xs font-bold text-gray-500 mb-2">基本出勤曜日 (チェックを外した曜日はシフトに入りません)</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-2">基本出勤曜日 (チェックを外した曜日はシフトに入りません)</label>
                     <div class="flex flex-wrap gap-3">
                         <label class="inline-flex items-center">
                             <input type="checkbox" id="prefDay1" class="form-checkbox text-blue-600 rounded" checked>
@@ -1235,7 +1235,7 @@
                     <p class="text-xs text-gray-500 mb-3">このスタッフが入れる (=該当する) シフトパターンにチェックを入れてください。<strong>全て未チェック</strong> または初期状態 = 全パターン該当 (デフォルト)。</p>
                     <div id="staffEligiblePatternsContainer" class="space-y-1">
                         <!-- JS で config.custom_shifts に基づき動的描画 -->
-                        <p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>
+                        <p class="text-sm text-gray-600 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>
                     </div>
                 </div>
 
@@ -1245,7 +1245,7 @@
                     <p class="text-xs text-gray-500 mb-3">該当パターンの中で「月N回〜M回入れたい」を指定します。空欄なら制約なし。</p>
                     <div id="staffPatternTargetsContainer" class="space-y-2">
                         <!-- JS で config.custom_shifts に基づき動的描画 -->
-                        <p class="text-xs text-gray-400 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>
+                        <p class="text-sm text-gray-600 text-center py-3">シフトパターンが登録されていません。先に「設定 → シフトパターン」を設定してください。</p>
                     </div>
                 </div>
 
@@ -1281,7 +1281,7 @@
                 </div>
                 <!-- スタッフ選択 -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">スタッフ</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">スタッフ</label>
                     <select id="requestStaffId" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"></select>
                 </div>
                 <input type="radio" name="requestType" value="off" checked class="hidden">
@@ -1296,12 +1296,12 @@
                 </div>
                 <!-- 選択済み日付 -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">選択した日付 <span id="selectedDateCount" class="text-indigo-600">0</span>件</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">選択した日付 <span id="selectedDateCount" class="text-indigo-600">0</span>件</label>
                     <div id="selectedDatesDisplay" class="flex flex-wrap gap-1.5 min-h-[32px] p-2 bg-gray-50 rounded-lg border border-gray-200"></div>
                 </div>
                 <!-- メモ -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">理由・メモ（任意）</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">理由・メモ（任意）</label>
                     <input type="text" id="requestReason" maxlength="500" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="例: 家族旅行のため">
                 </div>
             </div>
@@ -1325,7 +1325,7 @@
                 <p class="text-sm text-gray-500 mb-6">シフトの空き状況を分析し、<br>最適なスタッフを自動で割り当てます。</p>
                 
                 <div class="text-left bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
-                    <label class="block text-xs font-bold text-gray-500 mb-1">作成範囲</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">作成範囲</label>
                     <select id="autoFillTarget" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
                         <option value="reset_all">現在のシフトをリセットして再構築 (未来日のみ)</option>
                         <option value="next_week">来週分を作成</option>
@@ -1379,7 +1379,7 @@
             </div>
             <!-- v3.7.40: フッターを sticky で画面下部に固定 (iOS Safari 対応 + safe-area-inset 考慮) -->
             <div class="p-3 sm:p-4 bg-white border-t-2 border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
-                <p class="hidden sm:block text-xs text-gray-400"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
+                <p class="hidden sm:block text-sm text-gray-600"><i class="fa-solid fa-info-circle mr-1"></i>問題がなければ「確定して保存」を押してください</p>
                 <div class="flex gap-2 sm:gap-3 w-full sm:w-auto">
                     <button onclick="app.cancelShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-5 py-3.5 sm:py-2.5 text-sm font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition" title="この結果を破棄して終了 (DB保存なし)"><i class="fa-solid fa-trash-can mr-1"></i>破棄</button>
                     <button onclick="app.confirmShiftPreview()" class="flex-1 sm:flex-none px-4 sm:px-6 py-3.5 sm:py-2.5 text-base sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-lg transition flex items-center justify-center gap-2">
@@ -1399,15 +1399,15 @@
             </div>
             <div class="p-6 space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">現在のパスワード</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">現在のパスワード</label>
                     <input type="password" id="currentPassword" maxlength="128" autocomplete="current-password" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="現在のパスワード">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">新しいパスワード</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">新しいパスワード</label>
                     <input type="password" id="newPassword" maxlength="128" autocomplete="new-password" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="新しいパスワード (6文字以上)">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 mb-1">新しいパスワード（確認）</label>
+                    <label class="block text-sm font-bold text-gray-600 mb-1">新しいパスワード（確認）</label>
                     <input type="password" id="confirmPassword" maxlength="128" autocomplete="new-password" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-200 focus:border-amber-400" placeholder="もう一度入力">
                 </div>
             </div>
@@ -1451,7 +1451,7 @@
             </div>
             <div class="p-6">
                 <input type="hidden" id="noteDate">
-                <label class="block text-xs font-bold text-gray-500 mb-2">メモ内容 (団体予約、イベント等)</label>
+                <label class="block text-sm font-bold text-gray-600 mb-2">メモ内容 (団体予約、イベント等)</label>
                 <textarea id="noteText" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none h-32 resize-none" placeholder="例: 19:00〜 団体20名様"></textarea>
             </div>
             <!-- v3.7.39: モバイルで保存ボタン全幅化 -->
@@ -1607,9 +1607,9 @@
             </div>
             <!-- フッター (ページネーション) -->
             <div id="announcementFooter" class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <span id="announcementCounter" class="text-xs text-gray-400">1 / 1</span>
+                <span id="announcementCounter" class="text-sm text-gray-600">1 / 1</span>
                 <div class="flex gap-2">
-                    <button id="announcementPrev" onclick="app.prevAnnouncement()" class="px-3 py-1.5 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition hidden">
+                    <button id="announcementPrev" onclick="app.prevAnnouncement()" class="px-3 py-1.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition hidden">
                         <i class="fa-solid fa-chevron-left mr-1"></i>前へ
                     </button>
                     <button id="announcementNext" onclick="app.nextAnnouncement()" class="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition hidden">
