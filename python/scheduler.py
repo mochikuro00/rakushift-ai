@@ -1540,21 +1540,17 @@ class ShiftScheduler:
                             effective_min = min(min_days_week, available_days_in_week, max_days)
                             if effective_min > 0:
                                 is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
-                                # v3.7.89: 月給スタッフは ハード制約 (min_days_month と一貫)
-                                # 旧: 月給 1M ペナルティ → パターン100M/COVERAGE100M に負けて
-                                #   ユーザー設定の週N日が達成されないケースが頻発
-                                # 新: ハード制約で必ず達成 (effective_min は available_days で
-                                #   抑制済みなので infeasible リスクなし)
-                                if is_monthly:
-                                    prob += pulp.lpSum(wv) >= effective_min
-                                else:
-                                    # 時給はソフト制約だが 30k → 1M に強化
-                                    # (時間帯柔軟性は維持しつつ達成優先度を上げる)
-                                    mdw_slack = pulp.LpVariable(
-                                        "mdw_{}_{}".format(sid, week[0] if week else "x"),
-                                        0, None, pulp.LpInteger)
-                                    prob += pulp.lpSum(wv) + mdw_slack >= effective_min
-                                    penalty += mdw_slack * 1_000_000
+                                # v3.7.206: 月給の週最低日数を「ハード」→「高ペナルティのソフト」に変更。
+                                #   理由: 旧ハード制約は force_rest(夜勤翌休)/eligible_patterns/連勤上限で
+                                #   実際の達成可能日数がクランプ値を下回ると infeasible になり、Tier3/2 が
+                                #   解けず緊急モード(Tier1)へ落ちてシフトが荒れる主因だった。
+                                #   ソフト化でモデルは常に実行可能となり緊急モードを回避。
+                                #   月給は 20M (時給1M) と高重みで、達成可能な範囲では確実に優先される。
+                                mdw_slack = pulp.LpVariable(
+                                    "mdw_{}_{}".format(sid, week[0] if week else "x"),
+                                    0, None, pulp.LpInteger)
+                                prob += pulp.lpSum(wv) + mdw_slack >= effective_min
+                                penalty += mdw_slack * (20_000_000 if is_monthly else 1_000_000)
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
@@ -1584,21 +1580,16 @@ class ShiftScheduler:
                                 all_wv.append(x[(sid, d, oi)])
                         if all_wv:
                             is_monthly = str(s.get("salary_type", "hourly")).lower() == "monthly"
-                            # v3.7.84: 月給スタッフは ハード制約 で必ず達成
-                            # 旧: 20M ペナルティ → COVERAGE_OVER (100M) と衝突して犠牲
-                            #   過剰回避優先で月給スタッフの21日設定が無視されていた
-                            # 新: target_min_month はすでに物理上限 (max_possible /
-                            #   available_total) で抑制済みなので、infeasible リスク
-                            #   なしにハード制約化できる
-                            if is_monthly:
-                                prob += pulp.lpSum(all_wv) >= target_min_month
-                            else:
-                                # 時給スタッフはソフト制約のまま (柔軟調整余地を残す)
-                                mdm_slack = pulp.LpVariable(
-                                    "mdm_{}".format(sid), 0, None, pulp.LpInteger)
-                                prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
-                                # v3.7.83: 1M (Tier 3 相当)
-                                penalty += mdm_slack * 1_000_000
+                            # v3.7.206: 月給の月最低日数を「ハード」→「高ペナルティのソフト」に変更。
+                            #   理由: クランプは max_days_week までしか考慮せず、force_rest/eligible_patterns/
+                            #   連勤上限で実達成可能数が target を下回ると infeasible → 緊急モード(Tier1)に
+                            #   落ちてシフトが荒れる主因だった。ソフト化でモデルは常に実行可能になり緊急モード回避。
+                            #   月給は 20M (時給1M) の高重みで、達成可能な範囲では確実に優先される。
+                            #   過剰配置ON時は COVERAGE_OVER=1M < 20M のため、増員してでも月給最低日数を満たす。
+                            mdm_slack = pulp.LpVariable(
+                                "mdm_{}".format(sid), 0, None, pulp.LpInteger)
+                            prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
+                            penalty += mdm_slack * (20_000_000 if is_monthly else 1_000_000)
 
                 # --- v3.7.54: 全スタッフ最低出勤保証 (Tier 4 500k に弱化) ---
                 # v3.7.51-53 の 5M では COVERAGE_UNDER/OVER (100M) と衝突して
