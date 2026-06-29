@@ -4507,6 +4507,15 @@ const app = {
                         </button>
                     </div>
                     <div class="p-6">
+                        <div class="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 leading-relaxed">
+                            <p class="font-bold mb-1">📌 かんたん備考（役職ロールとは）</p>
+                            <ul class="list-disc pl-4 space-y-0.5">
+                                <li>スタッフ1人ずつに付ける「肩書き」です（例: 店長・リーダー・一般・パート）。</li>
+                                <li><b>「管理者」にチェック</b>を入れた役職の人だけが、シフトパターンの「管理者人数」の配置対象になります（＝あけしめ等を任せる責任者）。</li>
+                                <li>色は表示用の目印です（黄色＝新人として一部AIが配慮）。</li>
+                                <li>IDは内部処理用のため変更できません。</li>
+                            </ul>
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left">
                                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
@@ -4515,7 +4524,6 @@ const app = {
                                         <th class="p-3">識別ID</th>
                                         <th class="p-3">バッジカラー</th>
                                         <th class="p-3 text-center">管理者<br><span class="text-[9px] text-gray-400">として認識</span></th>
-                                        <th class="p-3 text-center">社員<br><span class="text-[9px] text-gray-400">として認識</span></th>
                                         <th class="p-3 text-right rounded-r-lg">操作</th>
                                     </tr>
                                 </thead>
@@ -4525,9 +4533,6 @@ const app = {
                                         const inferred = (role.color === 'purple' || role.color === 'red' || role.color === 'green'
                                                        || role.id === 'manager' || role.id === 'sub_manager' || role.id === 'employee');
                                         const isMgr = role.is_manager != null ? !!role.is_manager : inferred;
-                                        // v3.7.196: 社員フラグ (管理者と独立)。管理者は自動的に社員。未設定は緑/青を社員と推定
-                                        const inferredEmp = isMgr || role.color === 'green' || role.color === 'blue';
-                                        const isEmp = role.is_employee != null ? !!role.is_employee : inferredEmp;
                                         return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-2">
@@ -4547,13 +4552,8 @@ const app = {
                                                 </select>
                                             </td>
                                             <td class="p-2 text-center">
-                                                <label class="inline-flex items-center justify-center cursor-pointer" title="チェックを入れると、この役職のスタッフは「管理者最低人数」の対象になります">
+                                                <label class="inline-flex items-center justify-center cursor-pointer" title="チェックを入れると、この役職のスタッフは「管理者」として扱われ、シフトパターンの管理者人数の対象になります">
                                                     <input type="checkbox" class="setting-role-is-manager w-5 h-5 accent-indigo-600" ${isMgr?'checked':''}>
-                                                </label>
-                                            </td>
-                                            <td class="p-2 text-center">
-                                                <label class="inline-flex items-center justify-center cursor-pointer" title="チェックを入れると、この役職のスタッフは「社員」として扱われます (給与形態が時給でも社員優先・希望時間尊重の対象になります)">
-                                                    <input type="checkbox" class="setting-role-is-employee w-5 h-5 accent-emerald-600" ${isEmp?'checked':''}>
                                                 </label>
                                             </td>
                                             <td class="p-2 text-right">
@@ -4578,6 +4578,14 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">AIはこの時間帯の中でだけシフトを生成します。定休日にはシフトを入れません。</p>
                     </div>
                     <div class="p-6 space-y-8">
+                        <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 leading-relaxed">
+                            <p class="font-bold mb-1">📌 かんたん備考（営業時間・定休日）</p>
+                            <ul class="list-disc pl-4 space-y-0.5">
+                                <li>ここで決めた営業時間の<b>外</b>にはシフトは入りません。曜日タイプ（平日／土日／祝日）で時間を変えられます。</li>
+                                <li><b>24時間営業</b>のお店は右の「24時間」チェックをONにしてください。</li>
+                                <li><b>定休日</b>に指定した曜日・日付には、AIは誰もシフトを入れません。</li>
+                            </ul>
+                        </div>
                         <!-- 営業時間 (v3.7.60: 24時間営業対応) -->
                         <div class="space-y-4">
                             <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
@@ -4652,6 +4660,16 @@ const app = {
                         </button>
                     </div>
                     <div class="p-6">
+                        <div class="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900 leading-relaxed">
+                            <p class="font-bold mb-1">📌 かんたん備考（シフトパターンと「あけしめ」）</p>
+                            <ul class="list-disc pl-4 space-y-0.5">
+                                <li>AIが組み合わせる勤務の「型」です（例: 早番 9:00-14:00 / 遅番 17:00-22:00）。</li>
+                                <li>平日／土曜／日祝ごとに必要人数を設定できます。<b>0にするとその曜日はそのパターンを使いません</b>。</li>
+                                <li>🔑 <b>オープン(早番)やラスト(遅番)の「あけしめ」を社員(店長・リーダー)に必ず任せたい場合</b>は、そのパターンの<b>「管理者」をON にして人数を1以上</b>にしてください。→ そのパターンに管理者が指定人数だけ入るようAIが配置します。</li>
+                                <li><b>「翌休」をON</b>にすると、そのパターン(夜勤など)に入った翌日を自動で休みにします（夜勤の2連勤防止）。</li>
+                                <li>管理者が<b>OFF</b>のときは、そのパターンに誰が入るかはAIにおまかせ（管理者の制約なし）。</li>
+                            </ul>
+                        </div>
                         <!-- v3.7.100: モバイル幅対応 - 横スクロール最低 720px 保証 + ヒント -->
                         <p class="text-[10px] text-gray-400 mb-2 sm:hidden">👆 横にスワイプして全列を編集できます</p>
                         <div class="overflow-x-auto" style="-webkit-overflow-scrolling: touch;">
@@ -4736,6 +4754,14 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">「最低何人いればお店が回るか」を設定します。AIはこの人数を必ず確保しようとします。</p>
                     </div>
                     <div class="p-6">
+                        <div class="mb-5 p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-900 leading-relaxed">
+                            <p class="font-bold mb-1">📌 かんたん備考（人員配置要件）</p>
+                            <ul class="list-disc pl-4 space-y-0.5">
+                                <li><b>1日にお店全体で最低何人</b>必要かを、平日／土曜／日祝ごとに設定します。AIは必ずこの人数を確保しようとします。</li>
+                                <li>役職（管理者）ごとの人数は<b>シフトパターンの「管理者」列</b>で設定します（ここは総数）。</li>
+                                <li>下の<b>「⚡ 過剰配置を許容する」</b>: OFF=必要人数ぴったり（推奨）／ON=多めに入れてもOK（全員をたくさん入れたい時）。</li>
+                            </ul>
+                        </div>
                         <div class="grid grid-cols-1 gap-8 mb-6">
                             <div>
                                 <h4 class="text-sm font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">スタッフ総数要件</h4>
@@ -4782,6 +4808,14 @@ const app = {
                         <p class="text-xs text-gray-400 font-normal ml-6">時給の初期値、管理者パスワード、休憩ルールなどの基本設定です。</p>
                     </div>
                     <div class="p-6 space-y-6">
+                        <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 leading-relaxed">
+                            <p class="font-bold mb-1">📌 かんたん備考（システム設定）</p>
+                            <ul class="list-disc pl-4 space-y-0.5">
+                                <li><b>デフォルト時給</b>: スタッフ個別に時給を入れていない場合に使う初期値（人件費の概算に使用）。</li>
+                                <li><b>店舗パスワード</b>=日常の閲覧用／<b>管理者パスワード</b>=シフト編集など権限が必要な操作用。</li>
+                                <li><b>休憩時間ルール</b>: 「○時間を超えたら△分休憩」を自動で付与します。法令に合わせて設定してください。</li>
+                            </ul>
+                        </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 mb-1">デフォルト時給 (円)</label>
@@ -5018,7 +5052,7 @@ const app = {
         if(!this.state.config.roles) this.state.config.roles = [];
         // ユニークID生成
         const newId = 'role_' + Math.random().toString(36).substr(2, 5);
-        this.state.config.roles.push({ id: newId, name: '新規役職', color: 'gray', level: 1, is_manager: false, is_employee: false });
+        this.state.config.roles.push({ id: newId, name: '新規役職', color: 'gray', level: 1, is_manager: false });
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
@@ -5467,7 +5501,6 @@ const app = {
         const roleIds = document.querySelectorAll('.setting-role-id');
         const roleColors = document.querySelectorAll('.setting-role-color');
         const roleIsManagers = document.querySelectorAll('.setting-role-is-manager');
-        const roleIsEmployees = document.querySelectorAll('.setting-role-is-employee');
 
         const existingRoles = this.state.config.roles || [];
         config.roles = [];
@@ -5483,8 +5516,6 @@ const app = {
                     level: prev ? prev.level : 1,
                     // v3.7.81: 明示的な管理者フラグ
                     is_manager: isMgr,
-                    // v3.7.196: 社員フラグ (管理者は自動的に社員)
-                    is_employee: isMgr || (roleIsEmployees[i] ? !!roleIsEmployees[i].checked : false),
                 });
             }
         });
