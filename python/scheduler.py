@@ -1545,12 +1545,13 @@ class ShiftScheduler:
                                 #   実際の達成可能日数がクランプ値を下回ると infeasible になり、Tier3/2 が
                                 #   解けず緊急モード(Tier1)へ落ちてシフトが荒れる主因だった。
                                 #   ソフト化でモデルは常に実行可能となり緊急モードを回避。
-                                #   月給は 20M (時給1M) と高重みで、達成可能な範囲では確実に優先される。
+                                #   v3.7.209: 月給20M / 時給10M に強化 (時給の最低日数も強く尊重)。
+                                #   いずれも COVERAGE(100M) 未満なので infeasible は起こさず緊急モード回避を維持。
                                 mdw_slack = pulp.LpVariable(
                                     "mdw_{}_{}".format(sid, week[0] if week else "x"),
                                     0, None, pulp.LpInteger)
                                 prob += pulp.lpSum(wv) + mdw_slack >= effective_min
-                                penalty += mdw_slack * (20_000_000 if is_monthly else 1_000_000)
+                                penalty += mdw_slack * (20_000_000 if is_monthly else 10_000_000)
 
                 # --- 月(全体期間)の最低出勤日数 (ハード制約) ---
                 min_days_month = int(s.get("min_days_month") or 0)
@@ -1584,12 +1585,12 @@ class ShiftScheduler:
                             #   理由: クランプは max_days_week までしか考慮せず、force_rest/eligible_patterns/
                             #   連勤上限で実達成可能数が target を下回ると infeasible → 緊急モード(Tier1)に
                             #   落ちてシフトが荒れる主因だった。ソフト化でモデルは常に実行可能になり緊急モード回避。
-                            #   月給は 20M (時給1M) の高重みで、達成可能な範囲では確実に優先される。
-                            #   過剰配置ON時は COVERAGE_OVER=1M < 20M のため、増員してでも月給最低日数を満たす。
+                            #   v3.7.209: 月給20M / 時給10M に強化 (時給の最低日数も強く尊重)。
+                            #   過剰配置ON時は COVERAGE_OVER=1M < 10M/20M のため、増員してでも最低日数を満たす。
                             mdm_slack = pulp.LpVariable(
                                 "mdm_{}".format(sid), 0, None, pulp.LpInteger)
                             prob += pulp.lpSum(all_wv) + mdm_slack >= target_min_month
-                            penalty += mdm_slack * (20_000_000 if is_monthly else 1_000_000)
+                            penalty += mdm_slack * (20_000_000 if is_monthly else 10_000_000)
 
                 # --- v3.7.54: 全スタッフ最低出勤保証 (Tier 4 500k に弱化) ---
                 # v3.7.51-53 の 5M では COVERAGE_UNDER/OVER (100M) と衝突して
