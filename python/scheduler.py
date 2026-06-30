@@ -2298,29 +2298,9 @@ class ShiftScheduler:
                             # v3.7.47 [Tier 4]: 月給未配置 500k (推奨レベル)
                             penalty += not_working * 500_000
 
-                # 時給スタッフは「働くと小ペナルティ」(控え目配置)。ただしスポット帯は割引
-                hourly_ids = {s["id"] for s in self.staff_list
-                              if str(s.get("salary_type", "hourly")).lower() == "hourly"}
-                for sid in hourly_ids:
-                    for d in self.dates:
-                        opts = staff_opts.get((sid, d), [])
-                        if not opts:
-                            continue
-                        # その日に「スポット帯」(time_staff_req で要件が高いスロット) があるか
-                        slot_reqs = self._slot_reqs_cache.get(d, {}) if hasattr(self, '_slot_reqs_cache') else {}
-                        for oi, opt in enumerate(opts):
-                            # opt の時間範囲とスポット帯の重なりを判定
-                            is_spot = False
-                            if has_time_rules and slot_reqs:
-                                # opt 範囲内に高要件スロット (>= 2) があれば「スポット」
-                                for slot_min, req_at_slot in slot_reqs.items():
-                                    if opt["start_min"] <= slot_min < opt["end_min"] and req_at_slot >= 2:
-                                        is_spot = True
-                                        break
-                            # v3.7.47 [Tier 5]: 時給通常コスト 10k / スポット帯 0
-                            cost = 0 if is_spot else 10_000
-                            if cost > 0:
-                                penalty += x[(sid, d, oi)] * cost
+                # v3.7.210: OFF(厳格)時の「時給抑制(配置10k)」を撤廃 → 時給は通常扱い
+                #   (基本コスト SHIFT_COST のみ。月給の積極配置 500k は維持するため
+                #    結果として「月給を優先しつつ時給も普通に使う」挙動になる)。
 
             # シフト 1 件あたりの基本コスト (不要シフト抑制)
             for s in self.staff_list:
