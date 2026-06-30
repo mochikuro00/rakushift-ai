@@ -1094,15 +1094,6 @@
                 </div>
                 
 
-                <div class="p-4 bg-indigo-50 border border-indigo-300 rounded-lg text-sm text-gray-800 leading-relaxed">
-                    <p class="font-bold text-base text-indigo-800 mb-2">📌 かんたん備考（役割・評価・優先度の違い）</p>
-                    <ul class="list-disc pl-5 space-y-1.5">
-                        <li><b>役割</b>：肩書き（店長/リーダー/スタッフ）。「管理者」設定の役割は、シフトパターンの管理者人数の対象になります。</li>
-                        <li><b>評価ランク</b>：A＝優先的に配置／B＝標準／C＝控えめ／<b>D＝新人(研修)扱い</b>。Dの人は先輩(メンター)と時間が重なるようAIが配慮します。</li>
-                        <li><b>シフト優先度</b>：高＝なるべく多く入れる／中＝通常／低＝人手が足りない時の穴埋めだけ。</li>
-                    </ul>
-                </div>
-
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">シフト優先度</label>
                     <select id="staffShiftPriority" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
@@ -1171,6 +1162,16 @@
                 <div id="monthlyInputGroup" class="hidden">
                     <label class="block text-sm font-bold text-gray-700 mb-1">月給 (円)</label>
                     <input type="number" id="staffMonthlySalary" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-right" placeholder="250000">
+                </div>
+
+                <!-- v3.7.208: 役割・評価・優先度の備考を月給(給与形態)の下へ移動 -->
+                <div class="p-4 bg-indigo-50 border border-indigo-300 rounded-lg text-sm text-gray-800 leading-relaxed">
+                    <p class="font-bold text-base text-indigo-800 mb-2">📌 かんたん備考（役割・評価・優先度の違い）</p>
+                    <ul class="list-disc pl-5 space-y-1.5">
+                        <li><b>役割</b>：肩書き（店長/リーダー/スタッフ）。「管理者」設定の役割は、シフトパターンの管理者人数の対象になります。</li>
+                        <li><b>評価ランク</b>：A＝優先的に配置／B＝標準／C＝控えめ／<b>D＝新人(研修)扱い</b>。Dの人は先輩(メンター)と時間が重なるようAIが配慮します。</li>
+                        <li><b>シフト優先度</b>：高＝なるべく多く入れる／中＝通常／低＝人手が足りない時の穴埋めだけ。</li>
+                    </ul>
                 </div>
 
                 <div class="border-t border-gray-100 pt-4 mt-2">
