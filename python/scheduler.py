@@ -2298,16 +2298,17 @@ class ShiftScheduler:
                             # v3.7.47 [Tier 4]: 月給未配置 500k (推奨レベル)
                             penalty += not_working * 500_000
 
-                # v3.7.211: OFF(厳格)時、時給を「通常より少し多め」に配置する。
-                #   基本コスト SHIFT_COST(100k) を一部相殺する 50k の配置ボーナスを付与し、
-                #   時給スタッフをやや積極的に使う (月給優先 500k は維持)。
+                # v3.7.213: OFF(厳格)時、時給を「多め」に配置する。
+                #   基本コスト SHIFT_COST(100k) を上回る 150k の配置ボーナスを付与し
+                #   (実質 -50k=配置するほど得)、時給スタッフを積極的に使う。
+                #   月給優先(未配置500k)は維持=月給は自分の枠を先に確保、余り枠を時給が多めに埋める。
                 #   過剰回避(COVERAGE_OVER 100M)は不変のため過剰配置にはならない。
                 hourly_ids = {s["id"] for s in self.staff_list
                               if str(s.get("salary_type", "hourly")).lower() == "hourly"}
                 for sid in hourly_ids:
                     for d in self.dates:
                         for oi in range(len(staff_opts.get((sid, d), []))):
-                            penalty += x[(sid, d, oi)] * (-50_000)
+                            penalty += x[(sid, d, oi)] * (-150_000)
 
             # シフト 1 件あたりの基本コスト (不要シフト抑制)
             for s in self.staff_list:
