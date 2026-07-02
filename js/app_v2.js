@@ -1602,7 +1602,7 @@ const app = {
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${statusBadge}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">${dateStr}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center font-medium space-x-2">
-                        <button onclick="app.switchToHQShop('${shop.organization_id || shop.id}')" class="text-indigo-600 hover:text-indigo-900 font-bold">
+                        <button onclick="app.switchToHQShop('${shop.organization_id || shop.id}', '${this._sanitize(shop.contract_id || '')}')" class="text-indigo-600 hover:text-indigo-900 font-bold">
                             <i class="fa-solid fa-eye"></i> 閲覧
                         </button>
                         <button onclick="app.removeHQShop('${shop.organization_id || shop.id}')" class="text-red-600 hover:text-red-900 font-bold ml-2">
@@ -1618,7 +1618,7 @@ const app = {
                 <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl shadow-lg p-6 md:p-8 text-white flex justify-between items-center relative overflow-hidden">
                     <div class="relative z-10">
                         <h2 class="text-2xl md:text-3xl font-bold mb-2"><i class="fa-solid fa-building mr-2"></i>本部・ダッシュボード</h2>
-                        <p class="text-indigo-100 text-sm md:text-base">店舗にアクセスするには、下記の入力フォームから契約IDとパスワードを入力してください。</p>
+                        <p class="text-indigo-100 text-sm md:text-base">店舗を「登録」すると一覧に追加され、一覧の「閲覧」からシフト・スタッフ・設定を確認できます。</p>
                     </div>
                     <div class="relative z-10 flex flex-wrap gap-2 md:gap-3">
                         <button onclick="app.changeView('hq_manual')" class="bg-white/20 hover:bg-white/30 backdrop-blur text-white px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
@@ -1636,10 +1636,11 @@ const app = {
                     </div>
                 </div>
 
-                <!-- Manual Shop Login Card -->
+                <!-- 店舗登録カード (v3.7.216: 「閲覧する」→「登録」。登録後は下の一覧から閲覧) -->
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-key text-blue-500 mr-2"></i>指定の店舗を閲覧 (IDとパスワードでアクセス)</h3>
+                        <h3 class="font-bold text-gray-800"><i class="fa-solid fa-plus text-blue-500 mr-2"></i>店舗を登録 (契約IDとパスワードで追加)</h3>
+                        <p class="text-xs text-gray-500 mt-1">登録すると下の「登録店舗一覧」に追加され、一覧の「閲覧」からいつでも確認できます。</p>
                     </div>
                     <div class="p-6">
                         <div class="flex flex-col md:flex-row gap-4 items-end">
@@ -1649,11 +1650,11 @@ const app = {
                             </div>
                             <div class="flex-1">
                                 <label class="block text-sm font-bold text-gray-600 mb-1">パスワード</label>
-                                <input type="password" id="hqManualPassword" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="店舗用または管理者パスワード" onkeydown="if(event.key==='Enter') app.hqManualShopLogin()">
+                                <input type="password" id="hqManualPassword" class="w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="店舗用または管理者パスワード" onkeydown="if(event.key==='Enter') app.hqRegisterShop()">
                             </div>
                             <div>
-                                <button onclick="app.hqManualShopLogin()" class="w-full md:w-auto px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition whitespace-nowrap">
-                                    <i class="fa-solid fa-eye mr-2"></i>閲覧する
+                                <button onclick="app.hqRegisterShop()" class="w-full md:w-auto px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition whitespace-nowrap">
+                                    <i class="fa-solid fa-plus mr-2"></i>登録
                                 </button>
                             </div>
                         </div>
@@ -1687,9 +1688,10 @@ const app = {
         `;
     },
 
-    async hqManualShopLogin() {
+    // v3.7.216: 店舗を「登録」する (契約ID+パスワードで検証 → 一覧に追加。閲覧は一覧から)
+    async hqRegisterShop() {
         if (!this.state.isHQ) return;
-        
+
         const contractId = document.getElementById('hqManualContractId')?.value.trim();
         const password = document.getElementById('hqManualPassword')?.value.trim();
 
@@ -1700,62 +1702,42 @@ const app = {
 
         this.showLoading(true);
         try {
-            // 店舗のパスワード（スタッフまたは管理者）を検証
-            // 管理者パスワードでも通るように、まず shop login、ダメなら admin login を試すか、shop login で一元化
-            // 今回は店舗用ログインを試す
+            // 店舗パスワード → ダメなら管理者パスワードで検証
+            let orgId = null;
             const authResult = await API.rpc('verify_shop_login', {
-                p_contract_id: contractId,
-                p_password: password
+                p_contract_id: contractId, p_password: password
             });
-
             if (authResult && authResult.success) {
-                // Save to localStorage
-                try {
-                    let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
-                    if (!savedOrgIds.includes(authResult.organization_id)) {
-                        savedOrgIds.push(authResult.organization_id);
-                        localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
-                    }
-                } catch(e) {}
-
-                this.state.organization_id = authResult.organization_id;
-                this.state.isAdmin = true;
-                this.state.isShopLoggedIn = true;
-                await this.loadData();
-                this.showToast('店舗 (' + contractId + ') の閲覧を開始します', 'success');
-                this.updateAuthUI();
-                this.changeView('dashboard');
+                orgId = authResult.organization_id;
             } else {
-                // 管理者として試す
                 const adminResult = await API.rpc('verify_admin_login', {
-                    p_contract_id: contractId,
-                    p_login_id: 'admin',
-                    p_password: password
+                    p_contract_id: contractId, p_login_id: 'admin', p_password: password
                 });
-
-                if (adminResult && adminResult.success) {
-                    // Save to localStorage
-                    try {
-                        let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
-                        if (!savedOrgIds.includes(adminResult.organization_id)) {
-                            savedOrgIds.push(adminResult.organization_id);
-                            localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
-                        }
-                    } catch(e) {}
-
-                    this.state.organization_id = adminResult.organization_id;
-                    this.state.isAdmin = true;
-                    this.state.isShopLoggedIn = true;
-                    await this.loadData();
-                    this.showToast('管理者権限で店舗 (' + contractId + ') の閲覧を開始します', 'success');
-                    this.updateAuthUI();
-                    this.changeView('dashboard');
-                } else {
-                    this.showToast('IDまたはパスワードが正しくありません', 'error');
-                }
+                if (adminResult && adminResult.success) orgId = adminResult.organization_id;
             }
+
+            if (!orgId) {
+                this.showToast('IDまたはパスワードが正しくありません', 'error');
+                return;
+            }
+
+            // 一覧に追加 (org_id) + 契約IDマップ (閲覧時のデータ取得に使用)
+            try {
+                let saved = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
+                if (!saved.includes(orgId)) saved.push(orgId);
+                localStorage.setItem('hq_saved_shops', JSON.stringify(saved));
+                let cmap = JSON.parse(localStorage.getItem('hq_shop_contracts') || '{}');
+                cmap[orgId] = contractId;
+                localStorage.setItem('hq_shop_contracts', JSON.stringify(cmap));
+            } catch(e) {}
+
+            const idEl = document.getElementById('hqManualContractId'); if (idEl) idEl.value = '';
+            const pwEl = document.getElementById('hqManualPassword'); if (pwEl) pwEl.value = '';
+            this.showToast('店舗を登録しました。下の「登録店舗一覧」の「閲覧」から確認できます', 'success');
+            // 一覧を再描画して反映
+            this.renderHQDashboard(document.getElementById('viewContainer'));
         } catch(e) {
-            console.error('HQ Manual Shop Login error:', e);
+            console.error('HQ register error:', e);
             this.showToast('エラーが発生しました', 'error');
         } finally {
             this.showLoading(false);
@@ -1775,13 +1757,27 @@ const app = {
         }
     },
 
-    async switchToHQShop(orgId) {
+    async switchToHQShop(orgId, contractId) {
         if (!this.state.isHQ) return;
         this.showLoading(true);
         try {
+            // v3.7.216: contract_id を解決 (引数 → localStorage マップ)。
+            //   loadData は contract_id ベースの RPC で staff/shifts/config を取得するため、
+            //   contract_id が無いと空データになる (旧バグ: 閲覧してもスタッフ/シフト/設定が反映されない)。
+            let cid = (contractId || '').trim();
+            if (!cid) {
+                try { cid = (JSON.parse(localStorage.getItem('hq_shop_contracts') || '{}'))[orgId] || ''; } catch(e) {}
+            }
+            if (!cid) {
+                this.showToast('契約IDが未登録のため閲覧できません。上のフォームから再登録してください', 'error');
+                this.showLoading(false);
+                return;
+            }
             this.state.organization_id = orgId;
             this.state.isAdmin = true;
             this.state.isShopLoggedIn = true;
+            // contract_id を config にセット → loadData が正しく店舗データを取得
+            this.state.config = { ...(this.state.config || {}), contract_id: cid, organization_id: orgId };
             await this.loadData();
             this.showToast('店舗情報を読み込みました（閲覧専用モード）', 'success');
             this.updateAuthUI();
@@ -2209,7 +2205,7 @@ const app = {
             }
         }
 
-        await this.switchToHQShop(orgId);
+        await this.switchToHQShop(orgId, contractId);
         // ヘッダーに本部観覧モードのバナー表示
         setTimeout(() => this.showToast('🔍 本部観覧モード — 編集操作はサーバ側でも遮断されます', 'info'), 800);
     },
