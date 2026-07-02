@@ -3542,9 +3542,10 @@ const app = {
             try { localStorage.setItem('shiftScrollHintShown', '1'); } catch (e) {}
         }
         const hintHtml = showHint
-            ? `<div id="shiftScrollHint" class="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-2 animate-pulse">
-                <i class="fa-solid fa-arrows-left-right"></i>
-                <span>👆 横にスワイプして全日付を確認できます</span>
+            ? `<div id="shiftScrollHint" class="mb-2 px-3 py-2 bg-blue-50 border border-blue-300 rounded-lg text-sm text-blue-700 font-bold flex items-center gap-2 animate-pulse">
+                <span class="text-lg">👇</span>
+                <span>横にスワイプして全日付を確認できます</span>
+                <i class="fa-solid fa-arrows-left-right text-blue-500"></i>
                 <button onclick="document.getElementById('shiftScrollHint')?.remove()" class="ml-auto text-blue-400 hover:text-blue-600"><i class="fa-solid fa-xmark"></i></button>
             </div>`
             : '';
@@ -4630,8 +4631,12 @@ const app = {
                                 <li>管理者が<b>OFF</b>のときは、そのパターンに誰が入るかはAIにおまかせ（管理者の制約なし）。</li>
                             </ul>
                         </div>
-                        <!-- v3.7.100: モバイル幅対応 - 横スクロール最低 720px 保証 + ヒント -->
-                        <p class="text-[10px] text-gray-400 mb-2 sm:hidden">👆 横にスワイプして全列を編集できます</p>
+                        <!-- v3.7.100/214: モバイル幅対応 - 横スクロール + 目立つヒント -->
+                        <div class="mb-3 px-3 py-2 bg-blue-50 border border-blue-300 rounded-lg text-sm text-blue-700 font-bold flex items-center gap-2 sm:hidden animate-pulse">
+                            <span class="text-lg">👇</span>
+                            <span>横にスワイプして全ての列を編集できます</span>
+                            <i class="fa-solid fa-arrows-left-right ml-auto text-blue-500"></i>
+                        </div>
                         <div class="overflow-x-auto" style="-webkit-overflow-scrolling: touch;">
                             <table class="text-left" style="min-width: 720px; width: 100%;">
                                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
@@ -9262,6 +9267,19 @@ const app = {
                 </div>
 
                 <div class="space-y-4">
+                    <div class="bg-white rounded-lg p-4 border border-blue-200">
+                        <h4 class="font-bold text-blue-700 mb-2"><i class="fa-solid fa-store mr-1"></i>店舗設定（重要）</h4>
+                        <table class="w-full text-sm border-collapse">
+                            <thead><tr class="bg-blue-50"><th class="p-2 text-left border">設定項目</th><th class="p-2 text-left border">説明</th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">営業時間（曜日別）</td><td class="p-2 border">平日/土日/祝日の開店・閉店時間</td><td class="p-2 border text-red-600">閉店後の時間帯にも人員配置される</td></tr>
+                                <tr><td class="p-2 border font-bold">必要人員（曜日別）</td><td class="p-2 border">平日/土日/祝日の最低配置人数</td><td class="p-2 border text-red-600">人手不足・過剰配置が発生する</td></tr>
+                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遅番等の時間テンプレートと、平日/土曜/日祝の必要人数</td><td class="p-2 border text-red-600">必要人数が確保されず、人手不足・過剰配置が発生する</td></tr>
+                                <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベースの休業日</td><td class="p-2 border text-red-600">休業日にシフトが配置される</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
                     <div class="bg-white rounded-lg p-4 border border-orange-200">
                         <h4 class="font-bold text-orange-700 mb-2"><i class="fa-solid fa-user-gear mr-1"></i>スタッフ設定（最重要）</h4>
                         <table class="w-full text-sm border-collapse">
@@ -9273,19 +9291,6 @@ const app = {
                                 <tr><td class="p-2 border font-bold">役職</td><td class="p-2 border">店長/リーダー/スタッフ/新人</td><td class="p-2 border text-red-600">OJT制約やメンター配置が機能しない</td></tr>
                                 <tr><td class="p-2 border font-bold">評価 (A〜D)</td><td class="p-2 border">スキルレベル</td><td class="p-2 border text-red-600">チーム戦力バランスが偏る</td></tr>
                                 <tr><td class="p-2 border font-bold">給与形態</td><td class="p-2 border">月給制 or 時給制</td><td class="p-2 border text-red-600">月給スタッフが優先配置されず人件費が増大</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="bg-white rounded-lg p-4 border border-blue-200">
-                        <h4 class="font-bold text-blue-700 mb-2"><i class="fa-solid fa-store mr-1"></i>店舗設定（重要）</h4>
-                        <table class="w-full text-sm border-collapse">
-                            <thead><tr class="bg-blue-50"><th class="p-2 text-left border">設定項目</th><th class="p-2 text-left border">説明</th><th class="p-2 text-left border">未設定時の影響</th></tr></thead>
-                            <tbody>
-                                <tr><td class="p-2 border font-bold">営業時間（曜日別）</td><td class="p-2 border">平日/土日/祝日の開店・閉店時間</td><td class="p-2 border text-red-600">閉店後の時間帯にも人員配置される</td></tr>
-                                <tr><td class="p-2 border font-bold">必要人員（曜日別）</td><td class="p-2 border">平日/土日/祝日の最低配置人数</td><td class="p-2 border text-red-600">人手不足・過剰配置が発生する</td></tr>
-                                <tr><td class="p-2 border font-bold">シフトパターン</td><td class="p-2 border">早番/遅番等の時間テンプレートと、平日/土曜/日祝の必要人数</td><td class="p-2 border text-red-600">必要人数が確保されず、人手不足・過剰配置が発生する</td></tr>
-                                <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベースの休業日</td><td class="p-2 border text-red-600">休業日にシフトが配置される</td></tr>
                             </tbody>
                         </table>
                     </div>
