@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.217"}
+        return {"status": "ok", "db": "alive", "version": "3.7.218"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -576,19 +576,37 @@ async def hq_get_shops(request: Request):
             for c in configs:
                 config_map[c.get("organization_id")] = c
 
+        # v3.7.218: スタッフ人数は staff テーブルから実数を集計する。
+        #   config.staff_count 列は更新されず NULL のことが多く、本部一覧で 0 表示になっていた。
+        staff_counts = {}
+        try:
+            staff_rows = await supabase_query("staff", "select=organization_id&limit=100000")
+            if staff_rows:
+                for s in staff_rows:
+                    oid = s.get("organization_id")
+                    if oid:
+                        staff_counts[oid] = staff_counts.get(oid, 0) + 1
+        except Exception as _e:
+            logger.info("[HQ] staff count aggregate failed: {}".format(_e))
+
         # 結合
         shops = []
         for o in orgs:
             cfg = config_map.get(o["id"], {})
+            # 実スタッフ数を優先。取得できなければ config.staff_count → 0
+            real_count = staff_counts.get(o["id"])
+            if real_count is None:
+                real_count = cfg.get("staff_count") or 0
             shops.append({
                 "organization_id": o["id"],
                 "name": o.get("name", "未設定"),
                 "contract_id": cfg.get("contract_id", ""),
-                "plan": cfg.get("stripe_plan", "free"),
-                "staff_count": cfg.get("staff_count", 0),
+                # NULL 対策: cfg.get(...,default) は値が None だと None を返すため or でフォールバック
+                "plan": cfg.get("stripe_plan") or "free",
+                "staff_count": real_count,
                 "contact_name": cfg.get("contact_name", ""),
                 "customer_email": cfg.get("customer_email", ""),
-                "license_status": cfg.get("license_status", "active"),
+                "license_status": cfg.get("license_status") or "active",
                 "created_at": o.get("created_at", ""),
             })
 
