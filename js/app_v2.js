@@ -10608,7 +10608,16 @@ const app = {
         try { u = decodeURIComponent(encodedUrl || ''); } catch (e) { u = encodedUrl || ''; }
         u = (u || '').trim();
         if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u.replace(/^\/+/, '');
-        if (u) window.open(u, '_blank', 'noopener');
+        // v3.7.224: リンク先が自サイト(同一オリジン)だと新タブでアプリが開き未ログイン→
+        //   ログイン画面に飛ばされるため、その場合は開かない。
+        let sameOrigin = false;
+        try { sameOrigin = !!u && new URL(u).origin === location.origin; } catch (e) {}
+        if (!u || sameOrigin) {
+            this.showToast('このお知らせには有効なリンク先が設定されていません', 'info');
+            this._loadAnnouncementsAdmin();
+            return;
+        }
+        window.open(u, '_blank', 'noopener');
         this._loadAnnouncementsAdmin();
     },
 
@@ -10681,9 +10690,13 @@ const app = {
 
         // アクションボタン
         const actionEl = document.getElementById('announcementAction');
-        if (item.target_url && /^https?:\/\//i.test(item.target_url)) {
+        // v3.7.224: 自サイト(同一オリジン)へのリンクはログイン画面に飛ぶだけなので非表示
+        let _sameOrigin = false;
+        try { _sameOrigin = !!item.target_url && new URL(item.target_url).origin === location.origin; } catch (e) {}
+        if (item.target_url && /^https?:\/\//i.test(item.target_url) && !_sameOrigin) {
             actionEl.classList.remove('hidden');
-            document.getElementById('announcementLink').href = item.target_url;
+            const linkEl = document.getElementById('announcementLink');
+            linkEl.href = item.target_url;
             document.getElementById('announcementBtnText').textContent = item.button_text || '詳しく見る';
         } else {
             actionEl.classList.add('hidden');
