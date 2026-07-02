@@ -3973,11 +3973,15 @@ const app = {
             staffMap[staff.id].typeDays[stype].add(shift.date);
         });
 
+        // v3.7.219: 全スタッフを分析レポートに表示する。
+        //   旧: 時給スタッフはシフトがある月のみ staffMap に載り、シフト0の月は
+        //   分析から「消える」バグ (月給は常に表示され不整合)。
+        //   新: 在籍する全スタッフを 0 埋めで載せ、常に一覧表示する。
         this.state.staff.forEach(s => {
+            if (!staffMap[s.id]) staffMap[s.id] = { id: s.id, name: s.name, cost: 0, hours: 0, days: new Set(), typeDays: {} };
             if (s.salary_type === 'monthly') {
                 const salary = s.monthly_salary || 0;
                 totalCost += salary;
-                if (!staffMap[s.id]) staffMap[s.id] = { id: s.id, name: s.name, cost: 0, hours: 0, days: new Set(), typeDays: {} };
                 staffMap[s.id].cost += salary;
                 // v3.6.3: 月給を日次コストに分散 (旧版は日次グラフから完全脱落していた)
                 if (daysInMonth > 0) {
@@ -4000,7 +4004,9 @@ const app = {
             });
             return { ...s, days: s.days.size, types };
         }).sort((a, b) => b.cost - a.cost);
-        return { totalCost, totalHours, daysCount: daysInMonth, activeStaffCount: Object.keys(staffMap).length, dailyCosts, dailyLabels, staffStats, typeTotals };
+        // v3.7.219: 稼働スタッフ数は「実際にシフトがある人数」(全員0埋め表示に変えたため days>0 で判定)
+        const activeStaffCount = staffStats.filter(s => s.days > 0).length;
+        return { totalCost, totalHours, daysCount: daysInMonth, activeStaffCount, dailyCosts, dailyLabels, staffStats, typeTotals };
     },
 
     renderAnalyticsCharts(stats) {
@@ -4803,26 +4809,27 @@ const app = {
 
                         <!-- AI設定 (運営管理のため非表示) -->
                         
-                        <!-- 休憩時間ルール -->
+                        <!-- 休憩時間ルール v3.7.220: 色を目立たせる -->
                         <div class="border-t border-gray-100 pt-4">
-                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">休憩時間ルール</h4>
+                            <h4 class="text-base font-bold text-emerald-700 mb-1"><i class="fa-solid fa-mug-hot mr-1.5"></i>休憩時間ルール</h4>
+                            <p class="text-sm text-gray-600 mb-3">「◯時間を超えたら△分休憩」を設定すると、AIが自動で休憩を付与します（法令に合わせて設定）。</p>
                             <div class="space-y-3" id="breakRulesContainer">
                                 ${breakRules.map((rule, idx) => `
-                                    <div class="flex items-center gap-3">
-                                        <div class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-                                            <input type="number" class="setting-break-hours w-16 border-gray-300 rounded px-2 py-1 text-sm text-center font-bold" value="${rule.min_hours}">
-                                            <span class="text-xs text-gray-500">時間超で</span>
+                                    <div class="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                                        <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-emerald-200">
+                                            <input type="number" class="setting-break-hours w-16 border-emerald-300 rounded px-2 py-1 text-sm text-center font-bold" value="${rule.min_hours}">
+                                            <span class="text-sm text-gray-600 font-bold">時間超で</span>
                                         </div>
-                                        <i class="fa-solid fa-arrow-right text-gray-300 text-xs"></i>
-                                        <div class="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
-                                            <input type="number" class="setting-break-minutes w-16 border-blue-200 rounded px-2 py-1 text-sm text-center font-bold text-blue-700" value="${rule.break_minutes}">
-                                            <span class="text-xs text-blue-500">分休憩</span>
+                                        <i class="fa-solid fa-arrow-right text-emerald-400"></i>
+                                        <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-blue-200">
+                                            <input type="number" class="setting-break-minutes w-16 border-blue-300 rounded px-2 py-1 text-sm text-center font-bold text-blue-700" value="${rule.break_minutes}">
+                                            <span class="text-sm text-blue-600 font-bold">分休憩</span>
                                         </div>
-                                        <button onclick="app.removeBreakRule(${idx})" class="text-gray-400 hover:text-red-500 ml-2"><i class="fa-solid fa-times"></i></button>
+                                        <button onclick="app.removeBreakRule(${idx})" title="このルールを削除" class="ml-auto w-9 h-9 flex items-center justify-center text-white bg-red-500 hover:bg-red-600 rounded-lg shadow-sm transition active:scale-95"><i class="fa-solid fa-times"></i></button>
                                     </div>
                                 `).join('')}
                             </div>
-                            <button onclick="app.addBreakRule()" class="mt-3 text-xs flex items-center gap-1 text-blue-600 font-bold hover:text-blue-800"><i class="fa-solid fa-plus-circle"></i> ルールを追加</button>
+                            <button onclick="app.addBreakRule()" class="mt-3 text-sm flex items-center gap-1 text-emerald-700 font-bold hover:text-emerald-900 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg"><i class="fa-solid fa-plus-circle"></i> ルールを追加</button>
                         </div>
                     </div>
                 </div>
@@ -5091,25 +5098,45 @@ const app = {
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
+    // v3.7.220: 休憩ルールは DOM の行を「そのまま順序どおり」読む (min_hours=0 も保持)。
+    //   readSettingsFromDOM は h>0 フィルタ+ソートをかけるため、追加直後(既定0)の行が
+    //   消えて index がずれ、×で削除できないバグの原因だった。
+    _readBreakRulesFromDOM() {
+        const rules = [];
+        document.querySelectorAll('#breakRulesContainer > div').forEach(div => {
+            rules.push({
+                min_hours: Number(div.querySelector('.setting-break-hours')?.value || 0),
+                break_minutes: Number(div.querySelector('.setting-break-minutes')?.value || 0)
+            });
+        });
+        return rules;
+    },
+
     addBreakRule() {
+        // 他項目を保持しつつ、休憩は DOM 実体で保持 (h=0 行を落とさない)
+        const rules = this._readBreakRulesFromDOM();
         this.state.config = this.readSettingsFromDOM();
-        if(!this.state.config.break_rules) this.state.config.break_rules = [];
-        this.state.config.break_rules.push({ min_hours: 0, break_minutes: 60 });
+        rules.push({ min_hours: 0, break_minutes: 60 });
+        this.state.config.break_rules = rules;
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
     async removeBreakRule(index) {
+        // DOM 表示順のまま読み、その index を削除 (h=0 でも確実に消える)
+        const rules = this._readBreakRulesFromDOM();
+        if (index < 0 || index >= rules.length) return;
+        rules.splice(index, 1);
         this.state.config = this.readSettingsFromDOM();
-        if (!Array.isArray(this.state.config.break_rules)) this.state.config.break_rules = [];
-        if (index < 0 || index >= this.state.config.break_rules.length) return;
-        this.state.config.break_rules.splice(index, 1);
+        this.state.config.break_rules = rules;
         this.renderSettings(document.getElementById('viewContainer'));
         try {
             const cid = this._getContractId();
             if (cid) {
+                // 保存は有効なルール(min_hours>0)のみ
+                const valid = rules.filter(r => r.min_hours > 0).sort((a, b) => a.min_hours - b.min_hours);
                 await API.rpc('update_config_by_contract', {
                     p_contract_id: cid,
-                    p_data: { break_rules: this.state.config.break_rules }
+                    p_data: { break_rules: valid }
                 });
                 this.showToast('休憩ルールを削除しました', 'success');
             }
