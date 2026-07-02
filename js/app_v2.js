@@ -9274,18 +9274,19 @@ const app = {
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                     <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
                     <a href="#m-reference" class="text-indigo-600 hover:underline font-bold">📖 全設定・全機能リファレンス</a>
-                    <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
-                    <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタッフ評価 (A〜D)</a>
-                    <a href="#m-pattern-target" class="text-teal-600 hover:underline">2.5. シフトパターン振り分け</a>
-                    <a href="#m-shift" class="text-indigo-600 hover:underline">3. AIシフト作成</a>
-                    <a href="#m-labor" class="text-indigo-600 hover:underline">4. 労働基準法ルール</a>
-                    <a href="#m-break" class="text-indigo-600 hover:underline">5. 休憩ルール</a>
-                    <a href="#m-request" class="text-indigo-600 hover:underline">6. 休み希望</a>
-                    <a href="#m-settings" class="text-indigo-600 hover:underline">7. 店舗設定</a>
-                    <a href="#m-plan" class="text-indigo-600 hover:underline">8. プラン・課金</a>
-                    <a href="#m-auth" class="text-indigo-600 hover:underline">9. 権限 (管理者/スタッフ)</a>
-                    <a href="#m-analytics" class="text-indigo-600 hover:underline">10. 分析・レポート</a>
-                    <a href="#m-other" class="text-indigo-600 hover:underline">11. その他機能</a>
+                    <a href="#m-settings" class="text-blue-700 hover:underline font-bold">🏪【店舗設定】</a>
+                    <a href="#m-shift" class="text-indigo-600 hover:underline">・AIシフト作成</a>
+                    <a href="#m-labor" class="text-indigo-600 hover:underline">・労働基準法ルール</a>
+                    <a href="#m-break" class="text-indigo-600 hover:underline">・休憩ルール</a>
+                    <a href="#m-request" class="text-indigo-600 hover:underline">・休み希望</a>
+                    <a href="#m-roles" class="text-orange-700 hover:underline font-bold">👥【スタッフ管理】</a>
+                    <a href="#m-roles" class="text-indigo-600 hover:underline">・役職・ロール</a>
+                    <a href="#m-eval" class="text-indigo-600 hover:underline">・スタッフ評価 (A〜D)</a>
+                    <a href="#m-pattern-target" class="text-teal-600 hover:underline">・シフトパターン振り分け</a>
+                    <a href="#m-plan" class="text-indigo-600 hover:underline">プラン・課金</a>
+                    <a href="#m-auth" class="text-indigo-600 hover:underline">権限 (管理者/スタッフ)</a>
+                    <a href="#m-analytics" class="text-indigo-600 hover:underline">分析・レポート</a>
+                    <a href="#m-other" class="text-indigo-600 hover:underline">その他機能</a>
                 </div>
             </div>
 
@@ -9410,62 +9411,10 @@ const app = {
                 </details>
             </div>
 
-            <!-- 1. 役職 -->
-            <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">1.</span>役職・ロール</h3>
-                <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
-                    <tbody>
-                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名配置必須（AIが最優先で配置）</td></tr>
-                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代理として配置可能（店長と同等の権限）</td></tr>
-                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置（月給制の場合はコスト計算上有利に働きます）</td></tr>
-                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任者、メンター役</td><td class="p-2 border">新人スタッフの指導役として重宝されます</td></tr>
-                        <tr><td class="p-2 border font-bold">アルバイト (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長〜リーダー）と同日配置</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- 2. 評価 -->
-            <div id="m-eval" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">2.</span>スタッフ評価 (A〜D)</h3>
-                <p class="text-sm text-gray-600 mb-3">評価はAIシフト生成時のチーム編成・配置優先度に影響します。</p>
-                <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">評価</th><th class="p-2 text-left border">意味</th><th class="p-2 text-left border">戦力スコア</th><th class="p-2 text-left border">影響</th></tr></thead>
-                    <tbody>
-                        <tr class="bg-yellow-50"><td class="p-2 border font-bold text-yellow-700">A</td><td class="p-2 border">優秀</td><td class="p-2 border">3.0</td><td class="p-2 border">優先的に配置、ペナルティなし</td></tr>
-                        <tr class="bg-blue-50"><td class="p-2 border font-bold text-blue-700">B</td><td class="p-2 border">良好</td><td class="p-2 border">2.0</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold text-gray-500">C</td><td class="p-2 border">普通</td><td class="p-2 border">1.0</td><td class="p-2 border">やや控えめに配置</td></tr>
-                        <tr class="bg-red-50"><td class="p-2 border font-bold text-red-600">D</td><td class="p-2 border">研修中・要指導</td><td class="p-2 border">0.5</td><td class="p-2 border">メンター必須、単独配置不可</td></tr>
-                    </tbody>
-                </table>
-                <p class="text-xs text-gray-400 mt-2">※ チーム全体の戦力スコアが基準を満たすようAIが自動調整します</p>
-            </div>
-
-            <!-- 2.5. シフトパターン振り分け (v3.7.77) -->
-            <div id="m-pattern-target" class="bg-white rounded-xl shadow-sm border border-teal-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-teal-500 mr-2">2.5.</span>シフトパターン振り分け (月間目標回数)</h3>
-                <div class="space-y-3 text-sm text-gray-700">
-                    <p>スタッフ編集モーダルの <strong>「シフトパターン別 月間目標回数」</strong> セクションで、各スタッフを各シフトパターン (早番・遅番・夜勤等) に <strong>月何回入れたいか</strong> を指定できます。</p>
-                    <div class="bg-teal-50 border border-teal-200 rounded-lg p-3">
-                        <p class="text-xs font-bold text-teal-800 mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>使用例</p>
-                        <table class="w-full text-xs border-collapse">
-                            <thead><tr class="bg-teal-100"><th class="p-2 text-left border border-teal-200">スタッフ</th><th class="p-2 text-left border border-teal-200">早番</th><th class="p-2 text-left border border-teal-200">遅番</th><th class="p-2 text-left border border-teal-200">夜勤</th></tr></thead>
-                            <tbody>
-                                <tr><td class="p-2 border border-teal-200 font-bold">Aさん (早番担当)</td><td class="p-2 border border-teal-200">3</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">0</td></tr>
-                                <tr><td class="p-2 border border-teal-200 font-bold">Bさん (遅番担当)</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">3</td><td class="p-2 border border-teal-200">0</td></tr>
-                                <tr><td class="p-2 border border-teal-200 font-bold">Cさん (夜勤担当)</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">3</td></tr>
-                            </tbody>
-                        </table>
-                        <p class="text-xs text-teal-700 mt-2">→ AIは各スタッフの担当パターンを尊重しながらシフトを組みます。</p>
-                    </div>
-                    <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside ml-2">
-                        <li><strong>0 または空欄</strong>: 制約なし (AI が自由に配置)</li>
-                        <li><strong>1 以上</strong>: 月間で目標回数に近づくよう優先配置</li>
-                        <li>シフトパターン人数要件 (店舗設定側) と <strong>競合した場合は人数要件が優先</strong>される (= 「Aさん早番3回」と指定しても、その日に早番が不足していれば他のパターンに回ることがある)</li>
-                    </ul>
-                    <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><strong>💡 こんな運用に最適:</strong> 「夜勤専門のスタッフがいる」「学生バイトは早番だけにしたい」「特定スタッフを各時間帯に均等に分散させたい」など、スタッフごとの担当時間帯が明確な店舗。</p>
-                </div>
+            <!-- ══════════ カテゴリー: 店舗設定 ══════════ -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl p-4 shadow-md mt-2">
+                <h3 class="text-xl font-bold"><i class="fa-solid fa-store mr-2"></i>店舗設定</h3>
+                <p class="text-sm text-blue-100 mt-1">お店全体のルール（営業時間・シフトパターン・必要人数・休憩・労基法・AIシフト作成）</p>
             </div>
 
             <!-- 3. AIシフト作成 -->
@@ -9613,6 +9562,75 @@ const app = {
                     </ul>
                     <p class="text-xs text-amber-700 mt-2"><i class="fa-solid fa-info-circle mr-1"></i>月給スタッフは min_days_week / min_days_month が <strong>ハード制約</strong> です。物理的に達成可能な値を設定してください (例: 週5日勤務想定なら 月22日まで設定可能)。</p>
                 </div>
+            </div>
+
+            <!-- ══════════ カテゴリー: スタッフ管理 ══════════ -->
+            <div class="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl p-4 shadow-md mt-2">
+                <h3 class="text-xl font-bold"><i class="fa-solid fa-user-gear mr-2"></i>スタッフ管理</h3>
+                <p class="text-sm text-orange-50 mt-1">スタッフ個々の設定（役職・評価・シフトパターン担当・勤務制約）</p>
+            </div>
+
+            <!-- 1. 役職 -->
+            <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-orange-500 mr-2">■</span>役職・ロール</h3>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名配置必須（AIが最優先で配置）</td></tr>
+                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代理として配置可能（店長と同等の権限）</td></tr>
+                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置（月給制の場合はコスト計算上有利に働きます）</td></tr>
+                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任者、メンター役</td><td class="p-2 border">新人スタッフの指導役として重宝されます</td></tr>
+                        <tr><td class="p-2 border font-bold">アルバイト (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長〜リーダー）と同日配置</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 2. 評価 -->
+            <div id="m-eval" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-orange-500 mr-2">■</span>スタッフ評価 (A〜D)</h3>
+                <p class="text-sm text-gray-600 mb-3">評価はAIシフト生成時のチーム編成・配置優先度に影響します。</p>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">評価</th><th class="p-2 text-left border">意味</th><th class="p-2 text-left border">戦力スコア</th><th class="p-2 text-left border">影響</th></tr></thead>
+                    <tbody>
+                        <tr class="bg-yellow-50"><td class="p-2 border font-bold text-yellow-700">A</td><td class="p-2 border">優秀</td><td class="p-2 border">3.0</td><td class="p-2 border">優先的に配置、ペナルティなし</td></tr>
+                        <tr class="bg-blue-50"><td class="p-2 border font-bold text-blue-700">B</td><td class="p-2 border">良好</td><td class="p-2 border">2.0</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold text-gray-500">C</td><td class="p-2 border">普通</td><td class="p-2 border">1.0</td><td class="p-2 border">やや控えめに配置</td></tr>
+                        <tr class="bg-red-50"><td class="p-2 border font-bold text-red-600">D</td><td class="p-2 border">研修中・要指導</td><td class="p-2 border">0.5</td><td class="p-2 border">メンター必須、単独配置不可</td></tr>
+                    </tbody>
+                </table>
+                <p class="text-xs text-gray-400 mt-2">※ チーム全体の戦力スコアが基準を満たすようAIが自動調整します</p>
+            </div>
+
+            <!-- 2.5. シフトパターン振り分け (v3.7.77) -->
+            <div id="m-pattern-target" class="bg-white rounded-xl shadow-sm border border-teal-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-teal-500 mr-2">■</span>シフトパターン振り分け (月間目標回数)</h3>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <p>スタッフ編集モーダルの <strong>「シフトパターン別 月間目標回数」</strong> セクションで、各スタッフを各シフトパターン (早番・遅番・夜勤等) に <strong>月何回入れたいか</strong> を指定できます。</p>
+                    <div class="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                        <p class="text-xs font-bold text-teal-800 mb-1"><i class="fa-solid fa-lightbulb mr-1"></i>使用例</p>
+                        <table class="w-full text-xs border-collapse">
+                            <thead><tr class="bg-teal-100"><th class="p-2 text-left border border-teal-200">スタッフ</th><th class="p-2 text-left border border-teal-200">早番</th><th class="p-2 text-left border border-teal-200">遅番</th><th class="p-2 text-left border border-teal-200">夜勤</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border border-teal-200 font-bold">Aさん (早番担当)</td><td class="p-2 border border-teal-200">3</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">0</td></tr>
+                                <tr><td class="p-2 border border-teal-200 font-bold">Bさん (遅番担当)</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">3</td><td class="p-2 border border-teal-200">0</td></tr>
+                                <tr><td class="p-2 border border-teal-200 font-bold">Cさん (夜勤担当)</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">0</td><td class="p-2 border border-teal-200">3</td></tr>
+                            </tbody>
+                        </table>
+                        <p class="text-xs text-teal-700 mt-2">→ AIは各スタッフの担当パターンを尊重しながらシフトを組みます。</p>
+                    </div>
+                    <ul class="text-xs text-gray-600 space-y-1 list-disc list-inside ml-2">
+                        <li><strong>0 または空欄</strong>: 制約なし (AI が自由に配置)</li>
+                        <li><strong>1 以上</strong>: 月間で目標回数に近づくよう優先配置</li>
+                        <li>シフトパターン人数要件 (店舗設定側) と <strong>競合した場合は人数要件が優先</strong>される (= 「Aさん早番3回」と指定しても、その日に早番が不足していれば他のパターンに回ることがある)</li>
+                    </ul>
+                    <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><strong>💡 こんな運用に最適:</strong> 「夜勤専門のスタッフがいる」「学生バイトは早番だけにしたい」「特定スタッフを各時間帯に均等に分散させたい」など、スタッフごとの担当時間帯が明確な店舗。</p>
+                </div>
+            </div>
+
+            <!-- ══════════ カテゴリー: プラン・権限など ══════════ -->
+            <div class="bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl p-4 shadow-md mt-2">
+                <h3 class="text-xl font-bold"><i class="fa-solid fa-gears mr-2"></i>その他（プラン・権限・分析）</h3>
             </div>
 
             <!-- 8. プラン -->
