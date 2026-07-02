@@ -9240,6 +9240,7 @@ const app = {
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                     <a href="#m-screens" class="text-indigo-600 hover:underline font-bold">📸 画面ガイド（写真）</a>
                     <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
+                    <a href="#m-reference" class="text-indigo-600 hover:underline font-bold">📖 全設定・全機能リファレンス</a>
                     <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
                     <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタッフ評価 (A〜D)</a>
                     <a href="#m-pattern-target" class="text-teal-600 hover:underline">2.5. シフトパターン振り分け</a>
@@ -9332,6 +9333,76 @@ const app = {
                         </ul>
                     </div>
                 </div>
+            </div>
+
+            <!-- v3.7.217: 全設定・全機能リファレンス (折りたたみ式で読みやすく) -->
+            <div id="m-reference" class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-1"><i class="fa-solid fa-book-open mr-2 text-indigo-500"></i>全設定・全機能リファレンス（詳細）</h3>
+                <p class="text-sm text-gray-500 mb-4">各項目をタップすると詳しい説明が開きます。設定に迷ったらここを確認してください。</p>
+
+                <details class="border border-gray-200 rounded-lg mb-3 overflow-hidden group">
+                    <summary class="cursor-pointer select-none px-4 py-3 bg-blue-50 font-bold text-blue-800 flex items-center gap-2"><i class="fa-solid fa-store"></i>店舗設定 — 全項目<span class="ml-auto text-blue-400 group-open:rotate-180 transition"><i class="fa-solid fa-chevron-down"></i></span></summary>
+                    <div class="p-4 overflow-x-auto">
+                        <table class="w-full text-sm border-collapse">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">設定項目</th><th class="p-2 border text-left">内容・入力方法</th><th class="p-2 border text-left">AIへの効果</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">役職ロール</td><td class="p-2 border">店長/リーダー/一般/パート等の肩書きを追加・色分け。「管理者」チェックで責任者に指定</td><td class="p-2 border">管理者チェックの役職が「シフトパターンの管理者人数」の対象になる</td></tr>
+                                <tr><td class="p-2 border font-bold">営業時間（曜日別）</td><td class="p-2 border">平日/土日/祝日ごとの開店〜閉店。24時間営業はチェックON</td><td class="p-2 border">この時間外にはシフトを入れない</td></tr>
+                                <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">曜日ベースの休業日</td><td class="p-2 border">その曜日は誰も配置しない</td></tr>
+                                <tr><td class="p-2 border font-bold">シフトパターン（人数）</td><td class="p-2 border">早番/遅番等の時間と、平日/土曜/日祝の必要人数。0でその曜日は不使用</td><td class="p-2 border">必要人数の源泉。この人数を満たすよう配置</td></tr>
+                                <tr><td class="p-2 border font-bold">シフトパターン（管理者）</td><td class="p-2 border">ON＋人数で、そのパターンに必要な管理者数を指定（あけしめ責任者）</td><td class="p-2 border">指定人数の管理者を必ず配置。OFFはAIおまかせ</td></tr>
+                                <tr><td class="p-2 border font-bold">翌休（夜勤連勤防止）</td><td class="p-2 border">夜勤等のパターンでONにする</td><td class="p-2 border">そのパターンの翌日を自動で休みにする（2連勤防止・絶対厳守）</td></tr>
+                                <tr><td class="p-2 border font-bold">人員配置要件</td><td class="p-2 border">平日/土曜/日祝の総数（シフトパターン合計から<b>自動計算</b>・編集不可）</td><td class="p-2 border">1日の合計人数の基準</td></tr>
+                                <tr><td class="p-2 border font-bold">過剰配置トグル</td><td class="p-2 border">OFF=必要数ぴったり／ON=多め許容</td><td class="p-2 border">OFF=月給優先+時給多め／ON=給与差なしの公平配置</td></tr>
+                                <tr><td class="p-2 border font-bold">デフォルト時給</td><td class="p-2 border">個別時給未設定時の初期値</td><td class="p-2 border">人件費の概算に使用</td></tr>
+                                <tr><td class="p-2 border font-bold">休憩ルール</td><td class="p-2 border">「○時間超で△分休憩」を登録</td><td class="p-2 border">勤務時間から休憩を自動付与</td></tr>
+                                <tr><td class="p-2 border font-bold">運用ルール</td><td class="p-2 border">スタッフ画面に表示する連絡事項</td><td class="p-2 border">（表示のみ・生成には影響なし）</td></tr>
+                                <tr><td class="p-2 border font-bold">セキュリティ・引き継ぎ</td><td class="p-2 border">2段階認証PIN、責任者交代の手順</td><td class="p-2 border">（セキュリティ設定）</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+
+                <details class="border border-gray-200 rounded-lg mb-3 overflow-hidden group">
+                    <summary class="cursor-pointer select-none px-4 py-3 bg-orange-50 font-bold text-orange-800 flex items-center gap-2"><i class="fa-solid fa-user-gear"></i>スタッフ設定 — 全項目<span class="ml-auto text-orange-400 group-open:rotate-180 transition"><i class="fa-solid fa-chevron-down"></i></span></summary>
+                    <div class="p-4 overflow-x-auto">
+                        <table class="w-full text-sm border-collapse">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">設定項目</th><th class="p-2 border text-left">内容</th><th class="p-2 border text-left">AIへの効果</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">役割</td><td class="p-2 border">店長/リーダー/スタッフ等</td><td class="p-2 border">管理者役職はパターンの管理者人数の対象</td></tr>
+                                <tr><td class="p-2 border font-bold">評価ランク(A〜D)</td><td class="p-2 border">A=優先/B=標準/C=控えめ/D=新人(研修)</td><td class="p-2 border">Dは先輩(メンター)と時間を重ねる(OJT)</td></tr>
+                                <tr><td class="p-2 border font-bold">シフト優先度</td><td class="p-2 border">高/中/低</td><td class="p-2 border">高=なるべく多く/低=穴埋めのみ</td></tr>
+                                <tr><td class="p-2 border font-bold">基本出勤曜日・祝日</td><td class="p-2 border">入れる曜日にチェック</td><td class="p-2 border">外した曜日/祝日は配置しない</td></tr>
+                                <tr><td class="p-2 border font-bold">給与形態</td><td class="p-2 border">月給 or 時給</td><td class="p-2 border">月給=優先的に配置(固定費活用)</td></tr>
+                                <tr><td class="p-2 border font-bold">週/月の最低出勤日数</td><td class="p-2 border">最低これだけ入れたい日数</td><td class="p-2 border">月給20M/時給10Mで強く尊重</td></tr>
+                                <tr><td class="p-2 border font-bold">週/月の最大出勤日数</td><td class="p-2 border">これ以上は入れない上限</td><td class="p-2 border">上限を絶対超えない</td></tr>
+                                <tr><td class="p-2 border font-bold">1日の最大労働時間</td><td class="p-2 border">実労働(休憩除く)の上限</td><td class="p-2 border">長時間シフトを防ぐ</td></tr>
+                                <tr><td class="p-2 border font-bold">連続出勤日数(最大)</td><td class="p-2 border">何日連続まで可か(6=労基法)</td><td class="p-2 border">連勤上限を守る</td></tr>
+                                <tr><td class="p-2 border font-bold">該当シフトパターン</td><td class="p-2 border">このスタッフが入れるパターンにチェック</td><td class="p-2 border">未チェックのパターンには配置しない</td></tr>
+                                <tr><td class="p-2 border font-bold">パターン別 月間目標回数</td><td class="p-2 border">「早番を月N〜M回」等</td><td class="p-2 border">該当パターン内で回数を調整</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+
+                <details class="border border-gray-200 rounded-lg overflow-hidden group">
+                    <summary class="cursor-pointer select-none px-4 py-3 bg-green-50 font-bold text-green-800 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i>各機能の使い方<span class="ml-auto text-green-400 group-open:rotate-180 transition"><i class="fa-solid fa-chevron-down"></i></span></summary>
+                    <div class="p-4 overflow-x-auto">
+                        <table class="w-full text-sm border-collapse">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">機能</th><th class="p-2 border text-left">使い方</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">AIシフト作成</td><td class="p-2 border">「AIシフト作成」→作成範囲を選び実行。設定を守って自動生成</td></tr>
+                                <tr><td class="p-2 border font-bold">生成プレビュー</td><td class="p-2 border">結果を確認し「確定して保存」で反映。破棄も可能</td></tr>
+                                <tr><td class="p-2 border font-bold">シフト表</td><td class="p-2 border">表/カレンダー切替、並び順ソート、ドラッグで手直し、印刷/PDF</td></tr>
+                                <tr><td class="p-2 border font-bold">スタッフ管理</td><td class="p-2 border">追加/編集、役職順ソート、需給バランス警告の確認</td></tr>
+                                <tr><td class="p-2 border font-bold">休み希望</td><td class="p-2 border">スタッフがカレンダーで休み希望を提出→管理者が承認</td></tr>
+                                <tr><td class="p-2 border font-bold">分析レポート</td><td class="p-2 border">人件費・出勤日数内訳(日勤/夜勤別)をグラフ表示</td></tr>
+                                <tr><td class="p-2 border font-bold">お知らせ</td><td class="p-2 border">スタッフ向け連絡の掲示・管理</td></tr>
+                                <tr><td class="p-2 border font-bold">本部ダッシュボード</td><td class="p-2 border">契約ID+PWで店舗を「登録」→一覧の「閲覧」で各店舗を確認(閲覧専用)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
             </div>
 
             <!-- 1. 役職 -->
