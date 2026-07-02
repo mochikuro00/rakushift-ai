@@ -6115,7 +6115,7 @@ const app = {
                     <h3 style="margin: 0 0 6px 0; font-size: 14px; border-left: 5px solid #2563eb; padding-left: 8px;">
                         期間: ${startStr} 〜 ${endStr}
                     </h3>
-                    <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${isCompact ? '10px' : '11px'};">
+                    <table style="width: ${(isCompact ? 90 : 120) + days.length * colW}px; max-width: none; border-collapse: collapse; table-layout: fixed; font-size: ${isCompact ? '10px' : '11px'};">
                         <thead>
                             <tr>
                                 <th style="width: ${isCompact ? '90px' : '120px'}; background-color: #e5e7eb; background-image: linear-gradient(#e5e7eb,#e5e7eb); border: 1.2px solid #1f2937; padding: 4px; font-weight: 900;">スタッフ</th>
@@ -6166,8 +6166,8 @@ const app = {
                     </div>
                 </div>
                 <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px;">
-                    <button onclick="setTimeout(() => window.print(), 200)"
-                            style="flex: 1; min-width: 180px; padding: 12px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 15px; cursor: pointer;">
+                    <button onclick="app.doPrintNow()" ontouchend="event.preventDefault(); app.doPrintNow();"
+                            style="flex: 1; min-width: 180px; padding: 14px 20px; background: #0284c7; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 16px; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;">
                         🖨 印刷 / PDF保存
                     </button>
                     <button onclick="app.closePrintOverlay()"
@@ -6188,6 +6188,13 @@ const app = {
             }
         };
         document.addEventListener('keydown', escHandler);
+    },
+
+    // v3.7.221: スマホで印刷/PDFが押せない問題を修正。
+    //   setTimeout 経由の window.print() はモバイルでユーザー操作コンテキストを失い
+    //   ブロックされる。クリック直後に直接呼ぶことでダイアログを確実に開く。
+    doPrintNow() {
+        try { window.print(); } catch (e) { console.error('print failed', e); }
     },
 
     // v3.7.93: 印刷オーバーレイを閉じて元画面に戻る
@@ -10556,10 +10563,10 @@ const app = {
                                         <p class="text-sm text-gray-600 mt-2 whitespace-pre-line leading-relaxed">${this._sanitize(item.content)}</p>
                                         <div class="flex items-center gap-3 mt-3">
                                             ${item.target_url ? `
-                                                <a href="${item.target_url}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 transition">
+                                                <button type="button" onclick="app.openAnnouncementLink('${item.id}','${encodeURIComponent(item.target_url)}')" class="inline-flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 transition">
                                                     <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                                                     ${this._sanitize(item.button_text || '詳しく見る')}
-                                                </a>
+                                                </button>
                                             ` : ''}
                                             ${!isRead ? `
                                                 <button onclick="app.dismissAnnouncement('${item.id}')" class="inline-flex items-center gap-1 text-sm font-bold text-gray-500 hover:text-gray-700 transition">
@@ -10598,6 +10605,22 @@ const app = {
         this._loadAnnouncementsAdmin();
         this.updateAnnouncementBadge();
         this.showToast('既読にしました', 'info');
+    },
+
+    // v3.7.221: お知らせの外部リンクを開く。クリックで既読化＋バッジ更新。
+    //   target_url にプロトコルが無いと相対URL扱いで SPA が再読込→ログインに戻るため、
+    //   https:// を補完して新規タブで開く。
+    openAnnouncementLink(id, encodedUrl) {
+        try {
+            this._markAnnouncementRead(id);
+            this.updateAnnouncementBadge();
+        } catch (e) {}
+        let u = '';
+        try { u = decodeURIComponent(encodedUrl || ''); } catch (e) { u = encodedUrl || ''; }
+        u = (u || '').trim();
+        if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u.replace(/^\/+/, '');
+        if (u) window.open(u, '_blank', 'noopener');
+        this._loadAnnouncementsAdmin();
     },
 
     // 全てのお知らせを既読にする
