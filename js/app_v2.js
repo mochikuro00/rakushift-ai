@@ -9242,6 +9242,7 @@ const app = {
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="font-bold text-gray-800 mb-3">目次</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    <a href="#m-screens" class="text-indigo-600 hover:underline font-bold">📸 画面ガイド（写真）</a>
                     <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
                     <a href="#m-roles" class="text-indigo-600 hover:underline">1. 役職・ロール</a>
                     <a href="#m-eval" class="text-indigo-600 hover:underline">2. スタッフ評価 (A〜D)</a>
@@ -9255,6 +9256,34 @@ const app = {
                     <a href="#m-auth" class="text-indigo-600 hover:underline">9. 権限 (管理者/スタッフ)</a>
                     <a href="#m-analytics" class="text-indigo-600 hover:underline">10. 分析・レポート</a>
                     <a href="#m-other" class="text-indigo-600 hover:underline">11. その他機能</a>
+                </div>
+            </div>
+
+            <!-- v3.7.215: 画面ガイド (スクリーンショット) -->
+            <div id="m-screens" class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-1"><i class="fa-solid fa-images mr-2 text-indigo-500"></i>画面ガイド（写真で見る）</h3>
+                <p class="text-sm text-gray-500 mb-4">主要な画面の見本です。画像をタップすると拡大表示されます。まずは全体像をつかみましょう。</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${[
+                        ['07_shop_settings.png','🏪 店舗設定','営業時間・シフトパターン・必要人数を設定'],
+                        ['03_staff_management.png','👥 スタッフ管理','勤務制約・役職・評価・給与形態を登録'],
+                        ['05_ai_generation_modal.png','✨ AIシフト作成','ボタン1つで自動生成（作成範囲を選ぶ）'],
+                        ['06_shift_preview.png','🔍 生成プレビュー','確定前に結果を確認（保存するまで反映されない）'],
+                        ['02_shift_table.png','📋 シフト表','完成したシフトを表示・手直し・印刷'],
+                        ['08_analysis_report.png','📊 分析レポート','人件費・出勤日数の内訳をグラフで確認'],
+                        ['01_dashboard.png','🏠 ダッシュボード','今日のシフト・お知らせ・状況をひと目で'],
+                        ['04_announcement.png','📢 お知らせ','スタッフへの連絡・掲示を管理'],
+                    ].map(([img,title,desc]) => `
+                        <a href="images/manual/${img}" target="_blank" rel="noopener" class="block group border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:border-indigo-300 transition">
+                            <div class="h-40 bg-gray-50 overflow-hidden flex items-start justify-center">
+                                <img src="images/manual/${img}" alt="${title}" loading="lazy" class="w-full object-cover object-top group-hover:scale-[1.02] transition-transform">
+                            </div>
+                            <div class="p-3 border-t border-gray-100">
+                                <p class="font-bold text-sm text-gray-800">${title}</p>
+                                <p class="text-xs text-gray-500 mt-0.5 leading-snug">${desc}</p>
+                            </div>
+                        </a>
+                    `).join('')}
                 </div>
             </div>
 
