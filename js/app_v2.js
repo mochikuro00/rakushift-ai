@@ -9418,54 +9418,14 @@ const app = {
                 <p class="text-sm text-blue-100 mt-1">まずお店全体のルールを設定（営業時間・定休日・シフトパターン・必要人数・休憩）</p>
             </div>
 
-            <!-- 4. 労基法 -->
-            <div id="m-labor" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>労働基準法ルール（自動遵守）</h3>
-                <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条項</th><th class="p-2 text-left border">内容</th><th class="p-2 text-left border">システムの制御</th></tr></thead>
-                    <tbody>
-                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">1日8時間以内</td><td class="p-2 border">スタッフ個別設定で上書き可 (1日最大時間)</td></tr>
-                        <tr class="bg-amber-50"><td class="p-2 border">労基法32条</td><td class="p-2 border">週40時間以内</td><td class="p-2 border text-amber-700 text-xs"><strong>v3.7.90で撤廃</strong>: 変形労働時間制対応のためシステム側 自動制限を解除。店舗運用ルール側で管理してください。</td></tr>
-                        <tr><td class="p-2 border">労基法34条</td><td class="p-2 border">6h超→45分休憩、8h超→60分休憩</td><td class="p-2 border">自動付与（設定変更可）</td></tr>
-                        <tr><td class="p-2 border">労基法35条</td><td class="p-2 border">週1日以上の休日（連続6日まで）</td><td class="p-2 border">自動遵守</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- 5. 休憩ルール -->
-            <div id="m-break" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休憩ルール</h3>
-                <p class="text-sm text-gray-600 mb-2">シフト作成時に勤務時間から自動計算されます。店舗設定で変更可能です。</p>
-                <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">勤務時間</th><th class="p-2 text-left border">休憩時間</th></tr></thead>
-                    <tbody>
-                        <tr><td class="p-2 border">6時間超</td><td class="p-2 border">45分以上</td></tr>
-                        <tr><td class="p-2 border">8時間超</td><td class="p-2 border">60分以上</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- 6. 休み希望 -->
-            <div id="m-request" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">6.</span>休み希望</h3>
-                <div class="space-y-2 text-sm text-gray-700">
-                    <p><strong>スタッフ側:</strong> カレンダーから複数日をタップ選択→「休み希望を提出」</p>
-                    <p><strong>管理者側:</strong> 申請リストで確認→承認/却下</p>
-                    <p><strong>承認された休み希望</strong>はAIシフト作成時に自動反映され、その日にはシフトが配置されません。</p>
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                        <p class="text-xs text-amber-700"><strong>ポイント:</strong> 勤務日数はスタッフの「週最大勤務日数」設定で自動管理されます。休み希望は追加の休日指定です。</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 7. 店舗設定 -->
+            <!-- 7. 店舗設定 (労基法と入替: 先頭へ) -->
             <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>店舗設定</h3>
                 <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
                     <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
                 </div>
                 <div class="space-y-4 text-sm text-gray-700">
-                    
+
                     <div class="border-l-4 border-indigo-400 pl-4 py-1">
                         <h4 class="font-bold text-indigo-700 text-base mb-1">1. 役職・ロール設定</h4>
                         <p>スタッフの肩書き（店長・副店長・社員など）を自由にカスタマイズし、バッジの色を設定できます。各役職に「管理者として認識」チェックを付けると、AIは その役職のスタッフを <strong>シフトパターンの「管理者人数」</strong> の対象として扱います（＝オープン/ラストのあけしめを任せる責任者）。</p>
@@ -9527,6 +9487,46 @@ const app = {
                     </ul>
                     <p class="text-xs text-amber-700 mt-2"><i class="fa-solid fa-info-circle mr-1"></i>月給スタッフは min_days_week / min_days_month が <strong>ハード制約</strong> です。物理的に達成可能な値を設定してください (例: 週5日勤務想定なら 月22日まで設定可能)。</p>
                 </div>
+            </div>
+
+            <!-- 5. 休憩ルール -->
+            <div id="m-break" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休憩ルール</h3>
+                <p class="text-sm text-gray-600 mb-2">シフト作成時に勤務時間から自動計算されます。店舗設定で変更可能です。</p>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">勤務時間</th><th class="p-2 text-left border">休憩時間</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border">6時間超</td><td class="p-2 border">45分以上</td></tr>
+                        <tr><td class="p-2 border">8時間超</td><td class="p-2 border">60分以上</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 6. 休み希望 -->
+            <div id="m-request" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">6.</span>休み希望</h3>
+                <div class="space-y-2 text-sm text-gray-700">
+                    <p><strong>スタッフ側:</strong> カレンダーから複数日をタップ選択→「休み希望を提出」</p>
+                    <p><strong>管理者側:</strong> 申請リストで確認→承認/却下</p>
+                    <p><strong>承認された休み希望</strong>はAIシフト作成時に自動反映され、その日にはシフトが配置されません。</p>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <p class="text-xs text-amber-700"><strong>ポイント:</strong> 勤務日数はスタッフの「週最大勤務日数」設定で自動管理されます。休み希望は追加の休日指定です。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 労働基準法ルール (店舗設定と入替: 末尾へ) -->
+            <div id="m-labor" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>労働基準法ルール（自動遵守）</h3>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条項</th><th class="p-2 text-left border">内容</th><th class="p-2 text-left border">システムの制御</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border">労基法32条</td><td class="p-2 border">1日8時間以内</td><td class="p-2 border">スタッフ個別設定で上書き可 (1日最大時間)</td></tr>
+                        <tr class="bg-amber-50"><td class="p-2 border">労基法32条</td><td class="p-2 border">週40時間以内</td><td class="p-2 border text-amber-700 text-xs"><strong>v3.7.90で撤廃</strong>: 変形労働時間制対応のためシステム側 自動制限を解除。店舗運用ルール側で管理してください。</td></tr>
+                        <tr><td class="p-2 border">労基法34条</td><td class="p-2 border">6h超→45分休憩、8h超→60分休憩</td><td class="p-2 border">自動付与（設定変更可）</td></tr>
+                        <tr><td class="p-2 border">労基法35条</td><td class="p-2 border">週1日以上の休日（連続6日まで）</td><td class="p-2 border">自動遵守</td></tr>
+                    </tbody>
+                </table>
             </div>
 
             <!-- STEP 2: スタッフ管理 -->
