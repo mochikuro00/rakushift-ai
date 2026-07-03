@@ -9411,46 +9411,11 @@ const app = {
                 </details>
             </div>
 
-            <!-- ══════════ カテゴリー: 店舗設定 ══════════ -->
+            <!-- v3.7.225: シフト作成の手順順に並べ替え -->
+            <!-- STEP 1: 店舗設定 -->
             <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl p-4 shadow-md mt-2">
-                <h3 class="text-xl font-bold"><i class="fa-solid fa-store mr-2"></i>店舗設定</h3>
-                <p class="text-sm text-blue-100 mt-1">お店全体のルール（営業時間・シフトパターン・必要人数・休憩・労基法・AIシフト作成）</p>
-            </div>
-
-            <!-- 3. AIシフト作成 -->
-            <div id="m-shift" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">3.</span>AIシフト作成</h3>
-                <div class="space-y-3 text-sm text-gray-700">
-                    <p><strong>「AIシフト作成」ボタン1つ</strong>で以下が自動実行されます:</p>
-                    <ol class="list-decimal list-inside space-y-1 ml-2">
-                        <li>スタッフの条件・希望休・週勤務日数を読み込み</li>
-                        <li>Python数理最適化エンジン(PuLP)でベースシフト生成</li>
-                        <li>AI(Gemini)が労基法チェック・違反修正・最適化</li>
-                        <li>シフト保存→AI診断レポート表示</li>
-                    </ol>
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
-                        <p class="text-xs text-blue-700"><strong>作成範囲の選択肢:</strong></p>
-                        <ul class="text-xs text-blue-600 mt-1 space-y-0.5">
-                            <li>・現在のシフトをリセットして再構築 (未来日のみ)</li>
-                            <li>・来週分を作成</li>
-                        </ul>
-                    </div>
-                    <!-- v3.7.96: 不足セルクリック → 原因分析モーダル の説明 -->
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
-                        <p class="text-xs font-bold text-amber-800 mb-1"><i class="fa-solid fa-circle-question mr-1"></i>「不足」が出たら クリックで原因を確認</p>
-                        <p class="text-xs text-amber-700 leading-relaxed">
-                            シフト表の <strong>「⚠ 不足N名」</strong> セルをクリックすると、
-                            その日その時刻に「入れていないスタッフ」を以下のように分類表示します:
-                        </p>
-                        <ul class="text-xs text-amber-700 mt-1 space-y-0.5 list-disc list-inside ml-2">
-                            <li>✓ 在籍中 / ⏰ 別時間帯で勤務中 (シフト延長で配置可能)</li>
-                            <li>🏖 承認済み休み希望 (却下で配置可能)</li>
-                            <li>📅 NG曜日 (出勤不可)</li>
-                            <li>⏳ 希望時間帯外 (希望時間の見直し)</li>
-                            <li>? その他/週月上限到達</li>
-                        </ul>
-                    </div>
-                </div>
+                <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 1</span><i class="fa-solid fa-store mr-2"></i>店舗設定</h3>
+                <p class="text-sm text-blue-100 mt-1">まずお店全体のルールを設定（営業時間・定休日・シフトパターン・必要人数・休憩）</p>
             </div>
 
             <!-- 4. 労基法 -->
@@ -9564,10 +9529,10 @@ const app = {
                 </div>
             </div>
 
-            <!-- ══════════ カテゴリー: スタッフ管理 ══════════ -->
+            <!-- STEP 2: スタッフ管理 -->
             <div class="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl p-4 shadow-md mt-2">
-                <h3 class="text-xl font-bold"><i class="fa-solid fa-user-gear mr-2"></i>スタッフ管理</h3>
-                <p class="text-sm text-orange-50 mt-1">スタッフ個々の設定（役職・評価・シフトパターン担当・勤務制約）</p>
+                <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 2</span><i class="fa-solid fa-user-gear mr-2"></i>スタッフ管理</h3>
+                <p class="text-sm text-orange-50 mt-1">次にスタッフを登録（役職・評価・給与形態・勤務制約・担当パターン・休み希望）</p>
             </div>
 
             <!-- 1. 役職 -->
@@ -9625,6 +9590,37 @@ const app = {
                         <li>シフトパターン人数要件 (店舗設定側) と <strong>競合した場合は人数要件が優先</strong>される (= 「Aさん早番3回」と指定しても、その日に早番が不足していれば他のパターンに回ることがある)</li>
                     </ul>
                     <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><strong>💡 こんな運用に最適:</strong> 「夜勤専門のスタッフがいる」「学生バイトは早番だけにしたい」「特定スタッフを各時間帯に均等に分散させたい」など、スタッフごとの担当時間帯が明確な店舗。</p>
+                </div>
+            </div>
+
+            <!-- STEP 3: AIシフト作成 -->
+            <div class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl p-4 shadow-md mt-2">
+                <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 3</span><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>AIシフト作成</h3>
+                <p class="text-sm text-emerald-50 mt-1">最後に「AIシフト作成」で自動生成 → プレビュー確認 → 確定保存</p>
+            </div>
+
+            <!-- 3. AIシフト作成 -->
+            <div id="m-shift" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-emerald-600 mr-2">■</span>AIシフト作成の流れ</h3>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <p><strong>「AIシフト作成」ボタン1つ</strong>で以下が自動実行されます:</p>
+                    <ol class="list-decimal list-inside space-y-1 ml-2">
+                        <li>スタッフの条件・希望休・週勤務日数を読み込み</li>
+                        <li>Python数理最適化エンジン(PuLP)でベースシフト生成</li>
+                        <li>AI(Gemini)が労基法チェック・違反修正・最適化</li>
+                        <li>シフト保存→AI診断レポート表示</li>
+                    </ol>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                        <p class="text-xs text-blue-700"><strong>作成範囲の選択肢:</strong></p>
+                        <ul class="text-xs text-blue-600 mt-1 space-y-0.5">
+                            <li>・現在のシフトをリセットして再構築 (未来日のみ)</li>
+                            <li>・来週分を作成</li>
+                        </ul>
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+                        <p class="text-xs font-bold text-amber-800 mb-1"><i class="fa-solid fa-circle-question mr-1"></i>「不足」が出たら クリックで原因を確認</p>
+                        <p class="text-xs text-amber-700 leading-relaxed">シフト表の <strong>「⚠ 不足N名」</strong> セルをクリックすると、その日その時刻に「入れていないスタッフ」を分類表示します（在籍中／別時間帯で勤務中／承認済み休み希望／NG曜日／希望時間帯外／週月上限到達）。</p>
+                    </div>
                 </div>
             </div>
 
