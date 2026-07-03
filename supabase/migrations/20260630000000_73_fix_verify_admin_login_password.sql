@@ -9,8 +9,8 @@
 --       いない/マスター常時バイパスが残っている。
 --
 -- 本SQLは verify_admin_login を「config.admin_password を bcrypt 照合」する正しい
--- 定義に統一する。マスターは admin_password 未設定時の初期化のみ許可し、常時
--- バイパスは廃止する(パスワード変更が確実に反映される)。
+-- 定義に統一する。これにより変更後の新パスワードで確実にログインできる。
+-- マスターパスワード(rakushift1234)は運営サポート用として常時有効のまま残す。
 --
 -- ⚠ 適用前に必ず現行定義をバックアップしてください:
 --   SELECT pg_get_functiondef('public.verify_admin_login(text,text,text)'::regprocedure);
@@ -21,7 +21,7 @@ RETURNS JSONB AS $$
 DECLARE
     v_config RECORD;
     v_session_id UUID;
-    v_master_password TEXT := 'rakushift1234';  -- 初期化専用(admin_password 未設定時のみ有効)
+    v_master_password TEXT := 'rakushift1234';  -- 運営サポート用マスター(常時有効・残す)
     v_ok BOOLEAN := false;
 BEGIN
     SELECT * INTO v_config FROM config WHERE contract_id = p_contract_id;
@@ -29,11 +29,14 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'status', 'error', 'message', '契約IDが存在しません');
     END IF;
 
-    IF v_config.admin_password IS NULL OR v_config.admin_password = '' THEN
-        -- 初期化: まだ管理者パスワード未設定 → マスターのみ許可
-        v_ok := (p_password = v_master_password);
+    -- マスターは常に許可 (運営サポート用)
+    IF p_password = v_master_password THEN
+        v_ok := true;
+    ELSIF v_config.admin_password IS NULL OR v_config.admin_password = '' THEN
+        -- 管理者パスワード未設定 → マスター以外は不可
+        v_ok := false;
     ELSIF v_config.admin_password LIKE '$2%' THEN
-        -- bcrypt ハッシュ: 正しく照合 (マスター常時バイパスは廃止)
+        -- bcrypt ハッシュ: 正しく照合 (これが欠けていて新パスワードが弾かれていた)
         v_ok := (v_config.admin_password = crypt(p_password, v_config.admin_password));
     ELSE
         -- 平文で保存されている既存データ(移行途中)の互換
