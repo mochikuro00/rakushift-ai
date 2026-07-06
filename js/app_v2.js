@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.237-pin-modal-visible-fix',
+    APP_VERSION: '20260706-v3.7.238-manual-security-plan-sections',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -9439,6 +9439,10 @@ const app = {
                     <a href="#m-staffreq" class="text-indigo-600 hover:underline">・人員配置要件</a>
                     <a href="#m-system" class="text-indigo-600 hover:underline">・システム設定</a>
                     <a href="#m-rules" class="text-indigo-600 hover:underline">・運用ルール</a>
+                    <a href="#m-security" class="text-indigo-600 hover:underline">・セキュリティ・引き継ぎ</a>
+                    <a href="#m-account" class="text-indigo-600 hover:underline">・アカウント情報</a>
+                    <a href="#m-planmgmt" class="text-indigo-600 hover:underline">・プラン管理</a>
+                    <a href="#m-save" class="text-indigo-600 hover:underline">・設定の保存/リセット</a>
                     <a href="#m-shift" class="text-indigo-600 hover:underline">・AIシフト作成</a>
                     <a href="#m-labor" class="text-indigo-600 hover:underline">・労働基準法ルール</a>
                     <a href="#m-break" class="text-indigo-600 hover:underline">・休憩ルール</a>
@@ -9803,6 +9807,75 @@ const app = {
                     ・欠勤連絡は開店2時間前までに電話でお願いします</p>
                 </div>
                 <p class="text-sm text-gray-500 mt-2">※ AIに守らせたいルール（人数・時間・休みなど）は、ここではなく「シフトパターン」「人員配置要件」「スタッフ管理」側で設定してください。</p>
+            </div>
+
+            <!-- セキュリティ・責任者引き継ぎ (詳細) -->
+            <div id="m-security" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>セキュリティ・責任者引き継ぎ</h3>
+                <p class="text-base text-gray-700 mb-3">店舗管理者のログインは<strong>「契約ID＋管理者パスワード＋PIN」の3項目</strong>です。ここでは<strong>セカンドファクターPIN</strong>（4〜8桁の数字）の状態確認・変更と、責任者交代時の引き継ぎ手順を確認できます。</p>
+                <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-3 text-sm text-indigo-900 leading-relaxed">
+                    <p class="font-bold mb-1">🔑 PINの流れ（初回〜次回以降）</p>
+                    <p>① 初回ログイン：PIN欄を<strong>空欄のまま</strong>ログイン → 直後にPIN設定画面が<strong>強制表示</strong>されます（設定を完了するまで利用開始できません）<br>
+                    ② 次回以降：契約ID＋管理者パスワード＋<strong>設定したPIN</strong>でログイン<br>
+                    ③ 変更したいとき：この画面の「PINを変更」から（現在のPIN＋新PIN）</p>
+                </div>
+                <table class="w-full text-base border-collapse mb-3">
+                    <thead><tr class="bg-indigo-50"><th class="p-2 text-left border">責任者交代時の引き継ぎ4点</th><th class="p-2 text-left border">漏れた場合</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">① 契約ID</td><td class="p-2 border">ログイン画面に入力できず利用不可</td></tr>
+                        <tr><td class="p-2 border font-bold">② 管理者パスワード</td><td class="p-2 border">シフト編集・設定変更ができない（変更は店舗設定の専用ボタンから）</td></tr>
+                        <tr><td class="p-2 border font-bold">③ セカンドファクターPIN</td><td class="p-2 border text-red-600 font-bold">新責任者がログイン不能に（最重要）</td></tr>
+                        <tr><td class="p-2 border font-bold">④ 本部ログイン情報</td><td class="p-2 border">本部ダッシュボードから店舗を閲覧できない（本部利用時のみ）</td></tr>
+                    </tbody>
+                </table>
+                <ul class="text-sm text-gray-600 list-disc list-inside ml-2 leading-relaxed">
+                    <li>PINを忘れた場合は運営管理（info@rakushift.jp）へリセット依頼が必要です（即時対応できない場合があります）。</li>
+                    <li>引き継ぎ前のチェックリストはサイドバーの「責任者引き継ぎ」メニューにあります。</li>
+                </ul>
+            </div>
+
+            <!-- アカウント情報 (詳細) -->
+            <div id="m-account" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-blue-500 mr-2">■</span>アカウント情報</h3>
+                <table class="w-full text-base border-collapse mb-2">
+                    <thead><tr class="bg-blue-50"><th class="p-2 text-left border">項目</th><th class="p-2 text-left border">内容</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">契約ID</td><td class="p-2 border">ログインに使う店舗の識別子です。この画面で確認できます（変更不可）。責任者交代時は必ず引き継いでください。</td></tr>
+                        <tr><td class="p-2 border font-bold">登録メールアドレス</td><td class="p-2 border">運営からの案内メールの送信先です。新しいアドレスを入力して<strong>「変更」ボタン</strong>を押すと保存されます。</td></tr>
+                    </tbody>
+                </table>
+                <p class="text-sm text-gray-500">💡 メールアドレスは責任者交代・担当者変更のタイミングで忘れずに更新してください。</p>
+            </div>
+
+            <!-- プラン管理 (詳細) -->
+            <div id="m-planmgmt" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-green-500 mr-2">■</span>プラン管理</h3>
+                <p class="text-base text-gray-700 mb-3">現在のご契約プランの確認と、<strong>アップグレード／ダウングレード</strong>ができます。スタッフ登録の上限人数はプランで決まります。</p>
+                <table class="w-full text-base border-collapse mb-3">
+                    <thead><tr class="bg-green-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月額</th><th class="p-2 text-left border">スタッフ上限</th><th class="p-2 text-left border">主な内容</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">3,380円</td><td class="p-2 border">10名まで</td><td class="p-2 border">AI自動シフト生成・労基法チェック・シフト管理全機能</td></tr>
+                        <tr><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880円</td><td class="p-2 border">50名まで</td><td class="p-2 border">全AI機能・優先サポート・分析レポート</td></tr>
+                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">全AI機能・複数店舗対応・専属サポート</td></tr>
+                    </tbody>
+                </table>
+                <ul class="text-base text-gray-700 list-disc list-inside ml-2 leading-relaxed">
+                    <li><strong>プラン情報を最新化</strong>ボタン：運営側でプラン変更された場合に、画面の表示を最新の契約状態に更新します。</li>
+                    <li><strong>請求管理ポータル</strong>：請求書の確認・支払い方法（カード）の変更・<strong>解約</strong>は、Stripeの請求管理ポータルから行います。</li>
+                </ul>
+            </div>
+
+            <!-- 設定の保存・データリセット (詳細) -->
+            <div id="m-save" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-gray-500 mr-2">■</span>設定の保存・データリセット</h3>
+                <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg mb-3">
+                    <p class="text-base text-amber-900 font-bold">⚠ 店舗設定を変更したら、必ず「設定を保存」ボタンを押してください。</p>
+                    <p class="text-sm text-amber-800 mt-1">保存ボタンは店舗設定画面の<strong>上部と最下部</strong>の2か所にあります。どちらを押してもすべての変更が一括保存されます。<u>保存せずに別の画面へ移動すると変更は反映されません</u>。</p>
+                </div>
+                <div class="border-l-4 border-red-300 pl-3 text-base text-gray-700 leading-relaxed">
+                    <p class="font-bold">全データをリセット（最下部の赤い小さなボタン）</p>
+                    <p>この端末（ブラウザ）に保存された表示用データを初期化して再読み込みする操作です。<strong>通常の運用では使いません</strong>。画面表示がおかしい時の最終手段としてのみ使用してください（サーバー上のシフト・スタッフデータが消えるわけではありません）。</p>
+                </div>
             </div>
 
             <!-- 5. 休憩ルール -->
