@@ -924,9 +924,11 @@ const app = {
                 await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
-                // PIN 未設定の場合のみ初回設定モーダル (キャンセル時はログイン取消)
+                // PIN 未設定の場合は初回設定モーダルを強制表示 (v3.7.235: 逃げ道なし。
+                // フォームに PIN を入力していた場合はその値を引き継ぐ)
                 if (hasPin === false) {
-                    const pinOk = await this._showPinSetupModal(inputContractId);
+                    const typedPin = (document.getElementById('adminLoginPin')?.value || '').trim();
+                    const pinOk = await this._showPinSetupModal(inputContractId, typedPin);
                     if (!pinOk) {
                         this.showLoading(false);
                         return;
@@ -1875,8 +1877,8 @@ const app = {
         }
     },
 
-    // 初回 PIN 設定モーダル
-    _showPinSetupModal(contractId) {
+    // 初回 PIN 設定モーダル (v3.7.235: ログインフォームに入力済みの PIN があれば引き継ぐ)
+    _showPinSetupModal(contractId, prefillPin) {
         this._pinPendingContractId = contractId;
         const modal = document.getElementById('pinSetupModal');
         if (!modal) return Promise.resolve(true);
@@ -1884,7 +1886,8 @@ const app = {
         modal.classList.add('flex');
         const newEl = document.getElementById('pinSetupNew');
         const confEl = document.getElementById('pinSetupConfirm');
-        if (newEl) { newEl.value = ''; setTimeout(() => newEl.focus(), 100); }
+        const pre = (typeof prefillPin === 'string' && /^[0-9]{4,8}$/.test(prefillPin)) ? prefillPin : '';
+        if (newEl) { newEl.value = pre; setTimeout(() => newEl.focus(), 100); }
         if (confEl) confEl.value = '';
         const err = document.getElementById('pinSetupError');
         if (err) { err.classList.add('hidden'); err.textContent = ''; }
