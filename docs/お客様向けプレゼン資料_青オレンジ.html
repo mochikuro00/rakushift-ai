@@ -17,8 +17,7 @@ body { margin: 0; font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-seri
 }
 .slide:last-child { page-break-after: auto; }
 @media print { body { background: white; } .slide { margin: 0; box-shadow: none; } }
-.logo-text { background: linear-gradient(135deg,#2563eb,#f97316);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; }
+.logo-text { color:#2563eb; font-weight: 900; }
 .slide-header { display:flex; align-items:center; gap:14px; border-bottom:3px solid #2563eb; padding-bottom:10px; margin-bottom:18px; }
 .slide-header .n { width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px; }
 .slide-header h2 { font-size:26px; font-weight:800; margin:0; }
@@ -43,11 +42,15 @@ table.t td{ padding:9px 12px; border:1px solid #e5e7eb; }
 <body>
 
 <!-- P.1 表紙 -->
-<div class="slide g-blue" style="justify-content:center;align-items:flex-start;color:#fff;">
+<div class="slide g-blue" style="justify-content:center;align-items:flex-start;color:#fff;position:relative;">
   <div class="slide-number" style="color:rgba(255,255,255,.5)">P.1</div>
-  <div class="chip" style="background:rgba(255,255,255,.2);color:#fff;">AI × シフト管理</div>
-  <h1 style="font-size:64px;font-weight:900;margin:14px 0 6px;line-height:1.1;">ラクシフトAI</h1>
-  <p style="font-size:26px;font-weight:700;opacity:.95;margin:0;">ボタン1つで、シフト作成がおわる。</p>
+  <!-- 背景の大きなアイコンでインパクト -->
+  <i class="fa fa-calendar-check-o" style="position:absolute;right:-30px;top:-20px;font-size:360px;color:rgba(255,255,255,.08);"></i>
+  <div style="position:relative;">
+    <img src="../images/rakushift_logo_transparent.png" alt="ラクシフトAI" style="height:96px;filter:brightness(0) invert(1);margin-bottom:14px;">
+    <div class="chip" style="background:rgba(255,255,255,.2);color:#fff;">AI × シフト管理 SaaS</div>
+    <h1 style="font-size:72px;font-weight:900;margin:12px 0 6px;line-height:1.05;">ラクシフトAI</h1>
+    <p style="font-size:28px;font-weight:700;opacity:.98;margin:0;">ボタン1つで、シフト作成がおわる。</p>
   <p style="font-size:16px;opacity:.9;margin-top:18px;max-width:640px;line-height:1.7;">
     面倒なシフト作成を、AIが数十秒で自動作成。<br>
     労働基準法も自動チェック。もう「シフトパズル」で悩みません。
@@ -56,6 +59,7 @@ table.t td{ padding:9px 12px; border:1px solid #e5e7eb; }
     <div class="chip" style="background:rgba(255,255,255,.2);color:#fff;"><i class="fa fa-bolt"></i> 数十秒で自動作成</div>
     <div class="chip" style="background:rgba(255,255,255,.2);color:#fff;"><i class="fa fa-shield"></i> 労基法 自動遵守</div>
     <div class="chip" style="background:rgba(255,255,255,.2);color:#fff;"><i class="fa fa-mobile"></i> スマホ対応</div>
+  </div>
   </div>
 </div>
 
@@ -313,21 +317,14 @@ table.t td{ padding:9px 12px; border:1px solid #e5e7eb; }
     <div><h2>料金プラン & お問い合わせ</h2><p>お店の規模に合わせて選べます</p></div></div>
   <table class="t" style="margin-bottom:16px;">
     <tr><th>プラン</th><th>対象</th><th>スタッフ上限</th><th>主な機能</th></tr>
-    <tr><td><b>Standard</b></td><td>小規模店舗</td><td>〜20名</td><td>AIシフト作成・シフト表・休み希望</td></tr>
+    <tr><td><b>Standard</b></td><td>小規模店舗</td><td>〜10名</td><td>AIシフト作成・シフト表・休み希望</td></tr>
     <tr style="background:#eff6ff;"><td><b>Pro（人気）</b></td><td>中規模店舗</td><td>〜50名</td><td>Standard＋分析レポート・各種かしこい機能</td></tr>
     <tr><td><b>Premium</b></td><td>大規模・多店舗</td><td>無制限</td><td>Pro＋本部管理モード・優先サポート</td></tr>
   </table>
-  <div style="flex:1;display:flex;gap:20px;align-items:center;">
-    <div class="g-blue" style="flex:1;color:#fff;border-radius:16px;padding:26px;">
-      <h3 style="font-size:22px;font-weight:900;margin:0 0 10px;">まずは無料でお試しください</h3>
-      <p style="font-size:14px;opacity:.95;line-height:1.8;">
-        導入・操作説明もサポートします。<br>「シフト作成の悩み」を、今日から手放しましょう。</p>
-      <div class="chip" style="background:#fff;color:#2563eb;margin-top:12px;font-size:14px;"><i class="fa fa-envelope"></i> info@rakushift.jp</div>
-    </div>
-    <div style="flex:1;text-align:center;">
-      <h1 style="font-size:40px;margin:0;"><span class="logo-text">ラクシフトAI</span></h1>
-      <p style="font-size:15px;color:#6b7280;margin-top:6px;">ボタン1つで、シフト作成がおわる。</p>
-    </div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:10px;">
+    <img src="../images/rakushift_logo_transparent.png" alt="ラクシフトAI" style="height:70px;">
+    <h1 style="font-size:46px;margin:0;"><span class="logo-text">ラクシフトAI</span></h1>
+    <p style="font-size:17px;color:#6b7280;margin:0;">ボタン1つで、シフト作成がおわる。</p>
   </div>
   <div class="slide-footer">ラクシフトAI サービス紹介</div>
 </div>
