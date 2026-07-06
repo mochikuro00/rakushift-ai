@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260611-v3.7.170-admin-plan-badge-fix',
+    APP_VERSION: '20260706-v3.7.236-manual-pin-cache-refresh',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -9636,18 +9636,32 @@ const app = {
 
                     <div class="border-l-4 border-indigo-400 pl-4 py-1">
                         <h4 class="font-bold text-indigo-700 text-lg mb-1">7. セキュリティ・責任者引き継ぎ</h4>
-                        <p><strong>セカンドファクターPIN</strong>（契約ID＋パスワードに加えた 4〜8桁の2段階認証）を設定できます。未設定の場合、次回ログイン時にPIN設定画面が表示されます。</p>
-                        <p class="text-base text-gray-600 mt-1">責任者を交代する際の<strong>引き継ぎ手順</strong>（契約ID・管理者パスワード・PIN・本部連絡先）もこのセクションで確認できます。PINを忘れた場合は運営管理へのリセット依頼が必要です。</p>
+                        <p><strong>セカンドファクターPIN</strong>（4〜8桁の数字）の状態確認・変更ができます。店舗管理者のログインは<strong>「契約ID＋管理者パスワード＋PIN」の3項目</strong>です。<strong>初回ログイン時はPIN欄を空欄のままログイン</strong>すると、直後にPIN設定画面が表示され、<strong>設定を完了するまで利用を開始できません</strong>。</p>
+                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
+                            <li><strong>責任者交代時の引き継ぎ4点</strong>：契約ID／管理者パスワード／PIN／本部ログイン情報。<u>PINの引き継ぎ漏れは新責任者がログイン不能</u>になります。</li>
+                            <li>PINを忘れた場合は運営管理（info@rakushift.jp）へリセット依頼が必要です。</li>
+                            <li>引き継ぎ前のチェックリストはサイドバーの「責任者引き継ぎ」メニューにあります。</li>
+                        </ul>
                     </div>
 
                     <div class="border-l-4 border-blue-400 pl-4 py-1">
                         <h4 class="font-bold text-blue-700 text-lg mb-1">8. アカウント情報</h4>
-                        <p>契約IDなど、店舗アカウントの基本情報を確認できます。</p>
+                        <p><strong>契約ID</strong>（ログインに使う識別子）の確認と、<strong>登録メールアドレス</strong>（案内メールの送信先）の変更ができます。メールアドレスは入力して「変更」ボタンで保存します。</p>
                     </div>
 
                     <div class="border-l-4 border-green-400 pl-4 py-1">
                         <h4 class="font-bold text-green-700 text-lg mb-1">9. プラン管理</h4>
-                        <p>現在のご契約プラン（Standard / Pro / Premium）の確認・変更ができます。</p>
+                        <p>現在のご契約プランの確認と<strong>アップグレード／ダウングレード</strong>ができます。</p>
+                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
+                            <li><strong>Standard</strong>：3,380円/月・スタッフ10名まで ／ <strong>Pro</strong>：4,880円/月・50名まで ／ <strong>Premium</strong>：9,980円/月・無制限。</li>
+                            <li><strong>プラン情報を最新化</strong>ボタン：運営側でプラン変更された場合に表示を更新します。</li>
+                            <li><strong>請求管理ポータル</strong>：請求書の確認・支払い方法の変更・解約はStripeポータルから行います。</li>
+                        </ul>
+                    </div>
+
+                    <div class="border-l-4 border-gray-300 pl-4 py-1">
+                        <h4 class="font-bold text-gray-700 text-lg mb-1">10. 設定の保存・データリセット</h4>
+                        <p>変更後は画面上部または最下部の<strong>「設定を保存」</strong>ボタンで一括保存してください（<u>保存せず画面を移動すると変更は反映されません</u>）。最下部の「全データをリセット」はこの端末の表示データを初期化する操作です（通常は使いません）。</p>
                     </div>
                 </div>
 
