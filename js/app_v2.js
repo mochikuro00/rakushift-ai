@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.236-manual-pin-cache-refresh',
+    APP_VERSION: '20260706-v3.7.237-pin-modal-visible-fix',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -1882,8 +1882,10 @@ const app = {
         this._pinPendingContractId = contractId;
         const modal = document.getElementById('pinSetupModal');
         if (!modal) return Promise.resolve(true);
+        // v3.7.237: .modal は CSS で opacity:0/visibility:hidden のため、
+        // 'active' を付けないと DOM 上表示でも画面に見えない (これが「出ない」の原因)
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        modal.classList.add('flex', 'active');
         const newEl = document.getElementById('pinSetupNew');
         const confEl = document.getElementById('pinSetupConfirm');
         const pre = (typeof prefillPin === 'string' && /^[0-9]{4,8}$/.test(prefillPin)) ? prefillPin : '';
@@ -1935,7 +1937,7 @@ const app = {
 
     _closePinSetupModal() {
         const modal = document.getElementById('pinSetupModal');
-        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex', 'active'); }
     },
 
     _showPinEntryModal(contractId) {
@@ -1943,7 +1945,7 @@ const app = {
         const modal = document.getElementById('pinEntryModal');
         if (!modal) return Promise.resolve(true);
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        modal.classList.add('flex', 'active');
         const input = document.getElementById('pinEntryInput');
         if (input) { input.value = ''; setTimeout(() => input.focus(), 100); }
         const err = document.getElementById('pinEntryError');
@@ -2007,7 +2009,7 @@ const app = {
 
     _closePinEntryModal() {
         const modal = document.getElementById('pinEntryModal');
-        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex', 'active'); }
         this._pinPendingContractId = null;
     },
 
@@ -2022,13 +2024,13 @@ const app = {
         const err = document.getElementById('pinChangeError');
         if (err) { err.classList.add('hidden'); err.textContent = ''; }
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        modal.classList.add('flex', 'active');
         setTimeout(() => document.getElementById('pinChangeCurrent')?.focus(), 100);
     },
 
     closePinChangeModal() {
         const modal = document.getElementById('pinChangeModal');
-        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex', 'active'); }
     },
 
     async submitPinChange() {
@@ -9432,6 +9434,11 @@ const app = {
                     <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
                     <a href="#m-reference" class="text-indigo-600 hover:underline font-bold">📖 全設定・全機能リファレンス</a>
                     <a href="#m-settings" class="text-blue-700 hover:underline font-bold">🏪【店舗設定】</a>
+                    <a href="#m-hours" class="text-indigo-600 hover:underline">・営業時間＆定休日</a>
+                    <a href="#m-patterns" class="text-indigo-600 hover:underline">・シフトパターン</a>
+                    <a href="#m-staffreq" class="text-indigo-600 hover:underline">・人員配置要件</a>
+                    <a href="#m-system" class="text-indigo-600 hover:underline">・システム設定</a>
+                    <a href="#m-rules" class="text-indigo-600 hover:underline">・運用ルール</a>
                     <a href="#m-shift" class="text-indigo-600 hover:underline">・AIシフト作成</a>
                     <a href="#m-labor" class="text-indigo-600 hover:underline">・労働基準法ルール</a>
                     <a href="#m-break" class="text-indigo-600 hover:underline">・休憩ルール</a>
@@ -9701,6 +9708,101 @@ const app = {
                     </tbody>
                 </table>
                 <p class="text-sm text-gray-500 mt-2">※ 役職名・バッジ色・数は自由に設定できます。「管理者」チェックの有無だけがAIの配置に影響します（新人扱いは評価ランクDで判定）。</p>
+            </div>
+
+            <!-- 営業時間 & 定休日 (詳細) -->
+            <div id="m-hours" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-blue-500 mr-2">■</span>営業時間 ＆ 定休日</h3>
+                <p class="text-base text-gray-700 mb-3">AIは<strong>ここで設定した時間の中でだけ</strong>シフトを組みます。「お店が開いている時間」を正しく教えてあげる、いちばん基本の設定です。</p>
+                <table class="w-full text-base border-collapse mb-3">
+                    <thead><tr class="bg-blue-50"><th class="p-2 text-left border">項目</th><th class="p-2 text-left border">設定の仕方</th><th class="p-2 text-left border">AIへの影響</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">営業時間</td><td class="p-2 border">平日／土曜／日祝の3区分それぞれに開店〜閉店を15分刻みで設定</td><td class="p-2 border">この時間の外には絶対にシフトを入れません</td></tr>
+                        <tr><td class="p-2 border font-bold">24時間営業</td><td class="p-2 border">右側の「🕐 24時間営業」チェックをON</td><td class="p-2 border">その区分は終日シフト可能になります</td></tr>
+                        <tr><td class="p-2 border font-bold">定休日</td><td class="p-2 border">毎週休む曜日にチェック（例: 水曜定休）</td><td class="p-2 border">その曜日には誰も配置しません</td></tr>
+                        <tr><td class="p-2 border font-bold">臨時休業</td><td class="p-2 border">日付を選んで「追加」（複数登録可・×で削除）</td><td class="p-2 border">その日だけシフトを入れません（年末年始・棚卸し等）</td></tr>
+                    </tbody>
+                </table>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900 leading-relaxed">
+                    <p class="font-bold mb-1">💡 設定例</p>
+                    <p>平日 9:00〜22:00 ／ 土曜 10:00〜20:00 ／ 日祝 10:00〜20:00 ／ 定休日: 水曜 ／ 臨時休業: 12/31〜1/3</p>
+                    <p class="mt-1 text-blue-700">⚠ 営業時間からはみ出すシフトパターン（例: 営業9時開始なのに8時開始の早番）は使われないので、パターンの時間と整合させてください。</p>
+                </div>
+            </div>
+
+            <!-- シフトパターン (詳細) -->
+            <div id="m-patterns" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-purple-500 mr-2">■</span>シフトパターン（早番・遅番など）</h3>
+                <p class="text-base text-gray-700 mb-3">AIが組み合わせる<strong>勤務の「型」</strong>です。「早番＝9:00〜14:00」のように登録しておくと、AIはこの型の中から人を割り当てます。<strong>プリセット</strong>（飲食店向け・オフィス向け等）からの一括登録もできます。</p>
+                <table class="w-full text-base border-collapse mb-3">
+                    <thead><tr class="bg-purple-50"><th class="p-2 text-left border">列</th><th class="p-2 text-left border">意味</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">パターン名</td><td class="p-2 border">わかりやすい名前（早番／遅番／夜勤 など自由）</td></tr>
+                        <tr><td class="p-2 border font-bold">開始・終了</td><td class="p-2 border">その型の勤務時間（15分刻み）</td></tr>
+                        <tr><td class="p-2 border font-bold">平日・土曜・日祝 人数</td><td class="p-2 border">その曜日区分で<strong>何人必要か</strong>。<strong>0にするとその曜日はその型を使いません</strong></td></tr>
+                        <tr><td class="p-2 border font-bold">翌休</td><td class="p-2 border">ONにすると、その型に入った<strong>翌日を自動で休み</strong>に（夜勤の2連勤防止）</td></tr>
+                        <tr><td class="p-2 border font-bold">管理者</td><td class="p-2 border">ON＋人数1以上で、その型に<strong>管理者（店長/リーダー等）を必ず配置</strong>（開店・閉店の責任者確保）。OFFなら誰が入るかはAIにおまかせ</td></tr>
+                    </tbody>
+                </table>
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-900 leading-relaxed">
+                    <p class="font-bold mb-1">💡 設定例（飲食店）</p>
+                    <p>早番 9:00〜14:00｜平日2・土3・日祝3・管理者ON 1名（開店担当）<br>
+                    中番 11:00〜17:00｜平日1・土2・日祝2<br>
+                    遅番 17:00〜22:00｜平日2・土3・日祝3・管理者ON 1名（閉店担当）</p>
+                    <p class="mt-1 text-purple-700">📱 スマホでは表を横にスワイプすると全部の列を編集できます。</p>
+                </div>
+            </div>
+
+            <!-- 人員配置要件 (詳細) -->
+            <div id="m-staffreq" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-green-500 mr-2">■</span>人員配置要件</h3>
+                <p class="text-base text-gray-700 mb-3">「1日にお店全体で最低何人必要か」の数字です。<strong>シフトパターンの平日／土曜／日祝の人数を足し算して自動で入ります</strong>（直接編集はできません）。パターン側の人数を直すと、ここも自動で変わります。</p>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3 text-sm text-green-900 leading-relaxed">
+                    <p class="font-bold mb-1">💡 例</p>
+                    <p>早番2人＋中番1人＋遅番2人（平日）→ 平日の人員配置要件は自動で「5人」になります。</p>
+                </div>
+                <h4 class="font-bold text-gray-800 text-base mb-2">⚡「過剰配置を許容する」チェックの使い分け</h4>
+                <table class="w-full text-base border-collapse">
+                    <thead><tr class="bg-green-50"><th class="p-2 text-left border">設定</th><th class="p-2 text-left border">AIの動き</th><th class="p-2 text-left border">向いているお店</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">OFF（推奨）</td><td class="p-2 border">必要人数<strong>ぴったり</strong>に配置。月給スタッフ（固定費）を優先し、時給スタッフのシフトを抑えて<strong>人件費を最小化</strong></td><td class="p-2 border">人件費をしっかり管理したいお店</td></tr>
+                        <tr><td class="p-2 border font-bold">ON</td><td class="p-2 border">必要人数より<strong>多めの配置もOK</strong>。月給/時給の区別なく<strong>全員の出勤日数をなるべく確保</strong></td><td class="p-2 border">「スタッフ全員を最低◯日入れたい」お店</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- システム設定 (詳細) -->
+            <div id="m-system" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-gray-500 mr-2">■</span>システム設定</h3>
+                <div class="space-y-3 text-base text-gray-700 leading-relaxed">
+                    <div class="border-l-4 border-gray-300 pl-3">
+                        <p class="font-bold">デフォルト時給（円）</p>
+                        <p>スタッフ個別に時給を入れていない人に使う初期値です。分析レポートの人件費概算に使われます。</p>
+                    </div>
+                    <div class="border-l-4 border-amber-300 pl-3">
+                        <p class="font-bold">店舗パスワード と 管理者パスワード（2種類あります）</p>
+                        <p>・<strong>店舗パスワード</strong>＝スタッフも使う日常の閲覧用ログイン<br>
+                        ・<strong>管理者パスワード</strong>＝シフト編集・設定変更など権限が必要な操作用<br>
+                        それぞれ専用ボタン（「店舗ログインパスワードを変更」「管理者パスワードを変更」）から変更します。セキュリティのため現在のパスワードは画面に表示されません。</p>
+                    </div>
+                    <div class="border-l-4 border-emerald-300 pl-3">
+                        <p class="font-bold">休憩時間ルール</p>
+                        <p>「◯時間を超えたら△分休憩」を登録すると、AIがシフトに自動で休憩を入れます。初期値は労基法どおり<strong>6時間超→45分／8時間超→60分</strong>。「ルールを追加」で段を増やせ、×ボタンで削除できます。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 運用ルール (詳細) -->
+            <div id="m-rules" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-orange-500 mr-2">■</span>運用ルール（スタッフ向け表示）</h3>
+                <p class="text-base text-gray-700 mb-3">ここに書いた文章は<strong>スタッフ画面の「お店のルール」にそのまま表示</strong>されます。シフト生成には影響しない、<strong>お店からの掲示板・連絡事項</strong>です。</p>
+                <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-900 leading-relaxed">
+                    <p class="font-bold mb-1">💡 記入例</p>
+                    <p>・シフト希望は毎月15日までに提出してください<br>
+                    ・シフト交代は必ず店長の承認を取ってください<br>
+                    ・欠勤連絡は開店2時間前までに電話でお願いします</p>
+                </div>
+                <p class="text-sm text-gray-500 mt-2">※ AIに守らせたいルール（人数・時間・休みなど）は、ここではなく「シフトパターン」「人員配置要件」「スタッフ管理」側で設定してください。</p>
             </div>
 
             <!-- 5. 休憩ルール -->
