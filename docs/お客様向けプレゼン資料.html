@@ -17,17 +17,18 @@ body { margin: 0; font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-seri
 }
 .slide:last-child { page-break-after: auto; }
 @media print { body { background: white; } .slide { margin: 0; box-shadow: none; } }
-.logo-text { background: linear-gradient(135deg,#3b82f6,#8b5cf6 55%,#ec4899);
+.logo-text { background: linear-gradient(135deg,#0ABAB5,#FFC400);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 900; }
-.slide-header { display:flex; align-items:center; gap:14px; border-bottom:3px solid #3b82f6; padding-bottom:10px; margin-bottom:18px; }
+.slide-header { display:flex; align-items:center; gap:14px; border-bottom:3px solid #0ABAB5; padding-bottom:10px; margin-bottom:18px; }
 .slide-header .n { width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px; }
 .slide-header h2 { font-size:26px; font-weight:800; margin:0; }
 .slide-header p { margin:2px 0 0; color:#6b7280; font-size:13px; }
 .slide-number { position:absolute; bottom:7mm; right:12mm; color:#9ca3af; font-size:11px; font-weight:600; }
 .slide-footer { position:absolute; bottom:7mm; left:12mm; font-size:10px; color:#9ca3af; }
-.g-blue{background:linear-gradient(135deg,#3b82f6,#6366f1);} .g-purple{background:linear-gradient(135deg,#8b5cf6,#ec4899);}
-.g-green{background:linear-gradient(135deg,#10b981,#14b8a6);} .g-orange{background:linear-gradient(135deg,#f97316,#ef4444);}
-.g-amber{background:linear-gradient(135deg,#f59e0b,#f97316);}
+/* ティファニーブルー × 黄色 パレット */
+.g-blue{background:linear-gradient(135deg,#0ABAB5,#2ec9c2);} .g-purple{background:linear-gradient(135deg,#0e9e99,#48cfc8);}
+.g-green{background:linear-gradient(135deg,#12b3ad,#5ed6cd);} .g-orange{background:linear-gradient(135deg,#FFC107,#FF9F00);}
+.g-amber{background:linear-gradient(135deg,#FFD54F,#FFB300);}
 .shot { border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.12); width:100%; object-fit:cover; object-position:top; }
 .shot-frame { border-radius:12px; overflow:hidden; border:1px solid #e5e7eb; box-shadow:0 10px 30px rgba(0,0,0,0.14); background:#fff; }
 .shot-bar { height:22px; background:#f3f4f6; display:flex; align-items:center; gap:6px; padding:0 10px; border-bottom:1px solid #e5e7eb; }
@@ -121,10 +122,10 @@ table.t td{ padding:9px 12px; border:1px solid #e5e7eb; }
       <h3 style="font-size:20px;font-weight:900;margin:12px 0 6px;">店舗設定</h3>
       <p style="font-size:13px;opacity:.95;line-height:1.7;">営業時間・定休日・シフトパターン（早番/遅番など）・必要人数を登録。</p>
     </div>
-    <div class="g-amber" style="color:#fff;border-radius:16px;padding:22px;position:relative;">
-      <div class="step-badge">2</div>
+    <div class="g-amber" style="color:#5c4400;border-radius:16px;padding:22px;position:relative;">
+      <div class="step-badge" style="background:rgba(0,0,0,.18);color:#5c4400;">2</div>
       <h3 style="font-size:20px;font-weight:900;margin:12px 0 6px;">スタッフ管理</h3>
-      <p style="font-size:13px;opacity:.95;line-height:1.7;">スタッフの役職・評価・給与形態・勤務条件・休み希望を登録。</p>
+      <p style="font-size:13px;line-height:1.7;">スタッフの役職・評価・給与形態・勤務条件・休み希望を登録。</p>
     </div>
     <div class="g-green" style="color:#fff;border-radius:16px;padding:22px;position:relative;">
       <div class="step-badge">3</div>
@@ -168,7 +169,7 @@ table.t td{ padding:9px 12px; border:1px solid #e5e7eb; }
 <!-- P.6 STEP2 -->
 <div class="slide">
   <div class="slide-number">P.6</div>
-  <div class="slide-header"><div class="n g-amber">2</div>
+  <div class="slide-header"><div class="n g-amber" style="color:#5c4400;">2</div>
     <div><h2>STEP2｜スタッフ管理</h2><p>スタッフ一人ひとりの条件を登録します</p></div></div>
   <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:20px;flex:1;align-items:center;">
     <div class="shot-frame">
