@@ -9477,7 +9477,7 @@ const app = {
 
             <!-- 7. 店舗設定 (労基法と入替: 先頭へ) -->
             <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>店舗設定</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>店舗設定</h3>
                 <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
                     <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
                 </div>
@@ -9549,22 +9549,23 @@ const app = {
             <!-- 役職・ロール (休憩ルールの上に表示) -->
             <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>役職・ロール</h3>
+                <p class="text-sm text-gray-600 mb-3">役職は自由に作成・カスタマイズできます。各役職の<b>「管理者」設定をONにすると</b>、その役職のスタッフはAIの<b>メンター・管理者</b>（＝あけしめ責任者／新人の指導役）として扱われます。<b>下表はあくまで設定の一例</b>です。</p>
                 <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職（例）</th><th class="p-2 text-left border">管理者設定</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
                     <tbody>
-                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名配置必須（AIが最優先で配置）</td></tr>
-                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代理として配置可能（店長と同等の権限）</td></tr>
-                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置（月給制の場合はコスト計算上有利に働きます）</td></tr>
-                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任者、メンター役</td><td class="p-2 border">新人スタッフの指導役として重宝されます</td></tr>
-                        <tr><td class="p-2 border font-bold">アルバイト (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長〜リーダー）と同日配置</td></tr>
+                        <tr><td class="p-2 border font-bold">店長 / 副店長</td><td class="p-2 border text-red-600 font-bold">ON</td><td class="p-2 border">管理者権限をONにした場合、<b>メンター・管理者</b>として扱う。シフトパターンの「管理者人数」に従って優先配置、新人と同じ時間帯に配置</td></tr>
+                        <tr><td class="p-2 border font-bold">社員</td><td class="p-2 border">任意（ON/OFF）</td><td class="p-2 border">月給の場合は固定費として優先配置。管理者をONにすればメンター・管理者にもなります</td></tr>
+                        <tr><td class="p-2 border font-bold">リーダー</td><td class="p-2 border">ONで指導役に</td><td class="p-2 border">管理者ONにすると新人の指導役（メンター）として配置されます</td></tr>
+                        <tr><td class="p-2 border font-bold">アルバイト / パート</td><td class="p-2 border">OFF</td><td class="p-2 border">通常配置（管理者・メンターの対象外）</td></tr>
+                        <tr><td class="p-2 border font-bold">新人</td><td class="p-2 border">OFF</td><td class="p-2 border"><b>評価ランクD</b>のスタッフを新人と判定し、必ずメンターと同じ時間帯に配置します</td></tr>
                     </tbody>
                 </table>
+                <p class="text-xs text-gray-500 mt-2">※ 役職名・バッジ色・数は自由に設定できます。「管理者」チェックの有無だけがAIの配置に影響します（新人扱いは評価ランクDで判定）。</p>
             </div>
 
             <!-- 5. 休憩ルール -->
             <div id="m-break" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休憩ルール</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>休憩ルール</h3>
                 <p class="text-sm text-gray-600 mb-2">シフト作成時に勤務時間から自動計算されます。店舗設定で変更可能です。</p>
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">勤務時間</th><th class="p-2 text-left border">休憩時間</th></tr></thead>
@@ -9577,7 +9578,7 @@ const app = {
 
             <!-- 6. 休み希望 -->
             <div id="m-request" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">6.</span>休み希望</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>休み希望</h3>
                 <div class="space-y-2 text-sm text-gray-700">
                     <p><strong>スタッフ側:</strong> カレンダーから複数日をタップ選択→「休み希望を提出」</p>
                     <p><strong>管理者側:</strong> 申請リストで確認→承認/却下</p>
@@ -9590,7 +9591,7 @@ const app = {
 
             <!-- 4. 労働基準法ルール (店舗設定と入替: 末尾へ) -->
             <div id="m-labor" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>労働基準法ルール（自動遵守）</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>労働基準法ルール（自動遵守）</h3>
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条項</th><th class="p-2 text-left border">内容</th><th class="p-2 text-left border">システムの制御</th></tr></thead>
                     <tbody>
@@ -9688,7 +9689,7 @@ const app = {
 
             <!-- 8. プラン -->
             <div id="m-plan" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">8.</span>プラン・課金</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>プラン・課金</h3>
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月額</th><th class="p-2 text-left border">スタッフ上限</th><th class="p-2 text-left border">機能</th></tr></thead>
                     <tbody>
@@ -9707,7 +9708,7 @@ const app = {
 
             <!-- 9. 権限 -->
             <div id="m-auth" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">9.</span>権限 (管理者 / スタッフ)</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>権限 (管理者 / スタッフ)</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
                         <h4 class="font-bold text-green-600 mb-2">管理者ができること</h4>
@@ -9736,7 +9737,7 @@ const app = {
 
             <!-- 10. 分析 -->
             <div id="m-analytics" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">10.</span>分析・レポート</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>分析・レポート</h3>
                 <div class="space-y-2 text-sm text-gray-700">
                     <p><strong>月間推定人件費:</strong> 時給スタッフの実績＋月給スタッフの固定額。祝日割増(1.25倍)含む。</p>
                     <p><strong>日次コスト推移:</strong> 日ごとの人件費グラフ。</p>
@@ -9747,7 +9748,7 @@ const app = {
 
             <!-- 11. その他 -->
             <div id="m-other" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">11.</span>その他機能</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>その他機能</h3>
                 <div class="space-y-2 text-sm text-gray-700">
                     <p><strong>カレンダーメモ:</strong> 特定の日にメモを残せます（イベント・団体予約など）。</p>
                     <p><strong>ドラッグ&ドロップ:</strong> シフト表でシフトをドラッグして時間変更・スタッフ変更が可能（管理者のみ）。</p>
