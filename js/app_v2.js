@@ -9481,47 +9481,63 @@ const app = {
                 <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
                     <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
                 </div>
+                <p class="text-xs text-gray-500 mb-2">※ 実際の「店舗設定」画面に表示される<b>上から順番</b>で、設定が必要な項目をすべて説明します。</p>
                 <div class="space-y-4 text-sm text-gray-700">
 
                     <div class="border-l-4 border-indigo-400 pl-4 py-1">
                         <h4 class="font-bold text-indigo-700 text-base mb-1">1. 役職・ロール設定</h4>
-                        <p>スタッフの肩書き（店長・副店長・社員など）を自由にカスタマイズし、バッジの色を設定できます。各役職に「管理者として認識」チェックを付けると、AIは その役職のスタッフを <strong>シフトパターンの「管理者人数」</strong> の対象として扱います（＝オープン/ラストのあけしめを任せる責任者）。</p>
-                        <p class="text-xs text-gray-500 mt-1">※ チェック OFF の役職は管理者カウントから外れます。未設定の場合は紫/赤/緑のバッジカラーから自動判定 (後方互換)。<br>※ 「あけしめを社員に必ず任せたい」場合は、シフトパターン側で「管理者」をON＋人数1以上にしてください。</p>
+                        <p>スタッフの肩書き（店長・副店長・社員など）を自由に作成し、バッジ色を設定します。役職の<strong>「管理者として認識」をON</strong>にすると、その役職はAIの<strong>メンター・管理者</strong>（あけしめ責任者／新人の指導役）として扱われます。</p>
+                        <p class="text-xs text-gray-500 mt-1">※ 「あけしめを社員に必ず任せたい」場合は、シフトパターン側で「管理者」をON＋人数1以上にしてください。</p>
                     </div>
 
                     <div class="border-l-4 border-blue-400 pl-4 py-1">
                         <h4 class="font-bold text-blue-700 text-base mb-1">2. 営業時間 ＆ 定休日</h4>
-                        <p>平日・土日・祝日ごとに開店/閉店時間を設定します。未設定だと全日同一営業時間で計算されます。<br>定休日（毎週水曜など）を設定すると、AIはその曜日には一切シフトを入れません。</p>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-base mb-1">3. 人員配置要件（ベース）</h4>
-                        <p><strong>管理者の配置人数:</strong> シフトパターンごとに「管理者(店長・リーダー)を何人入れるか」を設定します（シフトパターン表の「管理者」列）。<br>
-                        <strong>スタッフ総数要件:</strong> 平日・土曜・日祝の各曜日タイプごとに、1日あたりの最低配置人数を設定します。<br>
-                        <span class="text-xs text-gray-500">※ 時間帯別の必要人数 (ランチ・ディナーピーク等) は <strong>シフトパターン</strong> で時間帯と人数を直接指定する方式に統一されました。</span></p>
+                        <p>平日・土日・祝日ごとに<strong>開店/閉店時間</strong>を設定します。<strong>24時間営業</strong>のお店は「24時間」チェックをONに。<strong>定休日</strong>（毎週水曜など）を設定すると、その曜日にはAIは一切シフトを入れません。</p>
                     </div>
 
                     <div class="border-l-4 border-purple-400 pl-4 py-1">
-                        <h4 class="font-bold text-purple-700 text-base mb-1">4. シフトパターンの設定（重要）</h4>
-                        <p>「早番（09:00〜14:00）」「遅番（17:00〜22:00）」などの時間テンプレートと、その時間帯に何人配置するかを <strong>平日 / 土曜 / 日祝</strong> の3カラムで指定できます。</p>
-                        <p class="text-xs text-gray-600 mt-1">例: 早番 平日2名・土曜3名・日祝3名 / 遅番 平日3名・土曜4名・日祝4名 → AIはこの曜日別人数を必ず満たす形でシフトを組みます。</p>
-                        <p class="text-xs text-amber-700 font-bold mt-1">※ 人数は必須入力です (最少1名)。プリセット (飲食店向け・オフィス向け等) からの一括追加もできます。</p>
-                    </div>
-
-                    <!-- v3.7.96: 過剰配置トグル の説明 -->
-                    <div class="border-l-4 border-amber-400 pl-4 py-1">
-                        <h4 class="font-bold text-amber-700 text-base mb-1">4.5. 過剰配置ポリシー (v3.7.91+)</h4>
-                        <p>人員配置要件セクションの下に「⚡ 過剰配置を許容する」チェックがあります:</p>
-                        <ul class="text-xs text-gray-700 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>OFF (推奨):</strong> 必要人数 <strong>ぴったり</strong>に配置 (過剰回避を最優先)</li>
-                            <li><strong>ON:</strong> 必要人数より<strong>多めに配置</strong>を許容 (スタッフを多く入れたい場合)</li>
+                        <h4 class="font-bold text-purple-700 text-base mb-1">3. シフトパターン（早番/遅番など）</h4>
+                        <p>「早番 09:00〜14:00」「遅番 17:00〜22:00」などの<strong>時間の型</strong>と、その<strong>平日/土曜/日祝の必要人数</strong>を設定します（<strong>0にするとその曜日はそのパターンを使いません</strong>）。プリセットからの一括追加も可能。</p>
+                        <ul class="text-xs text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
+                            <li><strong>翌休</strong>：ONにするとそのパターン（夜勤など）の翌日を自動でお休みに（夜勤の2連勤防止）。</li>
+                            <li><strong>管理者</strong>：ON＋人数を1以上にすると、そのパターンに管理者（店長/リーダー）を必ず配置（あけしめ責任者の確保）。OFFはAIにおまかせ。</li>
                         </ul>
-                        <p class="text-xs text-amber-700 mt-1">💡 「全員を最低5日入れたい」「過剰でも全員の出勤日数を満たしたい」場合は ON にしてください。</p>
                     </div>
 
                     <div class="border-l-4 border-green-400 pl-4 py-1">
-                        <h4 class="font-bold text-green-700 text-base mb-1">5. 休憩ルールの設定</h4>
-                        <p>「〇〇時間以上の勤務なら〇〇分の休憩を与える」というルールです。労働基準法に則り、6時間超で45分、8時間超で60分がデフォルトで設定されています。</p>
+                        <h4 class="font-bold text-green-700 text-base mb-1">4. 人員配置要件</h4>
+                        <p><strong>1日の総配置人数（平日/土曜/日祝）</strong>です。<strong>シフトパターンの人数合計から自動計算</strong>され、直接編集はできません（二重入力の手間なし）。</p>
+                        <p class="text-xs text-gray-700 mt-1">▼ すぐ下の <strong>「⚡ 過剰配置を許容する」</strong>チェック：<br>
+                        ・<strong>OFF（推奨）</strong>＝必要人数<strong>ぴったり</strong>で人件費を抑制／<strong>ON</strong>＝<strong>多めに配置</strong>して全員の出勤日数を確保。</p>
+                    </div>
+
+                    <div class="border-l-4 border-gray-400 pl-4 py-1">
+                        <h4 class="font-bold text-gray-700 text-base mb-1">5. システム設定</h4>
+                        <ul class="text-xs text-gray-700 list-disc list-inside ml-2 leading-relaxed">
+                            <li><strong>デフォルト時給</strong>：個別に時給を入れていないスタッフに使う初期値（人件費の概算に使用）。</li>
+                            <li><strong>店舗パスワード</strong>（日常の閲覧用）／<strong>管理者パスワード</strong>（シフト編集など権限が必要な操作用）。</li>
+                            <li><strong>休憩ルール</strong>：「○時間を超えたら△分休憩」を設定（労基法に則り 6時間超45分・8時間超60分がデフォルト）。</li>
+                        </ul>
+                    </div>
+
+                    <div class="border-l-4 border-orange-400 pl-4 py-1">
+                        <h4 class="font-bold text-orange-700 text-base mb-1">6. 運用ルール（スタッフ向け表示）</h4>
+                        <p>シフト提出期限や注意事項など、<strong>スタッフ画面に表示する連絡事項</strong>を入力します（シフト生成には影響しません）。</p>
+                    </div>
+
+                    <div class="border-l-4 border-indigo-400 pl-4 py-1">
+                        <h4 class="font-bold text-indigo-700 text-base mb-1">7. セキュリティ・責任者引き継ぎ</h4>
+                        <p><strong>セカンドファクターPIN</strong>（契約ID＋パスワードに加えた2段階認証）を設定できます。責任者を交代する際の<strong>引き継ぎ手順</strong>（契約ID・パスワード・PIN・本部連絡先）もこのセクションで確認できます。</p>
+                    </div>
+
+                    <div class="border-l-4 border-blue-400 pl-4 py-1">
+                        <h4 class="font-bold text-blue-700 text-base mb-1">8. アカウント情報</h4>
+                        <p>契約IDなど、店舗アカウントの基本情報を確認できます。</p>
+                    </div>
+
+                    <div class="border-l-4 border-green-400 pl-4 py-1">
+                        <h4 class="font-bold text-green-700 text-base mb-1">9. プラン管理</h4>
+                        <p>現在のご契約プラン（Standard / Pro / Premium）の確認・変更ができます。</p>
                     </div>
                 </div>
 
