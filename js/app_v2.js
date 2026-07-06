@@ -6190,11 +6190,68 @@ const app = {
         document.addEventListener('keydown', escHandler);
     },
 
-    // v3.7.221: スマホで印刷/PDFが押せない問題を修正。
-    //   setTimeout 経由の window.print() はモバイルでユーザー操作コンテキストを失い
-    //   ブロックされる。クリック直後に直接呼ぶことでダイアログを確実に開く。
+    // v3.7.227: スマホ(iPhone/Android)含む全ブラウザで印刷/PDF保存を安定化。
+    //   印刷対象を独立した iframe に隔離して印刷する。メインDOMの visibility トリックは
+    //   iOS Safari/アプリ内ブラウザで真っ白/失敗しやすいため、iframe 方式に統一。
     doPrintNow() {
-        try { window.print(); } catch (e) { console.error('print failed', e); }
+        const overlay = document.getElementById('printOverlay');
+        // 印刷対象(タイトル+テーブル)を抽出。操作ボタン(.no-print)は除外。
+        let inner = '';
+        if (overlay) {
+            const clone = overlay.cloneNode(true);
+            clone.querySelectorAll('.no-print').forEach(el => el.remove());
+            inner = clone.innerHTML;
+        }
+        if (!inner) { try { window.print(); } catch (e) {} return; }
+
+        const css = `
+            @page { size: landscape; margin: 6mm; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            html, body { margin: 0; padding: 0; background: #fff;
+                font-family: 'Yu Gothic','Meiryo','Hiragino Sans',sans-serif;
+                -webkit-font-smoothing: antialiased; }
+            h1 { font-size: 20px; margin: 8px 0 12px; }
+            table { border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
+            th, td { border: 1.2px solid #1f2937 !important; }
+            thead { display: table-header-group; }
+            .table-chunk { page-break-after: always; }
+            .table-chunk:last-child { page-break-after: auto; }
+        `;
+        const docHtml = '<!doctype html><html><head><meta charset="utf-8">'
+            + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            + '<style>' + css + '</style></head><body>' + inner + '</body></html>';
+
+        let ifr = document.getElementById('printIframe');
+        if (ifr) ifr.remove();
+        ifr = document.createElement('iframe');
+        ifr.id = 'printIframe';
+        ifr.setAttribute('aria-hidden', 'true');
+        ifr.style.cssText = 'position:fixed; right:0; bottom:0; width:1px; height:1px; opacity:0; border:0; pointer-events:none;';
+        document.body.appendChild(ifr);
+
+        let printed = false;
+        const doPrint = () => {
+            if (printed) return; printed = true;
+            try {
+                ifr.contentWindow.focus();
+                ifr.contentWindow.print();
+            } catch (e) {
+                // フォールバック: 通常印刷
+                try { window.print(); } catch (_) {}
+            }
+        };
+        const idoc = ifr.contentWindow.document;
+        idoc.open();
+        idoc.write(docHtml);
+        idoc.close();
+        // iOS Safari はレイアウト確定待ちが必要。load/短い遅延の両対応。
+        if (ifr.contentWindow.document.readyState === 'complete') {
+            setTimeout(doPrint, 200);
+        } else {
+            ifr.onload = () => setTimeout(doPrint, 200);
+            setTimeout(doPrint, 500); // onload が発火しない環境の保険
+        }
     },
 
     // v3.7.93: 印刷オーバーレイを閉じて元画面に戻る
@@ -9420,7 +9477,7 @@ const app = {
 
             <!-- 7. 店舗設定 (労基法と入替: 先頭へ) -->
             <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>店舗設定</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>店舗設定</h3>
                 <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
                     <p class="text-sm text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
                 </div>
@@ -9489,6 +9546,22 @@ const app = {
                 </div>
             </div>
 
+            <!-- 役職・ロール (休憩ルールの上に表示) -->
+            <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>役職・ロール</h3>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名配置必須（AIが最優先で配置）</td></tr>
+                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代理として配置可能（店長と同等の権限）</td></tr>
+                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置（月給制の場合はコスト計算上有利に働きます）</td></tr>
+                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任者、メンター役</td><td class="p-2 border">新人スタッフの指導役として重宝されます</td></tr>
+                        <tr><td class="p-2 border font-bold">アルバイト (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
+                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長〜リーダー）と同日配置</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
             <!-- 5. 休憩ルール -->
             <div id="m-break" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">5.</span>休憩ルール</h3>
@@ -9517,7 +9590,7 @@ const app = {
 
             <!-- 4. 労働基準法ルール (店舗設定と入替: 末尾へ) -->
             <div id="m-labor" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">4.</span>労働基準法ルール（自動遵守）</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">7.</span>労働基準法ルール（自動遵守）</h3>
                 <table class="w-full text-sm border-collapse">
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">条項</th><th class="p-2 text-left border">内容</th><th class="p-2 text-left border">システムの制御</th></tr></thead>
                     <tbody>
@@ -9533,22 +9606,6 @@ const app = {
             <div class="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl p-4 shadow-md mt-2">
                 <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 2</span><i class="fa-solid fa-user-gear mr-2"></i>スタッフ管理</h3>
                 <p class="text-sm text-orange-50 mt-1">次にスタッフを登録（役職・評価・給与形態・勤務制約・担当パターン・休み希望）</p>
-            </div>
-
-            <!-- 1. 役職 -->
-            <div id="m-roles" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-orange-500 mr-2">■</span>役職・ロール</h3>
-                <table class="w-full text-sm border-collapse">
-                    <thead><tr class="bg-gray-50"><th class="p-2 text-left border">役職</th><th class="p-2 text-left border">役割</th><th class="p-2 text-left border">シフト生成への影響</th></tr></thead>
-                    <tbody>
-                        <tr><td class="p-2 border font-bold">店長 (Manager)</td><td class="p-2 border">最高権限、メンター役</td><td class="p-2 border text-red-600 font-bold">毎営業日に最低○名配置必須（AIが最優先で配置）</td></tr>
-                        <tr><td class="p-2 border font-bold">副店長 (Sub-Manager)</td><td class="p-2 border">副管理者、メンター役</td><td class="p-2 border text-orange-600 font-bold">店長の代理として配置可能（店長と同等の権限）</td></tr>
-                        <tr><td class="p-2 border font-bold">社員 (Employee)</td><td class="p-2 border">一般社員</td><td class="p-2 border">アルバイトより優先的に配置（月給制の場合はコスト計算上有利に働きます）</td></tr>
-                        <tr><td class="p-2 border font-bold">リーダー (Leader)</td><td class="p-2 border">時間帯責任者、メンター役</td><td class="p-2 border">新人スタッフの指導役として重宝されます</td></tr>
-                        <tr><td class="p-2 border font-bold">アルバイト (Staff)</td><td class="p-2 border">一般スタッフ</td><td class="p-2 border">通常配置</td></tr>
-                        <tr><td class="p-2 border font-bold">新人 (Rookie)</td><td class="p-2 border">研修中</td><td class="p-2 border">必ずメンター（店長〜リーダー）と同日配置</td></tr>
-                    </tbody>
-                </table>
             </div>
 
             <!-- 2. 評価 -->
