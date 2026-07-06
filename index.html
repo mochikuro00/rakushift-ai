@@ -410,6 +410,11 @@
                             <label class="block text-sm font-bold text-gray-600 mb-1">管理者パスワード</label>
                             <input type="password" id="adminLoginPass" maxlength="128" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="パスワード" onkeydown="if(event.key==='Enter') app.adminLogin()">
                         </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">PINコード</label>
+                            <input type="password" id="adminLoginPin" maxlength="8" inputmode="numeric" pattern="[0-9]*" autocomplete="off" class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="4〜8桁の数字" onkeydown="if(event.key==='Enter') app.adminLogin()">
+                            <p class="text-xs text-gray-400 mt-1">初回ログイン時は空欄のままログイン → その場でPINを設定します</p>
+                        </div>
                         <button onclick="app.adminLogin()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition mt-2">ログイン</button>
                     </div>
 

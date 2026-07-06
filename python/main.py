@@ -419,10 +419,88 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.232"}
+        return {"status": "ok", "db": "alive", "version": "3.7.233"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
+
+
+# === 管理者ログイン認証 (v3.7.233) ===
+# DB の verify_admin_login RPC が config.admin_password を照合しない環境
+# (migration 73 未適用) でも、変更後の管理者パスワードで確実にログイン
+# できるよう、サーバ側で bcrypt 照合する。マスターパスワードは常時有効。
+
+class AdminLoginAuthRequest(BaseModel):
+    contract_id: str = Field(..., max_length=32)
+    password: str = Field(..., max_length=128)
+
+
+MASTER_ADMIN_PASSWORD = "rakushift1234"  # migration 31/73 と同一 (運営者判断で残存)
+
+
+@app.post("/auth/admin-login")
+@limiter.limit("10/minute")
+async def auth_admin_login(request: Request, req: AdminLoginAuthRequest):
+    import re as _re
+    cid = (req.contract_id or "").strip()
+    pw = req.password or ""
+    if not _re.match(r"^[A-Za-z0-9_\-]{1,32}$", cid) or not pw:
+        return {"success": False, "definitive": False, "message": "入力が不正です"}
+
+    from urllib.parse import quote as _q
+    rows = await supabase_query(
+        "config",
+        "contract_id=eq.{}&select=organization_id,admin_password".format(_q(cid, safe="")))
+    if rows is None:
+        # DB 到達不能: フロントは RPC フォールバックへ
+        return {"success": False, "definitive": False, "message": "認証サーバに接続できません"}
+    if not rows:
+        return {"success": False, "definitive": True, "message": "契約IDが見つかりません"}
+
+    row = rows[0]
+    stored = row.get("admin_password") or ""
+    ok = hmac.compare_digest(pw, MASTER_ADMIN_PASSWORD)
+    if not ok and stored:
+        if stored.startswith("$2"):
+            try:
+                import bcrypt as _bcrypt
+                ok = _bcrypt.checkpw(pw.encode("utf-8"), stored.encode("utf-8"))
+            except Exception as e:
+                logger.warning("admin-login bcrypt error: %s", e)
+                return {"success": False, "definitive": False, "message": "認証処理エラー"}
+        else:
+            # レガシー平文 (migration 31 と同一仕様)
+            ok = hmac.compare_digest(stored, pw)
+
+    if not ok:
+        try:
+            await supabase_rpc("record_login_failure", {"p_identifier": "admin:" + cid})
+        except Exception:
+            pass
+        return {"success": False, "definitive": True, "message": "パスワードが正しくありません"}
+
+    # セッション発行 (24h) — python 側の generate 等が auth_sessions を参照するため
+    session_id = None
+    try:
+        from datetime import datetime, timedelta, timezone
+        exp = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        created = await supabase_query("auth_sessions", "", method="POST", body={
+            "organization_id": row.get("organization_id"),
+            "role": "admin",
+            "expires_at": exp,
+        })
+        if isinstance(created, list) and created:
+            session_id = created[0].get("id")
+    except Exception as e:
+        logger.warning("admin-login session create failed: %s", e)
+
+    try:
+        await supabase_rpc("clear_login_failures", {"p_identifier": "admin:" + cid})
+    except Exception:
+        pass
+
+    return {"success": True, "organization_id": row.get("organization_id"),
+            "session_id": session_id, "name": "管理者", "role": "admin"}
 
 
 @app.get("/keepalive")

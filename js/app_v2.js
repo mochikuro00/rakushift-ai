@@ -809,24 +809,53 @@ const app = {
             let authResult = null;
             let authMethod = 'none';
             let orgId = null;
+            let apiRejected = false;
 
-            // 方法1: verify_admin_login RPC
+            // 方法0 (v3.7.233): Railway API で config.admin_password を直接 bcrypt 照合。
+            // DB の verify_admin_login が変更後パスワードを照合しない環境でも確実に動く。
             try {
-                authResult = await API.rpc('verify_admin_login', {
-                    p_contract_id: inputContractId,
-                    p_login_id: 'admin',
-                    p_password: password
+                const backendUrl = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG?.CALC_SERVER_URL) || 'https://rakushift-ai-production.up.railway.app';
+                const resp = await fetch(backendUrl + '/auth/admin-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contract_id: inputContractId, password: password })
                 });
-                if (authResult && authResult.success) {
-                    authMethod = 'admin_rpc';
-                    orgId = authResult.organization_id;
+                if (resp.ok) {
+                    const j = await resp.json();
+                    if (j && j.success) {
+                        authResult = j;
+                        authMethod = 'api';
+                        orgId = j.organization_id;
+                    } else if (j && j.definitive) {
+                        // 契約IDは存在しパスワード不一致が確定 → RPC フォールバックしない
+                        // (店舗パスワード等での意図しない管理者ログインを防ぐ)
+                        apiRejected = true;
+                        authResult = j;
+                    }
                 }
-            } catch (rpcErr) {
-                console.warn('[AdminLogin] admin RPC failed:', rpcErr.message);
+            } catch (apiErr) {
+                console.warn('[AdminLogin] API auth unavailable, falling back to RPC:', apiErr.message);
+            }
+
+            // 方法1: verify_admin_login RPC (API 到達不能時のみ)
+            if (authMethod === 'none' && !apiRejected) {
+                try {
+                    authResult = await API.rpc('verify_admin_login', {
+                        p_contract_id: inputContractId,
+                        p_login_id: 'admin',
+                        p_password: password
+                    });
+                    if (authResult && authResult.success) {
+                        authMethod = 'admin_rpc';
+                        orgId = authResult.organization_id;
+                    }
+                } catch (rpcErr) {
+                    console.warn('[AdminLogin] admin RPC failed:', rpcErr.message);
+                }
             }
 
             // 方法2: verify_shop_login で店舗認証
-            if (authMethod === 'none') {
+            if (authMethod === 'none' && !apiRejected) {
                 try {
                     authResult = await API.rpc('verify_shop_login', {
                         p_contract_id: inputContractId,
@@ -847,6 +876,33 @@ const app = {
             // 認証失敗として扱う。
 
             if (authResult && authResult.success) {
+                // v3.7.233: PIN はログインフォームの入力欄で検証 (設定済みの場合は必須)
+                let hasPin = null;
+                try {
+                    const pr = await API.rpc('has_pin_by_contract', { p_contract_id: inputContractId });
+                    hasPin = !!(pr && pr.has_pin);
+                } catch (pinErr) {
+                    console.warn('[AdminLogin] has_pin check failed (skip PIN):', pinErr.message);
+                }
+                if (hasPin === true) {
+                    const pinVal = (document.getElementById('adminLoginPin')?.value || '').trim();
+                    if (!/^[0-9]{4,8}$/.test(pinVal)) {
+                        this._recordLoginAttempt('admin_' + inputContractId, false);
+                        this.showToast('PINコード (4〜8桁の数字) を入力してください', 'error');
+                        return;
+                    }
+                    const vr = await API.rpc('verify_pin_by_contract', {
+                        p_contract_id: inputContractId,
+                        p_pin: pinVal,
+                    });
+                    if (!vr || !vr.success) {
+                        this._recordLoginAttempt('admin_' + inputContractId, false);
+                        try { await API.rpc('record_login_failure', { p_identifier: 'admin:' + inputContractId }); } catch (_) {}
+                        this.showToast(vr?.message || 'PINコードが正しくありません', 'error');
+                        return;
+                    }
+                }
+
                 this._recordLoginAttempt('admin_' + inputContractId, true);
                 try { await API.rpc('clear_login_failures', { p_identifier: 'admin:' + inputContractId }); } catch (_) {}
                 this.state.isAdmin = true;
@@ -868,11 +924,13 @@ const app = {
                 await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
-                // v3.7.133: 設定 PIN があれば追加検証 (失敗時はログイン取消)
-                const pinOk = await this._checkPinIfNeeded(inputContractId);
-                if (!pinOk) {
-                    this.showLoading(false);
-                    return;
+                // PIN 未設定の場合のみ初回設定モーダル (キャンセル時はログイン取消)
+                if (hasPin === false) {
+                    const pinOk = await this._showPinSetupModal(inputContractId);
+                    if (!pinOk) {
+                        this.showLoading(false);
+                        return;
+                    }
                 }
                 this.showToast(`管理者: ${this._sanitize(authResult.name || '管理者')} でログインしました`, 'success');
                 this.updateAnnouncementBadge();
@@ -6190,9 +6248,13 @@ const app = {
         document.addEventListener('keydown', escHandler);
     },
 
-    // v3.7.227: スマホ(iPhone/Android)含む全ブラウザで印刷/PDF保存を安定化。
-    //   印刷対象を独立した iframe に隔離して印刷する。メインDOMの visibility トリックは
-    //   iOS Safari/アプリ内ブラウザで真っ白/失敗しやすいため、iframe 方式に統一。
+    // v3.7.233: スマホ印刷の根本修正。
+    //   原因: iOS Safari / Android WebView は「非表示 iframe の contentWindow.print()」を
+    //   無視する (WebKit の既知制限)。そのため v3.7.227 の iframe 方式はスマホで無反応だった。
+    //   対策: スマホでは印刷専用ページを新しいタブで開き、そのページ自身から window.print()
+    //   を実行する (これはスマホ全ブラウザでサポートされる標準動作)。自動で印刷ダイアログを
+    //   出しつつ、ブロックされた場合に備えてページ内に手動の「印刷/PDF保存」ボタンも設置。
+    //   デスクトップは従来どおり iframe 方式 (タブが増えず UX が良い)。
     doPrintNow() {
         const overlay = document.getElementById('printOverlay');
         // 印刷対象(タイトル+テーブル)を抽出。操作ボタン(.no-print)は除外。
@@ -6217,10 +6279,45 @@ const app = {
             thead { display: table-header-group; }
             .table-chunk { page-break-after: always; }
             .table-chunk:last-child { page-break-after: auto; }
+            .print-toolbar { position: sticky; top: 0; z-index: 10; background: #0f172a;
+                padding: 10px 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+            .print-toolbar button { padding: 12px 18px; border: none; border-radius: 8px;
+                font-size: 16px; font-weight: bold; cursor: pointer; }
+            .print-toolbar .hint { color: #cbd5e1; font-size: 12px; flex-basis: 100%; }
+            @media print { .print-toolbar { display: none !important; } }
         `;
         const docHtml = '<!doctype html><html><head><meta charset="utf-8">'
             + '<meta name="viewport" content="width=device-width,initial-scale=1">'
             + '<style>' + css + '</style></head><body>' + inner + '</body></html>';
+
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+            || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform)); // iPadOS は Mac を名乗る
+
+        if (isMobile) {
+            const toolbar = '<div class="print-toolbar">'
+                + '<button onclick="window.print()" style="background:#0284c7;color:#fff;flex:1;min-width:150px;">🖨 印刷 / PDF保存</button>'
+                + '<button onclick="window.close()" style="background:#475569;color:#fff;">✕ 閉じる</button>'
+                + '<span class="hint">印刷画面が出ない場合は上のボタン、またはブラウザメニューの「印刷」「共有 → プリント」をご利用ください</span>'
+                + '</div>';
+            const autoPrint = '<scr' + 'ipt>window.addEventListener("load",function(){'
+                + 'setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);'
+                + '});</scr' + 'ipt>';
+            const mobileHtml = docHtml.replace('<body>', '<body>' + toolbar)
+                                      .replace('</body>', autoPrint + '</body>');
+            const w = window.open('', '_blank');
+            if (w) {
+                try {
+                    w.document.open();
+                    w.document.write(mobileHtml);
+                    w.document.close();
+                    return;
+                } catch (e) {
+                    console.warn('[Print] popup write failed, fallback to iframe:', e);
+                    try { w.close(); } catch (_) {}
+                }
+            }
+            // ポップアップブロック時は iframe 方式にフォールバック (下へ続行)
+        }
 
         let ifr = document.getElementById('printIframe');
         if (ifr) ifr.remove();
