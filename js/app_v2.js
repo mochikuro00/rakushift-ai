@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.241-print-unified-tab',
+    APP_VERSION: '20260706-v3.7.242-mark-all-read-fix',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -10671,8 +10671,10 @@ const app = {
         }
     },
     _markAllAnnouncementsRead() {
+        // v3.7.242: 既存の既読IDとマージ (空配列で上書きすると既読が消えるバグがあった)
         const allIds = (this._announcements || []).map(a => a.id).filter(Boolean);
-        localStorage.setItem('rakushift_read_announcements', JSON.stringify(allIds));
+        const merged = Array.from(new Set(this._getReadAnnouncementIds().concat(allIds)));
+        localStorage.setItem('rakushift_read_announcements', JSON.stringify(merged));
     },
     _filterUnreadAnnouncements(announcements) {
         const readIds = this._getReadAnnouncementIds();
@@ -10735,6 +10737,8 @@ const app = {
             const allAnnouncements = await API.rpc('list_active_announcements');
             const readIds = this._getReadAnnouncementIds();
             const announcements = (allAnnouncements || []);
+            // v3.7.242: 「全て既読にする」が参照する一覧を保持 (未設定だと空配列で機能しない)
+            this._announcements = announcements;
 
             if (!announcements || !Array.isArray(announcements) || announcements.length === 0) {
                 listEl.innerHTML = `
