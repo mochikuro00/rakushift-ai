@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.238-manual-security-plan-sections',
+    APP_VERSION: '20260706-v3.7.239-manual-shift-edit-note',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -10074,6 +10074,10 @@ const app = {
                     <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
                         <p class="text-sm font-bold text-amber-800 mb-1"><i class="fa-solid fa-circle-question mr-1"></i>「不足」が出たら クリックで原因を確認</p>
                         <p class="text-sm text-amber-700 leading-relaxed">シフト表の <strong>「⚠ 不足N名」</strong> セルをクリックすると、その日その時刻に「入れていないスタッフ」を分類表示します（在籍中／別時間帯で勤務中／承認済み休み希望／NG曜日／希望時間帯外／週月上限到達）。</p>
+                    </div>
+                    <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-400 rounded-xl p-4 mt-3">
+                        <p class="text-lg font-bold text-emerald-800"><i class="fa-solid fa-hand-pointer mr-2"></i>シフト生成後の変更について</p>
+                        <p class="text-base text-emerald-900 mt-1 leading-relaxed">生成されたシフトは<strong>「シフト表」画面で手動編集、またはドラッグ＆ドロップ</strong>で自由に変更できます。AIの結果はそのまま使う必要はなく、最後はいつでも人の手で微調整できます。</p>
                     </div>
                 </div>
             </div>
