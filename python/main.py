@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.233"}
+        return {"status": "ok", "db": "alive", "version": "3.7.234"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -459,18 +459,27 @@ async def auth_admin_login(request: Request, req: AdminLoginAuthRequest):
 
     row = rows[0]
     stored = row.get("admin_password") or ""
-    ok = hmac.compare_digest(pw, MASTER_ADMIN_PASSWORD)
+    pw_b = pw.encode("utf-8")
+    # compare_digest は str 同士だと非ASCII (日本語等) で TypeError → bytes で比較
+    ok = hmac.compare_digest(pw_b, MASTER_ADMIN_PASSWORD.encode("utf-8"))
     if not ok and stored:
         if stored.startswith("$2"):
             try:
                 import bcrypt as _bcrypt
-                ok = _bcrypt.checkpw(pw.encode("utf-8"), stored.encode("utf-8"))
+                ok = _bcrypt.checkpw(pw_b[:72], stored.encode("utf-8"))
             except Exception as e:
                 logger.warning("admin-login bcrypt error: %s", e)
                 return {"success": False, "definitive": False, "message": "認証処理エラー"}
         else:
             # レガシー平文 (migration 31 と同一仕様)
-            ok = hmac.compare_digest(stored, pw)
+            ok = hmac.compare_digest(stored.encode("utf-8"), pw_b)
+
+    if not ok and not stored:
+        # 管理者パスワード未設定テナント: ここで確定失敗にすると従来の
+        # RPC フォールバック (店舗パスワードでの管理者ログイン) を塞いでしまうため、
+        # definitive=false でフロント側のフォールバックに委ねる
+        return {"success": False, "definitive": False,
+                "message": "管理者パスワードが未設定です"}
 
     if not ok:
         try:
