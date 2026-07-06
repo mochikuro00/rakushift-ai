@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.239-manual-shift-edit-note',
+    APP_VERSION: '20260706-v3.7.240-remove-settings-summary',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -9433,7 +9433,7 @@ const app = {
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-base">
                     <a href="#m-important" class="text-red-600 hover:underline font-bold">⚠ 設定の重要性</a>
                     <a href="#m-reference" class="text-indigo-600 hover:underline font-bold">📖 全設定・全機能リファレンス</a>
-                    <a href="#m-settings" class="text-blue-700 hover:underline font-bold">🏪【店舗設定】</a>
+                    <a href="#m-hours" class="text-blue-700 hover:underline font-bold">🏪【店舗設定】</a>
                     <a href="#m-hours" class="text-indigo-600 hover:underline">・営業時間＆定休日</a>
                     <a href="#m-patterns" class="text-indigo-600 hover:underline">・シフトパターン</a>
                     <a href="#m-staffreq" class="text-indigo-600 hover:underline">・人員配置要件</a>
@@ -9584,117 +9584,6 @@ const app = {
             <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl p-4 shadow-md mt-2">
                 <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 1</span><i class="fa-solid fa-store mr-2"></i>店舗設定</h3>
                 <p class="text-base text-blue-100 mt-1">まずお店全体のルールを設定（営業時間・定休日・シフトパターン・必要人数・休憩）</p>
-            </div>
-
-            <!-- 7. 店舗設定 (労基法と入替: 先頭へ) -->
-            <div id="m-settings" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-3"><span class="text-indigo-500 mr-2">■</span>店舗設定</h3>
-                <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
-                    <p class="text-base text-amber-800 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>店舗設定はAIシフトの品質に直結します。必ず正確に設定してください。</p>
-                </div>
-                <p class="text-sm text-gray-500 mb-2">※ 実際の「店舗設定」画面に表示される<b>上から順番</b>で、設定が必要な項目をすべて説明します。</p>
-                <div class="space-y-5 text-base text-gray-800 leading-relaxed">
-
-                    <div class="border-l-4 border-indigo-400 pl-4 py-1">
-                        <h4 class="font-bold text-indigo-700 text-lg mb-1">1. 役職・ロール設定</h4>
-                        <p>スタッフの肩書き（店長・副店長・社員など）を<strong>自由に作成・追加</strong>できます。役職の<strong>「管理者として認識」をON</strong>にすると、その役職はAIの<strong>メンター・管理者</strong>（あけしめ責任者／新人の指導役）として扱われます。</p>
-                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>バッジカラー</strong>：表示用の目印です（<strong>黄色＝新人</strong>として一部AIが配慮）。</li>
-                            <li><strong>識別ID</strong>：システム内部用のため変更できません（新規追加時に自動生成）。</li>
-                            <li>「あけしめを社員に必ず任せたい」場合は、シフトパターン側で「管理者」をON＋人数1以上にしてください。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-blue-400 pl-4 py-1">
-                        <h4 class="font-bold text-blue-700 text-lg mb-1">2. 営業時間 ＆ 定休日</h4>
-                        <p>平日・土日・祝日ごとに<strong>開店/閉店時間</strong>を設定します。<strong>24時間営業</strong>のお店は「24時間」チェックをONに。</p>
-                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>定休日設定</strong>：毎週の休業曜日（毎週水曜など）。その曜日にはAIは一切シフトを入れません。</li>
-                            <li><strong>臨時休業設定</strong>：特定の日付（年末年始・棚卸し等）を指定して臨時休業にできます。その日にはシフトを入れません。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-purple-400 pl-4 py-1">
-                        <h4 class="font-bold text-purple-700 text-lg mb-1">3. シフトパターン（早番/遅番など）</h4>
-                        <p>「早番 09:00〜14:00」「遅番 17:00〜22:00」などの<strong>時間の型</strong>と、その<strong>平日/土曜/日祝の必要人数</strong>を設定します（<strong>0にするとその曜日はそのパターンを使いません</strong>）。<strong>プリセット</strong>（飲食店向け・オフィス向け等）からの一括追加も可能です。</p>
-                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>翌休</strong>：ONにするとそのパターン（夜勤など）の翌日を自動でお休みに（夜勤の2連勤防止）。</li>
-                            <li><strong>管理者</strong>：ON＋人数を1以上にすると、そのパターンに管理者（店長/リーダー）を必ず配置（あけしめ責任者の確保）。OFFはAIにおまかせ。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-green-400 pl-4 py-1">
-                        <h4 class="font-bold text-green-700 text-lg mb-1">4. 人員配置要件</h4>
-                        <p><strong>1日の総配置人数（平日/土曜/日祝）</strong>です。<strong>シフトパターンの人数合計から自動計算</strong>され、直接編集はできません（二重入力の手間なし）。</p>
-                        <p class="text-base text-gray-700 mt-1">▼ すぐ下の <strong>「⚡ 過剰配置を許容する」</strong>チェック：<br>
-                        ・<strong>OFF（推奨）</strong>＝必要人数<strong>ぴったり</strong>で人件費を抑制／<strong>ON</strong>＝<strong>多めに配置</strong>して全員の出勤日数を確保。<br>
-                        例:「スタッフ全員を最低5日入れたいので、必要人数を超えてもOK」→ ON。</p>
-                    </div>
-
-                    <div class="border-l-4 border-gray-400 pl-4 py-1">
-                        <h4 class="font-bold text-gray-700 text-lg mb-1">5. システム設定</h4>
-                        <ul class="text-base text-gray-700 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>デフォルト時給</strong>：個別に時給を入れていないスタッフに使う初期値（人件費の概算に使用）。</li>
-                            <li><strong>店舗パスワード</strong>（日常の閲覧用）／<strong>管理者パスワード</strong>（シフト編集など権限が必要な操作用）。それぞれ専用ボタンから変更できます。</li>
-                            <li><strong>休憩時間ルール</strong>：「○時間を超えたら△分休憩」を設定（労基法に則り 6時間超45分・8時間超60分がデフォルト）。「ルールを追加」で複数段設定も可能。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">6. 運用ルール（スタッフ向け表示）</h4>
-                        <p>シフト提出期限や注意事項など、<strong>スタッフ画面に表示する連絡事項</strong>を入力します（シフト生成には影響しません）。</p>
-                    </div>
-
-                    <div class="border-l-4 border-indigo-400 pl-4 py-1">
-                        <h4 class="font-bold text-indigo-700 text-lg mb-1">7. セキュリティ・責任者引き継ぎ</h4>
-                        <p><strong>セカンドファクターPIN</strong>（4〜8桁の数字）の状態確認・変更ができます。店舗管理者のログインは<strong>「契約ID＋管理者パスワード＋PIN」の3項目</strong>です。<strong>初回ログイン時はPIN欄を空欄のままログイン</strong>すると、直後にPIN設定画面が表示され、<strong>設定を完了するまで利用を開始できません</strong>。</p>
-                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>責任者交代時の引き継ぎ4点</strong>：契約ID／管理者パスワード／PIN／本部ログイン情報。<u>PINの引き継ぎ漏れは新責任者がログイン不能</u>になります。</li>
-                            <li>PINを忘れた場合は運営管理（info@rakushift.jp）へリセット依頼が必要です。</li>
-                            <li>引き継ぎ前のチェックリストはサイドバーの「責任者引き継ぎ」メニューにあります。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-blue-400 pl-4 py-1">
-                        <h4 class="font-bold text-blue-700 text-lg mb-1">8. アカウント情報</h4>
-                        <p><strong>契約ID</strong>（ログインに使う識別子）の確認と、<strong>登録メールアドレス</strong>（案内メールの送信先）の変更ができます。メールアドレスは入力して「変更」ボタンで保存します。</p>
-                    </div>
-
-                    <div class="border-l-4 border-green-400 pl-4 py-1">
-                        <h4 class="font-bold text-green-700 text-lg mb-1">9. プラン管理</h4>
-                        <p>現在のご契約プランの確認と<strong>アップグレード／ダウングレード</strong>ができます。</p>
-                        <ul class="text-base text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>Standard</strong>：3,380円/月・スタッフ10名まで ／ <strong>Pro</strong>：4,880円/月・50名まで ／ <strong>Premium</strong>：9,980円/月・無制限。</li>
-                            <li><strong>プラン情報を最新化</strong>ボタン：運営側でプラン変更された場合に表示を更新します。</li>
-                            <li><strong>請求管理ポータル</strong>：請求書の確認・支払い方法の変更・解約はStripeポータルから行います。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-gray-300 pl-4 py-1">
-                        <h4 class="font-bold text-gray-700 text-lg mb-1">10. 設定の保存・データリセット</h4>
-                        <p>変更後は画面上部または最下部の<strong>「設定を保存」</strong>ボタンで一括保存してください（<u>保存せず画面を移動すると変更は反映されません</u>）。最下部の「全データをリセット」はこの端末の表示データを初期化する操作です（通常は使いません）。</p>
-                    </div>
-                </div>
-
-                <!-- v3.7.96: スタッフ管理マニュアル追記 -->
-                <div class="mt-6 bg-white border-2 border-blue-200 rounded-xl p-5">
-                    <h3 class="text-lg font-bold text-blue-800 mb-3"><i class="fa-solid fa-user-gear mr-1"></i>スタッフ管理 — 勤務制約 (v3.7.91+)</h3>
-                    <p class="text-base text-gray-700 mb-3">スタッフ編集モーダルの「勤務制約 (AI自動作成用)」セクションは、最低/最大を週×月の表で管理します:</p>
-                    <table class="w-full text-sm border-collapse">
-                        <thead><tr class="bg-blue-50"><th class="p-2 border border-blue-200 text-left">期間</th><th class="p-2 border border-blue-200">最低出勤日数</th><th class="p-2 border border-blue-200">最大出勤日数</th></tr></thead>
-                        <tbody>
-                            <tr><td class="p-2 border border-blue-200 font-bold">週 (7日)</td><td class="p-2 border border-blue-200 text-center">0 〜 7</td><td class="p-2 border border-blue-200 text-center">1 〜 7</td></tr>
-                            <tr><td class="p-2 border border-blue-200 font-bold">月 (1-31日)</td><td class="p-2 border border-blue-200 text-center">0 〜 31</td><td class="p-2 border border-blue-200 text-center">1 〜 31</td></tr>
-                        </tbody>
-                    </table>
-                    <ul class="text-sm text-gray-600 mt-2 space-y-1 list-disc list-inside">
-                        <li><strong>最低出勤日数</strong>: 月給スタッフは <strong>ハード制約</strong>で必ず達成 / 時給スタッフは Tier 3 ソフト制約 (1M)</li>
-                        <li><strong>最大出勤日数 (週)</strong>: ハード制約 (週N日を超えない)</li>
-                        <li><strong>最大出勤日数 (月)</strong>: ハード制約 / 31日 = 制限なし</li>
-                        <li><strong>1日の最大勤務時間</strong>: 実労働ベース (休憩除く)、ハード制約</li>
-                    </ul>
-                    <p class="text-sm text-amber-700 mt-2"><i class="fa-solid fa-info-circle mr-1"></i>月給スタッフは min_days_week / min_days_month が <strong>ハード制約</strong> です。物理的に達成可能な値を設定してください (例: 週5日勤務想定なら 月22日まで設定可能)。</p>
-                </div>
             </div>
 
             <!-- 役職・ロール (休憩ルールの上に表示) -->
@@ -9922,87 +9811,6 @@ const app = {
             <div class="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl p-4 shadow-md mt-2">
                 <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 2</span><i class="fa-solid fa-user-gear mr-2"></i>スタッフ管理</h3>
                 <p class="text-base text-orange-50 mt-1">次にスタッフを登録（名前・役割・評価・シフト優先度・出勤曜日・給与形態・勤務制約・該当パターン・目標回数）</p>
-            </div>
-
-            <!-- スタッフ登録 全項目（入力画面の順・詳細） -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-1"><span class="text-orange-500 mr-2">■</span>スタッフ登録 — 全設定項目（入力画面の上から順）</h3>
-                <p class="text-sm text-gray-500 mb-3">「スタッフ 新規登録／編集」画面に表示される<b>上から順番</b>で、すべての項目を説明します。</p>
-                <div class="space-y-4 text-base text-gray-700">
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">1. 名前</h4>
-                        <p>スタッフの表示名を入力します（必須）。</p>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">2. 役割</h4>
-                        <p>役職を選びます（店長／リーダー／スタッフ 等）。その役職の<strong>「管理者」設定がON</strong>なら、シフトパターンの「管理者人数」の配置対象（＝あけしめ責任者）になります。</p>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">3. 評価ランク（優先度）</h4>
-                        <p>A＝優先的に配置／B＝標準／C＝控えめ／<strong>D＝新人(研修)扱い</strong>。Dの人は先輩(メンター)と時間が重なるようAIが配慮します。</p>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">4. シフト優先度</h4>
-                        <p>高＝なるべく多く入れる／中＝通常／低＝人手が足りない時の穴埋めだけ。</p>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">5. 基本出勤曜日</h4>
-                        <p><strong>チェックを外した曜日はシフトに入りません。</strong><br>※「祝日」のチェックを外すと、国民の祝日（海の日・敬老の日 等）にシフトを入れません。</p>
-                    </div>
-
-                    <div class="border-l-4 border-orange-400 pl-4 py-1">
-                        <h4 class="font-bold text-orange-700 text-lg mb-1">6. 給与形態（月給／時給）＋金額</h4>
-                        <p>「月給」か「時給」を選び、金額を入力します。</p>
-                        <ul class="text-sm text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li>※ 月給は「固定費」として扱い、設定した最低出勤日数を優先的に確保し、希望時間に関わらずフレキシブルに配置します。</li>
-                            <li>※ 時給より月給のほうが優先的にシフトが入るようになっています。</li>
-                            <li>※「社員」かどうかは給与形態ではなく<strong>役職ロール</strong>で決まります（給与形態とは独立）。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-indigo-300 pl-4 py-1 bg-indigo-50/40 rounded-r">
-                        <h4 class="font-bold text-indigo-700 text-base mb-1">📌 かんたん備考（役割・評価・優先度の違い）</h4>
-                        <ul class="text-sm text-gray-700 list-disc list-inside ml-2 leading-relaxed">
-                            <li><strong>役割</strong>：肩書き（店長/リーダー/スタッフ）。「管理者」設定の役割は、シフトパターンの管理者人数の対象になります。</li>
-                            <li><strong>評価ランク</strong>：A＝優先的に配置／B＝標準／C＝控えめ／D＝新人(研修)扱い。Dの人は先輩(メンター)と時間が重なるようAIが配慮します。</li>
-                            <li><strong>シフト優先度</strong>：高＝なるべく多く入れる／中＝通常／低＝人手が足りない時の穴埋めだけ。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-blue-400 pl-4 py-1">
-                        <h4 class="font-bold text-blue-700 text-lg mb-1">7. 勤務制約（AI自動作成用）— 週/月の最低・最大出勤日数</h4>
-                        <p>週(7日)・月(1〜31日)ごとに「最低出勤日数」「最大出勤日数」を設定します。</p>
-                        <ul class="text-sm text-gray-600 mt-1 list-disc list-inside ml-2 leading-relaxed">
-                            <li>※ 週最大7日＝制限なし／月最大31日＝制限なし。</li>
-                            <li>※ 例:「週5日」「月22日」と設定すると、その<strong>上限を絶対に超えません</strong>。</li>
-                        </ul>
-                    </div>
-
-                    <div class="border-l-4 border-blue-400 pl-4 py-1">
-                        <h4 class="font-bold text-blue-700 text-lg mb-1">8. 1日の最大勤務時間</h4>
-                        <p>実労働（休憩を除く）の上限時間です。※ 拘束時間ではなく実労働時間。長時間シフトを防ぎます。</p>
-                    </div>
-
-                    <div class="border-l-4 border-blue-400 pl-4 py-1">
-                        <h4 class="font-bold text-blue-700 text-lg mb-1">9. 連続出勤日数（最大）</h4>
-                        <p>何日連続まで働けるか（N日連続まで）。※ <strong>6＝労働基準法35条</strong>（週1日以上の休日）。</p>
-                    </div>
-
-                    <div class="border-l-4 border-teal-400 pl-4 py-1">
-                        <h4 class="font-bold text-teal-700 text-lg mb-1">10. 該当シフトパターン</h4>
-                        <p>このスタッフが入れる（＝該当する）シフトパターンにチェックを入れます。<strong>全て未チェック または初期状態＝全パターン該当（デフォルト）</strong>。「個別に選択」で早番だけ等の制限も可能です。</p>
-                    </div>
-
-                    <div class="border-l-4 border-teal-400 pl-4 py-1">
-                        <h4 class="font-bold text-teal-700 text-lg mb-1">11. シフトパターン別 月間目標回数（最低／最高）</h4>
-                        <p>該当パターンの中で「月N回〜M回入れたい」を、パターンごとに最低/最高で指定します。<strong>空欄なら制約なし</strong>。例:「日勤 月16〜20回／夜勤 月3〜4回」。</p>
-                    </div>
-                </div>
             </div>
 
             <!-- 2. 評価 -->
