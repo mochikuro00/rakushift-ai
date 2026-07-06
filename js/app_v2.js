@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.240-remove-settings-summary',
+    APP_VERSION: '20260706-v3.7.241-print-unified-tab',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -6253,13 +6253,13 @@ const app = {
         document.addEventListener('keydown', escHandler);
     },
 
-    // v3.7.233: スマホ印刷の根本修正。
-    //   原因: iOS Safari / Android WebView は「非表示 iframe の contentWindow.print()」を
-    //   無視する (WebKit の既知制限)。そのため v3.7.227 の iframe 方式はスマホで無反応だった。
-    //   対策: スマホでは印刷専用ページを新しいタブで開き、そのページ自身から window.print()
-    //   を実行する (これはスマホ全ブラウザでサポートされる標準動作)。自動で印刷ダイアログを
-    //   出しつつ、ブロックされた場合に備えてページ内に手動の「印刷/PDF保存」ボタンも設置。
-    //   デスクトップは従来どおり iframe 方式 (タブが増えず UX が良い)。
+    // v3.7.241: 印刷方式を全プラットフォームで「印刷専用タブ」に統一。
+    //   経緯: 非表示 iframe の print() はスマホ(WebKit)で無反応、PC でも
+    //   ブラウザにより空白ページ/無反応の不具合が出る (Firefox 等)。
+    //   方式: 印刷対象だけを新しいタブに書き出し、そのタブ自身から window.print()。
+    //   タブには常設の「🖨 印刷/PDF保存」「✕ 閉じる」ボタンがあり、自動ダイアログが
+    //   出なくても手動で必ず印刷できる。ポップアップブロック時は、メインページの
+    //   @media print CSS (#printOverlay のみ可視化) による直接印刷にフォールバック。
     doPrintNow() {
         const overlay = document.getElementById('printOverlay');
         // 印刷対象(タイトル+テーブル)を抽出。操作ボタン(.no-print)は除外。
@@ -6272,11 +6272,12 @@ const app = {
         if (!inner) { try { window.print(); } catch (e) {} return; }
 
         const css = `
-            @page { size: landscape; margin: 6mm; }
+            @page { size: A4 landscape; margin: 6mm; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             html, body { margin: 0; padding: 0; background: #fff;
                 font-family: 'Yu Gothic','Meiryo','Hiragino Sans',sans-serif;
                 -webkit-font-smoothing: antialiased; }
+            body { padding: 0 8px 8px; }
             h1 { font-size: 20px; margin: 8px 0 12px; }
             table { border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
             tr { page-break-inside: avoid; break-inside: avoid; }
@@ -6285,75 +6286,42 @@ const app = {
             .table-chunk { page-break-after: always; }
             .table-chunk:last-child { page-break-after: auto; }
             .print-toolbar { position: sticky; top: 0; z-index: 10; background: #0f172a;
-                padding: 10px 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+                margin: 0 -8px 10px; padding: 10px 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
             .print-toolbar button { padding: 12px 18px; border: none; border-radius: 8px;
                 font-size: 16px; font-weight: bold; cursor: pointer; }
             .print-toolbar .hint { color: #cbd5e1; font-size: 12px; flex-basis: 100%; }
             @media print { .print-toolbar { display: none !important; } }
         `;
+        const toolbar = '<div class="print-toolbar">'
+            + '<button onclick="window.print()" style="background:#0284c7;color:#fff;flex:1;min-width:150px;">🖨 印刷 / PDF保存</button>'
+            + '<button onclick="window.close()" style="background:#475569;color:#fff;">✕ 閉じる</button>'
+            + '<span class="hint">印刷画面が自動で出ない場合は上の「印刷 / PDF保存」ボタンを押してください (PDFにするには印刷ダイアログの送信先で「PDFに保存」を選択)</span>'
+            + '</div>';
+        const autoPrint = '<scr' + 'ipt>window.addEventListener("load",function(){'
+            + 'setTimeout(function(){try{window.focus();window.print();}catch(e){}},500);'
+            + '});</scr' + 'ipt>';
         const docHtml = '<!doctype html><html><head><meta charset="utf-8">'
             + '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            + '<style>' + css + '</style></head><body>' + inner + '</body></html>';
+            + '<title>シフト表 印刷</title>'
+            + '<style>' + css + '</style></head><body>' + toolbar + inner + autoPrint + '</body></html>';
 
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-            || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform)); // iPadOS は Mac を名乗る
-
-        if (isMobile) {
-            const toolbar = '<div class="print-toolbar">'
-                + '<button onclick="window.print()" style="background:#0284c7;color:#fff;flex:1;min-width:150px;">🖨 印刷 / PDF保存</button>'
-                + '<button onclick="window.close()" style="background:#475569;color:#fff;">✕ 閉じる</button>'
-                + '<span class="hint">印刷画面が出ない場合は上のボタン、またはブラウザメニューの「印刷」「共有 → プリント」をご利用ください</span>'
-                + '</div>';
-            const autoPrint = '<scr' + 'ipt>window.addEventListener("load",function(){'
-                + 'setTimeout(function(){try{window.focus();window.print();}catch(e){}},400);'
-                + '});</scr' + 'ipt>';
-            const mobileHtml = docHtml.replace('<body>', '<body>' + toolbar)
-                                      .replace('</body>', autoPrint + '</body>');
-            const w = window.open('', '_blank');
-            if (w) {
-                try {
-                    w.document.open();
-                    w.document.write(mobileHtml);
-                    w.document.close();
-                    return;
-                } catch (e) {
-                    console.warn('[Print] popup write failed, fallback to iframe:', e);
-                    try { w.close(); } catch (_) {}
-                }
-            }
-            // ポップアップブロック時は iframe 方式にフォールバック (下へ続行)
-        }
-
-        let ifr = document.getElementById('printIframe');
-        if (ifr) ifr.remove();
-        ifr = document.createElement('iframe');
-        ifr.id = 'printIframe';
-        ifr.setAttribute('aria-hidden', 'true');
-        ifr.style.cssText = 'position:fixed; right:0; bottom:0; width:1px; height:1px; opacity:0; border:0; pointer-events:none;';
-        document.body.appendChild(ifr);
-
-        let printed = false;
-        const doPrint = () => {
-            if (printed) return; printed = true;
+        let w = null;
+        try { w = window.open('', '_blank'); } catch (e) { w = null; }
+        if (w) {
             try {
-                ifr.contentWindow.focus();
-                ifr.contentWindow.print();
+                w.document.open();
+                w.document.write(docHtml);
+                w.document.close();
+                return;
             } catch (e) {
-                // フォールバック: 通常印刷
-                try { window.print(); } catch (_) {}
+                console.warn('[Print] popup write failed:', e);
+                try { w.close(); } catch (_) {}
             }
-        };
-        const idoc = ifr.contentWindow.document;
-        idoc.open();
-        idoc.write(docHtml);
-        idoc.close();
-        // iOS Safari はレイアウト確定待ちが必要。load/短い遅延の両対応。
-        if (ifr.contentWindow.document.readyState === 'complete') {
-            setTimeout(doPrint, 200);
-        } else {
-            ifr.onload = () => setTimeout(doPrint, 200);
-            setTimeout(doPrint, 500); // onload が発火しない環境の保険
         }
+        // ポップアップブロック時: メインページの @media print CSS が
+        // #printOverlay だけを可視化して印刷するのでそのまま window.print()
+        this.showToast('ポップアップがブロックされました。このまま印刷画面を開きます', 'info');
+        try { window.print(); } catch (e) {}
     },
 
     // v3.7.93: 印刷オーバーレイを閉じて元画面に戻る
