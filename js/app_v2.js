@@ -9622,7 +9622,30 @@ const app = {
             <!-- STEP 2: スタッフ管理 -->
             <div class="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl p-4 shadow-md mt-2">
                 <h3 class="text-xl font-bold"><span class="bg-white/25 rounded-full px-3 py-0.5 mr-2">STEP 2</span><i class="fa-solid fa-user-gear mr-2"></i>スタッフ管理</h3>
-                <p class="text-sm text-orange-50 mt-1">次にスタッフを登録（役職・評価・給与形態・勤務制約・担当パターン・休み希望）</p>
+                <p class="text-sm text-orange-50 mt-1">次にスタッフを登録（名前・役割・評価・シフト優先度・出勤曜日・給与形態・勤務制約・該当パターン・目標回数）</p>
+            </div>
+
+            <!-- スタッフ登録 全項目（入力画面の順） -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-1"><span class="text-orange-500 mr-2">■</span>スタッフ登録 — 設定項目（入力画面の上から順）</h3>
+                <p class="text-xs text-gray-500 mb-3">「スタッフ 新規登録／編集」画面で設定できる全項目です。上から順に説明します。</p>
+                <table class="w-full text-sm border-collapse">
+                    <thead><tr class="bg-gray-50"><th class="p-2 border text-left">項目</th><th class="p-2 border text-left">内容・AIへの効き方</th></tr></thead>
+                    <tbody>
+                        <tr><td class="p-2 border font-bold">名前</td><td class="p-2 border">スタッフの表示名（必須）。</td></tr>
+                        <tr><td class="p-2 border font-bold">役割</td><td class="p-2 border">役職を選択（店長／リーダー／スタッフ等）。その役職の「管理者」設定がONなら、シフトパターンの<b>管理者人数</b>の配置対象になります。</td></tr>
+                        <tr><td class="p-2 border font-bold">評価ランク（優先度）</td><td class="p-2 border">A＝優先的に配置／B＝標準／C＝控えめ／<b>D＝新人(研修)扱い</b>。Dの人は先輩(メンター)と時間が重なるようAIが配慮します。</td></tr>
+                        <tr><td class="p-2 border font-bold">シフト優先度</td><td class="p-2 border">高＝なるべく多く入れる／中＝通常／低＝人手が足りない時の穴埋めだけ。</td></tr>
+                        <tr><td class="p-2 border font-bold">基本出勤曜日</td><td class="p-2 border"><b>チェックを外した曜日はシフトに入りません</b>。「祝日」を外すと国民の祝日（海の日・敬老の日等）に入れません。</td></tr>
+                        <tr><td class="p-2 border font-bold">給与形態（月給／時給）</td><td class="p-2 border"><b>月給</b>＝「固定費」として最低出勤日数を優先確保し、希望時間に関わらずフレキシブルに配置。<b>時給より月給が優先的に入ります</b>。金額（月給/時給）も入力。<br>※「社員」かどうかは給与形態ではなく<b>役職ロール</b>で決まります（給与形態とは独立）。</td></tr>
+                        <tr><td class="p-2 border font-bold">勤務制約：週/月の最低・最大出勤日数</td><td class="p-2 border">週(7日)・月(1〜31日)ごとに「最低〜最大」を設定。<b>上限は絶対に超えません</b>（週最大7＝制限なし／月最大31＝制限なし）。例:「週5日・月22日」。</td></tr>
+                        <tr><td class="p-2 border font-bold">1日の最大勤務時間</td><td class="p-2 border">実労働（休憩を除く）の上限。長時間シフトを防ぎます。</td></tr>
+                        <tr><td class="p-2 border font-bold">連続出勤日数（最大）</td><td class="p-2 border">何日連続まで働けるか。<b>6＝労基法35条</b>（週1日以上の休日）。</td></tr>
+                        <tr><td class="p-2 border font-bold">該当シフトパターン</td><td class="p-2 border">このスタッフが入れるパターンにチェック。<b>全て未チェック（初期状態）＝全パターン該当（デフォルト）</b>。「個別に選択」で早番だけ等も可能。</td></tr>
+                        <tr><td class="p-2 border font-bold">シフトパターン別 月間目標回数</td><td class="p-2 border">該当パターンの中で「月N回〜M回入れたい」を最低/最高で指定（<b>空欄なら制約なし</b>）。例:「夜勤 月3〜4回」。</td></tr>
+                    </tbody>
+                </table>
+                <div class="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-xs text-emerald-800">💡 迷ったら「週/月の最低・最大出勤日数」「連勤上限」「基本出勤曜日」「役割」だけでも正確に入れると、AIの精度が大きく上がります。</div>
             </div>
 
             <!-- 2. 評価 -->
