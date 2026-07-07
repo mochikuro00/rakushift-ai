@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260707-v3.7.244-hq-scope-sidebar',
+    APP_VERSION: '20260707-v3.7.245-hq-manual-dnd',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -10066,7 +10066,12 @@ const app = {
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
                             <tr>
-                                <td class="p-2 border font-bold">シフトの新規作成・編集</td>
+                                <td class="p-2 border font-bold">シフトの手直し（ドラッグ&ドロップ）</td>
+                                <td class="p-2 border text-center text-green-600 font-bold"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2 border font-bold">AIシフトの新規生成</td>
                                 <td class="p-2 border text-center text-red-500 font-bold"><i class="fa-solid fa-circle-xmark"></i> 閲覧のみ</td>
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
@@ -10077,6 +10082,9 @@ const app = {
                             </tr>
                         </tbody>
                     </table>
+                    <div class="bg-emerald-50 border-l-4 border-emerald-400 rounded-r-lg p-3 mt-3">
+                        <p class="text-sm text-emerald-900 leading-relaxed"><i class="fa-solid fa-hand-pointer mr-1"></i><strong>シフトのドラッグ&ドロップは本部管理者でも可能です。</strong>店舗を閲覧中、シフト表でシフトバーを別のセルにドラッグして時間・担当者を手直しできます（既存シフトに重ねると入れ替え／連勤上限超過は自動ブロック）。AIによる新規生成やスタッフ・店舗設定の変更は、店舗側の運用を守るため店舗管理者のみが行えます。</p>
+                    </div>
                 </div>
             </div>
 
