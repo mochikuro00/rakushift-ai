@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260707-v3.7.245-hq-manual-dnd',
+    APP_VERSION: '20260707-v3.7.246-hq-full-admin',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -1241,7 +1241,7 @@ const app = {
             if (adminHeader) {
                 adminHeader.innerHTML = `
                     <div class="hidden md:flex items-center gap-2 mr-4 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded text-xs font-bold shadow-sm">
-                        <i class="fa-solid fa-eye"></i> 閲覧専用モード
+                        <i class="fa-solid fa-building"></i> 本部モード（編集可）
                     </div>
                     <button onclick="app.changeView('hq_dashboard')" class="px-3 py-1.5 text-xs font-bold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded bg-white transition-all mr-2 shadow-sm">
                         <i class="fa-solid fa-list mr-1"></i>店舗一覧
@@ -1252,20 +1252,10 @@ const app = {
                 `;
             }
 
-            // 閲覧専用: 編集系ボタンを隠す
-            if (hasShop) {
-                setTimeout(() => {
-                    const actionKeywords = ['追加', '保存', '作成', '申請', '編集', '設定', '削除', '承認', '却下'];
-                    document.querySelectorAll('button').forEach(btn => {
-                        if (!btn.closest('#adminHeaderControls') && !btn.closest('#sidebar')) {
-                            const txt = btn.textContent;
-                            if (actionKeywords.some(kw => txt.includes(kw))) {
-                                btn.classList.add('hidden');
-                            }
-                        }
-                    });
-                }, 100);
-            }
+            // v3.7.246: 本部管理者は店舗管理者と同等の権限を持つ（作成・編集・削除すべて可能）。
+            //   全ての書き込みは *_by_contract RPC で contract_id により認可されるため、
+            //   本部が店舗を閲覧中(contract_id セット済)は技術的にもフル編集が可能。
+            //   旧版の「編集系ボタンを隠す」閲覧専用制限は撤廃。
 
             this.updateRequestBadge();
             this.updateAnnouncementBadge();
@@ -1863,7 +1853,7 @@ const app = {
             // contract_id を config にセット → loadData が正しく店舗データを取得
             this.state.config = { ...(this.state.config || {}), contract_id: cid, organization_id: orgId };
             await this.loadData();
-            this.showToast('店舗情報を読み込みました（閲覧専用モード）', 'success');
+            this.showToast('店舗情報を読み込みました（本部モード：編集可能）', 'success');
             this.updateAuthUI();
             this.changeView('dashboard');
         } catch(e) {
@@ -2334,7 +2324,7 @@ const app = {
         const hqBar = (this.state.isHQ && this.state.organization_id) ? `
             <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-3 text-white">
                 <div class="flex items-center gap-2 font-bold">
-                    <i class="fa-solid fa-eye"></i> 閲覧専用モード（本部）
+                    <i class="fa-solid fa-building"></i> 本部モード（この店舗を編集中）
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button onclick="app.changeView('hq_dashboard')" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
@@ -2919,7 +2909,7 @@ const app = {
                     <!-- v3.7.144: モバイル幅で折り返し可能なツールバー -->
                     <div class="flex items-center gap-2 flex-wrap">
                         ${this.state.isAdmin ? `
-                        <button onclick="app.openModal('autoFillModal')" class="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 shrink-0 whitespace-nowrap">
+                        <button onclick="app.openModal('autoFillModal')" class="hq-allowed flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg shadow-md shadow-blue-200 transition-all transform active:scale-95 shrink-0 whitespace-nowrap">
                             <i class="fa-solid fa-wand-magic-sparkles"></i><span>AIシフト作成</span>
                         </button>
                         ` : ''}
@@ -10019,8 +10009,8 @@ const app = {
             <div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl shadow-sm border border-indigo-100 p-6">
                 <h3 class="text-lg font-bold text-indigo-900 mb-2"><i class="fa-solid fa-circle-info mr-2"></i>本部アカウントとは</h3>
                 <p class="text-sm text-indigo-700 leading-relaxed">
-                    本部アカウントは、複数店舗（テナント）のシフト稼働状況や人件費、スタッフ構成を横断的に把握・閲覧するための専用アカウントです。<br>
-                    <strong>セキュリティ保護のため、全店舗データは「閲覧専用」であり、本部から直接データの追加や編集、削除を行うことはできません。</strong>
+                    本部アカウントは、複数店舗（テナント）のシフト稼働状況や人件費、スタッフ構成を横断的に把握・管理するための専用アカウントです。<br>
+                    <strong>本部管理者は、閲覧中の店舗に対して店舗管理者と同等の操作（AIシフト生成・編集・スタッフ管理・設定変更など）が可能です。</strong>
                 </p>
             </div>
 
@@ -10031,7 +10021,7 @@ const app = {
                     <a href="#hq-auth" class="text-indigo-600 hover:underline">1. 本部権限とセキュリティポリシー</a>
                     <a href="#hq-dashboard-guide" class="text-indigo-600 hover:underline">2. 本部ダッシュボードの使い方</a>
                     <a href="#hq-shop-access" class="text-indigo-600 hover:underline">3. 店舗へのアクセス手順</a>
-                    <a href="#hq-view-mode" class="text-indigo-600 hover:underline">4. 閲覧専用モードでの制限操作</a>
+                    <a href="#hq-view-mode" class="text-indigo-600 hover:underline">4. 本部モードでできること</a>
                     <a href="#hq-faq" class="text-indigo-600 hover:underline">5. よくある質問 (FAQ)</a>
                 </div>
             </div>
@@ -10040,7 +10030,7 @@ const app = {
             <div id="hq-auth" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
                 <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">1.</span>本部権限とセキュリティポリシー</h4>
                 <div class="space-y-4">
-                    <p class="text-sm text-gray-600">本部管理者は、店舗のデータを誤って変更することを防ぐため、各画面が読み取り専用（閲覧のみ）の構成に自動制限されます。</p>
+                    <p class="text-sm text-gray-600">本部管理者は、閲覧中の店舗に対して<strong>店舗管理者と同等の操作</strong>ができます。シフトの作成・編集、スタッフ管理、店舗設定の変更まですべて可能です。</p>
                     <table class="w-full text-sm border-collapse border border-gray-200">
                         <thead>
                             <tr class="bg-gray-50 text-gray-700 font-bold">
@@ -10061,8 +10051,8 @@ const app = {
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
                             <tr>
-                                <td class="p-2 border font-bold">スタッフ構成の閲覧</td>
-                                <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
+                                <td class="p-2 border font-bold">AIシフトの新規生成</td>
+                                <td class="p-2 border text-center text-green-600 font-bold"><i class="fa-solid fa-circle-check"></i> 可能</td>
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
                             <tr>
@@ -10071,19 +10061,19 @@ const app = {
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
                             <tr>
-                                <td class="p-2 border font-bold">AIシフトの新規生成</td>
-                                <td class="p-2 border text-center text-red-500 font-bold"><i class="fa-solid fa-circle-xmark"></i> 閲覧のみ</td>
+                                <td class="p-2 border font-bold">スタッフの追加・変更</td>
+                                <td class="p-2 border text-center text-green-600 font-bold"><i class="fa-solid fa-circle-check"></i> 可能</td>
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
                             <tr>
-                                <td class="p-2 border font-bold">スタッフの追加・変更</td>
-                                <td class="p-2 border text-center text-red-500 font-bold"><i class="fa-solid fa-circle-xmark"></i> 閲覧のみ</td>
+                                <td class="p-2 border font-bold">店舗設定の変更</td>
+                                <td class="p-2 border text-center text-green-600 font-bold"><i class="fa-solid fa-circle-check"></i> 可能</td>
                                 <td class="p-2 border text-center text-green-600"><i class="fa-solid fa-circle-check"></i> 可能</td>
                             </tr>
                         </tbody>
                     </table>
                     <div class="bg-emerald-50 border-l-4 border-emerald-400 rounded-r-lg p-3 mt-3">
-                        <p class="text-sm text-emerald-900 leading-relaxed"><i class="fa-solid fa-hand-pointer mr-1"></i><strong>シフトのドラッグ&ドロップは本部管理者でも可能です。</strong>店舗を閲覧中、シフト表でシフトバーを別のセルにドラッグして時間・担当者を手直しできます（既存シフトに重ねると入れ替え／連勤上限超過は自動ブロック）。AIによる新規生成やスタッフ・店舗設定の変更は、店舗側の運用を守るため店舗管理者のみが行えます。</p>
+                        <p class="text-sm text-emerald-900 leading-relaxed"><i class="fa-solid fa-circle-check mr-1"></i><strong>本部管理者は閲覧中の店舗を店舗管理者と同じように操作できます。</strong>AIシフト生成・ドラッグ&ドロップでの手直し・スタッフ管理・店舗設定の変更まで、すべて本部から実行して保存できます。</p>
                     </div>
                 </div>
             </div>
@@ -10095,7 +10085,7 @@ const app = {
                     <p>ログイン後に表示される本部管理者用コントロールパネルです。ここでは以下の情報が確認できます。</p>
                     <ul class="list-disc pl-5 space-y-2">
                         <li><strong>登録店舗一覧:</strong> 傘下の全店舗の名前、契約ID、契約中のプラン（Standard/Proなど）、登録スタッフ数、および稼働状態が一覧で表示されます。</li>
-                        <li><strong>店舗へのアクセス:</strong> セキュリティ保護のため、一覧から店舗を直接クリックして入ることはできません。店舗に入るには次の「店舗へのアクセス手順」を実行してください。</li>
+                        <li><strong>店舗へのアクセス:</strong> 一覧の「閲覧」ボタンから店舗に入ると、その店舗を店舗管理者と同じように操作できます。</li>
                     </ul>
                 </div>
             </div>
@@ -10117,13 +10107,19 @@ const app = {
                 </div>
             </div>
 
-            <!-- 4. 閲覧専用モードでの制限操作 -->
+            <!-- 4. 本部モードでできること -->
             <div id="hq-view-mode" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">4.</span>閲覧専用モードでの制限操作</h4>
+                <h4 class="text-lg font-bold text-gray-800 border-b pb-2 mb-4"><span class="text-indigo-500 mr-2">4.</span>本部モードでできること</h4>
                 <div class="space-y-3 text-sm text-gray-600 leading-relaxed">
-                    <p>店舗に入った後は、店長アカウントと同等の表示情報を確認できますが、操作ボタンの大部分は非表示または無効化されます。</p>
-                    <div class="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-xs">
-                        ⚠️ <strong>ご注意:</strong> 本部閲覧中は、ボタン（「追加」「保存」「作成」「削除」など）は画面から自動的に非表示になります。もし編集が必要な場合は、自店舗の管理者が「店舗管理者ログイン」からアクセスして操作する必要があります。
+                    <p>店舗に入った後は、<strong>店舗管理者と同じ操作</strong>が行えます。シフト表・スタッフ・設定の各画面から、次の操作が可能です。</p>
+                    <ul class="list-disc pl-5 space-y-1.5">
+                        <li><strong>AIシフト作成</strong>：ツールバーの「AIシフト作成」から新規生成→プレビュー→保存。</li>
+                        <li><strong>ドラッグ&ドロップ</strong>：シフト表でシフトバーを別セルに移動して手直し（重ねると入れ替え／連勤上限超過は自動ブロック）。</li>
+                        <li><strong>スタッフ管理</strong>：スタッフの追加・編集・削除。</li>
+                        <li><strong>店舗設定</strong>：営業時間・シフトパターン・人員配置要件などの変更と保存。</li>
+                    </ul>
+                    <div class="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl p-4 text-sm">
+                        変更はすべてその店舗のデータに保存されます。複数店舗を運営する本部が、各店舗のシフトをまとめて作成・調整する用途に使えます。
                     </div>
                 </div>
             </div>
