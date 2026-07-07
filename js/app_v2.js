@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260706-v3.7.242-mark-all-read-fix',
+    APP_VERSION: '20260707-v3.7.244-hq-scope-sidebar',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -1226,7 +1226,7 @@ const app = {
         if (this.state.isHQ) {
             if (authBtn) authBtn.classList.add('hidden');
             
-            // 店舗が選択されている場合のみサイドバーメニューを表示
+            // 店舗が選択されている場合のみ店舗用サイドバーメニューを表示
             const hasShop = !!this.state.organization_id;
             adminLinks.forEach(link => {
                 if (hasShop) {
@@ -1235,6 +1235,8 @@ const app = {
                     link.classList.add('hidden');
                 }
             });
+            // 本部専用メニュー(本部ダッシュボード/本部マニュアル)は常時表示
+            document.querySelectorAll('.hq-link').forEach(link => link.classList.remove('hidden'));
 
             if (adminHeader) {
                 adminHeader.innerHTML = `
@@ -1291,6 +1293,8 @@ const app = {
                 link.classList.add('hidden');
             }
         });
+        // 本部専用メニューは HQ 以外では隠す
+        document.querySelectorAll('.hq-link').forEach(link => link.classList.add('hidden'));
 
         // ヘッダーへの管理者コントロール注入
         if (adminHeader) {
@@ -1588,31 +1592,16 @@ const app = {
 
         this.showLoading(true);
         let shops = [];
+        // v3.7.244: scope 対応済み RPC hq_get_all_shops に一本化。
+        //   本部セッションの scope_org_ids でサーバー側が確実に絞る (非グローバル本部は
+        //   登録した店舗しか返らない)。旧 /hq/shops バックエンド経路は全テナントを返し、
+        //   端末依存の localStorage 絞りに頼っていたため未登録店舗が漏れて表示されていた。
         try {
-            // バックエンド(Railway)経由で取得（サービスキーでRLSバイパス）
-            const backendUrl = RAKUSHIFT_CONFIG?.CALC_SERVER_URL || 'https://rakushift-ai-production.up.railway.app';
-            const sessionData = JSON.parse(sessionStorage.getItem('rakushift_user') || '{}');
-            const res = await fetch(`${backendUrl}/hq/shops`, {
-                headers: {
-                    'x-session-id': sessionData.session_id || '',
-                    'Content-Type': 'application/json'
-                }
-            });
-            if (res.ok) {
-                shops = await res.json();
-            } else {
-                throw new Error('Backend returned ' + res.status);
-            }
-        } catch (backendErr) {
-            console.warn('[HQ] Backend fallback failed:', backendErr.message);
-            // フォールバック: Supabase RPC
-            try {
-                const result = await API.rpc('hq_get_all_shops', {});
-                shops = result || [];
-            } catch (rpcErr) {
-                console.warn('[HQ] RPC also failed:', rpcErr.message);
-                this.showToast('店舗一覧の取得に失敗しました', 'error');
-            }
+            const result = await API.rpc('hq_get_all_shops', {});
+            shops = Array.isArray(result) ? result : [];
+        } catch (rpcErr) {
+            console.warn('[HQ] hq_get_all_shops failed:', rpcErr.message);
+            this.showToast('店舗一覧の取得に失敗しました', 'error');
         } finally {
             this.showLoading(false);
         }
@@ -1620,12 +1609,15 @@ const app = {
         const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
         const planColors = { standard: 'bg-blue-100 text-blue-800', pro: 'bg-green-100 text-green-800', premium: 'bg-purple-100 text-purple-800', oem: 'bg-amber-100 text-amber-800', free: 'bg-gray-100 text-gray-500' };
 
-        // ローカルストレージに保存されている店舗のみ表示（入力しない限り見えない）
-        let savedOrgIds = [];
-        try {
-            savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
-        } catch(e) {}
-        shops = shops.filter(shop => savedOrgIds.includes(shop.id) || savedOrgIds.includes(shop.organization_id));
+        // グローバル本部(運営 hq_master)は全店舗が返るため、localStorage で
+        // 「登録した店舗」だけに絞る。scope 付き本部は RPC が既に絞済みなのでそのまま表示。
+        const sess = (() => { try { return JSON.parse(sessionStorage.getItem('rakushift_user') || '{}'); } catch(e) { return {}; } })();
+        const isGlobalHQ = !!(sess.user && sess.user.is_global) || !!sess.is_global;
+        if (isGlobalHQ) {
+            let savedOrgIds = [];
+            try { savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]'); } catch(e) {}
+            shops = shops.filter(shop => savedOrgIds.includes(shop.id) || savedOrgIds.includes(shop.organization_id));
+        }
 
         let tableRows = '';
         if (shops.length === 0) {
@@ -1791,6 +1783,24 @@ const app = {
                 localStorage.setItem('hq_shop_contracts', JSON.stringify(cmap));
             } catch(e) {}
 
+            // v3.7.244: 非グローバル本部は DB の scope_org_ids にも追加し、
+            //   サーバー側で「登録した店舗のみ」を保証 (端末・キャッシュに依存しない)。
+            try {
+                const sess = JSON.parse(sessionStorage.getItem('rakushift_user') || '{}');
+                const u = sess.user || sess;
+                if (u && u.login_id && !u.is_global) {
+                    const scope = Array.isArray(u.scope_org_ids) ? u.scope_org_ids.slice() : [];
+                    if (!scope.includes(orgId)) scope.push(orgId);
+                    await API.rpc('update_hq_admin_scope', { p_login_id: u.login_id, p_scope_org_ids: scope });
+                    // セッション内の scope も更新
+                    u.scope_org_ids = scope;
+                    if (sess.user) sess.user = u;
+                    sessionStorage.setItem('rakushift_user', JSON.stringify(sess));
+                }
+            } catch (scopeErr) {
+                console.warn('[HQ] scope update failed:', scopeErr.message);
+            }
+
             const idEl = document.getElementById('hqManualContractId'); if (idEl) idEl.value = '';
             const pwEl = document.getElementById('hqManualPassword'); if (pwEl) pwEl.value = '';
             this.showToast('店舗を登録しました。下の「登録店舗一覧」の「閲覧」から確認できます', 'success');
@@ -1804,13 +1814,27 @@ const app = {
         }
     },
 
-    removeHQShop(orgId) {
-        if (!confirm('この店舗をリストから削除しますか？\n(※データベースのデータは削除されません)')) return;
+    async removeHQShop(orgId) {
+        if (!confirm('この店舗を本部の管理対象から外しますか？\n(※店舗自体のデータは削除されません)')) return;
         try {
             let savedOrgIds = JSON.parse(localStorage.getItem('hq_saved_shops') || '[]');
             savedOrgIds = savedOrgIds.filter(id => id !== orgId);
             localStorage.setItem('hq_saved_shops', JSON.stringify(savedOrgIds));
-            this.showToast('店舗をリストから削除しました', 'info');
+            // v3.7.244: 非グローバル本部は DB の scope_org_ids からも除外
+            try {
+                const sess = JSON.parse(sessionStorage.getItem('rakushift_user') || '{}');
+                const u = sess.user || sess;
+                if (u && u.login_id && !u.is_global) {
+                    const scope = (Array.isArray(u.scope_org_ids) ? u.scope_org_ids : []).filter(id => id !== orgId);
+                    await API.rpc('update_hq_admin_scope', { p_login_id: u.login_id, p_scope_org_ids: scope });
+                    u.scope_org_ids = scope;
+                    if (sess.user) sess.user = u;
+                    sessionStorage.setItem('rakushift_user', JSON.stringify(sess));
+                }
+            } catch (scopeErr) {
+                console.warn('[HQ] scope remove failed:', scopeErr.message);
+            }
+            this.showToast('店舗を管理対象から外しました', 'info');
             this.renderCurrentView();
         } catch(e) {
             console.error('Failed to remove shop', e);
@@ -2305,7 +2329,31 @@ const app = {
 
         const todayShiftsInitial = this.state.shifts.filter(s => s.date === todayStr);
 
-        container.innerHTML = `
+        // v3.7.244: 本部が店舗を閲覧中は、メイン上部に本部操作バーを表示
+        //   (本部ダッシュボードに戻る / 本部マニュアル / パスワード変更 / ログアウト)
+        const hqBar = (this.state.isHQ && this.state.organization_id) ? `
+            <div class="bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-3 text-white">
+                <div class="flex items-center gap-2 font-bold">
+                    <i class="fa-solid fa-eye"></i> 閲覧専用モード（本部）
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="app.changeView('hq_dashboard')" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-left"></i> 本部ダッシュボードに戻る
+                    </button>
+                    <button onclick="app.changeView('hq_manual')" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-book"></i> 本部マニュアル
+                    </button>
+                    <button onclick="app.openHQPasswordChange()" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-key"></i> パスワード変更
+                    </button>
+                    <button onclick="app.hqLogout()" class="bg-white/20 hover:bg-white/30 backdrop-blur px-3 py-2 rounded-lg font-bold text-sm transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-right-from-bracket"></i> ログアウト
+                    </button>
+                </div>
+            </div>
+        ` : '';
+
+        container.innerHTML = hqBar + `
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                 <!-- 左カラム -->
                 <div class="lg:col-span-2 space-y-6">
