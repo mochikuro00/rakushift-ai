@@ -553,6 +553,18 @@ class ShiftScheduler:
         t = self._get_day_type(date_str)
         if t == "closed":
             return self.op_limit, self.op_limit
+        # v3.7.247: 曜日別営業時間に対応。opening_times に mon/tue/... のキーが
+        # あればその曜日の時間を優先。国民の祝日は holiday バケットを使う(既存挙動維持)。
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            is_national = bool(_JP_HOLIDAY_AVAILABLE and jpholiday.is_holiday(dt.date()))
+            if not is_national:
+                day_key = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[dt.weekday()]
+                per = self.opening_times.get(day_key)
+                if per and per.get("start"):
+                    return per.get("start", self.op_limit), per.get("end", self.cl_limit)
+        except (ValueError, TypeError):
+            pass
         key = {"holiday": "holiday", "weekend": "weekend"}.get(t, "weekday")
         ot = self.opening_times.get(key, {})
         return ot.get("start", self.op_limit), ot.get("end", self.cl_limit)

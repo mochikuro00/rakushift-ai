@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260707-v3.7.246-hq-full-admin',
+    APP_VERSION: '20260707-v3.7.247-perday-hours-pattern-color-dnd',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -4567,9 +4567,6 @@ const app = {
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-id-badge text-indigo-500"></i> 役職・ロール設定</h3>
                         <p class="text-sm text-gray-600 font-normal ml-6">スタッフの肩書きを設定します。AIは「Manager」を管理者、「Rookie」を新人として自動判定します。</p>
-                        <button onclick="app.addRole()" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition">
-                            <i class="fa-solid fa-plus mr-1"></i>役職追加
-                        </button>
                     </div>
                     <div class="p-6">
                         <div class="mb-4 p-4 bg-indigo-50 border border-indigo-300 rounded-lg text-sm text-gray-800 leading-relaxed">
@@ -4632,6 +4629,9 @@ const app = {
                                 </tbody>
                             </table>
                         </div>
+                        <button onclick="app.addRole()" class="w-full mt-4 flex items-center justify-center gap-2 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-2 border-dashed border-indigo-300 rounded-lg font-bold transition">
+                            <i class="fa-solid fa-plus"></i>役職を追加する
+                        </button>
                         <p class="text-xs text-gray-400 mt-3">※ IDはシステム内部で使用するため変更できません。新規追加時のみ自動生成されます。</p>
                     </div>
                 </div>
@@ -4650,37 +4650,48 @@ const app = {
                                 <li><b>定休日</b>に指定した曜日・日付には、AIは誰もシフトを入れません。</li>
                             </ul>
                         </div>
-                        <!-- 営業時間 (v3.7.60: 24時間営業対応) -->
+                        <!-- 営業時間 (v3.7.247: 曜日ごとに個別設定) -->
                         <div class="space-y-4">
-                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定</h4>
-                            <p class="text-[11px] text-gray-500 -mt-2">💡 ヒント: 24時間営業の場合は右のチェックを ON にしてください。</p>
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider">営業時間設定（曜日ごと）</h4>
+                            <p class="text-[11px] text-gray-500 -mt-2">💡 曜日ごとに開店〜閉店を設定できます。24時間営業の曜日は右のチェックを ON に。国民の祝日は「日曜」の時間が使われます。</p>
                             ${(() => {
-                                // v3.7.187: is_24h は DB に保存されないため、保存済みの
-                                // opening_times (00:00〜23:45/24:00) からも 24h 状態を復元する。
+                                // v3.7.247: 曜日別営業時間。旧データ(weekday/weekend/holiday の3区分)は
+                                // 平日→月〜金, 土曜→土, 日祝→日 に展開して初期表示する。
                                 const _isFullDay = (ot) => !!ot && (ot.start || '').slice(0,5) === '00:00'
                                     && ['23:45','24:00','00:00'].includes((ot.end || '').slice(0,5));
-                                const is24hWd = !!(this.state.config.is_24h?.weekday) || _isFullDay(times.weekday);
-                                const is24hWe = !!(this.state.config.is_24h?.weekend) || _isFullDay(times.weekend);
-                                const is24hHd = !!(this.state.config.is_24h?.holiday) || _isFullDay(times.holiday);
-                                const renderRow = (dt, label, colorClass, defaultStart, defaultEnd, is24h) => `
-                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b border-gray-50 pb-4">
-                                        <div class="md:col-span-3 font-bold ${colorClass}">${label}</div>
+                                const cfg24 = this.state.config.is_24h || {};
+                                // 曜日キー → 旧バケット
+                                const DAYS = [
+                                    { k:'mon', label:'月曜日', color:'text-gray-700', bucket:'weekday', ds:'09:00', de:'22:00' },
+                                    { k:'tue', label:'火曜日', color:'text-gray-700', bucket:'weekday', ds:'09:00', de:'22:00' },
+                                    { k:'wed', label:'水曜日', color:'text-gray-700', bucket:'weekday', ds:'09:00', de:'22:00' },
+                                    { k:'thu', label:'木曜日', color:'text-gray-700', bucket:'weekday', ds:'09:00', de:'22:00' },
+                                    { k:'fri', label:'金曜日', color:'text-gray-700', bucket:'weekday', ds:'09:00', de:'22:00' },
+                                    { k:'sat', label:'土曜日', color:'text-blue-600', bucket:'weekend', ds:'10:00', de:'20:00' },
+                                    { k:'sun', label:'日曜日・祝日', color:'text-red-600', bucket:'holiday', ds:'10:00', de:'20:00' },
+                                ];
+                                const renderRow = (d) => {
+                                    const cur = times[d.k] || times[d.bucket] || {};
+                                    const start = cur.start || d.ds;
+                                    const end = cur.end || d.de;
+                                    const is24h = !!cfg24[d.k] || !!cfg24[d.bucket] || _isFullDay(cur);
+                                    return `
+                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center border-b border-gray-50 pb-3">
+                                        <div class="md:col-span-3 font-bold ${d.color}">${d.label}</div>
                                         <div class="md:col-span-6 flex items-center gap-3 ${is24h ? 'opacity-40 pointer-events-none' : ''}">
-                                            ${this.get15MinTimeSelect(times[dt]?.start || defaultStart, 'time_'+dt+'_start', 'form-input border-gray-300 rounded-lg w-full')}
+                                            ${this.get15MinTimeSelect(start, 'time_'+d.k+'_start', 'form-input border-gray-300 rounded-lg w-full')}
                                             <span class="text-gray-400">～</span>
-                                            ${this.get15MinTimeSelect(times[dt]?.end || defaultEnd, 'time_'+dt+'_end', 'form-input border-gray-300 rounded-lg w-full')}
+                                            ${this.get15MinTimeSelect(end, 'time_'+d.k+'_end', 'form-input border-gray-300 rounded-lg w-full')}
                                         </div>
                                         <div class="md:col-span-3 flex items-center">
                                             <label class="flex items-center gap-2 cursor-pointer text-xs font-bold bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-2 rounded-lg transition">
-                                                <input type="checkbox" id="is_24h_${dt}" class="w-4 h-4" ${is24h ? 'checked' : ''} onchange="app._toggle24h('${dt}', this.checked)">
-                                                <span class="text-violet-700">🕐 24時間営業</span>
+                                                <input type="checkbox" id="is_24h_${d.k}" class="w-4 h-4" ${is24h ? 'checked' : ''} onchange="app._toggle24h('${d.k}', this.checked)">
+                                                <span class="text-violet-700">🕐 24時間</span>
                                             </label>
                                         </div>
                                     </div>
-                                `;
-                                return renderRow('weekday', '平日 (月-金)', 'text-gray-700', '09:00', '22:00', is24hWd) +
-                                       renderRow('weekend', '土曜日', 'text-blue-600', '10:00', '20:00', is24hWe) +
-                                       renderRow('holiday', '日祝日', 'text-red-600', '10:00', '20:00', is24hHd);
+                                `;};
+                                return DAYS.map(renderRow).join('');
                             })()}
                         </div>
 
@@ -4719,9 +4730,6 @@ const app = {
                     <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                         <h3 class="font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> シフトパターン (早番/遅番など)</h3>
                         <p class="text-sm text-gray-600 font-normal ml-6">AIが組み合わせるシフトの「型」です。例：早番9-14時、遅番17-22時など。</p>
-                        <button onclick="app.addShiftPattern()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-bold hover:bg-purple-200 transition">
-                            <i class="fa-solid fa-plus mr-1"></i>追加
-                        </button>
                     </div>
                     <div class="p-6">
                         <div class="mb-4 p-4 bg-purple-50 border border-purple-300 rounded-lg text-sm text-gray-800 leading-relaxed">
@@ -4745,6 +4753,7 @@ const app = {
                                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
                                     <tr>
                                         <th class="p-2 sm:p-3 rounded-l-lg" style="min-width:120px;">パターン名</th>
+                                        <th class="p-2 sm:p-3 text-center" style="min-width:96px;">色<br><span class="text-[9px] text-gray-400">シフト表に反映</span></th>
                                         <th class="p-2 sm:p-3" style="min-width:100px;">開始</th>
                                         <th class="p-2 sm:p-3" style="min-width:100px;">終了</th>
                                         <th class="p-2 sm:p-3 text-center" style="min-width:70px;">平日<br><span class="text-[9px] text-gray-400">人数</span></th>
@@ -4768,6 +4777,9 @@ const app = {
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-1 sm:p-2">
                                                 <input type="text" class="setting-shift-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${this._sanitize(shift.name || '')}" placeholder="例: 早番">
+                                            </td>
+                                            <td class="p-1 sm:p-2 text-center">
+                                                ${this._shiftColorSelect(shift.color || '')}
                                             </td>
                                             <td class="p-1 sm:p-2">
                                                 ${this.get15MinTimeSelect(shift.start, '', 'setting-shift-start w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
@@ -4807,10 +4819,13 @@ const app = {
                                         </tr>
                                         `;
                                     }).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="9" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。「追加」ボタンまたはプリセットから登録してください。</td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="10" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。下の「シフトパターンを追加する」またはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
+                        <button onclick="app.addShiftPattern()" class="w-full mt-4 flex items-center justify-center gap-2 py-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border-2 border-dashed border-purple-300 rounded-lg font-bold transition">
+                            <i class="fa-solid fa-plus"></i>シフトパターンを追加する
+                        </button>
                         <p class="text-xs text-gray-400 mt-3">💡 ここで登録したパターンの中からAIが最適な組み合わせを選びます。平日・土曜・日祝でパターンごとの必要人数を分けて設定できます。</p>
                     </div>
                 </div>
@@ -5318,12 +5333,12 @@ const app = {
             // チェック時は 00:00 〜 23:45 (営業時間 = 24h)
             this.state.config.opening_times[dayType] = { start: '00:00', end: '23:45' };
         } else {
-            // v3.7.189: 解除時は営業時間を通常値に戻す。
-            // (00:00-23:45 のまま残すと、保存値からの24h復元ロジックで
-            //  チェックが外れない不具合になるため)
-            const def = { weekday: { start: '09:00', end: '22:00' },
-                          weekend: { start: '10:00', end: '20:00' },
-                          holiday: { start: '10:00', end: '20:00' } };
+            // v3.7.189/247: 解除時は営業時間を通常値に戻す。
+            const def = { mon:{start:'09:00',end:'22:00'}, tue:{start:'09:00',end:'22:00'},
+                          wed:{start:'09:00',end:'22:00'}, thu:{start:'09:00',end:'22:00'},
+                          fri:{start:'09:00',end:'22:00'}, sat:{start:'10:00',end:'20:00'},
+                          sun:{start:'10:00',end:'20:00'},
+                          weekday:{start:'09:00',end:'22:00'}, weekend:{start:'10:00',end:'20:00'}, holiday:{start:'10:00',end:'20:00'} };
             this.state.config.opening_times[dayType] = def[dayType] || { start: '09:00', end: '22:00' };
         }
         this.renderSettings(document.getElementById('viewContainer'));
@@ -5543,6 +5558,7 @@ const app = {
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
         const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
+        const shiftColors = document.querySelectorAll('.setting-shift-color');
 
         const parseCount = (input) => {
             // v3.7.110: 0 も許容 (「この曜日はこのパターン使わない」を表現)
@@ -5560,6 +5576,7 @@ const app = {
                 name: (el.value || '').trim(),
                 start: (shiftStarts[i]?.value || '').trim(),
                 end: (shiftEnds[i]?.value || '').trim(),
+                color: (shiftColors[i]?.value || '').trim(),
                 count_weekday: cwd,
                 count_weekend: cwe,
                 count_holiday: chd,
@@ -5607,28 +5624,32 @@ const app = {
         // (config_safe view から除外され、ここで読んでも空文字なので参照しない)
         config.shop_rules_text = document.getElementById('settingShopRules')?.value || '';
 
-        // 営業時間
+        // 営業時間 (v3.7.247: 曜日別)
         const getVal = (id) => document.getElementById(id)?.value;
-        config.opening_times = {
-            weekday: { start: getVal('time_weekday_start') || '09:00', end: getVal('time_weekday_end') || '22:00' },
-            weekend: { start: getVal('time_weekend_start') || '10:00', end: getVal('time_weekend_end') || '20:00' },
-            holiday: { start: getVal('time_holiday_start') || '10:00', end: getVal('time_holiday_end') || '20:00' }
-        };
-        // 旧互換
-        config.opening_time = config.opening_times.weekday.start;
-        config.closing_time = config.opening_times.weekday.end;
-
-        // v3.7.60: 24時間営業フラグ
-        config.is_24h = config.is_24h || {};
-        ['weekday', 'weekend', 'holiday'].forEach(dt => {
-            const cb = document.getElementById(`is_24h_${dt}`);
-            if (cb) {
-                config.is_24h[dt] = cb.checked;
-                if (cb.checked) {
-                    config.opening_times[dt] = { start: '00:00', end: '23:45' };
-                }
-            }
+        const _dayDefs = [
+            { k:'mon', ds:'09:00', de:'22:00' }, { k:'tue', ds:'09:00', de:'22:00' },
+            { k:'wed', ds:'09:00', de:'22:00' }, { k:'thu', ds:'09:00', de:'22:00' },
+            { k:'fri', ds:'09:00', de:'22:00' }, { k:'sat', ds:'10:00', de:'20:00' },
+            { k:'sun', ds:'10:00', de:'20:00' },
+        ];
+        const ot = {};
+        config.is_24h = {};
+        _dayDefs.forEach(d => {
+            const cb = document.getElementById(`is_24h_${d.k}`);
+            const is24 = !!(cb && cb.checked);
+            config.is_24h[d.k] = is24;
+            ot[d.k] = is24
+                ? { start: '00:00', end: '23:45' }
+                : { start: getVal('time_'+d.k+'_start') || d.ds, end: getVal('time_'+d.k+'_end') || d.de };
         });
+        // 後方互換: 旧バケット(weekday=月/weekend=土/holiday=日)も維持
+        ot.weekday = ot.mon; ot.weekend = ot.sat; ot.holiday = ot.sun;
+        config.is_24h.weekday = config.is_24h.mon;
+        config.is_24h.weekend = config.is_24h.sat;
+        config.is_24h.holiday = config.is_24h.sun;
+        config.opening_times = ot;
+        config.opening_time = ot.mon.start;
+        config.closing_time = ot.mon.end;
 
         // v3.7.67: 中休み時間 UI 廃止 → 常に空
         config.break_periods = {};
@@ -5680,12 +5701,14 @@ const app = {
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
         const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
+        const shiftColors = document.querySelectorAll('.setting-shift-color');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
             const name = (el.value || '').trim();
             const start = (shiftStarts[i]?.value || '').trim();
             const end = (shiftEnds[i]?.value || '').trim();
+            const color = (shiftColors[i]?.value || '').trim();
             // v3.7.71: name/start/end のいずれかが空ならこのパターンを破棄
             // (空の start/end が scheduler 側で "00:00-00:00" として無視される
             //  バグを未然防止)
@@ -5709,6 +5732,7 @@ const app = {
                 name,
                 start,
                 end,
+                color,
                 count_weekday: cwd,
                 count_weekend: cwe,
                 count_holiday: chd,
@@ -6406,6 +6430,42 @@ const app = {
         return COLOR_MAP[name] || COLOR_MAP.blue;
     },
 
+    // v3.7.247: シフトパターンの色（明示指定）。key → シフトバーの Tailwind クラス
+    PATTERN_COLOR_CLASSES: {
+        yellow:  'bg-yellow-100 text-yellow-800 border-yellow-500',
+        purple:  'bg-purple-100 text-purple-700 border-purple-500',
+        sky:     'bg-sky-100 text-sky-700 border-sky-500',
+        indigo:  'bg-indigo-200 text-indigo-800 border-indigo-600',
+        emerald: 'bg-emerald-100 text-emerald-700 border-emerald-500',
+        pink:    'bg-pink-100 text-pink-700 border-pink-500',
+        orange:  'bg-orange-100 text-orange-700 border-orange-500',
+        teal:    'bg-teal-100 text-teal-700 border-teal-500',
+        blue:    'bg-blue-100 text-blue-700 border-blue-500',
+        red:     'bg-red-100 text-red-700 border-red-500',
+        gray:    'bg-gray-100 text-gray-700 border-gray-500',
+    },
+
+    // 設定画面: パターン色のプルダウン（左に色見本のドット付き）
+    _shiftColorSelect(current) {
+        const opts = [
+            { v:'',        label:'自動' },
+            { v:'yellow',  label:'🟡 黄' },
+            { v:'purple',  label:'🟣 紫' },
+            { v:'sky',     label:'🔵 水色' },
+            { v:'indigo',  label:'🟦 藍' },
+            { v:'emerald', label:'🟢 緑' },
+            { v:'pink',    label:'🌸 桃' },
+            { v:'orange',  label:'🟠 橙' },
+            { v:'teal',    label:'🩵 青緑' },
+            { v:'blue',    label:'🔷 青' },
+            { v:'red',     label:'🔴 赤' },
+            { v:'gray',    label:'⚪ 灰' },
+        ];
+        return `<select class="setting-shift-color w-full border-gray-300 rounded px-1 py-1.5 text-sm">`
+            + opts.map(o => `<option value="${o.v}" ${o.v === (current||'') ? 'selected' : ''}>${o.label}</option>`).join('')
+            + `</select>`;
+    },
+
     _getShiftBarColor(shift, customShifts) {
         const PALETTE = [
             'bg-yellow-100 text-yellow-800 border-yellow-500',  // 0: 早番想定 (yellow)
@@ -6430,14 +6490,21 @@ const app = {
         const sEnd = (shift.end_time || '').slice(0, 5);
         let matchedIdx = -1;
         let matchedName = '';
+        let matchedColor = '';
         customShifts.forEach((p, i) => {
             const pStart = (p.start || '').slice(0, 5);
             const pEnd = (p.end || '').slice(0, 5);
             if (pStart && pEnd && pStart === sStart && pEnd === sEnd) {
                 matchedIdx = i;
                 matchedName = (p.name || '').toLowerCase();
+                matchedColor = p.color || '';
             }
         });
+
+        // v3.7.247: パターンに色が明示指定されていれば最優先で反映
+        if (matchedColor && this.PATTERN_COLOR_CLASSES[matchedColor]) {
+            return this.PATTERN_COLOR_CLASSES[matchedColor];
+        }
 
         // 2) 名称マッチ優先 (より特定的なほうから)
         if (matchedName) {
@@ -6642,6 +6709,29 @@ const app = {
         td.classList.remove('dnd-drop-target', 'ring-2', 'ring-blue-400', 'ring-inset');
     },
 
+    // v3.7.247: DnD 後の再描画でスクロール位置を保持し「毎回リロードされる」体感を解消
+    _dndRerender() {
+        const capture = () => {
+            const el = document.getElementById('shiftViewContent');
+            const inner = el ? el.querySelector('.custom-scrollbar') : null;
+            return {
+                x: el ? el.scrollLeft : 0, y: el ? el.scrollTop : 0,
+                ix: inner ? inner.scrollLeft : 0, iy: inner ? inner.scrollTop : 0,
+                page: window.scrollY,
+            };
+        };
+        const s = capture();
+        this.renderCurrentView();
+        // 再描画後に同じ位置へ復元 (レイアウト確定後)
+        requestAnimationFrame(() => {
+            const el = document.getElementById('shiftViewContent');
+            if (el) { el.scrollLeft = s.x; el.scrollTop = s.y; }
+            const inner = el ? el.querySelector('.custom-scrollbar') : null;
+            if (inner) { inner.scrollLeft = s.ix; inner.scrollTop = s.iy; }
+            window.scrollTo(0, s.page);
+        });
+    },
+
     async onShiftDrop(e, dateStr, staffId) {
         e.preventDefault();
         e.stopPropagation();
@@ -6724,7 +6814,7 @@ const app = {
             // 両方成功 → state 反映
             shiftA.staff_id = origB.staff_id; shiftA.date = origB.date;
             shiftB.staff_id = origA.staff_id; shiftB.date = origA.date;
-            this.renderCurrentView();
+            this._dndRerender();
             this.updateHeader();
             const nameA = this.getStaff(shiftA.staff_id)?.name || '?';
             const nameB = this.getStaff(shiftB.staff_id)?.name || '?';
@@ -6783,7 +6873,7 @@ const app = {
                     }
                 }
             }
-            this.renderCurrentView();
+            this._dndRerender();
             this.updateHeader();
             const staff = this.getStaff(updates.staff_id || shift.staff_id);
             this.showToast(`シフトを更新しました${staff ? ' (' + staff.name + ')' : ''}`, 'success');
@@ -10478,13 +10568,56 @@ const app = {
 
     getStaff(id) { return this.state.staff.find(s => s.id === id); },
     showLoading(show) { const el = document.getElementById('globalLoading'); if (show) el.classList.remove('hidden'); else el.classList.add('hidden'); },
+    // v3.7.247: エラー/禁止事項(警告)は画面中央にポップアップ表示して見やすくする。
+    _showCenterAlert(message, type) {
+        const isError = type === 'error';
+        const accent = isError ? 'red' : 'amber';
+        const icon = isError ? 'fa-circle-xmark' : 'fa-triangle-exclamation';
+        const title = isError ? 'エラー' : 'ご注意';
+        // 既存の中央アラートがあれば除去 (連続表示で重ならないように)
+        document.getElementById('centerAlertOverlay')?.remove();
+        const overlay = document.createElement('div');
+        overlay.id = 'centerAlertOverlay';
+        overlay.className = 'fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4';
+        const safeMsg = this._sanitize(message);
+        const close = () => { overlay.classList.add('opacity-0'); setTimeout(() => overlay.remove(), 200); };
+        overlay._close = close;
+        overlay.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden transform transition-all scale-95 opacity-0" id="centerAlertCard">
+                <div class="bg-${accent}-50 px-5 py-4 flex items-center gap-3 border-b border-${accent}-100">
+                    <div class="w-11 h-11 rounded-full bg-${accent}-100 text-${accent}-600 flex items-center justify-center shrink-0">
+                        <i class="fa-solid ${icon} text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-${accent}-700">${title}</h3>
+                </div>
+                <div class="px-5 py-5">
+                    <p class="text-base text-gray-800 leading-relaxed">${safeMsg}</p>
+                </div>
+                <div class="px-5 pb-5">
+                    <button class="w-full py-3 bg-${accent}-600 hover:bg-${accent}-700 text-white font-bold rounded-xl transition" data-close>OK</button>
+                </div>
+            </div>`;
+        overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.hasAttribute('data-close')) close(); });
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => {
+            const card = overlay.querySelector('#centerAlertCard');
+            if (card) card.classList.remove('scale-95', 'opacity-0');
+        });
+        // 12秒で自動的に閉じる (ユーザーが OK/背景クリックでも閉じられる)
+        setTimeout(() => { if (document.getElementById('centerAlertOverlay') === overlay) close(); }, 12000);
+    },
+
     showToast(message, type = 'info') {
+        // v3.7.247: error / warning は中央ポップアップに切り替え (見やすさ向上)
+        if (type === 'error' || type === 'warning') {
+            this._showCenterAlert(message, type);
+            return;
+        }
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
-        let colorClass = type === 'success' ? 'border-green-200 text-green-600' : type === 'error' ? 'border-red-300 text-red-700 bg-red-50' : type === 'warning' ? 'border-amber-300 text-amber-700 bg-amber-50' : 'border-gray-200 text-gray-600';
-        let icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-circle-xmark' : type === 'warning' ? 'fa-triangle-exclamation' : 'fa-info-circle';
-        // v3.7.5: error と warning は永続表示 + 閉じるボタン (旧版は3秒で消えて読めなかった)
-        const persistent = (type === 'error' || type === 'warning');
+        let colorClass = type === 'success' ? 'border-green-200 text-green-600' : 'border-gray-200 text-gray-600';
+        let icon = type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+        const persistent = false;
         // v3.7.14: モバイル幅 (iPhone SE 1st gen 320px) でもはみ出ないように w-full + max-w
         toast.className = `flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border bg-white transform transition-all duration-300 translate-y-2 opacity-0 w-full sm:min-w-[320px] max-w-[480px] ${colorClass}`;
         const safeMsg = this._sanitize(message);
