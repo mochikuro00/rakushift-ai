@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260707-v3.7.247-perday-hours-pattern-color-dnd',
+    APP_VERSION: '20260707-v3.7.248-perday-axis-fix',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -3171,16 +3171,20 @@ const app = {
                         openTime = specialDay.start;
                         closeTime = specialDay.end;
                     } else {
-                        // 通常営業設定
+                        // 通常営業設定 (v3.7.248: 曜日別 opening_times[mon..sun] を優先)
                         const times = this.state.config.opening_times || {};
                         const defTimes = this.state.defaultConfig.opening_times;
                         const getStart = (type) => times[type]?.start || defTimes[type].start;
                         const getEnd = (type) => times[type]?.end || defTimes[type].end;
+                        const perDay = !isHoliday ? times[['sun','mon','tue','wed','thu','fri','sat'][dayOfWeek]] : null;
 
-                        if (isHoliday) {
+                        if (perDay && perDay.start) {
+                            openTime = perDay.start;
+                            closeTime = perDay.end;
+                        } else if (isHoliday) {
                             openTime = getStart('holiday');
                             closeTime = getEnd('holiday');
-                        } else if (dayOfWeek === 0 || dayOfWeek === 6) { 
+                        } else if (dayOfWeek === 0 || dayOfWeek === 6) {
                             openTime = getStart('weekend');
                             closeTime = getEnd('weekend');
                         } else {
@@ -3348,9 +3352,13 @@ const app = {
                 const getT = (key) => ((times || {})[key] || defTimes[key]);
                 let dayOpen, dayClose;
                 const specialDay = (this.state.config.special_days || {})[dateStr];
+                // v3.7.248: 曜日別 opening_times[mon..sun] を優先
+                const perDayOt = !isHoliday ? (times || {})[['sun','mon','tue','wed','thu','fri','sat'][dayOfWeek]] : null;
                 if (specialDay && specialDay.start && specialDay.end) {
                     dayOpen = specialDay.start;
                     dayClose = specialDay.end;
+                } else if (perDayOt && perDayOt.start) {
+                    dayOpen = perDayOt.start; dayClose = perDayOt.end;
                 } else if (isHoliday) {
                     dayOpen = getT('holiday').start; dayClose = getT('holiday').end;
                 } else if (dayOfWeek === 0 || dayOfWeek === 6) {
@@ -5326,6 +5334,9 @@ const app = {
 
     // v3.7.60: 24時間営業チェック切替
     _toggle24h(dayType, enabled) {
+        // v3.7.248: 再描画で他セクションの未保存編集(役職名・パターン等)が消えないよう
+        // 先に DOM 全体を取り込む (チェックボックスの新状態も含めて反映される)
+        this.state.config = this.readSettingsFromDOM();
         if (!this.state.config.is_24h) this.state.config.is_24h = {};
         this.state.config.is_24h[dayType] = enabled;
         if (!this.state.config.opening_times) this.state.config.opening_times = {};
@@ -5342,7 +5353,9 @@ const app = {
             this.state.config.opening_times[dayType] = def[dayType] || { start: '09:00', end: '22:00' };
         }
         this.renderSettings(document.getElementById('viewContainer'));
-        this.showToast(enabled ? `${dayType} を24時間営業に設定しました` : `${dayType} の24時間設定を解除しました`, 'success');
+        const dayLabel = { mon:'月曜', tue:'火曜', wed:'水曜', thu:'木曜', fri:'金曜', sat:'土曜', sun:'日曜・祝日',
+                           weekday:'平日', weekend:'土曜', holiday:'日祝' }[dayType] || dayType;
+        this.showToast(enabled ? `${dayLabel}を24時間営業に設定しました` : `${dayLabel}の24時間設定を解除しました`, 'success');
     },
 
     // v3.7.57: プリセットルール (ランチ/ディナー等) を一括追加
@@ -6423,6 +6436,7 @@ const app = {
             teal:    { bg: '#ccfbf1', border: '#0d9488' },
             red:     { bg: '#fee2e2', border: '#dc2626' },
             blue:    { bg: '#dbeafe', border: '#2563eb' },
+            gray:    { bg: '#f3f4f6', border: '#4b5563' },
         };
         // bg-{color}-NNN を最優先で抽出
         const m = cls.match(/bg-([a-z]+)-/);
