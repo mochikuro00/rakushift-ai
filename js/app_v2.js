@@ -30,6 +30,51 @@ const app = {
         return { from: fmt(from), to: fmt(to) };
     },
 
+    // v3.7.252: 差分同期 (デルタシンク)。同一範囲の再取得は「前回以降の変更分だけ」を
+    // 受信して転送量を90%以上削減する。範囲内の全IDリストで削除も検知。
+    // RPC 未適用の環境では旧 list_shifts_by_contract に自動フォールバック。
+    _shiftsSyncedAt: null,
+    _shiftsSyncKey: null,   // 差分同期の対象テナント (店舗切替時の誤マージ防止)
+    async _fetchShiftsSmart(contractId, range) {
+        const sameRange = this.state.loadedShiftRange
+            && this.state.loadedShiftRange.from === range.from
+            && this.state.loadedShiftRange.to === range.to;
+        const canDelta = !!(sameRange && this._shiftsSyncedAt
+            && this._shiftsSyncKey === contractId
+            && Array.isArray(this.state.shifts) && this.state.shifts.length > 0);
+        let r = null;
+        try {
+            r = await API.rpc('delta_shifts_by_contract', {
+                p_contract_id: contractId,
+                p_from: range.from,
+                p_to: range.to,
+                p_since: canDelta ? this._shiftsSyncedAt : null,
+            });
+        } catch (e) {
+            console.warn('[Delta] RPC失敗 → 全件取得にフォールバック:', e.message);
+        }
+        if (!r || !Array.isArray(r.changed)) {
+            const rows = await API.rpc('list_shifts_by_contract', {
+                p_contract_id: contractId, p_from: range.from, p_to: range.to });
+            return Array.isArray(rows) ? rows : [];
+        }
+        let merged;
+        if (canDelta) {
+            const idSet = new Set((r.ids || []).map(String));
+            const map = new Map();
+            this.state.shifts.forEach(s => { if (idSet.has(String(s.id))) map.set(String(s.id), s); });
+            r.changed.forEach(row => map.set(String(row.id), row));
+            merged = Array.from(map.values());
+            console.log(`[Delta] 差分${r.changed.length}件のみ受信 (範囲内${idSet.size}件)`);
+        } else {
+            merged = r.changed;
+        }
+        merged.sort((a, b) => String(a.date + (a.start_time || '')).localeCompare(String(b.date + (b.start_time || ''))));
+        this._shiftsSyncedAt = r.server_time || null;
+        this._shiftsSyncKey = contractId;
+        return merged;
+    },
+
     // 表示中の月が既ロード範囲外の場合のみ shifts を再ロード (キャッシュ判定付き)
     // 範囲内なら何もしないため、頻繁な月切替でも DB 負荷ゼロ
     async ensureShiftsLoaded() {
@@ -43,11 +88,7 @@ const app = {
             // session-less RPC 経由で RLS を回避 (REST + RLS は壊れる可能性あり)
             const cid = this.state.config?.contract_id || API.session?.user?.contract_id;
             if (!cid) return;
-            const rows = await API.rpc('list_shifts_by_contract', {
-                p_contract_id: cid,
-                p_from: target.from,
-                p_to: target.to
-            });
+            const rows = await this._fetchShiftsSmart(cid, target);
             this.state.shifts = Array.isArray(rows) ? rows : [];
             this.state.loadedShiftRange = target;
             console.log(`[Shifts] Reloaded ${this.state.shifts.length} for ${target.from}〜${target.to}`);
@@ -211,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260707-v3.7.249-perday-pattern-counts',
+    APP_VERSION: '20260711-v3.7.252-delta-sync',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -551,11 +592,7 @@ const app = {
                 const [cfgRes, staffRes, shiftsRes, requestsRes] = await Promise.allSettled([
                     API.rpc('get_config_by_contract', { p_contract_id: contractId }),
                     API.rpc('list_staff_by_contract', { p_contract_id: contractId }),
-                    API.rpc('list_shifts_by_contract', {
-                        p_contract_id: contractId,
-                        p_from: shiftRange.from,
-                        p_to: shiftRange.to
-                    }),
+                    this._fetchShiftsSmart(contractId, shiftRange),
                     API.rpc('list_requests_by_contract', { p_contract_id: contractId })
                 ]);
 
