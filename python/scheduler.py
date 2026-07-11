@@ -206,6 +206,22 @@ class ShiftScheduler:
                         pat[key] = v_int
                 except (ValueError, TypeError):
                     pass
+            # v3.7.249: 曜日別必要人数 counts = {mon..sun, hol} を正規化してコピー
+            raw_counts = p.get("counts")
+            if isinstance(raw_counts, dict):
+                norm = {}
+                for ck in ("mon", "tue", "wed", "thu", "fri", "sat", "sun", "hol"):
+                    cv = raw_counts.get(ck)
+                    if cv is None or str(cv) == "":
+                        continue
+                    try:
+                        cvi = int(cv)
+                        if cvi >= 0:
+                            norm[ck] = cvi
+                    except (ValueError, TypeError):
+                        pass
+                if norm:
+                    pat["counts"] = norm
             self.shift_patterns.append(pat)
         # v3.7.71: シフトパターンのデバッグログ (本番でユーザー設定の状況を把握)
         logger.info(
@@ -536,10 +552,43 @@ class ShiftScheduler:
             return "weekend"
         return "weekday"
 
+    # v3.7.249: 日付 → 曜日キー (mon..sun / 祝日は hol)。パターン・人員要件の共通判定
+    def _day_key_for_date(self, date_str):
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+        if _JP_HOLIDAY_AVAILABLE and jpholiday.is_holiday(dt.date()):
+            return "hol"
+        return ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[dt.weekday()]
+
+    # v3.7.249: パターンの必要人数を日付で解決 (per-day counts 優先 → 旧3区分フォールバック)
+    def _pattern_count_for_date(self, p, date_str):
+        counts = p.get("counts") or {}
+        key = self._day_key_for_date(date_str)
+        if key and key in counts and counts[key] is not None and str(counts[key]) != "":
+            return counts[key]
+        t = self._get_day_type(date_str)
+        if t == "holiday":
+            return p.get("count_holiday", p.get("count"))
+        if t == "weekend":
+            return p.get("count_weekend", p.get("count"))
+        return p.get("count_weekday", p.get("count"))
+
     def _get_required_staff(self, date_str):
         t = self._get_day_type(date_str)
         if t == "closed":
             return 0
+        # v3.7.249: 曜日別 staff_req (min_mon..min_sun / min_hol) を優先
+        key = self._day_key_for_date(date_str)
+        sr = self.config.get("staff_req", {}) or {}
+        if key:
+            v = sr.get("min_" + key)
+            if v is not None and str(v) != "":
+                try:
+                    return int(v)
+                except (ValueError, TypeError):
+                    pass
         if t == "holiday":
             return self.min_holiday
         if t == "weekend":
@@ -744,13 +793,9 @@ class ShiftScheduler:
 
         # v3.7.110: 当該曜日タイプの count が 0 のパターンは「この曜日では使わない」と
         # 解釈して opt から除外。これでユーザーが「土曜は早番なし」を表現できる。
-        _day_type = self._get_day_type(date_str)
         def _pat_count_for_day(p):
-            if _day_type == "holiday":
-                return p.get("count_holiday", p.get("count"))
-            if _day_type == "weekend":
-                return p.get("count_weekend", p.get("count"))
-            return p.get("count_weekday", p.get("count"))
+            # v3.7.249: 曜日別 counts 優先の共通ヘルパー
+            return self._pattern_count_for_date(p, date_str)
         filtered = []
         for p in patterns_to_use:
             c = _pat_count_for_day(p)
@@ -874,14 +919,8 @@ class ShiftScheduler:
         # v3.7.66: シフトパターンの count を曜日別に読み取り、slot ごとに合算
         # 各パターンに count_weekday / count_weekend / count_holiday があれば使う
         # なければ旧 count にフォールバック
-        day_type_for_pat = self._get_day_type(date_str)
         for pat in self.shift_patterns:
-            if day_type_for_pat == "holiday":
-                pat_count = pat.get("count_holiday", pat.get("count"))
-            elif day_type_for_pat == "weekend":
-                pat_count = pat.get("count_weekend", pat.get("count"))
-            else:
-                pat_count = pat.get("count_weekday", pat.get("count"))
+            pat_count = self._pattern_count_for_date(pat, date_str)
             if not pat_count or pat_count <= 0:
                 continue
             try:
@@ -954,11 +993,19 @@ class ShiftScheduler:
         #     → 4名不足 と表示される (現実には誰も入れない時間帯のはず)
         # 新: ユーザーが意図的にシフトパターンを登録した = その時間帯外は不要 と解釈。
         #   shift_patterns が空のユーザーは従来通りベース要件を使う。
-        has_patterns = bool(self.shift_patterns) and any(
-            int(p.get("count_weekday", p.get("count", 0)) or 0) > 0
-            or int(p.get("count_weekend", p.get("count", 0)) or 0) > 0
-            or int(p.get("count_holiday", p.get("count", 0)) or 0) > 0
-            for p in self.shift_patterns)
+        def _any_count(p):
+            vals = [p.get("count_weekday", p.get("count", 0)),
+                    p.get("count_weekend", p.get("count", 0)),
+                    p.get("count_holiday", p.get("count", 0))]
+            vals += list((p.get("counts") or {}).values())
+            for v in vals:
+                try:
+                    if int(v or 0) > 0:
+                        return True
+                except (ValueError, TypeError):
+                    continue
+            return False
+        has_patterns = bool(self.shift_patterns) and any(_any_count(p) for p in self.shift_patterns)
         final_slots = {}
         for t, counts in slots.items():
             base_or_rule = max(counts["base"], counts["any"] + counts["hall"] + counts["kitchen"])
@@ -1760,15 +1807,9 @@ class ShiftScheduler:
                         # pattern_sum は最繁スロットしか見ないため、日次合計人数を過剰扱いし
                         # 100M ペナルティで歪んでいた。当日に使うパターンの「人数合計」も
                         # 上限候補に含めて、時間帯が重ならない構成でも過剰判定しないようにする。
-                        _dt_d = self._get_day_type(d)
                         total_pat_count = 0
                         for _pat in self.shift_patterns:
-                            if _dt_d == "holiday":
-                                _pc = _pat.get("count_holiday", _pat.get("count"))
-                            elif _dt_d == "weekend":
-                                _pc = _pat.get("count_weekend", _pat.get("count"))
-                            else:
-                                _pc = _pat.get("count_weekday", _pat.get("count"))
+                            _pc = self._pattern_count_for_date(_pat, d)
                             try:
                                 _pc = int(_pc) if _pc is not None else 0
                             except (ValueError, TypeError):
@@ -1822,13 +1863,8 @@ class ShiftScheduler:
                     if day_type_d == "closed":
                         continue
                     for pat in self.shift_patterns:
-                        # 曜日別 count を取得
-                        if day_type_d == "holiday":
-                            pat_count = pat.get("count_holiday", pat.get("count"))
-                        elif day_type_d == "weekend":
-                            pat_count = pat.get("count_weekend", pat.get("count"))
-                        else:
-                            pat_count = pat.get("count_weekday", pat.get("count"))
+                        # 曜日別 count を取得 (v3.7.249: per-day 優先)
+                        pat_count = self._pattern_count_for_date(pat, d)
                         if pat_count is None or pat_count <= 0:
                             continue
                         ps_min = self._to_minutes(pat["start"])

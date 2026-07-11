@@ -211,7 +211,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260707-v3.7.248-perday-axis-fix',
+    APP_VERSION: '20260707-v3.7.249-perday-pattern-counts',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -3338,9 +3338,12 @@ const app = {
                 const jh = (typeof window !== 'undefined' && window.JapaneseHolidays) || (typeof JapaneseHolidays !== 'undefined' ? JapaneseHolidays : null);
                 const isHoliday = jh ? jh.isHoliday(dateStr) : false;
 
-                // 必要人数を取得（ベース値）
+                // 必要人数を取得（ベース値）v3.7.249: 曜日別 staff_req を優先
                 let required = parseInt(staffReq.min_weekday || 2);
-                if (isHoliday || dayOfWeek === 0) {
+                const _reqDayKey = isHoliday ? 'hol' : ['sun','mon','tue','wed','thu','fri','sat'][dayOfWeek];
+                if (staffReq['min_' + _reqDayKey] != null && staffReq['min_' + _reqDayKey] !== '') {
+                    required = parseInt(staffReq['min_' + _reqDayKey]) || 0;
+                } else if (isHoliday || dayOfWeek === 0) {
                     required = parseInt(staffReq.min_holiday || 3);
                 } else if (dayOfWeek === 6) {
                     required = parseInt(staffReq.min_weekend || 3);
@@ -3386,12 +3389,11 @@ const app = {
                 const patCountKey = dayTypeForUi === 'holiday' ? 'count_holiday'
                                   : dayTypeForUi === 'weekend' ? 'count_weekend'
                                   : 'count_weekday';
+                // v3.7.249: 曜日別 counts を優先
+                const patDayKey = isJpHolidayUi ? 'hol' : ['sun','mon','tue','wed','thu','fri','sat'][dayOfWeek];
                 // パターンが1つ以上 count>0 で登録されているか
-                const hasPatterns = customShifts.some(p => {
-                    const c = Number(p[patCountKey] != null ? p[patCountKey]
-                                    : (p.count != null ? p.count : 0));
-                    return Number.isFinite(c) && c > 0;
-                });
+                const hasPatterns = customShifts.some(p =>
+                    this._patCountForDayUi(p, patDayKey, patCountKey) > 0);
 
                 // 15分スロットごとに「同時在籍人数」vs「そのスロットの要件」を比較
                 const shiftsForDay = this.state.shifts.filter(s => s.date === dateStr);
@@ -3414,9 +3416,7 @@ const app = {
                         const ps = toMins(pat.start || '00:00');
                         let pe = toMins(pat.end || '00:00');
                         if (pe <= ps) pe += 24 * 60;
-                        const rawCnt = pat[patCountKey] != null ? pat[patCountKey]
-                                     : (pat.count != null ? pat.count : 0);
-                        const cnt = Number(rawCnt) || 0;
+                        const cnt = this._patCountForDayUi(pat, patDayKey, patCountKey);
                         if (cnt > 0 && ps <= t && t < pe) {
                             patternSum += cnt;
                         }
@@ -4534,15 +4534,19 @@ const app = {
         const reqs = config.staff_req || this.state.defaultConfig.staff_req;
         const closedDays = config.closed_days || [];
         const customShifts = config.custom_shifts || [];
-        // v3.7.200: 人員配置要件はシフトパターンの曜日別合計から自動計算
-        const _patSum = (kind) => customShifts.reduce((a, s) => {
+        // v3.7.249: 人員配置要件はシフトパターンの曜日別(月〜日・祝)合計から自動計算
+        const _patCountOf = (s, dk) => {
+            if (s.counts && s.counts[dk] != null && s.counts[dk] !== '') return Number(s.counts[dk]) || 0;
             const cwd = s.count_weekday != null ? s.count_weekday : (s.count != null ? s.count : 1);
             const cwe = s.count_weekend != null ? s.count_weekend : cwd;
             const chd = s.count_holiday != null ? s.count_holiday : cwe;
-            const v = kind === 'wd' ? cwd : kind === 'we' ? cwe : chd;
-            return a + (Number(v) || 0);
-        }, 0);
-        const sumWd = _patSum('wd'), sumWe = _patSum('we'), sumHd = _patSum('hd');
+            if (dk === 'sat') return Number(cwe) || 0;
+            if (dk === 'sun' || dk === 'hol') return Number(chd) || 0;
+            return Number(cwd) || 0;
+        };
+        const _patSumDay = (dk) => customShifts.reduce((a, s) => a + _patCountOf(s, dk), 0);
+        const daySums = {};
+        ['mon','tue','wed','thu','fri','sat','sun','hol'].forEach(dk => { daySums[dk] = _patSumDay(dk); });
         const roles = config.roles || this.state.defaultConfig.roles;
         const breakRules = config.break_rules || this.state.defaultConfig.break_rules;
         const shopRulesText = config.shop_rules_text || this.state.defaultConfig.shop_rules_text;
@@ -4757,16 +4761,21 @@ const app = {
                             <i class="fa-solid fa-arrows-left-right ml-auto text-blue-500"></i>
                         </div>
                         <div class="overflow-x-auto" style="-webkit-overflow-scrolling: touch;">
-                            <table class="text-left" style="min-width: 720px; width: 100%;">
+                            <table class="text-left" style="min-width: 1100px; width: 100%;">
                                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-bold">
                                     <tr>
                                         <th class="p-2 sm:p-3 rounded-l-lg" style="min-width:120px;">パターン名</th>
                                         <th class="p-2 sm:p-3 text-center" style="min-width:96px;">色<br><span class="text-[9px] text-gray-400">シフト表に反映</span></th>
                                         <th class="p-2 sm:p-3" style="min-width:100px;">開始</th>
                                         <th class="p-2 sm:p-3" style="min-width:100px;">終了</th>
-                                        <th class="p-2 sm:p-3 text-center" style="min-width:70px;">平日<br><span class="text-[9px] text-gray-400">人数</span></th>
-                                        <th class="p-2 sm:p-3 text-center text-blue-600" style="min-width:70px;">土曜<br><span class="text-[9px] text-gray-400">人数</span></th>
-                                        <th class="p-2 sm:p-3 text-center text-red-600" style="min-width:70px;">日祝<br><span class="text-[9px] text-gray-400">人数</span></th>
+                                        <th class="p-1 sm:p-2 text-center" style="min-width:52px;">月</th>
+                                        <th class="p-1 sm:p-2 text-center" style="min-width:52px;">火</th>
+                                        <th class="p-1 sm:p-2 text-center" style="min-width:52px;">水</th>
+                                        <th class="p-1 sm:p-2 text-center" style="min-width:52px;">木</th>
+                                        <th class="p-1 sm:p-2 text-center" style="min-width:52px;">金</th>
+                                        <th class="p-1 sm:p-2 text-center text-blue-600" style="min-width:52px;">土</th>
+                                        <th class="p-1 sm:p-2 text-center text-red-600" style="min-width:52px;">日</th>
+                                        <th class="p-1 sm:p-2 text-center text-rose-600" style="min-width:52px;">祝</th>
                                         <th class="p-2 sm:p-3 text-center" style="min-width:64px;">翌休<br><span class="text-[9px] text-gray-400">夜勤連勤防止</span></th>
                                         <th class="p-2 sm:p-3 text-center" style="min-width:96px;">管理者<br><span class="text-[9px] text-gray-400">ON=人数/OFF=ﾗﾝﾀﾞﾑ</span></th>
                                         <th class="p-2 sm:p-3 text-right rounded-r-lg" style="min-width:50px;">操作</th>
@@ -4795,15 +4804,12 @@ const app = {
                                             <td class="p-1 sm:p-2">
                                                 ${this.get15MinTimeSelect(shift.end, '', 'setting-shift-end w-full border-gray-300 rounded px-2 py-1.5 text-sm')}
                                             </td>
-                                            <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-wd w-16 border-gray-300 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwd}">
-                                            </td>
-                                            <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-we w-16 border-blue-200 bg-blue-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${cwe}">
-                                            </td>
-                                            <td class="p-1 sm:p-2 text-center">
-                                                <input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-hd w-16 border-red-200 bg-red-50 rounded px-2 py-1.5 text-sm font-bold text-center" value="${chd}">
-                                            </td>
+                                            ${[['mon',cwd,'border-gray-300 '],['tue',cwd,'border-gray-300 '],['wed',cwd,'border-gray-300 '],['thu',cwd,'border-gray-300 '],['fri',cwd,'border-gray-300 '],['sat',cwe,'border-blue-200 bg-blue-50'],['sun',chd,'border-red-200 bg-red-50'],['hol',chd,'border-rose-200 bg-rose-50']].map(([dk, fb, cls]) => {
+                                                const cv = (shift.counts && shift.counts[dk] != null && shift.counts[dk] !== '') ? shift.counts[dk] : fb;
+                                                return '<td class="p-0.5 sm:p-1 text-center">'
+                                                    + '<input type="number" required min="0" max="50" step="1" inputmode="numeric" oninput="app._recalcStaffingFromPatterns()" class="setting-shift-count-' + dk + ' w-12 ' + cls + ' rounded px-1 py-1.5 text-sm font-bold text-center" value="' + cv + '">'
+                                                    + '</td>';
+                                            }).join('')}
                                             <td class="p-1 sm:p-2 text-center">
                                                 <input type="hidden" class="setting-shift-rest" value="${shift.force_rest_next_day ? '1' : '0'}">
                                                 <button type="button" onclick="app.togglePatternRest(this)" title="このパターンに入った翌日を自動的に休みにします (夜勤の2連勤防止)" class="setting-shift-rest-btn w-10 h-6 rounded-full relative transition ${shift.force_rest_next_day ? 'bg-indigo-500' : 'bg-gray-300'}">
@@ -4827,7 +4833,7 @@ const app = {
                                         </tr>
                                         `;
                                     }).join('')}
-                                    ${customShifts.length === 0 ? '<tr><td colspan="10" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。下の「シフトパターンを追加する」またはプリセットから登録してください。</td></tr>' : ''}
+                                    ${customShifts.length === 0 ? '<tr><td colspan="15" class="p-4 text-center text-gray-400 text-sm">シフトパターンが登録されていません。下の「シフトパターンを追加する」またはプリセットから登録してください。</td></tr>' : ''}
                                 </tbody>
                             </table>
                         </div>
@@ -4855,21 +4861,15 @@ const app = {
                         </div>
                         <div class="grid grid-cols-1 gap-8 mb-6">
                             <div>
-                                <h4 class="text-sm font-bold text-gray-700 mb-1 border-b border-gray-100 pb-2">スタッフ総数要件 <span class="text-[10px] font-normal text-green-600">(シフトパターンの合計から自動計算)</span></h4>
-                                <p class="text-[11px] text-gray-400 mb-3">下のシフトパターンの「平日／土曜／日祝」人数の合計が自動で入ります。直接編集はできません。</p>
-                                <div class="space-y-4">
-                                    <div class="grid grid-cols-3 gap-2 items-center">
-                                        <label class="text-xs font-bold text-gray-600">平日</label>
-                                        <input type="number" id="req_min_weekday" min="0" max="50" step="1" readonly title="シフトパターンの平日人数の合計（自動計算）" class="col-span-2 border-gray-200 bg-gray-100 text-gray-700 font-bold rounded-lg px-3 py-1.5 cursor-not-allowed" value="${sumWd || reqs.min_weekday || reqs.min_total || 2}">
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2 items-center">
-                                        <label class="text-xs font-bold text-blue-600">土曜日</label>
-                                        <input type="number" id="req_min_weekend" min="0" max="50" step="1" readonly title="シフトパターンの土曜人数の合計（自動計算）" class="col-span-2 border-blue-200 bg-blue-50 text-blue-700 font-bold rounded-lg px-3 py-1.5 cursor-not-allowed" value="${sumWe || reqs.min_weekend || reqs.min_total || 3}">
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2 items-center">
-                                        <label class="text-xs font-bold text-red-600">日祝日</label>
-                                        <input type="number" id="req_min_holiday" min="0" max="50" step="1" readonly title="シフトパターンの日祝人数の合計（自動計算）" class="col-span-2 border-red-200 bg-red-50 text-red-700 font-bold rounded-lg px-3 py-1.5 cursor-not-allowed" value="${sumHd || reqs.min_holiday || reqs.min_total || 3}">
-                                    </div>
+                                <h4 class="text-sm font-bold text-gray-700 mb-1 border-b border-gray-100 pb-2">スタッフ総数要件 <span class="text-[10px] font-normal text-green-600">(シフトパターンの月〜日・祝の合計から自動計算)</span></h4>
+                                <p class="text-[11px] text-gray-400 mb-3">下のシフトパターンの曜日ごとの人数合計が自動で入ります。直接編集はできません。</p>
+                                <div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                                    ${[['mon','月','text-gray-600','border-gray-200 bg-gray-100 text-gray-700'],['tue','火','text-gray-600','border-gray-200 bg-gray-100 text-gray-700'],['wed','水','text-gray-600','border-gray-200 bg-gray-100 text-gray-700'],['thu','木','text-gray-600','border-gray-200 bg-gray-100 text-gray-700'],['fri','金','text-gray-600','border-gray-200 bg-gray-100 text-gray-700'],['sat','土','text-blue-600','border-blue-200 bg-blue-50 text-blue-700'],['sun','日','text-red-600','border-red-200 bg-red-50 text-red-700'],['hol','祝','text-rose-600','border-rose-200 bg-rose-50 text-rose-700']].map(([dk, lb, lcls, icls]) => `
+                                        <div class="text-center">
+                                            <label class="block text-xs font-bold ${lcls} mb-1">${lb}</label>
+                                            <input type="number" id="req_min_${dk}" min="0" max="50" step="1" readonly title="シフトパターンの${lb}人数の合計（自動計算）" class="w-full ${icls} font-bold rounded-lg px-1 py-1.5 text-center cursor-not-allowed" value="${daySums[dk]}">
+                                        </div>
+                                    `).join('')}
                                 </div>
                             </div>
                         </div>
@@ -5497,9 +5497,9 @@ const app = {
         const sumClass = (cls) => Array.from(document.querySelectorAll(cls))
             .reduce((a, el) => a + (parseInt(el.value, 10) || 0), 0);
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-        set('req_min_weekday', sumClass('.setting-shift-count-wd'));
-        set('req_min_weekend', sumClass('.setting-shift-count-we'));
-        set('req_min_holiday', sumClass('.setting-shift-count-hd'));
+        ['mon','tue','wed','thu','fri','sat','sun','hol'].forEach(dk => {
+            set('req_min_' + dk, sumClass('.setting-shift-count-' + dk));
+        });
     },
 
     addShiftPattern() {
@@ -5565,9 +5565,9 @@ const app = {
         const shiftNames    = document.querySelectorAll('.setting-shift-name');
         const shiftStarts   = document.querySelectorAll('.setting-shift-start');
         const shiftEnds     = document.querySelectorAll('.setting-shift-end');
-        const shiftCountsWd = document.querySelectorAll('.setting-shift-count-wd');
-        const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
-        const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
+        const DAYK = ['mon','tue','wed','thu','fri','sat','sun','hol'];
+        const shiftCountsByDayD = {};
+        DAYK.forEach(dk => { shiftCountsByDayD[dk] = document.querySelectorAll('.setting-shift-count-' + dk); });
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
         const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
@@ -5580,9 +5580,9 @@ const app = {
         };
         const all = [];
         shiftNames.forEach((el, i) => {
-            const cwd = parseCount(shiftCountsWd[i]);
-            const cwe = parseCount(shiftCountsWe[i]);
-            const chd = parseCount(shiftCountsHd[i]);
+            const counts = {};
+            DAYK.forEach(dk => { counts[dk] = parseCount(shiftCountsByDayD[dk][i]); });
+            const cwd = counts.mon, cwe = counts.sat, chd = counts.hol;
             const mgrRaw = Number(shiftMgrs[i]?.value);
             const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
             all.push({
@@ -5590,6 +5590,7 @@ const app = {
                 start: (shiftStarts[i]?.value || '').trim(),
                 end: (shiftEnds[i]?.value || '').trim(),
                 color: (shiftColors[i]?.value || '').trim(),
+                counts,
                 count_weekday: cwd,
                 count_weekend: cwe,
                 count_holiday: chd,
@@ -5708,9 +5709,9 @@ const app = {
         const shiftNames = document.querySelectorAll('.setting-shift-name');
         const shiftStarts = document.querySelectorAll('.setting-shift-start');
         const shiftEnds = document.querySelectorAll('.setting-shift-end');
-        const shiftCountsWd = document.querySelectorAll('.setting-shift-count-wd');
-        const shiftCountsWe = document.querySelectorAll('.setting-shift-count-we');
-        const shiftCountsHd = document.querySelectorAll('.setting-shift-count-hd');
+        const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun','hol'];
+        const shiftCountsByDay = {};
+        DAY_KEYS.forEach(dk => { shiftCountsByDay[dk] = document.querySelectorAll('.setting-shift-count-' + dk); });
         const shiftRests = document.querySelectorAll('.setting-shift-rest');
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
         const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
@@ -5735,9 +5736,9 @@ const app = {
                 const v = Number(input?.value);
                 return Number.isFinite(v) && v >= 0 ? Math.min(v, 50) : 1;
             };
-            const cwd = parseCount(shiftCountsWd[i]);
-            const cwe = parseCount(shiftCountsWe[i]);
-            const chd = parseCount(shiftCountsHd[i]);
+            const counts = {};
+            DAY_KEYS.forEach(dk => { counts[dk] = parseCount(shiftCountsByDay[dk][i]); });
+            const cwd = counts.mon, cwe = counts.sat, chd = counts.hol;
             const mgrRaw = Number(shiftMgrs[i]?.value);
             const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
             const mgrOn = shiftMgrOns[i]?.value === '1';
@@ -5746,6 +5747,7 @@ const app = {
                 start,
                 end,
                 color,
+                counts,
                 count_weekday: cwd,
                 count_weekend: cwe,
                 count_holiday: chd,
@@ -5762,13 +5764,15 @@ const app = {
             if (!Number.isFinite(n) || n < 0) return def;
             return Math.min(n, 50);  // 50名以上の要件は現実的でなく上限化
         };
-        config.staff_req = {
-            // 管理者要件は廃止 (パターン別 manager_count に移行)。min_manager は 0 固定。
-            min_manager: 0,
-            min_weekday: _clampStaff(document.getElementById('req_min_weekday')?.value, 2),
-            min_weekend: _clampStaff(document.getElementById('req_min_weekend')?.value, 3),
-            min_holiday: _clampStaff(document.getElementById('req_min_holiday')?.value, 3)
-        };
+        // v3.7.249: 曜日別 (月〜日・祝) + 旧3区分互換 (weekday=月, weekend=土, holiday=祝)
+        const _sr = { min_manager: 0 };
+        ['mon','tue','wed','thu','fri','sat','sun','hol'].forEach(dk => {
+            _sr['min_' + dk] = _clampStaff(document.getElementById('req_min_' + dk)?.value, dk === 'sat' || dk === 'sun' || dk === 'hol' ? 3 : 2);
+        });
+        _sr.min_weekday = _sr.min_mon;
+        _sr.min_weekend = _sr.min_sat;
+        _sr.min_holiday = _sr.min_hol;
+        config.staff_req = _sr;
 
         // 休憩ルール
         const breakRules = [];
@@ -6442,6 +6446,15 @@ const app = {
         const m = cls.match(/bg-([a-z]+)-/);
         const name = m ? m[1] : 'blue';
         return COLOR_MAP[name] || COLOR_MAP.blue;
+    },
+
+    // v3.7.249: パターンの必要人数を曜日キーで解決 (counts 優先 → 旧3区分)
+    _patCountForDayUi(pat, dayKey, legacyKey) {
+        if (pat.counts && pat.counts[dayKey] != null && pat.counts[dayKey] !== '') {
+            return Number(pat.counts[dayKey]) || 0;
+        }
+        const v = pat[legacyKey] != null ? pat[legacyKey] : (pat.count != null ? pat.count : 0);
+        return Number(v) || 0;
     },
 
     // v3.7.247: シフトパターンの色（明示指定）。key → シフトバーの Tailwind クラス
@@ -8943,7 +8956,9 @@ const app = {
         // ベース要件
         let baseReq = 2;
         const sReq = config.staff_req || {};
-        if (isHoliday) baseReq = sReq.min_holiday || 3;
+        const _bDayKey = isHoliday ? 'hol' : ['sun','mon','tue','wed','thu','fri','sat'][dayOfWeek];
+        if (sReq['min_' + _bDayKey] != null && sReq['min_' + _bDayKey] !== '') baseReq = Number(sReq['min_' + _bDayKey]) || 0;
+        else if (isHoliday) baseReq = sReq.min_holiday || 3;
         else if (dayOfWeek === 0 || dayOfWeek === 6) baseReq = sReq.min_weekend || 3;
         else baseReq = sReq.min_weekday || 2;
         
@@ -8960,11 +8975,8 @@ const app = {
         const patCountKey = isHoliday ? 'count_holiday'
                           : (dayOfWeek === 0 ? 'count_holiday'
                           : (dayOfWeek === 6 ? 'count_weekend' : 'count_weekday'));
-        const hasPatterns2 = customShifts.some(p => {
-            const c = Number(p[patCountKey] != null ? p[patCountKey]
-                            : (p.count != null ? p.count : 0));
-            return Number.isFinite(c) && c > 0;
-        });
+        const hasPatterns2 = customShifts.some(p =>
+            this._patCountForDayUi(p, _bDayKey, patCountKey) > 0);
         for (let t = startMins; t < effectiveEndMins; t += 15) {
             let patternSum = 0;
             customShifts.forEach(pat => {
@@ -8972,9 +8984,7 @@ const app = {
                 const ps = toMins(pat.start);
                 let pe = toMins(pat.end);
                 if (pe <= ps) pe += 24 * 60;
-                const rawCnt = pat[patCountKey] != null ? pat[patCountKey]
-                             : (pat.count != null ? pat.count : 0);
-                const cnt = Number(rawCnt) || 0;
+                const cnt = this._patCountForDayUi(pat, _bDayKey, patCountKey);
                 if (cnt > 0 && ps <= t && t < pe) {
                     patternSum += cnt;
                 }
