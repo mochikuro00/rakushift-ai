@@ -1512,7 +1512,7 @@
                     <i class="fas fa-pause"></i>
                 </div>
                 <div>
-                    <p class="text-sm font-semibold text-gray-900">${orgName} を停止しますか？</p>
+                    <p class="text-sm font-semibold text-gray-900">${escapeHtml(orgName)} を停止しますか？</p>
                     <p class="text-xs text-gray-600 mt-1.5">テナントはログインできなくなりますが、データは<strong class="text-amber-700">6ヶ月間</strong>保持され、いつでも復活できます。</p>
                 </div>
             </div>
@@ -1533,7 +1533,7 @@
                     <i class="fas fa-play"></i>
                 </div>
                 <div>
-                    <p class="text-sm font-semibold text-gray-900">${orgName} を復活しますか？</p>
+                    <p class="text-sm font-semibold text-gray-900">${escapeHtml(orgName)} を復活しますか？</p>
                     <p class="text-xs text-gray-600 mt-1.5">テナントは再びログイン・利用できるようになります。データはすべて保持されています。</p>
                 </div>
             </div>
@@ -1555,9 +1555,9 @@
                 </div>
                 <div>
                     <p class="text-sm font-bold text-red-900">この操作は取り消せません</p>
-                    <p class="text-xs text-gray-700 mt-1.5"><strong>${orgName}</strong> の全データ（スタッフ・シフト・リクエスト・設定）を完全に削除します。</p>
+                    <p class="text-xs text-gray-700 mt-1.5"><strong>${escapeHtml(orgName)}</strong> の全データ（スタッフ・シフト・リクエスト・設定）を完全に削除します。</p>
                     <p class="text-xs text-red-700 mt-2">確認のため、下の入力欄にテナント名を正確に入力してください:</p>
-                    <p class="text-xs text-gray-500 mt-1">テナント名: <code class="bg-gray-100 px-1.5 py-0.5 rounded">${orgName}</code></p>
+                    <p class="text-xs text-gray-500 mt-1">テナント名: <code class="bg-gray-100 px-1.5 py-0.5 rounded">${escapeHtml(orgName)}</code></p>
                     <input type="text" id="deleteConfirmName" class="mt-2 w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 text-sm" placeholder="テナント名を入力" autocomplete="off">
                 </div>
             </div>
@@ -1933,11 +1933,11 @@
                     : `<button onclick="confirmDeleteHqAdmin('${escapeHtml(h.login_id)}')" class="ml-1 px-2.5 py-1 text-xs bg-red-50 text-red-600 rounded-md hover:bg-red-100 border border-red-100" title="本部削除"><i class="fas fa-trash"></i></button>`;
                 const editBtn = h.is_global
                     ? ''
-                    : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="ml-1 px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 border border-amber-100" title="管轄を一覧から選択"><i class="fas fa-pen"></i></button>`;
+                    : `<button onclick="openEditHqScope('${escapeHtml(h.login_id)}')" class="ml-1 px-2.5 py-1 text-xs bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 border border-amber-100" title="管轄を一覧から選択"><i class="fas fa-pen"></i></button>`;
                 // 常設「+ 店舗登録」ボタン (展開不要でモーダル起動)
                 const quickRegBtn = h.is_global
                     ? ''
-                    : `<button onclick='openRegisterStoreModal(${JSON.stringify(h)})' class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 font-bold shadow-sm" title="店舗ID + 管理者パスワードで管轄に登録"><i class="fas fa-plus-circle"></i>店舗登録</button>`;
+                    : `<button onclick="openRegisterStoreModal('${escapeHtml(h.login_id)}')" class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md hover:from-amber-600 hover:to-orange-600 font-bold shadow-sm" title="店舗ID + 管理者パスワードで管轄に登録"><i class="fas fa-plus-circle"></i>店舗登録</button>`;
 
                 const scopeDetailHtml = scopeList.length === 0
                     ? '<p class="text-xs text-gray-400 py-2">管轄テナントがありません</p>'
@@ -1955,12 +1955,12 @@
                 // 管轄編集ボタン: 展開エリア内に目立つ位置で配置 (グローバル本部は不要)
                 const addScopeBtnHtml = h.is_global
                     ? '<span class="text-[11px] text-gray-400">グローバル本部は全店舗が自動的に管轄対象です</span>'
-                    : `<button onclick='openEditHqScope(${JSON.stringify(h)})' class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold shadow-sm"><i class="fas fa-list-check"></i>一覧から選択して編集</button>`;
+                    : `<button onclick="openEditHqScope('${escapeHtml(h.login_id)}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-bold shadow-sm"><i class="fas fa-list-check"></i>一覧から選択して編集</button>`;
 
                 // 展開エリア内: モーダル起動のショートカットボタン (顧客本部のみ)
                 const registerFormHtml = h.is_global ? '' : `
                     <div class="mt-3">
-                        <button onclick='openRegisterStoreModal(${JSON.stringify(h)})' class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-bold shadow-md transition-all">
+                        <button onclick="openRegisterStoreModal('${escapeHtml(h.login_id)}')" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 font-bold shadow-md transition-all">
                             <i class="fas fa-plus-circle"></i>店舗を新規登録 (店舗ID + 管理者パスワード)
                         </button>
                     </div>`;
@@ -2005,6 +2005,7 @@
     // 「店舗登録」モーダルを開く (本部行のクリック → モーダル直接起動)
     let _registerStoreTargetHq = null;
     function openRegisterStoreModal(hq) {
+        if (typeof hq === 'string') hq = allHqAdmins.find(x => x.login_id === hq);
         if (!hq || hq.is_global) return;
         _registerStoreTargetHq = hq;
         document.getElementById('regModalHqName').textContent = hq.company_name || '(会社名未設定)';
@@ -2115,6 +2116,8 @@
     }
 
     function openEditHqScope(hq) {
+        if (typeof hq === 'string') hq = allHqAdmins.find(x => x.login_id === hq);
+        if (!hq) return;
         const listEl = document.getElementById('editHqScopeList');
         const currentScope = new Set(hq.scope_org_ids || []);
         document.getElementById('editHqLoginIdDisplay').textContent = hq.login_id;
@@ -2431,8 +2434,10 @@
     const PLAN_COLORS = { standard: '#3b82f6', pro: '#22c55e', premium: '#a855f7', oem: '#f59e0b' };
 
     function renderRevenue() {
-        // 課金中: Stripe決済済み or OEMプラン (active)
-        const paying = allTenants.filter(t => t.subscription_status === 'active' && (t.stripe_customer_id || t.stripe_plan === 'oem'));
+        // v3.7.261: ヘッダの月間売上カード(updateStats)と同一定義に統一。
+        // 旧: stripe_customer_id 必須 → 手動プラン変更したStripe未連携テナントが漏れ、
+        //     タブを開くとカードの数字が下振れしていた。
+        const paying = allTenants.filter(t => t.subscription_status === 'active');
 
         // プラン別集計
         const planCounts = { standard: 0, pro: 0, premium: 0, oem: 0 };
@@ -2552,7 +2557,7 @@
         const tbody = document.getElementById('revCustomerTable');
         tbody.innerHTML = allTenants.map(t => {
             const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : 'free';
-            const isPaying = t.subscription_status === 'active' && (t.stripe_customer_id || plan === 'oem');
+            const isPaying = t.subscription_status === 'active';
             const price = isPaying ? (PLAN_PRICES[plan] || 0) : 0;
             const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
             const statusBadge = t.license_status === 'active'
@@ -2793,10 +2798,11 @@
     }
 
     function escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        // v3.7.261: textContent方式は " ' を素通しし onclick属性からの脱出XSSを許すため明示エスケープ
+        if (str == null) return '';
+        return String(str).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
     }
 
     function openModal(id) {
@@ -2938,6 +2944,7 @@
                 document.getElementById('adminName').textContent = adminSession.name;
                 showAdminPanel();
                 loadTenants();
+                checkPaymentAlerts();  // v3.7.261: 復元時も決済失敗アラートをチェック
             } catch (e) {
                 sessionStorage.removeItem('platform_admin');
             }
@@ -3092,7 +3099,10 @@
         document.getElementById('annPriority').value = a.priority;
         document.getElementById('annTargetUrl').value = a.target_url || '';
         document.getElementById('annBtnText').value = a.button_text || '';
-        document.getElementById('annExpiresAt').value = a.expires_at ? a.expires_at.slice(0, 16) : '';
+        // v3.7.261: 保存値はUTC。datetime-local はローカル解釈のため、表示時にローカル変換して往復ズレを防ぐ
+        document.getElementById('annExpiresAt').value = a.expires_at
+            ? (() => { const d = new Date(a.expires_at); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()
+            : '';
         document.getElementById('annActiveWrap').style.display = 'flex';
         document.getElementById('annActive').checked = a.is_active;
         document.getElementById('annModalTitle').innerHTML = '<i class="fas fa-pen mr-2"></i>お知らせ編集';

@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260712-v3.7.260-hq-suspend-block',
+    APP_VERSION: '20260712-v3.7.261-audit-fixes',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -952,6 +952,20 @@ const app = {
 
                 this._recordLoginAttempt('admin_' + inputContractId, true);
                 try { await API.rpc('clear_login_failures', { p_identifier: 'admin:' + inputContractId }); } catch (_) {}
+
+                // v3.7.261: PIN 未設定はセッションを永続化する前に強制設定させる。
+                // (旧: setSession 後にモーダルを出していたため、リロードで init 復元され
+                //  PIN 未設定のまま管理者利用を継続できるバイパスがあった)
+                if (hasPin === false) {
+                    const typedPin = (document.getElementById('adminLoginPin')?.value || '').trim();
+                    const pinOk = await this._showPinSetupModal(inputContractId, typedPin);
+                    if (!pinOk) {
+                        // まだ何も永続化していないので離脱で安全 (未ログイン状態のまま)
+                        this.showLoading(false);
+                        return;
+                    }
+                }
+
                 this.state.isAdmin = true;
                 this.state.isShopLoggedIn = true;
                 this.state.organization_id = orgId;
@@ -971,16 +985,6 @@ const app = {
                 await this.loadData();
                 this.updateAuthUI();
                 this.updateHeader();
-                // PIN 未設定の場合は初回設定モーダルを強制表示 (v3.7.235: 逃げ道なし。
-                // フォームに PIN を入力していた場合はその値を引き継ぐ)
-                if (hasPin === false) {
-                    const typedPin = (document.getElementById('adminLoginPin')?.value || '').trim();
-                    const pinOk = await this._showPinSetupModal(inputContractId, typedPin);
-                    if (!pinOk) {
-                        this.showLoading(false);
-                        return;
-                    }
-                }
                 this.showToast(`管理者: ${this._sanitize(authResult.name || '管理者')} でログインしました`, 'success');
                 this.updateAnnouncementBadge();
                 // v3.7.130: 初回のみチュートリアル自動表示
@@ -2212,8 +2216,9 @@ const app = {
         this._tutorialIndex = 0;
         const modal = document.getElementById('tutorialModal');
         if (!modal) return;
+        // v3.7.261: .modal は active クラスが無いと opacity:0/visibility:hidden で不可視
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        modal.classList.add('flex', 'active');
         this._renderTutorialStep();
     },
 
@@ -2279,7 +2284,7 @@ const app = {
         const modal = document.getElementById('tutorialModal');
         if (modal) {
             modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            modal.classList.remove('flex', 'active');
         }
         try {
             localStorage.setItem('rakushift_tutorial_v1_seen', completed ? 'completed' : 'skipped');
@@ -5358,8 +5363,27 @@ const app = {
     },
 
     deleteRole(index) {
-        this.state.config = this.readSettingsFromDOM();
-        const role = this.state.config.roles[index];
+        // v3.7.261: readSettingsFromDOM は空名の役職行を除外するため index がずれ、
+        //   別の役職が削除される不具合があった。DOM の全行(空名含む)を index 保持で
+        //   直接読み取ってから splice する (deleteShiftPattern と同型の対策)。
+        const roleNames = document.querySelectorAll('.setting-role-name');
+        const roleIds = document.querySelectorAll('.setting-role-id');
+        const roleColors = document.querySelectorAll('.setting-role-color');
+        const roleIsManagers = document.querySelectorAll('.setting-role-is-manager');
+        const existingRoles = this.state.config.roles || [];
+        const allRoles = [];
+        roleNames.forEach((el, i) => {
+            const rId = roleIds[i]?.value;
+            const prev = existingRoles.find(r => r.id === rId);
+            allRoles.push({
+                id: rId,
+                name: (el.value || '').trim(),
+                color: roleColors[i]?.value || 'gray',
+                level: prev ? prev.level : 1,
+                is_manager: roleIsManagers[i] ? !!roleIsManagers[i].checked : false,
+            });
+        });
+        const role = allRoles[index];
         if (!role) return;
 
         if (role.id === 'manager' || role.id === 'staff') {
@@ -5376,7 +5400,11 @@ const app = {
             if (!confirm(msg)) return;
         }
 
-        this.state.config.roles.splice(index, 1);
+        allRoles.splice(index, 1);
+        // 他セクションの未保存編集を保持しつつ roles だけ index 安全な allRoles で上書き
+        const merged = this.readSettingsFromDOM();
+        merged.roles = allRoles.filter(r => r.name);
+        this.state.config = merged;
         this.renderSettings(document.getElementById('viewContainer'));
     },
 
@@ -5663,9 +5691,10 @@ const app = {
     addShiftPattern() {
         // 現在の入力を一時保存
         this.state.config = this.readSettingsFromDOM();
-        // 新しい空行を追加
+        // 新しい行を追加。v3.7.261: 既定名を入れて readSettingsFromDOM の空名フィルタで
+        // 消えないようにする (名前未入力のまま別操作すると行が消えるバグの防止)
         if(!this.state.config.custom_shifts) this.state.config.custom_shifts = [];
-        this.state.config.custom_shifts.push({ name: '', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0, manager_enabled: false });
+        this.state.config.custom_shifts.push({ name: '新規パターン', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0, manager_enabled: false });
         // 再描画
         this.renderSettings(document.getElementById('viewContainer'));
     },

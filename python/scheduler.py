@@ -1909,13 +1909,10 @@ class ShiftScheduler:
                         mgr_need = int(pat.get("manager_count") or 0)
                         if mgr_need <= 0:
                             continue
-                        # そのパターンがその曜日タイプで使われているか (count>0)
-                        if day_type_d == "holiday":
-                            pc = pat.get("count_holiday", pat.get("count"))
-                        elif day_type_d == "weekend":
-                            pc = pat.get("count_weekend", pat.get("count"))
-                        else:
-                            pc = pat.get("count_weekday", pat.get("count"))
+                        # そのパターンがその曜日で使われているか (count>0)
+                        # v3.7.261: 曜日別 counts (mon..sun) を尊重 (旧3区分参照だと
+                        # 火〜金が月の値で判定され管理者制約が消える不具合を修正)
+                        pc = self._pattern_count_for_date(pat, d)
                         if pc is None or pc <= 0:
                             continue
                         ps_min = self._to_minutes(pat["start"])
@@ -2597,14 +2594,10 @@ class ShiftScheduler:
             if d:
                 shifts_by_date.setdefault(d, []).append(s)
         for d in self._operational_dates:
-            day_type = self._get_day_type(d)
-            count_key = "count_holiday" if day_type == "holiday" else (
-                "count_weekend" if day_type == "weekend" else "count_weekday")
             needed = 0
             for pat in self.shift_patterns:
-                c = pat.get(count_key)
-                if c is None:
-                    c = pat.get("count")
+                # v3.7.261: 曜日別 counts を尊重 (旧3区分参照だと不足日リストが誤る)
+                c = self._pattern_count_for_date(pat, d)
                 try:
                     n = int(c) if c is not None else 0
                 except (ValueError, TypeError):

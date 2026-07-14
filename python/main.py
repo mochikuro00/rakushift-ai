@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.260"}
+        return {"status": "ok", "db": "alive", "version": "3.7.261"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1588,6 +1588,9 @@ async def stripe_subscription_info(request: Request, contract_id: str = ""):
     rows = await supabase_query(
         "config",
         "contract_id=eq.{}&select=stripe_subscription_id,stripe_plan,cancel_requested_at,cancel_effective_date".format(_q(cid, safe="")))
+    if rows is None:
+        # v3.7.261: DB到達不能を契約ID不存在(404)と混同しない
+        return JSONResponse(status_code=503, content={"error": "サーバに接続できません。時間をおいて再度お試しください"})
     if not rows:
         return JSONResponse(status_code=404, content={"error": "契約IDが見つかりません"})
     sub_id = rows[0].get("stripe_subscription_id")
@@ -1646,6 +1649,8 @@ async def license_cancel_request(request: Request, req: CancelRequestBody):
     rows = await supabase_query(
         "config",
         "contract_id=eq.{}&select=id,organization_id,stripe_subscription_id,cancel_requested_at".format(_q(cid, safe="")))
+    if rows is None:
+        return JSONResponse(status_code=503, content={"error": "サーバに接続できません。時間をおいて再度お試しください"})
     if not rows:
         return JSONResponse(status_code=404, content={"error": "契約IDが見つかりません"})
     row = rows[0]
@@ -1667,11 +1672,14 @@ async def license_cancel_request(request: Request, req: CancelRequestBody):
     if orgs:
         shop_name = orgs[0].get("name") or ""
 
-    # config に申請を記録
-    await supabase_query(
+    # config に申請を記録 (v3.7.261: 一次記録の成否を確認。失敗時は通知せず中断)
+    patched = await supabase_query(
         "config", "contract_id=eq.{}".format(_q(cid, safe="")), method="PATCH",
         body={"cancel_requested_at": _dt.now(_tz(_td(hours=9))).isoformat(),
               "cancel_effective_date": effective.isoformat()})
+    if patched is None:
+        return JSONResponse(status_code=503, content={
+            "error": "解約申請の保存に失敗しました。時間をおいて再度お試しください"})
 
     # 運営管理のお問い合わせ一覧にも記録
     try:
@@ -1964,6 +1972,9 @@ async def stripe_webhook(request: Request):
 
                 # プラン変更の検出 (subscription.updated時)
                 if event_type == "customer.subscription.updated" and status == "active":
+                    # v3.7.261: 支払い回復時に payment_failed_at をクリア
+                    # (残さないと次回失敗時に古い日付で 21日経過扱いになり即停止する)
+                    update_data["payment_failed_at"] = None
                     items = data.get("items", {}).get("data", [])
                     if items:
                         price_id = items[0].get("price", {}).get("id", "")
