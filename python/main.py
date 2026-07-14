@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.256"}
+        return {"status": "ok", "db": "alive", "version": "3.7.257"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1587,12 +1587,17 @@ async def stripe_subscription_info(request: Request, contract_id: str = ""):
     from urllib.parse import quote as _q
     rows = await supabase_query(
         "config",
-        "contract_id=eq.{}&select=stripe_subscription_id,stripe_plan".format(_q(cid, safe="")))
+        "contract_id=eq.{}&select=stripe_subscription_id,stripe_plan,cancel_requested_at,cancel_effective_date".format(_q(cid, safe="")))
     if not rows:
         return JSONResponse(status_code=404, content={"error": "契約IDが見つかりません"})
     sub_id = rows[0].get("stripe_subscription_id")
     if not sub_id:
-        return {"has_subscription": False}
+        # 手動発行テナント: 解約申請の状態を返す (v3.7.257)
+        return {
+            "has_subscription": False,
+            "manual_cancel_requested": bool(rows[0].get("cancel_requested_at")),
+            "manual_cancel_effective_date": rows[0].get("cancel_effective_date"),
+        }
 
     _load_platform_settings()
     sk = _get_setting("stripe_secret_key")
@@ -1619,6 +1624,94 @@ async def stripe_subscription_info(request: Request, contract_id: str = ""):
         logger.info("subscription-info error: {}".format(e))
         err = "サブスクリプション情報の取得に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500, content={"error": err})
+
+
+# === 手動テナントの解約申請 (v3.7.257) ===
+# 発効日ルール: 申請した月の末日 (当月末・JST)。Stripe契約テナントは対象外(ポータルで解約)。
+class CancelRequestBody(BaseModel):
+    contract_id: str = Field(..., max_length=32)
+
+
+@app.post("/license/cancel-request")
+@limiter.limit("5/minute")
+async def license_cancel_request(request: Request, req: CancelRequestBody):
+    import re as _re
+    import calendar as _cal
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    cid = (req.contract_id or "").strip()
+    if not _re.match(r"^[A-Za-z0-9_\-]{1,32}$", cid):
+        return JSONResponse(status_code=400, content={"error": "invalid contract_id"})
+
+    from urllib.parse import quote as _q
+    rows = await supabase_query(
+        "config",
+        "contract_id=eq.{}&select=id,organization_id,stripe_subscription_id,cancel_requested_at".format(_q(cid, safe="")))
+    if not rows:
+        return JSONResponse(status_code=404, content={"error": "契約IDが見つかりません"})
+    row = rows[0]
+    if row.get("stripe_subscription_id"):
+        return JSONResponse(status_code=400, content={
+            "error": "Stripe契約のテナントは請求管理ポータルから解約してください"})
+    if row.get("cancel_requested_at"):
+        return {"success": True, "already": True, "message": "既に解約申請済みです"}
+
+    # 発効日 = 当月末 (JST)
+    jst_today = _dt.now(_tz(_td(hours=9))).date()
+    last_day = _cal.monthrange(jst_today.year, jst_today.month)[1]
+    effective = jst_today.replace(day=last_day)
+
+    # 店舗名を取得
+    shop_name = ""
+    orgs = await supabase_query(
+        "organizations", "id=eq.{}&select=name".format(_q(str(row.get("organization_id") or ""), safe="")))
+    if orgs:
+        shop_name = orgs[0].get("name") or ""
+
+    # config に申請を記録
+    await supabase_query(
+        "config", "contract_id=eq.{}".format(_q(cid, safe="")), method="PATCH",
+        body={"cancel_requested_at": _dt.now(_tz(_td(hours=9))).isoformat(),
+              "cancel_effective_date": effective.isoformat()})
+
+    # 運営管理のお問い合わせ一覧にも記録
+    try:
+        await supabase_query("inquiries", method="POST", body={
+            "company_name": "【解約申請】" + (shop_name or cid),
+            "phone": "-",
+            "contact_name": "セルフ解約申請",
+            "message": "契約ID {} から解約申請がありました。発効日(当月末): {}。発効日にテナントの停止処理を行ってください。".format(cid, effective.isoformat()),
+            "status": "new",
+        })
+    except Exception as e:
+        logger.warning("cancel-request inquiry save failed: %s", e)
+
+    # 運営へメール通知 (SMTP設定済みの場合)
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        to_email = os.environ.get("INQUIRY_EMAIL_TO") or "mochikuro.inc@gmail.com"
+        smtp_user = os.environ.get("SMTP_USER", "")
+        smtp_pass = os.environ.get("SMTP_PASS", "")
+        if smtp_user and smtp_pass:
+            body_text = ("ラクシフトAI 解約申請\n\n店舗名: {}\n契約ID: {}\n申請日: {}\n解約発効日(当月末): {}\n\n"
+                         "発効日に運営管理からテナントの停止処理を行ってください。").format(
+                shop_name or "(未設定)", cid, jst_today.isoformat(), effective.isoformat())
+            msg = MIMEText(body_text, "plain", "utf-8")
+            msg["From"] = smtp_user
+            msg["To"] = to_email
+            msg["Subject"] = "【ラクシフト】解約申請 - {}".format((shop_name or cid).replace("\r", "").replace("\n", ""))
+            def _send_sync():
+                with smtplib.SMTP(os.environ.get("SMTP_HOST", "smtp.gmail.com"),
+                                  int(os.environ.get("SMTP_PORT", "587")), timeout=20) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+            await asyncio.to_thread(_send_sync)
+            logger.info("cancel-request email sent for %s", cid)
+    except Exception as e:
+        logger.warning("cancel-request email failed: %s", e)
+
+    return {"success": True, "effective_date": effective.isoformat()}
 
 
 # === 運営管理: Stripe 決済一覧 (v3.7.255) ===

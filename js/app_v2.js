@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260712-v3.7.256-cancel-date-announce',
+    APP_VERSION: '20260712-v3.7.257-manual-cancel-request',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5168,8 +5168,8 @@ const app = {
                                 <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> 請求管理ポータル
                             </button>
                         </div>
-                        <div id="cancelInfoBox" class="mt-3 hidden"></div>
                         ` : ''}
+                        <div id="cancelInfoBox" class="mt-3 hidden"></div>
                     </div>
                 </div>
 
@@ -5208,7 +5208,12 @@ const app = {
             const res = await fetch(`${backendUrl}/stripe/subscription-info?contract_id=${encodeURIComponent(cid)}`);
             if (!res.ok) return;
             const info = await res.json();
-            if (!info.has_subscription || !info.current_period_end) return;
+            // v3.7.257: 手動発行テナント (Stripe契約なし) は「解約申請」フロー (発効日=当月末)
+            if (!info.has_subscription) {
+                this._renderManualCancelBox(box, info);
+                return;
+            }
+            if (!info.current_period_end) return;
             const end = new Date(info.current_period_end * 1000);
             const endStr = `${end.getFullYear()}年${end.getMonth() + 1}月${end.getDate()}日`;
             const daysLeft = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86400000));
@@ -5228,6 +5233,62 @@ const app = {
             box.classList.remove('hidden');
         } catch (e) {
             console.warn('[CancelInfo] load failed:', e.message);
+        }
+    },
+
+    // v3.7.257: 手動発行テナント用の解約申請ボックス (発効日=申請月の末日)
+    _renderManualCancelBox(box, info) {
+        const fmt = (d) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        if (info.manual_cancel_requested && info.manual_cancel_effective_date) {
+            const eff = new Date(info.manual_cancel_effective_date + 'T00:00:00');
+            const daysLeft = Math.max(0, Math.ceil((eff.getTime() - Date.now()) / 86400000));
+            box.innerHTML = `
+                <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                    <p class="text-sm font-bold text-red-700"><i class="fa-solid fa-circle-exclamation mr-1"></i>解約申請済みです</p>
+                    <p class="text-sm text-red-800 mt-1"><strong>${fmt(eff)}</strong>（あと${daysLeft}日）でサービスが終了します。それまでは全機能をご利用いただけます。解約の取り消しは運営 (info@rakushift.jp) までご連絡ください。</p>
+                </div>`;
+        } else {
+            const now = new Date();
+            const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const daysLeft = Math.max(0, Math.ceil((eom.getTime() - Date.now()) / 86400000));
+            box.innerHTML = `
+                <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p class="text-sm font-bold text-gray-700"><i class="fa-solid fa-calendar-xmark mr-1 text-gray-500"></i>解約をご検討の場合</p>
+                    <p class="text-sm text-gray-600 mt-1">いま解約を申請すると、<strong>当月末 ${fmt(eom)}</strong>（<strong>あと${daysLeft}日後</strong>）付けで解約となります。それまでは全機能をご利用いただけます（日割り返金はありません）。</p>
+                    <button onclick="app.requestManualCancel()" class="mt-3 px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50 transition">
+                        <i class="fa-solid fa-door-open mr-1"></i>解約を申請する
+                    </button>
+                </div>`;
+        }
+        box.classList.remove('hidden');
+    },
+
+    async requestManualCancel() {
+        const now = new Date();
+        const eom = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const eomStr = `${eom.getFullYear()}年${eom.getMonth() + 1}月${eom.getDate()}日`;
+        if (!confirm(`解約を申請しますか?\n\n・解約発効日: ${eomStr}（当月末）\n・発効日まで全機能を利用できます\n・日割り返金はありません\n\nこの操作は運営への連絡なしには取り消せません。`)) return;
+        const cid = this._getContractId();
+        if (!cid) { this.showToast('セッションエラー: 再ログインしてください', 'error'); return; }
+        this.showLoading(true);
+        try {
+            const backendUrl = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG?.CALC_SERVER_URL) || 'https://rakushift-ai-production.up.railway.app';
+            const res = await fetch(`${backendUrl}/license/cancel-request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contract_id: cid })
+            });
+            const j = await res.json();
+            if (res.ok && j.success) {
+                this.showToast(`解約申請を受け付けました。${eomStr} にサービス終了予定です`, 'success');
+                this._loadCancelInfo();
+            } else {
+                this.showToast(j.error || '解約申請に失敗しました', 'error');
+            }
+        } catch (e) {
+            this.showToast('解約申請に失敗しました: ' + e.message, 'error');
+        } finally {
+            this.showLoading(false);
         }
     },
 
@@ -9948,6 +10009,7 @@ const app = {
                     <li><strong>プラン情報を最新化</strong>ボタン：運営側でプラン変更された場合に、画面の表示を最新の契約状態に更新します。</li>
                     <li><strong>請求管理ポータル</strong>：請求書の確認・支払い方法（カード）の変更・<strong>解約</strong>は、Stripeの請求管理ポータルから行います。</li>
                     <li><strong>解約の発効日</strong>：解約は<strong>契約日から起算した現在の利用期間の末日</strong>付けで発効します。プラン管理画面に「いま解約すると◯月◯日（あと◯日後）付けで解約」と自動表示されるので、手続き前に確認できます。期間末日までは全機能を利用でき、日割り返金はありません。</li>
+                    <li><strong>手動発行契約（請求書払い等）の解約</strong>：Stripeを通さない契約は、プラン管理の<strong>「解約を申請する」ボタン</strong>から申請します。発効日は<strong>申請した月の末日（当月末）</strong>で、申請時に画面に表示されます。申請すると運営に自動通知され、発効日にサービスが終了します。</li>
                 </ul>
             </div>
 
