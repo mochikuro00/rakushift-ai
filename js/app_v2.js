@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260712-v3.7.259-suspend-admin-gate',
+    APP_VERSION: '20260712-v3.7.260-hq-suspend-block',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -1691,9 +1691,11 @@ const app = {
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${statusBadge}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-400">${dateStr}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center font-medium space-x-2">
-                        <button onclick="app.switchToHQShop('${shop.organization_id || shop.id}', '${this._sanitize(shop.contract_id || '')}')" class="text-indigo-600 hover:text-indigo-900 font-bold">
+                        ${status === 'suspended'
+                            ? '<span class="text-gray-400 font-bold cursor-not-allowed" title="解約により停止中のため閲覧できません"><i class="fa-solid fa-ban"></i> 停止中</span>'
+                            : `<button onclick="app.switchToHQShop('${shop.organization_id || shop.id}', '${this._sanitize(shop.contract_id || '')}')" class="text-indigo-600 hover:text-indigo-900 font-bold">
                             <i class="fa-solid fa-eye"></i> 閲覧
-                        </button>
+                        </button>`}
                         <button onclick="app.removeHQShop('${shop.organization_id || shop.id}')" class="text-red-600 hover:text-red-900 font-bold ml-2">
                             <i class="fa-solid fa-trash"></i> 削除
                         </button>
@@ -1894,6 +1896,15 @@ const app = {
                 this.showLoading(false);
                 return;
             }
+            // v3.7.260: 解約により停止中の店舗は本部からも閲覧不可
+            try {
+                const sc = await API.rpc('check_subscription_status', { p_contract_id: cid });
+                if (sc && !sc.allowed && sc.status === 'suspended') {
+                    this.showToast('この店舗は解約により停止中のため閲覧できません', 'error');
+                    this.showLoading(false);
+                    return;
+                }
+            } catch (_) { /* RPC失敗時は続行 */ }
             this.state.organization_id = orgId;
             this.state.isAdmin = true;
             this.state.isShopLoggedIn = true;
