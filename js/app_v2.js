@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260712-v3.7.257-manual-cancel-request',
+    APP_VERSION: '20260712-v3.7.259-suspend-admin-gate',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -833,6 +833,16 @@ const app = {
 
         this.showLoading(true);
         try {
+            // v3.7.259: ライセンス停止中のテナントは管理者ログインも遮断
+            // (店舗ログインには従来からあったチェック。解約自動停止の実効性のため管理者側にも適用)
+            try {
+                const subCheck = await API.rpc('check_subscription_status', { p_contract_id: inputContractId });
+                if (subCheck && !subCheck.allowed && subCheck.status === 'suspended') {
+                    this.showToast('このアカウントのライセンスは停止中です。運営までお問い合わせください。', 'error');
+                    return;
+                }
+            } catch (_) { /* RPC失敗時は従来どおり続行 (フェイルオープン) */ }
+
             // サーバ側レート制限チェック
             try {
                 const rl = await API.rpc('can_attempt_login', { p_identifier: 'admin:' + inputContractId });
