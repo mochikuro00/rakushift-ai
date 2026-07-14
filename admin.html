@@ -368,6 +368,10 @@
                 <button id="tabRevenue" onclick="switchTab('revenue')" class="tab-btn">
                     <i class="fas fa-chart-line mr-1.5"></i>事業収益
                 </button>
+                <button id="tabPayments" onclick="switchTab('payments')" class="tab-btn">
+                    <i class="fas fa-credit-card mr-1.5"></i>決済管理
+                    <span id="paymentAlertBadge" class="hidden ml-1.5 px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded-full animate-pulse">0</span>
+                </button>
                 <button id="tabReferrers" onclick="switchTab('referrers')" class="tab-btn">
                     <i class="fas fa-user-group mr-1.5"></i>紹介者管理
                 </button>
@@ -626,6 +630,55 @@
                     </div>
                 </div>
             </div><!-- /panelRevenue -->
+
+            <!-- ===== 決済管理タブ (v3.7.255: Stripe実決済の成功/失敗を分離表示) ===== -->
+            <div id="panelPayments" class="hidden panel">
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                    <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-credit-card mr-2 text-indigo-500"></i>Stripe 決済管理</h2>
+                    <button onclick="loadPayments(true)" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition">
+                        <i class="fas fa-rotate mr-1"></i>最新の情報に更新
+                    </button>
+                </div>
+
+                <!-- 未決済アラートバナー -->
+                <div id="paymentAlertBanner" class="hidden mb-4 p-4 bg-red-50 border-l-4 border-red-600 rounded-r-xl">
+                    <p class="font-bold text-red-700 text-base"><i class="fas fa-triangle-exclamation mr-2"></i><span id="paymentAlertText">決済できていない請求があります</span></p>
+                    <p class="text-sm text-red-600 mt-1">下の「⚠ 決済できていない請求」を確認し、必要に応じてお客様へ連絡してください。</p>
+                </div>
+
+                <!-- 未決済・失敗 -->
+                <div class="bg-white rounded-xl border-2 border-red-200 shadow-sm mb-6 overflow-hidden">
+                    <div class="px-5 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+                        <h3 class="font-bold text-red-700"><i class="fas fa-circle-xmark mr-2"></i>⚠ 決済できていない請求 (支払い待ち・失敗・回収不能)</h3>
+                        <span id="unpaidCount" class="text-sm font-bold text-red-600">0件</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <tr><th class="px-4 py-2 text-left">請求日</th><th class="px-4 py-2 text-left">店舗</th><th class="px-4 py-2 text-left">契約ID</th><th class="px-4 py-2 text-right">金額</th><th class="px-4 py-2 text-center">状態</th><th class="px-4 py-2 text-center">再試行</th><th class="px-4 py-2 text-center">請求書</th></tr>
+                            </thead>
+                            <tbody id="unpaidTableBody"><tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">「最新の情報に更新」を押してください</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 決済済み -->
+                <div class="bg-white rounded-xl border border-green-200 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 bg-green-50 border-b border-green-200 flex items-center justify-between">
+                        <h3 class="font-bold text-green-700"><i class="fas fa-circle-check mr-2"></i>✅ 決済済みの請求</h3>
+                        <span id="paidCount" class="text-sm font-bold text-green-600">0件</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <tr><th class="px-4 py-2 text-left">決済日</th><th class="px-4 py-2 text-left">店舗</th><th class="px-4 py-2 text-left">契約ID</th><th class="px-4 py-2 text-right">金額</th><th class="px-4 py-2 text-center">プラン</th><th class="px-4 py-2 text-center">請求書</th></tr>
+                            </thead>
+                            <tbody id="paidTableBody"><tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">—</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-3">※ Stripe の直近100件の請求書を表示。決済失敗時はこのタブに赤バッジとアラート音でお知らせします（ログイン時に自動チェック）。</p>
+            </div><!-- /panelPayments -->
 
             <!-- ===== 紹介者管理タブ ===== -->
             <div id="panelReferrers" class="hidden panel">
@@ -1282,6 +1335,7 @@
                 document.getElementById('adminName').textContent = result.name;
                 showAdminPanel();
                 await loadTenants();
+                checkPaymentAlerts();  // v3.7.255: 決済失敗があれば赤バッジ+アラート音
             } else {
                 errorEl.textContent = result.message;
                 errorEl.classList.remove('hidden');
@@ -1707,8 +1761,114 @@
     }
 
     // --- タブ切替 ---
+
+    // --- 決済管理 (v3.7.255: Stripe実決済の成功/失敗を分離表示 + アラート) ---
+    const RAILWAY_API = 'https://rakushift-ai-production.up.railway.app';
+
+    function _beepAlert() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [0, 0.35].forEach(delay => {
+                const osc = ctx.createOscillator(), g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.value = 880; g.gain.value = 0.15;
+                osc.start(ctx.currentTime + delay);
+                osc.stop(ctx.currentTime + delay + 0.25);
+            });
+        } catch (e) { /* 音が鳴らせない環境は無視 */ }
+    }
+
+    async function _fetchPayments() {
+        const sess = adminSession || JSON.parse(sessionStorage.getItem('platform_admin') || 'null');
+        const res = await fetch(RAILWAY_API + '/admin/stripe/payments', {
+            headers: { 'x-session-id': (sess && sess.session_id) || '' }
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+    }
+
+    function _payDate(ts) {
+        if (!ts) return '—';
+        const d = new Date(ts * 1000);
+        return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+    }
+    function _payYen(amount, currency) {
+        if (amount == null) return '—';
+        return (currency === 'jpy') ? ('¥' + Number(amount).toLocaleString()) : (amount + ' ' + (currency||'').toUpperCase());
+    }
+    const PAY_STATUS_LABELS = {
+        open: '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">支払い待ち/失敗</span>',
+        uncollectible: '<span class="px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">回収不能</span>',
+        paid: '<span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">決済済み</span>',
+    };
+    function _payEsc(t) {
+        return String(t == null ? '' : t).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+
+    async function loadPayments(showDoneMsg) {
+        const unpaidBody = document.getElementById('unpaidTableBody');
+        const paidBody = document.getElementById('paidTableBody');
+        unpaidBody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...</td></tr>';
+        try {
+            const data = await _fetchPayments();
+            _renderPaymentAlert(data.counts.unpaid);
+            document.getElementById('unpaidCount').textContent = data.counts.unpaid + '件';
+            document.getElementById('paidCount').textContent = data.counts.paid + '件';
+            unpaidBody.innerHTML = data.unpaid.length === 0
+                ? '<tr><td colspan="7" class="px-4 py-6 text-center text-green-600 font-bold"><i class="fas fa-circle-check mr-1"></i>未決済の請求はありません</td></tr>'
+                : data.unpaid.map(function(p) { return '<tr class="border-t border-gray-100 bg-red-50/40">'
+                    + '<td class="px-4 py-2.5">' + _payDate(p.date) + '</td>'
+                    + '<td class="px-4 py-2.5 font-bold">' + _payEsc(p.shop_name || p.customer_email || '不明') + '</td>'
+                    + '<td class="px-4 py-2.5 font-mono text-xs">' + _payEsc(p.contract_id || '—') + '</td>'
+                    + '<td class="px-4 py-2.5 text-right font-bold text-red-700">' + _payYen(p.amount, p.currency) + '</td>'
+                    + '<td class="px-4 py-2.5 text-center">' + (PAY_STATUS_LABELS[p.status] || _payEsc(p.status)) + '</td>'
+                    + '<td class="px-4 py-2.5 text-center text-xs">' + (p.attempt_count || 0) + '回' + (p.next_attempt ? '<br>次回 ' + _payDate(p.next_attempt) : '') + '</td>'
+                    + '<td class="px-4 py-2.5 text-center">' + (p.invoice_url ? '<a href="' + _payEsc(p.invoice_url) + '" target="_blank" rel="noopener" class="text-indigo-600 hover:underline text-xs font-bold">開く <i class="fas fa-arrow-up-right-from-square"></i></a>' : '—') + '</td>'
+                    + '</tr>'; }).join('');
+            paidBody.innerHTML = data.paid.length === 0
+                ? '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">決済履歴はまだありません</td></tr>'
+                : data.paid.map(function(p) { return '<tr class="border-t border-gray-100">'
+                    + '<td class="px-4 py-2.5">' + _payDate(p.date) + '</td>'
+                    + '<td class="px-4 py-2.5 font-bold">' + _payEsc(p.shop_name || p.customer_email || '不明') + '</td>'
+                    + '<td class="px-4 py-2.5 font-mono text-xs">' + _payEsc(p.contract_id || '—') + '</td>'
+                    + '<td class="px-4 py-2.5 text-right font-bold text-green-700">' + _payYen(p.amount, p.currency) + '</td>'
+                    + '<td class="px-4 py-2.5 text-center text-xs">' + _payEsc(p.plan || '—') + '</td>'
+                    + '<td class="px-4 py-2.5 text-center">' + (p.invoice_url ? '<a href="' + _payEsc(p.invoice_url) + '" target="_blank" rel="noopener" class="text-indigo-600 hover:underline text-xs font-bold">開く <i class="fas fa-arrow-up-right-from-square"></i></a>' : '—') + '</td>'
+                    + '</tr>'; }).join('');
+            if (showDoneMsg) alert('決済情報を更新しました (成功 ' + data.counts.paid + '件 / 未決済 ' + data.counts.unpaid + '件)');
+        } catch (e) {
+            unpaidBody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-red-500">取得に失敗しました: ' + _payEsc(e.message) + '</td></tr>';
+        }
+    }
+
+    function _renderPaymentAlert(unpaidCount) {
+        const badge = document.getElementById('paymentAlertBadge');
+        const banner = document.getElementById('paymentAlertBanner');
+        if (!badge || !banner) return;
+        if (unpaidCount > 0) {
+            badge.textContent = unpaidCount;
+            badge.classList.remove('hidden');
+            banner.classList.remove('hidden');
+            document.getElementById('paymentAlertText').textContent = '決済できていない請求が ' + unpaidCount + ' 件あります';
+        } else {
+            badge.classList.add('hidden');
+            banner.classList.add('hidden');
+        }
+    }
+
+    // ログイン直後の自動チェック: 未決済があれば赤バッジ + アラート音
+    async function checkPaymentAlerts() {
+        try {
+            const data = await _fetchPayments();
+            _renderPaymentAlert(data.counts.unpaid);
+            if (data.counts.unpaid > 0) _beepAlert();
+        } catch (e) { console.warn('payment alert check failed:', e); }
+    }
+
     function switchTab(tab) {
-        const panels = ['Tenants','Revenue','Referrers','Announcements','Inquiries','Hqadmins'];
+        const panels = ['Tenants','Revenue','Payments','Referrers','Announcements','Inquiries','Hqadmins'];
         const activeCls = 'tab-btn active';
         const inactiveCls = 'tab-btn';
         panels.forEach(p => {
@@ -1724,6 +1884,7 @@
         if (btn) btn.className = activeCls;
 
         if (tab === 'revenue') renderRevenue();
+        else if (tab === 'payments') loadPayments();
         else if (tab === 'referrers') loadReferrers();
         else if (tab === 'announcements') loadAnnouncements();
         else if (tab === 'inquiries') loadInquiries();

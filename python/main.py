@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.253"}
+        return {"status": "ok", "db": "alive", "version": "3.7.255"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1571,6 +1571,77 @@ async def create_portal_session(req: PortalRequest):
         err_msg = "ポータルの作成に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500,
                             content={"error": err_msg})
+
+
+# === 運営管理: Stripe 決済一覧 (v3.7.255) ===
+# 決済済み(paid) / 未決済・失敗(open, uncollectible) を分類して返す。
+# 運営管理 (admin.html) の「決済管理」タブが使用。platform_admin セッション必須。
+@app.get("/admin/stripe/payments")
+@limiter.limit("10/minute")
+async def admin_stripe_payments(request: Request,
+                                x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+
+    _load_platform_settings()
+    sk = _get_setting("stripe_secret_key")
+    if not sk:
+        return JSONResponse(status_code=500, content={"error": "Stripe is not configured"})
+    stripe.api_key = sk
+
+    try:
+        # customer_id → テナント情報の対応表
+        tenant_map = {}
+        rows = await supabase_query(
+            "config",
+            "select=contract_id,organization_id,stripe_customer_id,stripe_plan&stripe_customer_id=not.is.null")
+        orgs = await supabase_query("organizations", "select=id,name")
+        org_names = {o.get("id"): o.get("name") for o in (orgs or [])}
+        for c in (rows or []):
+            cid = c.get("stripe_customer_id")
+            if cid:
+                tenant_map[cid] = {
+                    "contract_id": c.get("contract_id"),
+                    "shop_name": org_names.get(c.get("organization_id"), ""),
+                    "plan": c.get("stripe_plan"),
+                }
+
+        # 直近の請求書 (最大100件 = 約1年分/100テナント月)
+        invoices = stripe.Invoice.list(limit=100)
+        paid, unpaid = [], []
+        for inv in invoices.get("data", []):
+            status = inv.get("status")
+            if status in ("draft", "void"):
+                continue  # 下書き・無効化済みは対象外
+            cust = inv.get("customer")
+            tenant = tenant_map.get(cust, {})
+            item = {
+                "invoice_id": inv.get("id"),
+                "date": inv.get("created"),
+                "amount": inv.get("amount_due") if status != "paid" else inv.get("amount_paid"),
+                "currency": inv.get("currency"),
+                "status": status,
+                "attempt_count": inv.get("attempt_count", 0),
+                "next_attempt": inv.get("next_payment_attempt"),
+                "customer_email": inv.get("customer_email") or "",
+                "invoice_url": inv.get("hosted_invoice_url") or "",
+                "contract_id": tenant.get("contract_id") or "",
+                "shop_name": tenant.get("shop_name") or "",
+                "plan": tenant.get("plan") or "",
+            }
+            if status == "paid":
+                paid.append(item)
+            else:
+                # open (支払い待ち/失敗リトライ中) / uncollectible (回収不能)
+                unpaid.append(item)
+
+        return {"paid": paid, "unpaid": unpaid,
+                "counts": {"paid": len(paid), "unpaid": len(unpaid)}}
+    except Exception as e:
+        logger.info("admin stripe payments error: {}".format(e))
+        err = "決済情報の取得に失敗しました" if IS_PRODUCTION else str(e)
+        return JSONResponse(status_code=500, content={"error": err})
 
 
 @app.post("/stripe/webhook")
