@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260711-v3.7.252-delta-sync',
+    APP_VERSION: '20260712-v3.7.256-cancel-date-announce',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -5160,7 +5160,7 @@ const app = {
                             </div>
                         </div>
 
-                        <!-- Stripeポータルリンク -->
+                        <!-- Stripeポータルリンク + 解約発効日アナウンス (v3.7.256) -->
                         ${config.stripe_subscription_id ? `
                         <div class="border-t border-gray-100 pt-4 flex justify-between items-center">
                             <p class="text-xs text-gray-400">請求書・支払い方法の変更・解約はStripeポータルから</p>
@@ -5168,6 +5168,7 @@ const app = {
                                 <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> 請求管理ポータル
                             </button>
                         </div>
+                        <div id="cancelInfoBox" class="mt-3 hidden"></div>
                         ` : ''}
                     </div>
                 </div>
@@ -5190,6 +5191,44 @@ const app = {
         `;
         // v3.7.133: PIN 状態を非同期で読み込んで表示更新
         this._renderPinStatus();
+        // v3.7.256: 解約発効日 (契約日起算の利用期間末日) を非同期表示
+        this._loadCancelInfo();
+    },
+
+    // v3.7.256: セルフ解約の発効日アナウンス。
+    // Stripe の現在の利用期間末日 (=契約日から起算した更新日) を取得し、
+    // 「いま解約すると何日後・何月何日付けで解約になるか」をプラン管理に表示する。
+    async _loadCancelInfo() {
+        const box = document.getElementById('cancelInfoBox');
+        if (!box) return;
+        const cid = this._getContractId();
+        if (!cid) return;
+        try {
+            const backendUrl = (typeof RAKUSHIFT_CONFIG !== 'undefined' && RAKUSHIFT_CONFIG?.CALC_SERVER_URL) || 'https://rakushift-ai-production.up.railway.app';
+            const res = await fetch(`${backendUrl}/stripe/subscription-info?contract_id=${encodeURIComponent(cid)}`);
+            if (!res.ok) return;
+            const info = await res.json();
+            if (!info.has_subscription || !info.current_period_end) return;
+            const end = new Date(info.current_period_end * 1000);
+            const endStr = `${end.getFullYear()}年${end.getMonth() + 1}月${end.getDate()}日`;
+            const daysLeft = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86400000));
+            if (info.cancel_at_period_end) {
+                box.innerHTML = `
+                    <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                        <p class="text-sm font-bold text-red-700"><i class="fa-solid fa-circle-exclamation mr-1"></i>解約予約済みです</p>
+                        <p class="text-sm text-red-800 mt-1"><strong>${endStr}</strong>（あと${daysLeft}日）でサービスが終了します。それまでは全機能をご利用いただけます。解約の取り消しは請求管理ポータルから可能です。</p>
+                    </div>`;
+            } else {
+                box.innerHTML = `
+                    <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p class="text-sm font-bold text-gray-700"><i class="fa-solid fa-calendar-xmark mr-1 text-gray-500"></i>解約をご検討の場合</p>
+                        <p class="text-sm text-gray-600 mt-1">いま解約手続きをすると、契約日から起算した現在の利用期間の末日 <strong class="text-gray-900">${endStr}</strong>（<strong>あと${daysLeft}日後</strong>）付けで解約となります。それまでは全機能をご利用いただけます（日割り返金はありません）。手続きは上の「請求管理ポータル」から行えます。</p>
+                    </div>`;
+            }
+            box.classList.remove('hidden');
+        } catch (e) {
+            console.warn('[CancelInfo] load failed:', e.message);
+        }
     },
 
     async _renderPinStatus() {
@@ -9908,6 +9947,7 @@ const app = {
                 <ul class="text-base text-gray-700 list-disc list-inside ml-2 leading-relaxed">
                     <li><strong>プラン情報を最新化</strong>ボタン：運営側でプラン変更された場合に、画面の表示を最新の契約状態に更新します。</li>
                     <li><strong>請求管理ポータル</strong>：請求書の確認・支払い方法（カード）の変更・<strong>解約</strong>は、Stripeの請求管理ポータルから行います。</li>
+                    <li><strong>解約の発効日</strong>：解約は<strong>契約日から起算した現在の利用期間の末日</strong>付けで発効します。プラン管理画面に「いま解約すると◯月◯日（あと◯日後）付けで解約」と自動表示されるので、手続き前に確認できます。期間末日までは全機能を利用でき、日割り返金はありません。</li>
                 </ul>
             </div>
 

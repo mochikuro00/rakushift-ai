@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.255"}
+        return {"status": "ok", "db": "alive", "version": "3.7.256"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1571,6 +1571,54 @@ async def create_portal_session(req: PortalRequest):
         err_msg = "ポータルの作成に失敗しました" if IS_PRODUCTION else str(e)
         return JSONResponse(status_code=500,
                             content={"error": err_msg})
+
+
+# === サブスクリプション情報 (v3.7.256: セルフ解約の発効日アナウンス用) ===
+# 契約日から起算した「現在の利用期間の末日」= 解約が発効する日を返す。
+# 認証は既存 *_by_contract RPC と同じ contract_id ベアラーモデル。
+@app.get("/stripe/subscription-info")
+@limiter.limit("20/minute")
+async def stripe_subscription_info(request: Request, contract_id: str = ""):
+    import re as _re
+    cid = (contract_id or "").strip()
+    if not _re.match(r"^[A-Za-z0-9_\-]{1,32}$", cid):
+        return JSONResponse(status_code=400, content={"error": "invalid contract_id"})
+
+    from urllib.parse import quote as _q
+    rows = await supabase_query(
+        "config",
+        "contract_id=eq.{}&select=stripe_subscription_id,stripe_plan".format(_q(cid, safe="")))
+    if not rows:
+        return JSONResponse(status_code=404, content={"error": "契約IDが見つかりません"})
+    sub_id = rows[0].get("stripe_subscription_id")
+    if not sub_id:
+        return {"has_subscription": False}
+
+    _load_platform_settings()
+    sk = _get_setting("stripe_secret_key")
+    if not sk:
+        return JSONResponse(status_code=500, content={"error": "Stripe is not configured"})
+    stripe.api_key = sk
+    try:
+        sub = stripe.Subscription.retrieve(sub_id)
+        # current_period_end: API バージョンにより subscription 直下 or items 配下
+        period_end = sub.get("current_period_end")
+        if not period_end:
+            items = (sub.get("items") or {}).get("data") or []
+            if items:
+                period_end = items[0].get("current_period_end")
+        return {
+            "has_subscription": True,
+            "status": sub.get("status"),
+            "start_date": sub.get("start_date"),
+            "current_period_end": period_end,
+            "cancel_at_period_end": bool(sub.get("cancel_at_period_end")),
+            "canceled_at": sub.get("canceled_at"),
+        }
+    except Exception as e:
+        logger.info("subscription-info error: {}".format(e))
+        err = "サブスクリプション情報の取得に失敗しました" if IS_PRODUCTION else str(e)
+        return JSONResponse(status_code=500, content={"error": err})
 
 
 # === 運営管理: Stripe 決済一覧 (v3.7.255) ===
