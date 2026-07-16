@@ -422,7 +422,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.269"}
+        return {"status": "ok", "db": "alive", "version": "3.7.270"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1743,7 +1743,7 @@ async def admin_customers(request: Request,
     configs = await supabase_query(
         "config",
         "select=organization_id,contract_id,subscription_status,stripe_customer_id,stripe_subscription_id,"
-        "stripe_plan,customer_email,contact_email,contact_name,phone,contact_phone,address,referrer_code,"
+        "stripe_plan,customer_email,contact_email,contact_name,phone,contact_phone,address,referrer_code,company_name,"
         "cancel_requested_at,cancel_effective_date,payment_failed_at,trial_ends_at") or []
     orgs = await supabase_query(
         "organizations",
@@ -1800,7 +1800,7 @@ async def admin_customers(request: Request,
             "organization_id": oid,
             "contract_id": c.get("contract_id"),
             "shop_name": org.get("name") or "",
-            "applied_company": cust_company.get(cid) if cid else "",
+            "applied_company": c.get("company_name") or (cust_company.get(cid) if cid else "") or "",
             "contact_name": c.get("contact_name") or "",
             "email": c.get("customer_email") or c.get("contact_email") or "",
             "phone": c.get("phone") or "",
@@ -2016,6 +2016,7 @@ async def stripe_webhook(request: Request):
                         "phone": phone,
                         "contact_phone": contact_phone,
                         "address": address,
+                        "company_name": org_name,
                     }
                     if referrer_code:
                         config_update["referrer_code"] = referrer_code

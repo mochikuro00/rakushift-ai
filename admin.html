@@ -1999,7 +1999,7 @@
             rows.push('<tr class="border-t border-gray-100 hover:bg-gray-50">'
                 + '<td class="px-4 py-2.5">' + SRC_BADGE[t.source] + '</td>'
                 + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'tenant\',' + _ti + ')" class="text-indigo-700 hover:underline text-left">' + escapeHtml(t.shop_name || '(未設定)') + '</button>'
-                    + ((t.applied_company && t.applied_company !== t.shop_name) ? '<br><span class="text-[11px] font-normal text-gray-400">申込: ' + escapeHtml(t.applied_company) + '</span>' : '') + '</td>'
+                    + (t.applied_company ? '<br><span class="text-[11px] font-normal text-gray-400">会社名: ' + escapeHtml(t.applied_company) + '</span>' : '') + '</td>'
                 + '<td class="px-4 py-2.5">' + escapeHtml(t.contact_name || '—') + '</td>'
                 + '<td class="px-4 py-2.5 text-xs">' + escapeHtml(t.email || '') + (t.phone ? '<br>' + escapeHtml(t.phone) : '') + '</td>'
                 + '<td class="px-4 py-2.5 text-center">' + (PLAN_LABEL[t.plan] || t.plan || '—') + '</td>'
@@ -2072,8 +2072,8 @@
             const t = (_customersData.tenants || [])[idx]; if (!t) return;
             const srcLabel = t.source === 'stripe' ? 'Stripe契約' : '手動発行';
             let html = '<div class="mb-3">' + SRC_BADGE[t.source] + '</div>';
+            html += _row('会社名', t.applied_company || t.shop_name);
             html += _row('店舗名', t.shop_name);
-            html += _row('事業者名(申込)', t.applied_company);
             html += _row('契約ID', t.contract_id);
             html += _row('住所', t.address);
             html += _row('代表電話番号', t.phone);
@@ -2911,9 +2911,9 @@
         if (!list.length) {
             html += '<p class="text-gray-400 text-sm py-4 text-center">このコードで契約した顧客はまだいません</p>';
         } else {
-            html += '<table class="w-full text-sm"><thead class="text-xs text-gray-500 border-b"><tr><th class="text-left py-1.5">店舗名</th><th class="text-left">契約ID</th><th class="text-center">プラン</th><th class="text-center">状態</th><th class="text-center">契約日</th></tr></thead><tbody>';
+            html += '<table class="w-full text-sm"><thead class="text-xs text-gray-500 border-b"><tr><th class="text-left py-1.5">会社名 / 店舗名</th><th class="text-left">契約ID</th><th class="text-center">プラン</th><th class="text-center">状態</th><th class="text-center">契約日</th></tr></thead><tbody>';
             html += list.map(c => '<tr class="border-b border-gray-50">'
-                + '<td class="py-2 font-bold">' + escapeHtml(c.shop_name || '(未設定)') + '</td>'
+                + '<td class="py-2 font-bold">' + escapeHtml(c.company_name || c.shop_name || '(未設定)') + ((c.shop_name && c.company_name && c.shop_name !== c.company_name) ? '<br><span class="text-[11px] font-normal text-gray-400">店舗: ' + escapeHtml(c.shop_name) + '</span>' : '') + '</td>'
                 + '<td class="font-mono text-xs">' + escapeHtml(c.contract_id || '—') + '</td>'
                 + '<td class="text-center text-xs">' + (planLabel[c.plan] || c.plan || '—') + '</td>'
                 + '<td class="text-center">' + (c.license_status === 'suspended' ? '<span class="text-gray-400">停止</span>' : (c.is_paying ? '<span class="text-green-600 font-bold">課金中</span>' : '<span class="text-amber-600">未課金</span>')) + '</td>'
