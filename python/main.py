@@ -216,6 +216,8 @@ class InquiryRequest(BaseModel):
     v3.7.137: max_length / 範囲制限を追加 (DoS / 異常入力対策)
     """
     company_name: str = Field(min_length=1, max_length=200)
+    business_name: str = Field(default="", max_length=200)  # v3.7.267: 事業者名
+    email: str = Field(default="", max_length=200)          # v3.7.267: メールアドレス
     company_address: str = Field(default="", max_length=300)
     phone: str = Field(min_length=1, max_length=40)
     contact_name: str = Field(min_length=1, max_length=100)
@@ -419,7 +421,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.266"}
+        return {"status": "ok", "db": "alive", "version": "3.7.267"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1740,7 +1742,7 @@ async def admin_customers(request: Request,
     configs = await supabase_query(
         "config",
         "select=organization_id,contract_id,subscription_status,stripe_customer_id,stripe_subscription_id,"
-        "stripe_plan,customer_email,contact_email,contact_name,phone,contact_phone,address,"
+        "stripe_plan,customer_email,contact_email,contact_name,phone,contact_phone,address,referrer_code,"
         "cancel_requested_at,cancel_effective_date,payment_failed_at,trial_ends_at") or []
     orgs = await supabase_query(
         "organizations",
@@ -1800,8 +1802,10 @@ async def admin_customers(request: Request,
             "applied_company": cust_company.get(cid) if cid else "",
             "contact_name": c.get("contact_name") or "",
             "email": c.get("customer_email") or c.get("contact_email") or "",
-            "phone": c.get("phone") or c.get("contact_phone") or "",
+            "phone": c.get("phone") or "",
+            "contact_phone": c.get("contact_phone") or "",
             "address": c.get("address") or "",
+            "referrer_code": c.get("referrer_code") or "",
             "plan": c.get("stripe_plan") or "",
             "subscription_status": c.get("subscription_status") or "",
             "license_status": org.get("license_status") or "active",
@@ -1817,18 +1821,33 @@ async def admin_customers(request: Request,
     # 2. お問い合わせ (見込み客)
     inquiries = await supabase_query(
         "inquiries",
-        "select=id,company_name,company_address,phone,contact_name,contact_phone,plan_summary,"
+        "select=id,company_name,business_name,email,company_address,phone,contact_name,contact_phone,plan_summary,"
+        "light_plan_count,standard_plan_count,premium_plan_count,preferred_days,preferred_time,"
         "message,status,created_at,handled_at,internal_notes&order=created_at.desc&limit=500") or []
     leads = []
     for q in inquiries:
+        _lc = q.get("light_plan_count") or 0
+        _sc = q.get("standard_plan_count") or 0
+        _pc = q.get("premium_plan_count") or 0
+        try:
+            total_stores = int(_lc) + int(_sc) + int(_pc)
+        except (ValueError, TypeError):
+            total_stores = 0
         leads.append({
             "source": "inquiry",
             "id": q.get("id"),
             "company_name": q.get("company_name") or "",
+            "business_name": q.get("business_name") or "",
+            "email": q.get("email") or "",
             "contact_name": q.get("contact_name") or "",
-            "phone": q.get("phone") or q.get("contact_phone") or "",
+            "phone": q.get("phone") or "",
+            "contact_phone": q.get("contact_phone") or "",
             "address": q.get("company_address") or "",
             "plan_summary": q.get("plan_summary") or "",
+            "standard_count": _sc, "pro_count": _lc, "premium_count": _pc,
+            "total_stores": total_stores,
+            "preferred_days": q.get("preferred_days") or "",
+            "preferred_time": q.get("preferred_time") or "",
             "message": q.get("message") or "",
             "status": q.get("status") or "new",
             "created_at": q.get("created_at"),
@@ -2379,6 +2398,8 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
     try:
         inquiry_data = {
             "company_name": req.company_name,
+            "business_name": req.business_name,
+            "email": req.email,
             "company_address": req.company_address,
             "phone": req.phone,
             "contact_name": req.contact_name,

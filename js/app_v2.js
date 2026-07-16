@@ -1029,6 +1029,8 @@ const app = {
             return;
         }
         const company = document.getElementById('inquiryCompany')?.value.trim() || '';
+        const business = document.getElementById('inquiryBusiness')?.value.trim() || '';
+        const email = document.getElementById('inquiryEmail')?.value.trim() || '';
         const address = document.getElementById('inquiryAddress')?.value.trim() || '';
         const phone = document.getElementById('inquiryPhone')?.value.trim() || '';
         const name = document.getElementById('inquiryName')?.value.trim() || '';
@@ -1047,6 +1049,7 @@ const app = {
 
         // バリデーション
         if (!company) { this.showToast('会社名を入力してください', 'error'); return; }
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { this.showToast('有効なメールアドレスを入力してください', 'error'); return; }
         if (!address) { this.showToast('会社住所を入力してください', 'error'); return; }
         if (!phone) { this.showToast('会社連絡先を入力してください', 'error'); return; }
         if (!name) { this.showToast('ご担当者名を入力してください', 'error'); return; }
@@ -1062,10 +1065,11 @@ const app = {
         this.showLoading(true);
         try {
             // プランサマリー文字列を構築
+            // v3.7.267: フォーム表示は Standard=standardCount / Pro=lightCount / Premium=premiumCount
             const planParts = [];
-            if (lightCount !== '0') planParts.push(`ライトプラン ${lightCount}件`);
-            if (standardCount !== '0') planParts.push(`スタンダードプラン ${standardCount}件`);
-            if (premiumCount !== '0') planParts.push(`プレミアムプラン ${premiumCount}件`);
+            if (standardCount !== '0') planParts.push(`Standard ${standardCount}件`);
+            if (lightCount !== '0') planParts.push(`Pro ${lightCount}件`);
+            if (premiumCount !== '0') planParts.push(`Premium ${premiumCount}件`);
             const planSummary = planParts.join('、');
 
             // 連絡希望日程サマリー
@@ -1079,6 +1083,8 @@ const app = {
 
             const inquiryData = {
                 company_name: this._sanitize(company),
+                business_name: this._sanitize(business),
+                email: this._sanitize(email),
                 company_address: this._sanitize(address),
                 phone: this._sanitize(phone),
                 contact_name: this._sanitize(name),
@@ -1120,7 +1126,7 @@ const app = {
             }
 
             // フォームリセット
-            ['inquiryCompany', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage', 'inquiryDate1', 'inquiryDate2', 'inquiryDate3'].forEach(id => {
+            ['inquiryCompany', 'inquiryBusiness', 'inquiryEmail', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage', 'inquiryDate1', 'inquiryDate2', 'inquiryDate3'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });

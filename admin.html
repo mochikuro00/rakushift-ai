@@ -1986,9 +1986,10 @@
             if (filt !== 'all' && filt !== t.source) return;
             const hay = [t.shop_name, t.applied_company, t.contact_name, t.contract_id, t.email, t.phone].join(' ').toLowerCase();
             if (q && !hay.includes(q)) return;
+            const _ti = _customersData.tenants.indexOf(t);
             rows.push('<tr class="border-t border-gray-100 hover:bg-gray-50">'
                 + '<td class="px-4 py-2.5">' + SRC_BADGE[t.source] + '</td>'
-                + '<td class="px-4 py-2.5 font-bold">' + escapeHtml(t.shop_name || '(未設定)')
+                + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'tenant\',' + _ti + ')" class="text-indigo-700 hover:underline text-left">' + escapeHtml(t.shop_name || '(未設定)') + '</button>'
                     + ((t.applied_company && t.applied_company !== t.shop_name) ? '<br><span class="text-[11px] font-normal text-gray-400">申込: ' + escapeHtml(t.applied_company) + '</span>' : '') + '</td>'
                 + '<td class="px-4 py-2.5">' + escapeHtml(t.contact_name || '—') + '</td>'
                 + '<td class="px-4 py-2.5 text-xs">' + escapeHtml(t.email || '') + (t.phone ? '<br>' + escapeHtml(t.phone) : '') + '</td>'
@@ -1999,12 +2000,14 @@
                 + '</tr>');
         });
         if (filt === 'all' || filt === 'inquiry') {
-            _customersData.leads.forEach(l => {
-                const hay = [l.company_name, l.contact_name, l.phone, l.plan_summary].join(' ').toLowerCase();
+            _customersData.leads.forEach((l, _li) => {
+                const hay = [l.company_name, l.business_name, l.contact_name, l.phone, l.email, l.plan_summary].join(' ').toLowerCase();
                 if (q && !hay.includes(q)) return;
+                const storeBadge = (l.total_stores >= 3) ? ' <span class="text-[10px] bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 font-bold">' + l.total_stores + '店舗</span>' : '';
                 rows.push('<tr class="border-t border-gray-100 hover:bg-amber-50/40 bg-amber-50/20">'
                     + '<td class="px-4 py-2.5">' + SRC_BADGE.inquiry + '</td>'
-                    + '<td class="px-4 py-2.5 font-bold">' + escapeHtml(l.company_name || '(未設定)') + '</td>'
+                    + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'lead\',' + _li + ')" class="text-amber-700 hover:underline text-left">' + escapeHtml(l.company_name || '(未設定)') + '</button>' + storeBadge
+                    + (l.business_name ? '<br><span class="text-[11px] font-normal text-gray-400">事業者: ' + escapeHtml(l.business_name) + '</span>' : '') + '</td>'
                     + '<td class="px-4 py-2.5">' + escapeHtml(l.contact_name || '—') + '</td>'
                     + '<td class="px-4 py-2.5 text-xs">' + escapeHtml(l.phone || '') + '</td>'
                     + '<td class="px-4 py-2.5 text-center text-xs">' + escapeHtml(l.plan_summary || '—') + '</td>'
@@ -2045,6 +2048,60 @@
                 + '<td class="px-4 py-2.5 text-center">' + action + '</td>'
                 + '</tr>';
         }).join('');
+    }
+
+
+    // --- 顧客詳細モーダル (v3.7.267) ---
+    function _row(label, val) {
+        if (val == null || val === '') return '';
+        return '<div class="flex py-2 border-b border-gray-50"><div class="w-32 shrink-0 text-gray-500">' + escapeHtml(label) + '</div><div class="flex-1 font-medium text-gray-900 break-all">' + escapeHtml(val) + '</div></div>';
+    }
+    function openCustomerDetail(kind, idx) {
+        const body = document.getElementById('customerDetailBody');
+        if (kind === 'tenant') {
+            const t = (_customersData.tenants || [])[idx]; if (!t) return;
+            const srcLabel = t.source === 'stripe' ? 'Stripe契約' : '手動発行';
+            let html = '<div class="mb-3">' + SRC_BADGE[t.source] + '</div>';
+            html += _row('店舗名', t.shop_name);
+            html += _row('事業者名(申込)', t.applied_company);
+            html += _row('契約ID', t.contract_id);
+            html += _row('住所', t.address);
+            html += _row('代表電話番号', t.phone);
+            html += _row('担当者名', t.contact_name);
+            html += _row('メールアドレス', t.email);
+            html += _row('担当者電話番号', t.contact_phone);
+            html += _row('紹介者コード', t.referrer_code);
+            html += _row('プラン', PLAN_LABEL[t.plan] || t.plan);
+            html += _row('スタッフ数', (t.staff_count || 0) + '名');
+            html += _row('契約状態', srcLabel);
+            html += _row('ライセンス', t.license_status === 'suspended' ? '停止中' : '稼働中');
+            if (t.cancel_requested_at) html += _row('解約申請日', _custDate(t.cancel_requested_at));
+            if (t.cancel_effective_date) html += _row('解約発効日', _custDate(t.cancel_effective_date));
+            html += _row('登録日', _custDate(t.created_at));
+            body.innerHTML = html;
+        } else {
+            const l = (_customersData.leads || [])[idx]; if (!l) return;
+            let html = '<div class="mb-3">' + SRC_BADGE.inquiry + ' <span class="ml-2 text-xs text-gray-500">受信: ' + _custDate(l.created_at) + '</span></div>';
+            html += _row('会社名', l.company_name);
+            html += _row('事業者名', l.business_name);
+            html += _row('メールアドレス', l.email);
+            html += _row('住所', l.address);
+            html += _row('電話番号', l.phone);
+            html += _row('担当者名', l.contact_name);
+            html += _row('担当者電話', l.contact_phone);
+            const planLines = [];
+            if (l.standard_count) planLines.push('Standard ' + l.standard_count + '件');
+            if (l.pro_count) planLines.push('Pro ' + l.pro_count + '件');
+            if (l.premium_count) planLines.push('Premium ' + l.premium_count + '件');
+            html += _row('申込プラン', planLines.join(' / ') || l.plan_summary);
+            html += _row('合計店舗数', (l.total_stores || 0) + '店舗');
+            html += _row('希望日程', l.preferred_days);
+            html += _row('希望時間帯', l.preferred_time);
+            html += _row('ステータス', l.status);
+            if (l.message) html += '<div class="pt-3"><div class="text-gray-500 mb-1">メッセージ</div><div class="bg-gray-50 rounded p-2 whitespace-pre-wrap text-gray-800">' + escapeHtml(l.message) + '</div></div>';
+            body.innerHTML = html;
+        }
+        document.getElementById('customerDetailModal').classList.remove('hidden');
     }
 
     function switchTab(tab) {
@@ -3400,5 +3457,17 @@
         if (el) el.classList.add('active');
     }
     </script>
+
+    <!-- ========== 顧客詳細モーダル (v3.7.267) ========== -->
+    <div id="customerDetailModal" class="hidden fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onclick="if(event.target===this) this.classList.add('hidden')">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-5 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-blue-50">
+                <h3 class="font-bold text-lg text-gray-900"><i class="fas fa-address-card text-indigo-600 mr-2"></i>顧客詳細</h3>
+                <button onclick="document.getElementById('customerDetailModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-700"><i class="fas fa-xmark text-xl"></i></button>
+            </div>
+            <div id="customerDetailBody" class="p-6 overflow-y-auto flex-1 text-sm"></div>
+        </div>
+    </div>
+
 </body>
 </html>
