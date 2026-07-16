@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.262"}
+        return {"status": "ok", "db": "alive", "version": "3.7.264"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1758,8 +1758,9 @@ async def admin_customers(request: Request,
     except Exception:
         pass
 
-    # Stripe 最新決済状況を customer_id ごとにマップ (任意・失敗しても続行)
+    # Stripe 最新決済状況 + 申込会社名を customer_id ごとにマップ (任意・失敗しても続行)
     pay_status = {}
+    cust_company = {}  # customer_id -> 申込時の会社名 (org_name)
     try:
         _load_platform_settings()
         sk = _get_setting("stripe_secret_key")
@@ -1769,6 +1770,11 @@ async def admin_customers(request: Request,
                 cust = inv.get("customer")
                 if cust and cust not in pay_status:
                     pay_status[cust] = inv.get("status")  # list は新しい順
+            # 顧客の申込会社名 (Customer.name / metadata.org_name)
+            for cu in stripe.Customer.list(limit=100).get("data", []):
+                nm = cu.get("name") or (cu.get("metadata") or {}).get("org_name") or ""
+                if nm:
+                    cust_company[cu.get("id")] = nm
     except Exception as e:
         logger.info("customers: stripe enrich skipped: {}".format(e))
 
@@ -1783,6 +1789,7 @@ async def admin_customers(request: Request,
             "organization_id": oid,
             "contract_id": c.get("contract_id"),
             "shop_name": org.get("name") or "",
+            "applied_company": cust_company.get(cid) if cid else "",
             "contact_name": c.get("contact_name") or "",
             "email": c.get("customer_email") or c.get("contact_email") or "",
             "phone": c.get("phone") or c.get("contact_phone") or "",
