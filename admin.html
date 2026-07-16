@@ -358,7 +358,7 @@
         <!-- メインコンテンツ -->
         <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <!-- タブ切替 -->
-            <div class="flex gap-1 mb-6 flex-wrap p-1 bg-white rounded-xl border border-gray-200 inline-flex">
+            <div class="flex gap-1 mb-6 flex-wrap p-1 bg-white rounded-xl border border-gray-200">
                 <button id="tabCustomers" onclick="switchTab('customers')" class="tab-btn active">
                     <i class="fas fa-address-book mr-1.5"></i>顧客情報
                     <span id="cancelAlertBadge" class="hidden ml-1.5 px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded-full">0</span>
@@ -1953,7 +1953,11 @@
             renderCancelTable();
             renderCustomerList();
         } catch (e) {
-            if (custBody) custBody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-red-500">取得に失敗: ' + escapeHtml(e.message) + '</td></tr>';
+            // v3.7.266: 失敗時もサマリー・解約表を空表示にリセットし「半端な表示」を防ぐ
+            ['custStripe','custManual','custLeads','custCancel'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
+            const canBody2 = document.getElementById('cancelTableBody');
+            if (canBody2) canBody2.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">読み込みに失敗しました。「更新」で再試行してください</td></tr>';
+            if (custBody) custBody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-red-500">取得に失敗しました（' + escapeHtml(e.message) + '）。「更新」で再試行してください</td></tr>';
         }
     }
 

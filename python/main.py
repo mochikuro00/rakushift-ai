@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.265"}
+        return {"status": "ok", "db": "alive", "version": "3.7.266"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1758,25 +1758,33 @@ async def admin_customers(request: Request,
     except Exception:
         pass
 
-    # Stripe 最新決済状況 + 申込会社名を customer_id ごとにマップ (任意・失敗しても続行)
+    # Stripe 最新決済状況 + 申込会社名を customer_id ごとにマップ。
+    # v3.7.266: Stripe 呼び出しが遅いと顧客タブ全体が待たされ「たまに出てこない」原因に
+    #   なるため、別スレッド + 8秒タイムアウトで実行。超過時は決済状況/申込会社名だけ
+    #   欠落させ、テナント/見込み客データは即返す。
     pay_status = {}
     cust_company = {}  # customer_id -> 申込時の会社名 (org_name)
-    try:
-        _load_platform_settings()
-        sk = _get_setting("stripe_secret_key")
-        if sk:
+    _load_platform_settings()
+    sk = _get_setting("stripe_secret_key")
+    if sk:
+        def _fetch_stripe():
             stripe.api_key = sk
+            ps, cc = {}, {}
             for inv in stripe.Invoice.list(limit=100).get("data", []):
-                cust = inv.get("customer")
-                if cust and cust not in pay_status:
-                    pay_status[cust] = inv.get("status")  # list は新しい順
-            # 顧客の申込会社名 (Customer.name / metadata.org_name)
-            for cu in stripe.Customer.list(limit=100).get("data", []):
-                nm = cu.get("name") or (cu.get("metadata") or {}).get("org_name") or ""
+                cu = inv.get("customer")
+                if cu and cu not in ps:
+                    ps[cu] = inv.get("status")
+            for c2 in stripe.Customer.list(limit=100).get("data", []):
+                nm = c2.get("name") or (c2.get("metadata") or {}).get("org_name") or ""
                 if nm:
-                    cust_company[cu.get("id")] = nm
-    except Exception as e:
-        logger.info("customers: stripe enrich skipped: {}".format(e))
+                    cc[c2.get("id")] = nm
+            return ps, cc
+        try:
+            pay_status, cust_company = await asyncio.wait_for(asyncio.to_thread(_fetch_stripe), timeout=8.0)
+        except asyncio.TimeoutError:
+            logger.info("customers: stripe enrich timed out (8s), returning without it")
+        except Exception as e:
+            logger.info("customers: stripe enrich skipped: {}".format(e))
 
     tenants = []
     for c in configs:
