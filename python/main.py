@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.261"}
+        return {"status": "ok", "db": "alive", "version": "3.7.262"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1725,6 +1725,119 @@ async def license_cancel_request(request: Request, req: CancelRequestBody):
 # === 運営管理: Stripe 決済一覧 (v3.7.255) ===
 # 決済済み(paid) / 未決済・失敗(open, uncollectible) を分類して返す。
 # 運営管理 (admin.html) の「決済管理」タブが使用。platform_admin セッション必須。
+# === 運営管理: 顧客情報の統合ビュー (v3.7.262) ===
+# Stripe契約 / 手動発行テナント / お問い合わせ(見込み客) を1つにまとめ、
+# 解約状態も含めて返す。運営コンソールの「顧客情報」タブが使用。
+@app.get("/admin/customers")
+@limiter.limit("10/minute")
+async def admin_customers(request: Request,
+                          x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+
+    # 1. テナント (config + organizations)
+    configs = await supabase_query(
+        "config",
+        "select=organization_id,contract_id,subscription_status,stripe_customer_id,stripe_subscription_id,"
+        "stripe_plan,customer_email,contact_email,contact_name,phone,contact_phone,address,"
+        "cancel_requested_at,cancel_effective_date,payment_failed_at,trial_ends_at") or []
+    orgs = await supabase_query(
+        "organizations",
+        "select=id,name,license_status,license_suspended_at,data_deletion_scheduled_at,created_at") or []
+    org_map = {o.get("id"): o for o in orgs}
+
+    # スタッフ数集計
+    staff_counts = {}
+    try:
+        staff_rows = await supabase_query("staff", "select=organization_id&limit=100000")
+        for s in (staff_rows or []):
+            oid = s.get("organization_id")
+            if oid:
+                staff_counts[oid] = staff_counts.get(oid, 0) + 1
+    except Exception:
+        pass
+
+    # Stripe 最新決済状況を customer_id ごとにマップ (任意・失敗しても続行)
+    pay_status = {}
+    try:
+        _load_platform_settings()
+        sk = _get_setting("stripe_secret_key")
+        if sk:
+            stripe.api_key = sk
+            for inv in stripe.Invoice.list(limit=100).get("data", []):
+                cust = inv.get("customer")
+                if cust and cust not in pay_status:
+                    pay_status[cust] = inv.get("status")  # list は新しい順
+    except Exception as e:
+        logger.info("customers: stripe enrich skipped: {}".format(e))
+
+    tenants = []
+    for c in configs:
+        oid = c.get("organization_id")
+        org = org_map.get(oid, {})
+        src = "stripe" if c.get("stripe_subscription_id") else "manual"
+        cid = c.get("stripe_customer_id")
+        tenants.append({
+            "source": src,
+            "organization_id": oid,
+            "contract_id": c.get("contract_id"),
+            "shop_name": org.get("name") or "",
+            "contact_name": c.get("contact_name") or "",
+            "email": c.get("customer_email") or c.get("contact_email") or "",
+            "phone": c.get("phone") or c.get("contact_phone") or "",
+            "address": c.get("address") or "",
+            "plan": c.get("stripe_plan") or "",
+            "subscription_status": c.get("subscription_status") or "",
+            "license_status": org.get("license_status") or "active",
+            "payment_status": pay_status.get(cid) if cid else None,
+            "cancel_requested_at": c.get("cancel_requested_at"),
+            "cancel_effective_date": c.get("cancel_effective_date"),
+            "payment_failed_at": c.get("payment_failed_at"),
+            "staff_count": staff_counts.get(oid, 0),
+            "data_deletion_scheduled_at": org.get("data_deletion_scheduled_at"),
+            "created_at": org.get("created_at"),
+        })
+
+    # 2. お問い合わせ (見込み客)
+    inquiries = await supabase_query(
+        "inquiries",
+        "select=id,company_name,company_address,phone,contact_name,contact_phone,plan_summary,"
+        "message,status,created_at,handled_at,internal_notes&order=created_at.desc&limit=500") or []
+    leads = []
+    for q in inquiries:
+        leads.append({
+            "source": "inquiry",
+            "id": q.get("id"),
+            "company_name": q.get("company_name") or "",
+            "contact_name": q.get("contact_name") or "",
+            "phone": q.get("phone") or q.get("contact_phone") or "",
+            "address": q.get("company_address") or "",
+            "plan_summary": q.get("plan_summary") or "",
+            "message": q.get("message") or "",
+            "status": q.get("status") or "new",
+            "created_at": q.get("created_at"),
+            "handled_at": q.get("handled_at"),
+        })
+
+    # 解約中/予約のテナント抽出 (解約管理セクション用)
+    cancelling = [t for t in tenants
+                  if t.get("cancel_requested_at") or t.get("subscription_status") == "canceled"
+                  or t.get("license_status") == "suspended"]
+
+    return {
+        "tenants": tenants,
+        "leads": leads,
+        "cancelling": cancelling,
+        "counts": {
+            "stripe": sum(1 for t in tenants if t["source"] == "stripe"),
+            "manual": sum(1 for t in tenants if t["source"] == "manual"),
+            "leads": len(leads),
+            "cancelling": len(cancelling),
+        },
+    }
+
+
 @app.get("/admin/stripe/payments")
 @limiter.limit("10/minute")
 async def admin_stripe_payments(request: Request,
