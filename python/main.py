@@ -419,7 +419,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.264"}
+        return {"status": "ok", "db": "alive", "version": "3.7.265"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1697,7 +1697,7 @@ async def license_cancel_request(request: Request, req: CancelRequestBody):
     try:
         import smtplib
         from email.mime.text import MIMEText
-        to_email = os.environ.get("INQUIRY_EMAIL_TO") or "mochikuro.inc@gmail.com"
+        to_email = os.environ.get("INQUIRY_EMAIL_TO") or "rakushift.ai@gmail.com"
         smtp_user = os.environ.get("SMTP_USER", "")
         smtp_pass = os.environ.get("SMTP_PASS", "")
         if smtp_user and smtp_pass:
@@ -2303,7 +2303,7 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
     from datetime import datetime
 
     # メール送信先（環境変数優先、未設定時は運営アドレス）
-    to_email = os.environ.get("INQUIRY_EMAIL_TO") or "mochikuro.inc@gmail.com"
+    to_email = os.environ.get("INQUIRY_EMAIL_TO") or "rakushift.ai@gmail.com"
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
