@@ -2234,18 +2234,71 @@
         document.getElementById('newHqPassword').value = pw;
     }
 
+
+    // --- 管轄店舗セレクタ (v3.7.263: 検索・並び替え・一括選択。100店舗超でも探せる) ---
+    function renderScopeSelector(listEl, cbClass, preChecked) {
+        const checked = new Set(preChecked || []);
+        listEl.style.overflow = 'visible';
+        listEl.innerHTML =
+            '<div class="flex gap-2 mb-2">'
+            + '<input class="scope-search flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="店舗名・契約IDで検索">'
+            + '<select class="scope-sort px-2 py-1.5 border border-gray-300 rounded text-xs">'
+            + '<option value="name">名前順</option><option value="contract">契約ID順</option><option value="checked">選択中を上に</option>'
+            + '</select></div>'
+            + '<div class="flex items-center justify-between text-[11px] text-gray-500 mb-1">'
+            + '<span class="scope-count"></span>'
+            + '<span><button type="button" class="scope-all text-indigo-600 font-bold hover:underline">表示中を全選択</button>'
+            + ' / <button type="button" class="scope-none text-gray-500 font-bold hover:underline">全解除</button></span></div>'
+            + '<div class="scope-rows max-h-56 overflow-y-auto border border-gray-100 rounded bg-white"></div>';
+        const searchEl = listEl.querySelector('.scope-search');
+        const sortEl = listEl.querySelector('.scope-sort');
+        const rowsEl = listEl.querySelector('.scope-rows');
+        const countEl = listEl.querySelector('.scope-count');
+
+        function syncCheckedFromDOM() {
+            rowsEl.querySelectorAll('.' + cbClass).forEach(cb => {
+                if (cb.checked) checked.add(cb.value); else checked.delete(cb.value);
+            });
+        }
+        function draw() {
+            const q = (searchEl.value || '').toLowerCase().trim();
+            const sort = sortEl.value;
+            let list = (allTenants || []).slice();
+            if (q) list = list.filter(t => ((t.name || '') + ' ' + (t.contract_id || '')).toLowerCase().includes(q));
+            list.sort((a, b) => {
+                if (sort === 'contract') return String(a.contract_id || '').localeCompare(String(b.contract_id || ''));
+                if (sort === 'checked') {
+                    const ca = checked.has(a.organization_id) ? 0 : 1, cb2 = checked.has(b.organization_id) ? 0 : 1;
+                    if (ca !== cb2) return ca - cb2;
+                }
+                return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
+            });
+            rowsEl.innerHTML = list.map(t =>
+                '<label class="flex items-center gap-2 py-1.5 px-2 hover:bg-indigo-50 cursor-pointer text-sm border-b border-gray-50">'
+                + '<input type="checkbox" class="' + cbClass + '" value="' + escapeHtml(t.organization_id) + '" data-name="' + escapeHtml(t.name || '') + '" ' + (checked.has(t.organization_id) ? 'checked' : '') + '>'
+                + '<span class="font-bold text-gray-900">' + escapeHtml(t.name || '(名称未設定)') + '</span>'
+                + '<span class="text-xs text-gray-400 font-mono ml-auto">' + escapeHtml(t.contract_id || '') + '</span>'
+                + '</label>'
+            ).join('') || '<p class="text-gray-400 text-xs p-3">該当する店舗がありません</p>';
+            countEl.textContent = '選択中 ' + checked.size + ' 店舗 / 表示 ' + list.length + ' 件';
+        }
+        rowsEl.addEventListener('change', e => { if (e.target.classList.contains(cbClass)) { syncCheckedFromDOM(); countEl.textContent = '選択中 ' + checked.size + ' 店舗'; } });
+        searchEl.addEventListener('input', () => { syncCheckedFromDOM(); draw(); });
+        sortEl.addEventListener('change', () => { syncCheckedFromDOM(); draw(); });
+        listEl.querySelector('.scope-all').addEventListener('click', () => { syncCheckedFromDOM(); rowsEl.querySelectorAll('.' + cbClass).forEach(cb => checked.add(cb.value)); draw(); });
+        listEl.querySelector('.scope-none').addEventListener('click', () => { checked.clear(); draw(); });
+        // 検索フィルタで非表示のチェックも保持したまま返すゲッター
+        listEl._getSelectedScope = () => { syncCheckedFromDOM(); return Array.from(checked); };
+        draw();
+    }
+
     async function openCreateHqAdminModal() {
         // 既存テナント一覧をロードして、管轄選択リストに表示
         const listEl = document.getElementById('newHqScopeList');
         if (!allTenants || !allTenants.length) {
             await loadTenants();
         }
-        listEl.innerHTML = (allTenants || []).map(t => `
-            <label class="flex items-center gap-2 py-1.5 px-2 hover:bg-white rounded cursor-pointer text-sm">
-                <input type="checkbox" class="hq-scope-cb" value="${t.organization_id}" data-name="${escapeHtml(t.name||'')}">
-                <span class="font-bold text-gray-900">${escapeHtml(t.name||'')}</span>
-                <span class="text-xs text-gray-400 font-mono">${escapeHtml(t.contract_id||'')}</span>
-            </label>`).join('') || '<p class="text-gray-400 text-xs p-2">テナントがありません</p>';
+        renderScopeSelector(listEl, 'hq-scope-cb', []);
         document.getElementById('newHqLoginId').value = '';
         document.getElementById('newHqPassword').value = '';
         document.getElementById('newHqCompany').value = '';
@@ -2258,7 +2311,8 @@
         const password = document.getElementById('newHqPassword').value;
         const company = document.getElementById('newHqCompany').value.trim();
         const email = document.getElementById('newHqEmail').value.trim();
-        const scope = Array.from(document.querySelectorAll('.hq-scope-cb:checked')).map(cb => cb.value);
+        const _nsl = document.getElementById('newHqScopeList');
+        const scope = _nsl._getSelectedScope ? _nsl._getSelectedScope() : Array.from(document.querySelectorAll('.hq-scope-cb:checked')).map(cb => cb.value);
         if (!loginId || loginId.length < 3) { showToast('login_id は3文字以上', 'error'); return; }
         if (!/^[A-Za-z0-9_\-]+$/.test(loginId)) { showToast('login_id は半角英数字/_/-のみ', 'error'); return; }
         if (!password || password.length < 8) { showToast('パスワードは8文字以上', 'error'); return; }
@@ -2297,19 +2351,15 @@
         const currentScope = new Set(hq.scope_org_ids || []);
         document.getElementById('editHqLoginIdDisplay').textContent = hq.login_id;
         document.getElementById('editHqScopeModal').dataset.loginId = hq.login_id;
-        listEl.innerHTML = (allTenants || []).map(t => `
-            <label class="flex items-center gap-2 py-1.5 px-2 hover:bg-white rounded cursor-pointer text-sm">
-                <input type="checkbox" class="hq-edit-scope-cb" value="${t.organization_id}" ${currentScope.has(t.organization_id) ? 'checked' : ''}>
-                <span class="font-bold text-gray-900">${escapeHtml(t.name||'')}</span>
-                <span class="text-xs text-gray-400 font-mono">${escapeHtml(t.contract_id||'')}</span>
-            </label>`).join('') || '<p class="text-gray-400 text-xs p-2">テナントがありません</p>';
+        renderScopeSelector(listEl, 'hq-edit-scope-cb', Array.from(currentScope));
         document.getElementById('editHqScopeModal').classList.remove('hidden');
     }
 
     async function submitEditHqScope() {
         const modal = document.getElementById('editHqScopeModal');
         const loginId = modal.dataset.loginId;
-        const scope = Array.from(document.querySelectorAll('.hq-edit-scope-cb:checked')).map(cb => cb.value);
+        const _esl = document.getElementById('editHqScopeList');
+        const scope = _esl._getSelectedScope ? _esl._getSelectedScope() : Array.from(document.querySelectorAll('.hq-edit-scope-cb:checked')).map(cb => cb.value);
         try {
             const result = await rpc('update_hq_admin_scope', { p_login_id: loginId, p_scope_org_ids: scope });
             if (result && result.success) {
