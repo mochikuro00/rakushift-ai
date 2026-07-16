@@ -422,7 +422,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.274"}
+        return {"status": "ok", "db": "alive", "version": "3.7.275"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1795,8 +1795,16 @@ async def admin_customers(request: Request,
         org = org_map.get(oid, {})
         src = "stripe" if c.get("stripe_subscription_id") else "manual"
         cid = c.get("stripe_customer_id")
+        # v3.7.275: 請求カテゴリー (Stripe / OEM / 請求書払い)
+        if c.get("stripe_subscription_id"):
+            billing_category = "stripe"
+        elif (c.get("stripe_plan") or "") in ("oem", "enterprise"):
+            billing_category = "oem"
+        else:
+            billing_category = "invoice"
         tenants.append({
             "source": src,
+            "billing_category": billing_category,
             "organization_id": oid,
             "contract_id": c.get("contract_id"),
             "shop_name": org.get("name") or "",
@@ -1866,7 +1874,9 @@ async def admin_customers(request: Request,
         "leads": leads,
         "cancelling": cancelling,
         "counts": {
-            "stripe": sum(1 for t in tenants if t["source"] == "stripe"),
+            "stripe": sum(1 for t in tenants if t["billing_category"] == "stripe"),
+            "oem": sum(1 for t in tenants if t["billing_category"] == "oem"),
+            "invoice": sum(1 for t in tenants if t["billing_category"] == "invoice"),
             "manual": sum(1 for t in tenants if t["source"] == "manual"),
             "leads": len(leads),
             "cancelling": len(cancelling),
