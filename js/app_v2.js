@@ -343,6 +343,18 @@ const app = {
                 // 【復元処理】
                 // session内のuser情報から状態を復元する
                 const user = API.session.user;
+                if (user && user.role === 'hq_admin') {
+                    // v3.7.273: 本部セッションの復元 (旧: hq_admin が該当分岐なく
+                    // isShopLoggedIn=true の壊れた店舗ゲスト状態になり、リロードで本部に戻れなかった)
+                    this.state.isHQ = true;
+                    this.state.isAdmin = false;
+                    this.state.isShopLoggedIn = false;
+                    this.state.organization_id = null;
+                    this.updateAuthUI();
+                    this.updateHeader();
+                    this.changeView('hq_dashboard');
+                    return;
+                }
                 if (user) {
                     // ライセンス状態チェック（セッション復元時）
                     if (user.contract_id) {
@@ -758,6 +770,7 @@ const app = {
                 try { await API.rpc('clear_login_failures', { p_identifier: 'shop:' + contractId }); } catch (_) {}
                 this.state.isShopLoggedIn = true;
                 this.state.isAdmin = false;
+                this.state.isHQ = false;  // v3.7.273: 本部モードの残留を防ぐ
                 this.state.organization_id = authResult.organization_id;
 
                 API.setSession({
@@ -833,13 +846,19 @@ const app = {
 
         this.showLoading(true);
         try {
-            // v3.7.259: ライセンス停止中のテナントは管理者ログインも遮断
-            // (店舗ログインには従来からあったチェック。解約自動停止の実効性のため管理者側にも適用)
+            // v3.7.259/273: 停止中・解約済み・未払いのテナントは管理者ログインも遮断
+            // (店舗ログインと同じ扱いに統一。past_due は決済導線のためログインは許可)
             try {
                 const subCheck = await API.rpc('check_subscription_status', { p_contract_id: inputContractId });
-                if (subCheck && !subCheck.allowed && subCheck.status === 'suspended') {
-                    this.showToast('このアカウントのライセンスは停止中です。運営までお問い合わせください。', 'error');
-                    return;
+                if (subCheck && !subCheck.allowed) {
+                    if (subCheck.status === 'suspended') {
+                        this.showToast('このアカウントのライセンスは停止中です。運営までお問い合わせください。', 'error');
+                        return;
+                    }
+                    if (subCheck.status === 'canceled' || subCheck.status === 'unpaid') {
+                        this.showToast('サブスクリプションが無効です。プランを再度ご契約ください。', 'error');
+                        return;
+                    }
                 }
             } catch (_) { /* RPC失敗時は従来どおり続行 (フェイルオープン) */ }
 
@@ -968,6 +987,7 @@ const app = {
 
                 this.state.isAdmin = true;
                 this.state.isShopLoggedIn = true;
+                this.state.isHQ = false;  // v3.7.273: 本部モードの残留を防ぐ
                 this.state.organization_id = orgId;
 
                 API.setSession({
@@ -6106,6 +6126,7 @@ const app = {
     },
 
     async saveSettings() {
+        if (!this._requireAdmin()) return;
         const newConfig = this.readSettingsFromDOM();
 
         // contract_id があれば session-less RPC (update_config_by_contract) で
@@ -7144,6 +7165,7 @@ const app = {
     },
 
     async saveShift() {
+        if (!this._requireAdmin()) return;
         const id = (document.getElementById('editShiftId')?.value || '');
         const date = (document.getElementById('editShiftDate')?.value || '');
         const start = (document.getElementById('editShiftStart')?.value || '');
@@ -7209,6 +7231,7 @@ const app = {
     },
 
     async deleteShift(id) {
+        if (!this._requireAdmin()) return;
         // シフト削除の安全確認
         const shift = this.state.shifts.find(s => s.id === id);
         const staffName = shift ? (this.state.staff.find(st => st.id === shift.staff_id)?.name || '不明') : '不明';
@@ -7504,6 +7527,7 @@ const app = {
     },
 
     async saveStaff() {
+        if (!this._requireAdmin()) return;
         const id = (document.getElementById('staffId')?.value || '');
 
         // テナント情報を確実に取得 (欠落時は config_safe から自動復旧)
@@ -7660,6 +7684,16 @@ const app = {
         const validationErrors = [];
         if (data.min_days_week > data.max_days_week) {
             validationErrors.push('週の最低出勤日数 (' + data.min_days_week + ') が週の最大勤務日数 (' + data.max_days_week + ') を超えています');
+        }
+        // v3.7.273: 月の最低/最大出勤日数のクロス検証 (週と対称に)
+        if (data.min_days_month > data.max_days_month) {
+            validationErrors.push('月の最低出勤日数 (' + data.min_days_month + ') が月の最大出勤日数 (' + data.max_days_month + ') を超えています');
+        }
+        // v3.7.273: 該当パターンを「個別選択」にして1つも選ばない状態を防ぐ
+        //   (空配列は「全パターン該当」を意味するため、意図と逆になる)
+        if (allCb && !allCb.checked && eligiblePatterns.length === 0
+            && document.querySelectorAll('.setting-staff-eligible').length > 0) {
+            validationErrors.push('該当シフトパターンを1つ以上選ぶか、「全パターン該当」をONにしてください');
         }
         if (data.max_days_week <= 0 || data.max_days_week > 7) {
             validationErrors.push('週の最大勤務日数は 1〜7 の範囲で設定してください (現在: ' + data.max_days_week + ')');
@@ -8273,6 +8307,7 @@ const app = {
     _requestInFlight: new Set(),
 
     async handleRequest(id, status) {
+        if (!this._requireAdmin()) return;
         // v3.7.138: 連続クリック / 同時処理を阻止
         if (this._requestInFlight.has(id)) {
             this.showToast('処理中です。少しお待ちください', 'warning');
@@ -8333,6 +8368,7 @@ const app = {
     },
 
     async handleBatchAction(action) {
+        if (!this._requireAdmin()) return;
         // action: 'approved' | 'rejected'
         const ids = Array.from(document.querySelectorAll('.req-select-cb:checked'))
                          .map(cb => cb.dataset.reqId).filter(Boolean);
@@ -8550,6 +8586,7 @@ const app = {
     },
 
        async runAutoFill() {
+        if (!this._requireAdmin()) return;
         // v3.7.37: 「何も出ない」原因対策 — 進行中フラグの自動解除 + 反応トースト
         if (this._shiftGenInProgress) {
             // 5分以上前のフラグなら強制解除 (スタック対策)
@@ -10851,6 +10888,16 @@ const app = {
         });
         // 12秒で自動的に閉じる (ユーザーが OK/背景クリックでも閉じられる)
         setTimeout(() => { if (document.getElementById('centerAlertOverlay') === overlay) close(); }, 12000);
+    },
+
+    // v3.7.273: 店舗用(ゲスト)ロールが書込み関数をコンソール等から直接呼ぶ権限昇格を防ぐ統一ガード。
+    // 本部(isHQ)は店舗閲覧時 isAdmin=true になるため通過する。
+    _requireAdmin() {
+        if (!this.state.isAdmin) {
+            this.showToast('この操作には管理者権限が必要です', 'error');
+            return false;
+        }
+        return true;
     },
 
     showToast(message, type = 'info') {

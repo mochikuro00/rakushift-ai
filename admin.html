@@ -2135,7 +2135,7 @@
             const _ti = _customersData.tenants.indexOf(t);
             rows.push('<tr class="border-t border-gray-100 hover:bg-gray-50">'
                 + '<td class="px-4 py-2.5">' + SRC_BADGE[t.source] + '</td>'
-                + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'tenant\',' + _ti + ')" class="text-indigo-700 hover:underline text-left">' + jsAttr(t.shop_name || '(未設定)') + '</button>'
+                + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'tenant\',' + _ti + ')" class="text-indigo-700 hover:underline text-left">' + escapeHtml(t.shop_name || '(未設定)') + '</button>'
                     + (t.applied_company ? '<br><span class="text-[11px] font-normal text-gray-400">会社名: ' + escapeHtml(t.applied_company) + '</span>' : '') + '</td>'
                 + '<td class="px-4 py-2.5">' + escapeHtml(t.contact_name || '—') + '</td>'
                 + '<td class="px-4 py-2.5 text-xs">' + escapeHtml(t.email || '') + (t.phone ? '<br>' + escapeHtml(t.phone) : '') + '</td>'
@@ -2152,7 +2152,7 @@
                 const storeBadge = (l.total_stores >= 3) ? ' <span class="text-[10px] bg-indigo-100 text-indigo-700 rounded px-1.5 py-0.5 font-bold">' + l.total_stores + '店舗</span>' : '';
                 rows.push('<tr class="border-t border-gray-100 hover:bg-amber-50/40 bg-amber-50/20">'
                     + '<td class="px-4 py-2.5">' + SRC_BADGE.inquiry + '</td>'
-                    + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'lead\',' + _li + ')" class="text-amber-700 hover:underline text-left">' + jsAttr(l.company_name || '(未設定)') + '</button>' + storeBadge
+                    + '<td class="px-4 py-2.5 font-bold"><button onclick="openCustomerDetail(\'lead\',' + _li + ')" class="text-amber-700 hover:underline text-left">' + escapeHtml(l.company_name || '(未設定)') + '</button>' + storeBadge
                     + (l.business_name ? '<br><span class="text-[11px] font-normal text-gray-400">事業者: ' + escapeHtml(l.business_name) + '</span>' : '') + '</td>'
                     + '<td class="px-4 py-2.5">' + escapeHtml(l.contact_name || '—') + '</td>'
                     + '<td class="px-4 py-2.5 text-xs">' + escapeHtml(l.phone || '') + '</td>'
@@ -2220,10 +2220,16 @@
             html += _row('紹介者コード', t.referrer_code);
             html += _row('プラン', PLAN_LABEL[t.plan] || t.plan);
             html += _row('スタッフ数', (t.staff_count || 0) + '名');
-            html += _row('契約状態', srcLabel);
+            html += _row('契約種別', srcLabel);
+            const subLabel = { active:'契約中', canceled:'解約済み', past_due:'支払い遅延', unpaid:'未払い', free:'未契約', trialing:'トライアル中' };
+            html += _row('契約状況', subLabel[t.subscription_status] || t.subscription_status);
+            const payLabel = { paid:'決済済み', open:'支払い待ち/失敗', uncollectible:'回収不能' };
+            if (t.payment_status) html += _row('直近の決済', payLabel[t.payment_status] || t.payment_status);
             html += _row('ライセンス', t.license_status === 'suspended' ? '停止中' : '稼働中');
+            if (t.payment_failed_at) html += _row('支払い遅延開始', _custDate(t.payment_failed_at));
             if (t.cancel_requested_at) html += _row('解約申請日', _custDate(t.cancel_requested_at));
             if (t.cancel_effective_date) html += _row('解約発効日', _custDate(t.cancel_effective_date));
+            if (t.data_deletion_scheduled_at) html += _row('データ削除予定日', _custDate(t.data_deletion_scheduled_at));
             html += _row('登録日', _custDate(t.created_at));
             body.innerHTML = html;
         } else {
@@ -2742,7 +2748,7 @@
         // 有料プラン → subscription_status = active、Free → cancelled
         const data = { stripe_plan: newPlan };
         if (newPlan === 'free') {
-            data.subscription_status = 'cancelled';
+            data.subscription_status = 'canceled';
         } else {
             data.subscription_status = 'active';
         }
