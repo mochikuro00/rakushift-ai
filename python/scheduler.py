@@ -788,6 +788,14 @@ class ShiftScheduler:
             eligible_set = set(str(e) for e in eligible)
             patterns_to_use = [p for p in self.shift_patterns
                                if (p.get("name") or "") in eligible_set]
+            # v3.7.274: 指定パターンが1つも現存しない(改名/削除で孤児化した)場合は
+            # 「配置不能」ではなく「制約なし(全パターン該当)」に退避する。
+            # (旧: 空リスト → そのスタッフが誰のシフトにも入れず消える不具合)
+            if not patterns_to_use:
+                logger.warning(
+                    "[Scheduler] staff '%s' の eligible_patterns %s が現存パターンと一致せず、"
+                    "制約なし扱いに退避します", staff.get("name"), list(eligible_set))
+                patterns_to_use = self.shift_patterns.copy()
         else:
             patterns_to_use = self.shift_patterns.copy()
 

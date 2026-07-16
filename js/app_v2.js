@@ -4620,7 +4620,8 @@ const app = {
     renderSettings(container) {
         if (!this.state.isAdmin) return;
         const config = this.state.config;
-        
+        // v3.7.274: シフトパターンに不変IDを付与 (改名/削除時の追随に使用)
+        this._ensurePatternIds();
         const times = config.opening_times || this.state.defaultConfig.opening_times;
         const reqs = config.staff_req || this.state.defaultConfig.staff_req;
         const closedDays = config.closed_days || [];
@@ -4884,6 +4885,7 @@ const app = {
                                         return `
                                         <tr class="group hover:bg-gray-50">
                                             <td class="p-1 sm:p-2">
+                                                <input type="hidden" class="setting-shift-id" value="${this._sanitize(shift.id || '')}">
                                                 <input type="text" class="setting-shift-name w-full border-gray-300 rounded px-2 py-1.5 text-sm font-bold" value="${this._sanitize(shift.name || '')}" placeholder="例: 早番">
                                             </td>
                                             <td class="p-1 sm:p-2 text-center">
@@ -5716,13 +5718,20 @@ const app = {
         });
     },
 
+    // v3.7.274: 各シフトパターンに不変IDを付与 (未付与のものだけ)。改名/削除の追随に使う。
+    _newPatternId() { return 'sp_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3); },
+    _ensurePatternIds() {
+        const list = (this.state.config && this.state.config.custom_shifts) || [];
+        list.forEach(p => { if (!p.id) p.id = this._newPatternId(); });
+    },
+
     addShiftPattern() {
         // 現在の入力を一時保存
         this.state.config = this.readSettingsFromDOM();
         // 新しい行を追加。v3.7.261: 既定名を入れて readSettingsFromDOM の空名フィルタで
         // 消えないようにする (名前未入力のまま別操作すると行が消えるバグの防止)
         if(!this.state.config.custom_shifts) this.state.config.custom_shifts = [];
-        this.state.config.custom_shifts.push({ name: '新規パターン', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0, manager_enabled: false });
+        this.state.config.custom_shifts.push({ id: this._newPatternId(), name: '新規パターン', start: '09:00', end: '18:00', force_rest_next_day: false, manager_count: 0, manager_enabled: false });
         // 再描画
         this.renderSettings(document.getElementById('viewContainer'));
     },
@@ -5787,6 +5796,7 @@ const app = {
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
         const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
         const shiftColors = document.querySelectorAll('.setting-shift-color');
+        const shiftIdsD = document.querySelectorAll('.setting-shift-id');
 
         const parseCount = (input) => {
             // v3.7.110: 0 も許容 (「この曜日はこのパターン使わない」を表現)
@@ -5801,6 +5811,7 @@ const app = {
             const mgrRaw = Number(shiftMgrs[i]?.value);
             const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
             all.push({
+                id: (shiftIdsD[i]?.value || '').trim() || this._newPatternId(),
                 name: (el.value || '').trim(),
                 start: (shiftStarts[i]?.value || '').trim(),
                 end: (shiftEnds[i]?.value || '').trim(),
@@ -5931,6 +5942,7 @@ const app = {
         const shiftMgrs = document.querySelectorAll('.setting-shift-mgr');
         const shiftMgrOns = document.querySelectorAll('.setting-shift-mgr-on');
         const shiftColors = document.querySelectorAll('.setting-shift-color');
+        const shiftIds = document.querySelectorAll('.setting-shift-id');
 
         config.custom_shifts = [];
         shiftNames.forEach((el, i) => {
@@ -5938,6 +5950,7 @@ const app = {
             const start = (shiftStarts[i]?.value || '').trim();
             const end = (shiftEnds[i]?.value || '').trim();
             const color = (shiftColors[i]?.value || '').trim();
+            const patId = (shiftIds[i]?.value || '').trim() || this._newPatternId();
             // v3.7.71: name/start/end のいずれかが空ならこのパターンを破棄
             // (空の start/end が scheduler 側で "00:00-00:00" として無視される
             //  バグを未然防止)
@@ -5958,6 +5971,7 @@ const app = {
             const mgrCnt = Number.isFinite(mgrRaw) && mgrRaw > 0 ? Math.min(mgrRaw, 50) : 0;
             const mgrOn = shiftMgrOns[i]?.value === '1';
             config.custom_shifts.push({
+                id: patId,
                 name,
                 start,
                 end,
@@ -6125,9 +6139,83 @@ const app = {
         return null;
     },
 
+    // v3.7.274: シフトパターンの改名・削除を全スタッフの制約に追随させる。
+    //   eligible_patterns / pattern_target_counts は「パターン名」をキーに持つため、
+    //   改名すると孤児化する。旧→新の対応を id で判定し、該当スタッフを更新・保存する。
+    async _cascadePatternRename(oldPatterns, newPatterns) {
+        try {
+            const newById = {};
+            (newPatterns || []).forEach(p => { if (p.id) newById[p.id] = p.name; });
+            const renameMap = {};   // 旧名 → 新名
+            const deleted = new Set();
+            (oldPatterns || []).forEach(op => {
+                if (!op.id || !op.name) return;
+                if (!(op.id in newById)) { deleted.add(op.name); return; }
+                const newName = newById[op.id];
+                if (newName && newName !== op.name) renameMap[op.name] = newName;
+            });
+            if (Object.keys(renameMap).length === 0 && deleted.size === 0) return;
+
+            const contractId = this.state.config.contract_id || API.session?.user?.contract_id;
+            if (!contractId) return;
+
+            const remapArr = (arr) => {
+                if (!Array.isArray(arr)) return { arr, changed: false };
+                let changed = false;
+                const out = [];
+                arr.forEach(k => {
+                    if (deleted.has(k)) { changed = true; return; }        // 削除 → 除去
+                    if (renameMap[k]) { out.push(renameMap[k]); changed = true; } // 改名 → 差替
+                    else out.push(k);
+                });
+                return { arr: out, changed };
+            };
+            const remapObj = (obj) => {
+                if (!obj || typeof obj !== 'object') return { obj, changed: false };
+                let changed = false;
+                const out = {};
+                Object.keys(obj).forEach(k => {
+                    if (deleted.has(k)) { changed = true; return; }
+                    if (renameMap[k]) { out[renameMap[k]] = obj[k]; changed = true; }
+                    else out[k] = obj[k];
+                });
+                return { obj: out, changed };
+            };
+
+            let updated = 0;
+            for (const st of (this.state.staff || [])) {
+                const ep = remapArr(st.eligible_patterns);
+                const pt = remapObj(st.pattern_target_counts);
+                if (!ep.changed && !pt.changed) continue;
+                st.eligible_patterns = ep.arr;
+                st.pattern_target_counts = pt.obj;
+                try {
+                    await API.rpc('upsert_staff_by_contract', {
+                        p_contract_id: contractId,
+                        p_staff_id: st.id,
+                        p_data: { eligible_patterns: st.eligible_patterns,
+                                  pattern_target_counts: st.pattern_target_counts },
+                    });
+                    updated++;
+                } catch (e) {
+                    console.warn('[cascadePattern] staff update failed:', st.id, e.message);
+                }
+            }
+            if (updated > 0) {
+                this.showToast(`パターン変更に合わせてスタッフ ${updated} 名の該当設定を更新しました`, 'info');
+            }
+        } catch (e) {
+            console.warn('[cascadePatternRename] failed:', e.message);
+        }
+    },
+
     async saveSettings() {
         if (!this._requireAdmin()) return;
+        // v3.7.274: パターンの改名/削除を検出し、スタッフの eligible_patterns /
+        // pattern_target_counts を追随更新するため、保存前の旧パターンを控える。
+        const _oldPatterns = (this.state.config.custom_shifts || []).map(p => ({ id: p.id, name: p.name }));
         const newConfig = this.readSettingsFromDOM();
+        await this._cascadePatternRename(_oldPatterns, newConfig.custom_shifts || []);
 
         // contract_id があれば session-less RPC (update_config_by_contract) で
         // 完全にセッション独立で保存する。state.config.id は不要。
