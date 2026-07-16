@@ -668,27 +668,34 @@
                         </div>
                     </div>
 
-                    <!-- 顧客一覧（単価付き） -->
+                    <!-- 顧客別収益一覧（請求カテゴリータブ＋ソート） -->
                     <div class="card overflow-hidden">
-                        <div class="p-5 border-b border-gray-100">
+                        <div class="p-5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
                             <h3 class="section-title flex items-center gap-2.5">
                                 <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-users text-sm"></i></span>
                                 顧客別収益一覧
                             </h3>
+                            <!-- v3.7.275: 請求カテゴリー切替タブ -->
+                            <div id="revBillingTabs" class="inline-flex rounded-lg bg-gray-100 p-1 text-sm">
+                                <button data-bcat="all"     onclick="setRevBilling('all')"     class="px-3 py-1.5 rounded-md font-semibold transition">すべて <span class="rev-cnt text-xs opacity-70">0</span></button>
+                                <button data-bcat="stripe"  onclick="setRevBilling('stripe')"  class="px-3 py-1.5 rounded-md font-semibold transition">Stripe決済 <span class="rev-cnt text-xs opacity-70">0</span></button>
+                                <button data-bcat="oem"     onclick="setRevBilling('oem')"     class="px-3 py-1.5 rounded-md font-semibold transition">OEM代理店 <span class="rev-cnt text-xs opacity-70">0</span></button>
+                                <button data-bcat="invoice" onclick="setRevBilling('invoice')" class="px-3 py-1.5 rounded-md font-semibold transition">請求書払い <span class="rev-cnt text-xs opacity-70">0</span></button>
+                            </div>
                         </div>
                         <div class="table-scroll">
                             <table class="w-full">
                                 <thead>
                                     <tr>
-                                        <th class="text-left">組織名</th>
+                                        <th class="text-left cursor-pointer select-none hover:text-blue-600" onclick="setRevSort('name')">組織名 <span data-sk="name" class="rev-sort text-xs opacity-40"></span></th>
                                         <th class="text-left">契約ID</th>
+                                        <th class="text-center cursor-pointer select-none hover:text-blue-600" onclick="setRevSort('billing')">請求区分 <span data-sk="billing" class="rev-sort text-xs opacity-40"></span></th>
                                         <th class="text-left">担当者</th>
                                         <th class="text-left">メール</th>
-                                        <th class="text-left">電話</th>
-                                        <th class="text-center">プラン</th>
-                                        <th class="text-right">月額</th>
-                                        <th class="text-center">ステータス</th>
-                                        <th class="text-left">登録日</th>
+                                        <th class="text-center cursor-pointer select-none hover:text-blue-600" onclick="setRevSort('plan')">プラン <span data-sk="plan" class="rev-sort text-xs opacity-40"></span></th>
+                                        <th class="text-right cursor-pointer select-none hover:text-blue-600" onclick="setRevSort('price')">月額 <span data-sk="price" class="rev-sort text-xs opacity-40"></span></th>
+                                        <th class="text-center cursor-pointer select-none hover:text-blue-600" onclick="setRevSort('status')">ステータス <span data-sk="status" class="rev-sort text-xs opacity-40"></span></th>
+                                        <th class="text-left cursor-pointer select-none hover:text-blue-600" onclick="setRevSort('created')">登録日 <span data-sk="created" class="rev-sort text-xs opacity-40"></span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="revCustomerTable" class="divide-y divide-gray-100"></tbody>
@@ -3006,24 +3013,85 @@
             });
         }
 
-        // 顧客一覧テーブル
+        // 顧客一覧テーブル (v3.7.275: 請求カテゴリータブ＋ソート)
+        renderRevCustomers();
+    }
+
+    // 請求カテゴリー判定 (list_tenants は stripe_customer_id / stripe_plan を返す)
+    function _revBillingCat(t) {
+        if ((t.stripe_plan || '') === 'oem' || (t.stripe_plan || '') === 'enterprise') return 'oem';
+        if (t.stripe_customer_id) return 'stripe';
+        return 'invoice';
+    }
+    let _revBilling = 'all';
+    let _revSort = { key: 'created', dir: 'desc' };
+    const REV_BILLING_BADGE = {
+        stripe: '<span class="badge badge-success">Stripe決済</span>',
+        oem: '<span class="badge badge-amber">OEM代理店</span>',
+        invoice: '<span class="badge badge-info">請求書払い</span>',
+    };
+
+    function setRevBilling(cat) { _revBilling = cat; renderRevCustomers(); }
+    function setRevSort(key) {
+        if (_revSort.key === key) { _revSort.dir = _revSort.dir === 'asc' ? 'desc' : 'asc'; }
+        else { _revSort.key = key; _revSort.dir = (key === 'name' || key === 'billing' || key === 'plan') ? 'asc' : 'desc'; }
+        renderRevCustomers();
+    }
+
+    function renderRevCustomers() {
+        const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', enterprise: 'badge-amber', free: 'badge-neutral' };
+        const planOrder = { standard: 1, pro: 2, premium: 3, oem: 4, enterprise: 5, free: 0 };
+        // タブ件数
+        const catCount = { all: allTenants.length, stripe: 0, oem: 0, invoice: 0 };
+        allTenants.forEach(t => { catCount[_revBillingCat(t)]++; });
+        document.querySelectorAll('#revBillingTabs button').forEach(btn => {
+            const c = btn.getAttribute('data-bcat');
+            const cntEl = btn.querySelector('.rev-cnt'); if (cntEl) cntEl.textContent = catCount[c] ?? 0;
+            const active = c === _revBilling;
+            btn.classList.toggle('bg-white', active);
+            btn.classList.toggle('shadow-sm', active);
+            btn.classList.toggle('text-blue-600', active);
+            btn.classList.toggle('text-gray-500', !active);
+        });
+        // ソート矢印
+        document.querySelectorAll('.rev-sort').forEach(el => {
+            const k = el.getAttribute('data-sk');
+            el.textContent = (_revSort.key === k) ? (_revSort.dir === 'asc' ? '▲' : '▼') : '';
+            el.classList.toggle('opacity-40', _revSort.key !== k);
+        });
+
+        let rows = allTenants.filter(t => _revBilling === 'all' || _revBillingCat(t) === _revBilling);
+        const dir = _revSort.dir === 'asc' ? 1 : -1;
+        const priceOf = t => (t.subscription_status === 'active') ? (PLAN_PRICES[(t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : 'free'] || 0) : 0;
+        rows.sort((a, b) => {
+            let va, vb;
+            switch (_revSort.key) {
+                case 'name': va = (a.name || '').toLowerCase(); vb = (b.name || '').toLowerCase(); break;
+                case 'billing': va = _revBillingCat(a); vb = _revBillingCat(b); break;
+                case 'plan': va = planOrder[a.stripe_plan] || 0; vb = planOrder[b.stripe_plan] || 0; break;
+                case 'price': va = priceOf(a); vb = priceOf(b); break;
+                case 'status': va = (a.license_status === 'active') ? 1 : 0; vb = (b.license_status === 'active') ? 1 : 0; break;
+                case 'created': default: va = a.created_at || ''; vb = b.created_at || ''; break;
+            }
+            if (va < vb) return -1 * dir; if (va > vb) return 1 * dir; return 0;
+        });
+
         const tbody = document.getElementById('revCustomerTable');
-        tbody.innerHTML = allTenants.map(t => {
+        if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">該当する顧客がありません</td></tr>'; return; }
+        tbody.innerHTML = rows.map(t => {
             const plan = (t.stripe_plan && t.stripe_plan !== 'free') ? t.stripe_plan : 'free';
             const isPaying = t.subscription_status === 'active';
             const price = isPaying ? (PLAN_PRICES[plan] || 0) : 0;
-            const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
             const statusBadge = t.license_status === 'active'
                 ? '<span class="badge badge-success">有効</span>'
                 : '<span class="badge badge-danger">停止</span>';
             const created = t.created_at ? formatDate(t.created_at) : '-';
-
             return `<tr>
                 <td class="text-left font-semibold text-gray-900 text-sm">${escapeHtml(t.name)}</td>
                 <td class="text-left"><span class="font-mono text-[11px] text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-200">${escapeHtml(t.contract_id)}</span></td>
+                <td class="text-center">${REV_BILLING_BADGE[_revBillingCat(t)]}</td>
                 <td class="text-left text-sm text-gray-700">${escapeHtml(t.contact_name || '-')}</td>
                 <td class="text-left text-xs text-gray-500">${escapeHtml(t.customer_email || '-')}</td>
-                <td class="text-left text-xs text-gray-500">${escapeHtml(t.phone || '-')}</td>
                 <td class="text-center"><span class="badge ${planBadgeClass[plan] || 'badge-neutral'}">${PLAN_NAMES[plan] || '未契約'}</span></td>
                 <td class="text-right font-mono font-bold text-gray-900">${price > 0 ? '¥' + price.toLocaleString() : '<span class="text-gray-300">—</span>'}</td>
                 <td class="text-center">${statusBadge}</td>
