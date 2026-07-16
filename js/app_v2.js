@@ -9757,6 +9757,7 @@ const app = {
                     <a href="#m-security" class="text-indigo-600 hover:underline">・セキュリティ・引き継ぎ</a>
                     <a href="#m-account" class="text-indigo-600 hover:underline">・アカウント情報</a>
                     <a href="#m-planmgmt" class="text-indigo-600 hover:underline">・プラン管理</a>
+                    <a href="#m-cancel" class="text-red-600 hover:underline">・解約について</a>
                     <a href="#m-save" class="text-indigo-600 hover:underline">・設定の保存/リセット</a>
                     <a href="#m-shift" class="text-indigo-600 hover:underline">・AIシフト作成</a>
                     <a href="#m-labor" class="text-indigo-600 hover:underline">・労働基準法ルール</a>
@@ -10069,6 +10070,30 @@ const app = {
                     <li><strong>解約の発効日</strong>：解約は<strong>契約日から起算した現在の利用期間の末日</strong>付けで発効します。プラン管理画面に「いま解約すると◯月◯日（あと◯日後）付けで解約」と自動表示されるので、手続き前に確認できます。期間末日までは全機能を利用でき、日割り返金はありません。</li>
                     <li><strong>手動発行契約（請求書払い等）の解約</strong>：Stripeを通さない契約は、プラン管理の<strong>「解約を申請する」ボタン</strong>から申請します。発効日は<strong>申請した月の末日（当月末）</strong>で、申請時に画面に表示されます。申請すると運営に自動通知され、発効日にサービスが終了します。</li>
                 </ul>
+            </div>
+
+            <!-- 解約について (詳細) -->
+            <div id="m-cancel" class="bg-white rounded-xl shadow-sm border border-red-200 p-6">
+                <h3 class="text-lg font-bold text-red-700 mb-3"><span class="mr-2">■</span>解約について（重要）</h3>
+                <div class="space-y-3 text-base text-gray-700 leading-relaxed">
+                    <table class="w-full text-sm border-collapse">
+                        <thead><tr class="bg-gray-50"><th class="p-2 border text-left">項目</th><th class="p-2 border text-left">クレジット契約（Stripe）</th><th class="p-2 border text-left">手動発行契約（請求書等）</th></tr></thead>
+                        <tbody>
+                            <tr><td class="p-2 border font-bold">解約の入口</td><td class="p-2 border">プラン管理 →「請求管理ポータル」</td><td class="p-2 border">プラン管理 →「解約を申請する」</td></tr>
+                            <tr><td class="p-2 border font-bold">発効日</td><td class="p-2 border">契約日起算の利用期間の末日</td><td class="p-2 border">申請した月の末日（当月末）</td></tr>
+                            <tr><td class="p-2 border font-bold">発効日まで</td><td class="p-2 border" colspan="2">全機能をそのまま利用できます（日割り返金はありません）</td></tr>
+                            <tr><td class="p-2 border font-bold">解約の取消</td><td class="p-2 border">期間末までは請求ポータルから取消可</td><td class="p-2 border">運営（info@rakushift.jp）へ連絡</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r-lg">
+                        <p class="font-bold text-amber-900">データの保持と復活</p>
+                        <ul class="list-disc list-inside ml-2 mt-1 text-sm text-amber-900 leading-relaxed">
+                            <li>解約でサービスが停止した後も、<strong>データは6ヶ月間保持</strong>されます。</li>
+                            <li>6ヶ月以内であれば、再契約により<strong>同じデータで復活</strong>できます（クレジット契約は支払いを再開すると自動で、手動契約は運営が復活）。契約IDは変わりません。</li>
+                            <li>6ヶ月を過ぎるとデータは完全に削除されます。</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
 
             <!-- 設定の保存・データリセット (詳細) -->

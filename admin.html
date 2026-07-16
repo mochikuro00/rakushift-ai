@@ -386,6 +386,9 @@
                     <i class="fas fa-envelope-open-text mr-1.5"></i>お問い合わせ
                     <span id="inquiryBadge" class="ml-1 text-xs bg-red-500 text-white rounded-full px-1.5 hidden">0</span>
                 </button>
+                <button id="tabManual" onclick="switchTab('manual')" class="tab-btn">
+                    <i class="fas fa-book mr-1.5"></i>運営マニュアル
+                </button>
             </div>
 
             <!-- 統計カード -->
@@ -874,6 +877,140 @@
                     </div>
                 </div>
             </div><!-- /panelInquiries -->
+
+            <!-- ===== 運営マニュアルタブ (v3.7.272) ===== -->
+            <div id="panelManual" class="hidden panel">
+                <div class="max-w-4xl mx-auto space-y-5">
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-book text-indigo-500 mr-2"></i>運営管理マニュアル</h2>
+                        <p class="text-sm text-gray-500 mt-1">この運営コンソールの各タブの使い方と、運営者が行う作業をまとめています。</p>
+                    </div>
+
+                    <!-- 目次 -->
+                    <div class="bg-white rounded-xl border border-gray-200 p-4">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                            <a href="#man-customers" class="text-indigo-600 hover:underline">① 顧客情報</a>
+                            <a href="#man-tenants" class="text-indigo-600 hover:underline">② テナント管理</a>
+                            <a href="#man-hq" class="text-indigo-600 hover:underline">③ 本部管理</a>
+                            <a href="#man-revenue" class="text-indigo-600 hover:underline">④ 事業収益</a>
+                            <a href="#man-payments" class="text-indigo-600 hover:underline">⑤ 決済管理</a>
+                            <a href="#man-referrers" class="text-indigo-600 hover:underline">⑥ 紹介者管理</a>
+                            <a href="#man-announce" class="text-indigo-600 hover:underline">⑦ お知らせ管理</a>
+                            <a href="#man-inquiry" class="text-indigo-600 hover:underline">⑧ お問い合わせ</a>
+                            <a href="#man-cancel" class="text-red-600 hover:underline font-bold">⑨ 解約対応（重要）</a>
+                            <a href="#man-settings" class="text-indigo-600 hover:underline">⑩ プラットフォーム設定</a>
+                        </div>
+                    </div>
+
+                    <div id="man-customers" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">① 顧客情報</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">Stripe契約・手動発行テナント・お問い合わせ（見込み客）を1画面に集約したメイン画面です。</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
+                            <li>上部サマリーで Stripe契約数／手動発行数／見込み客数／解約数 を一目で確認。</li>
+                            <li><b>名称をクリック</b>すると顧客詳細（会社名・住所・代表/担当電話・メール・紹介者コード・プラン・スタッフ数・解約状況）が開きます。</li>
+                            <li><b>解約の管理</b>セクション：発効待ちは「今すぐ停止」、停止済みは「復活」。解約手続き中があるとタブに赤バッジが付きます。</li>
+                            <li>検索窓とソース別フィルタで絞り込めます。</li>
+                        </ul>
+                    </div>
+
+                    <div id="man-tenants" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">② テナント管理</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">全テナント（契約店舗）の一覧・作成・保守を行います。</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
+                            <li><b>＋新規テナント</b>：手動でテナントを発行（請求書払い・OEM等）。会社名・プラン・紹介者コードを設定できます。</li>
+                            <li><b>👁 観覧</b>：そのテナントのシフト・スタッフ・設定を閲覧。</li>
+                            <li><b>🔑 PINリセット</b>：管理者がPINを忘れた場合に初期化（次回ログイン時に再設定）。</li>
+                            <li><b>🏷 プラン変更</b>：テナントのプランを運営側から変更。</li>
+                            <li><b>⏸ 停止 / ▶ 復活 / 🗑 削除</b>：ライセンスの停止・復活・完全削除。停止後もデータは6ヶ月保持されます。</li>
+                            <li>上部「APIキー・プラットフォーム設定」で Stripe / Gemini 等のキーを管理します（⑩参照）。</li>
+                        </ul>
+                    </div>
+
+                    <div id="man-hq" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">③ 本部管理</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">複数店舗をまとめて閲覧する「本部アカウント」を発行・管理します。</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
+                            <li><b>本部発行</b>：本部ID・パスワード・管轄する店舗を設定。管轄店舗は検索・並び替え・一括選択できます（100店舗超でも探せます）。</li>
+                            <li><b>管轄編集</b>：後から管轄店舗を追加・削除。</li>
+                            <li>本部は「契約ID＋管理者パスワード」で店舗を管轄に登録することもできます。</li>
+                            <li>本部は管轄店舗を店舗管理者と同等に操作できます（AI生成・編集含む）。</li>
+                        </ul>
+                    </div>
+
+                    <div id="man-revenue" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">④ 事業収益</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">MRR（月間経常収益）やプラン別内訳を把握します。課金中テナントの合計月額が表示されます。</p>
+                    </div>
+
+                    <div id="man-payments" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">⑤ 決済管理</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">Stripe の実際の決済状況を「決済済み」「未決済（失敗・回収不能）」に分けて表示します。</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
+                            <li>未決済がある場合、ログイン時に<b>赤バッジ＋アラート音</b>で通知されます。</li>
+                            <li>各行の請求書リンクから Stripe の請求書を開けます。再試行回数・次回再試行日も表示。</li>
+                            <li><b>運営作業</b>：未決済が続く顧客には連絡し、支払い方法の更新を促してください（21日で自動停止）。</li>
+                        </ul>
+                    </div>
+
+                    <div id="man-referrers" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">⑥ 紹介者管理</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">紹介者（代理店・パートナー）の発行と報酬管理を行います。</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
+                            <li><b>新規発行</b>：紹介者名・紹介法人名・紹介者コード（空欄で自動生成）・報酬タイプ（％ or 固定額）・<b>振込口座</b>を登録。</li>
+                            <li><b>紹介数</b>の件数をクリックすると、その紹介者が契約させた顧客一覧（会社名・契約ID・プラン・課金/未課金・契約日）が開きます。</li>
+                            <li>紹介者コードは、新規申込フォーム／お問い合わせフォーム／手動テナント発行のいずれからでも紐付きます。</li>
+                            <li><b>運営作業</b>：月次で報酬額を確認し、登録された振込口座へ振込を行います。</li>
+                        </ul>
+                    </div>
+
+                    <div id="man-announce" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">⑦ お知らせ管理</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">全テナントに表示するお知らせを作成・編集します。種別（お知らせ/注意/キャンペーン/アップデート）・優先度・有効期限・リンクボタンを設定できます。</p>
+                        <p class="text-xs text-amber-700 mt-2">※ リンクボタンのURLに自サイトのURLを入れると「詳しく見る」でログイン画面に戻るため、外部URLか空欄にしてください。</p>
+                    </div>
+
+                    <div id="man-inquiry" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">⑧ お問い合わせ</h3>
+                        <p class="text-sm text-gray-700 leading-relaxed">3店舗以上の申込フォームからの問い合わせが届きます。会社名・事業者名・メール・電話・希望プラン・希望日程・紹介者コードを確認できます。</p>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
+                            <li>問い合わせが入ると <b>rakushift.ai@gmail.com へ自動メール通知</b>されます（本文に連絡先・希望内容を記載）。</li>
+                            <li>解約申請（手動契約）も同じ通知先にメールが届き、顧客情報タブの解約管理に表示されます。</li>
+                        </ul>
+                    </div>
+
+                    <div id="man-cancel" class="bg-white rounded-xl border-2 border-red-200 p-5">
+                        <h3 class="font-bold text-red-700 mb-2">⑨ 解約対応（運営者が行うこと）</h3>
+                        <table class="w-full text-sm border-collapse mb-3">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">段階</th><th class="p-2 border text-left">クレジット契約（Stripe）</th><th class="p-2 border text-left">手動発行契約</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">解約手続き</td><td class="p-2 border">顧客が請求ポータルで解約（運営作業なし）</td><td class="p-2 border">顧客が「解約を申請する」→ 運営にメール通知</td></tr>
+                                <tr><td class="p-2 border font-bold">発効日</td><td class="p-2 border">契約日起算の期間末日</td><td class="p-2 border">申請月の末日（当月末）</td></tr>
+                                <tr><td class="p-2 border font-bold">サービス停止</td><td class="p-2 border text-green-700">Webhookで<b>自動</b>停止</td><td class="p-2 border text-green-700">毎日0:05のジョブで<b>自動</b>停止</td></tr>
+                                <tr><td class="p-2 border font-bold">運営がやること</td><td class="p-2 border">原則なし（前倒し停止したい時のみ顧客情報→今すぐ停止）</td><td class="p-2 border">原則なし。発効前に止めたい場合のみ「今すぐ停止」</td></tr>
+                                <tr><td class="p-2 border font-bold">復活</td><td class="p-2 border">支払い再開/再契約で<b>自動復活</b>（6ヶ月以内・契約IDそのまま）</td><td class="p-2 border">顧客情報 or テナント管理の「復活」ボタン（6ヶ月以内）</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="bg-red-50 rounded-lg p-3 text-sm text-red-900 leading-relaxed">
+                            <p class="font-bold mb-1">重要ポイント</p>
+                            <ul class="list-disc list-inside ml-1 space-y-1">
+                                <li>解約後も<b>データは6ヶ月保持</b>。6ヶ月を過ぎると自動削除されます。</li>
+                                <li>Stripe契約は、支払い回復・再アクティブ化でライセンスが<b>自動で復活</b>します（テナント情報・契約IDは変わりません）。</li>
+                                <li>手動契約の復活は運営が「復活」ボタンで行います。</li>
+                                <li>どちらも日割り返金はありません（発効日まで利用可）。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="man-settings" class="bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 class="font-bold text-gray-900 mb-2">⑩ プラットフォーム設定（テナント管理タブ上部）</h3>
+                        <ul class="list-disc list-inside text-sm text-gray-700 mt-1 space-y-1 leading-relaxed">
+                            <li><b>Stripe</b>：シークレットキー・価格ID（Standard/Pro/Premium）・Webhook署名シークレット。決済とテナント自動作成に必須。</li>
+                            <li><b>AI（Gemini）</b>：APIキー・モデル。AIシフト生成の労基法チェックに使用。</li>
+                            <li><b>メール（環境変数）</b>：SMTP_USER / SMTP_PASS で送信、INQUIRY_EMAIL_TO で通知先（既定 rakushift.ai@gmail.com）。Railwayの環境変数で設定します。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div><!-- /panelManual -->
 
             <!-- ===== 本部管理タブ ===== -->
             <div id="panelHqadmins" class="hidden panel">
@@ -2116,7 +2253,7 @@
     }
 
     function switchTab(tab) {
-        const panels = ['Customers','Tenants','Revenue','Payments','Referrers','Announcements','Inquiries','Hqadmins'];
+        const panels = ['Customers','Tenants','Revenue','Payments','Referrers','Announcements','Inquiries','Hqadmins','Manual'];
         const activeCls = 'tab-btn active';
         const inactiveCls = 'tab-btn';
         panels.forEach(p => {

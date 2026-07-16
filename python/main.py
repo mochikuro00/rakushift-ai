@@ -422,7 +422,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.271"}
+        return {"status": "ok", "db": "alive", "version": "3.7.272"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -2125,6 +2125,26 @@ async def stripe_webhook(request: Request):
                     # v3.7.261: 支払い回復時に payment_failed_at をクリア
                     # (残さないと次回失敗時に古い日付で 21日経過扱いになり即停止する)
                     update_data["payment_failed_at"] = None
+
+                    # v3.7.272: 停止中のテナントが再びactiveになったら自動でライセンス復活。
+                    # (支払い回復や解約取消でサブスクが復活してもライセンスが停止のままだと
+                    #  ログインできず「テナント情報が変わる」状態が続くため)
+                    try:
+                        _cfgs = await supabase_query(
+                            "config", "contract_id=eq.{}&select=organization_id".format(contract_id))
+                        _oid = _cfgs[0].get("organization_id") if _cfgs else None
+                        if _oid:
+                            _orgs = await supabase_query(
+                                "organizations", "id=eq.{}&select=license_status".format(_oid))
+                            if _orgs and _orgs[0].get("license_status") == "suspended":
+                                await supabase_rpc("activate_license", {
+                                    "p_organization_id": _oid,
+                                    "p_note": "Stripe subscription reactivated (auto)"
+                                })
+                                logger.info("[Webhook] Auto-reactivated license for: %s", contract_id)
+                    except Exception as _e:
+                        logger.warning("[Webhook] auto-reactivate failed: %s", _e)
+
                     items = data.get("items", {}).get("data", [])
                     if items:
                         price_id = items[0].get("price", {}).get("id", "")
