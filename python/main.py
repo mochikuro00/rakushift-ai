@@ -422,7 +422,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.270"}
+        return {"status": "ok", "db": "alive", "version": "3.7.271"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1979,7 +1979,7 @@ async def stripe_webhook(request: Request):
             metadata = data.get("metadata", {})
             subscription_id = data.get("subscription")
             customer_id = data.get("customer")
-            customer_email = data.get("customer_details", {}).get("email") or metadata.get("email", "")
+            customer_email = (data.get("customer_details") or {}).get("email") or metadata.get("email", "")
 
             if metadata.get("type") == "new_subscription":
                 # === 新規申し込み: テナント自動作成 + メール送信 ===
@@ -2349,9 +2349,13 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
 
     sc = {
         "company_name":    _safe_mail_text(req.company_name, 200),
+        "business_name":   _safe_mail_text(req.business_name, 200),
+        "email":           _safe_mail_text(req.email, 200),
         "company_address": _safe_mail_text(req.company_address, 300),
         "phone":           _safe_mail_text(req.phone, 40),
         "contact_name":    _safe_mail_text(req.contact_name, 100),
+        "contact_phone":   _safe_mail_text(req.contact_phone, 40),
+        "referrer_code":   _safe_mail_text(req.referrer_code, 20),
         "plan_summary":    _safe_mail_text(req.plan_summary, 200),
         "preferred_days":  _safe_mail_text(req.preferred_days, 200),
         "preferred_time":  _safe_mail_text(req.preferred_time, 100),
@@ -2368,15 +2372,16 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
 
 ■ 会社情報
   会社名:     {sc['company_name']}
+  事業者名:   {sc['business_name'] or '(なし)'}
   会社住所:   {sc['company_address']}
-  連絡先:     {sc['phone']}
+  メール:     {sc['email'] or '(なし)'}
+  代表電話:   {sc['phone']}
   担当者名:   {sc['contact_name']}
+  担当者電話: {sc['contact_phone'] or '(なし)'}
+  紹介者コード: {sc['referrer_code'] or '(なし)'}
 
 ■ 契約予定プラン
   {sc['plan_summary'] or '未選択'}
-  ├ ライトプラン:       {req.light_plan_count}件
-  ├ スタンダードプラン:  {req.standard_plan_count}件
-  └ プレミアムプラン:    {req.premium_plan_count}件
 
 ■ ご連絡希望日程
   希望曜日:   {sc['preferred_days'] or '指定なし'}
