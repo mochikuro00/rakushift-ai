@@ -232,6 +232,7 @@ class InquiryRequest(BaseModel):
     preferred_time: str = Field(default="", max_length=100)
     schedule_summary: str = Field(default="", max_length=300)
     message: str = Field(default="", max_length=2000)
+    referrer_code: str = Field(default="", max_length=20)  # v3.7.268
 
 
 class CheckoutRequest(BaseModel):
@@ -421,7 +422,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.267"}
+        return {"status": "ok", "db": "alive", "version": "3.7.268"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -1822,7 +1823,7 @@ async def admin_customers(request: Request,
     inquiries = await supabase_query(
         "inquiries",
         "select=id,company_name,business_name,email,company_address,phone,contact_name,contact_phone,plan_summary,"
-        "light_plan_count,standard_plan_count,premium_plan_count,preferred_days,preferred_time,"
+        "light_plan_count,standard_plan_count,premium_plan_count,preferred_days,preferred_time,referrer_code,"
         "message,status,created_at,handled_at,internal_notes&order=created_at.desc&limit=500") or []
     leads = []
     for q in inquiries:
@@ -1848,6 +1849,7 @@ async def admin_customers(request: Request,
             "total_stores": total_stores,
             "preferred_days": q.get("preferred_days") or "",
             "preferred_time": q.get("preferred_time") or "",
+            "referrer_code": q.get("referrer_code") or "",
             "message": q.get("message") or "",
             "status": q.get("status") or "new",
             "created_at": q.get("created_at"),
@@ -2412,6 +2414,7 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
             "preferred_time": req.preferred_time,
             "schedule_summary": req.schedule_summary,
             "message": req.message,
+            "referrer_code": (req.referrer_code or "").strip().upper() or None,
             "status": "new"
         }
         result = await supabase_query("inquiries", method="POST", body=inquiry_data)

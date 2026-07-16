@@ -1174,6 +1174,11 @@
                     </div>
                 </div>
                 <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1"><i class="fas fa-building-columns text-indigo-400 mr-1"></i>振込口座（報酬の振込先）</label>
+                    <textarea id="refBankAccount" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="例: ○○銀行 △△支店 普通 1234567 ヤマダ タロウ"></textarea>
+                    <p class="text-[10px] text-gray-400 mt-1">銀行名・支店・種別・口座番号・名義をご記入ください</p>
+                </div>
+                <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">備考</label>
                     <textarea id="refNote" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="任意"></textarea>
                 </div>
@@ -2058,6 +2063,7 @@
     }
     function openCustomerDetail(kind, idx) {
         const body = document.getElementById('customerDetailBody');
+        document.getElementById('customerDetailModal').querySelector('h3').innerHTML = '<i class="fas fa-address-card text-indigo-600 mr-2"></i>顧客詳細';
         if (kind === 'tenant') {
             const t = (_customersData.tenants || [])[idx]; if (!t) return;
             const srcLabel = t.source === 'stripe' ? 'Stripe契約' : '手動発行';
@@ -2095,6 +2101,7 @@
             if (l.premium_count) planLines.push('Premium ' + l.premium_count + '件');
             html += _row('申込プラン', planLines.join(' / ') || l.plan_summary);
             html += _row('合計店舗数', (l.total_stores || 0) + '店舗');
+            html += _row('紹介者コード', l.referrer_code);
             html += _row('希望日程', l.preferred_days);
             html += _row('希望時間帯', l.preferred_time);
             html += _row('ステータス', l.status);
@@ -2872,14 +2879,47 @@
     // =========================================================
     let allReferrers = [];
 
+    let _referrerClients = {};  // code -> [clients]  (v3.7.268)
     async function loadReferrers() {
         try {
             const data = await rpc('list_referrers');
             allReferrers = data || [];
+            // 紹介したクライアント一覧 (課金状態問わず全件) を取得してコード別に集計
+            try {
+                const clients = await rpc('list_referrer_clients');
+                _referrerClients = {};
+                (clients || []).forEach(c => {
+                    const k = (c.referrer_code || '').toUpperCase();
+                    (_referrerClients[k] = _referrerClients[k] || []).push(c);
+                });
+            } catch (ce) { _referrerClients = {}; console.warn('referrer clients load failed', ce); }
             renderReferrers();
         } catch (e) {
             showToast('紹介者一覧の取得に失敗: ' + e.message, 'error');
         }
+    }
+
+    function openReferrerClients(code) {
+        const list = _referrerClients[(code || '').toUpperCase()] || [];
+        const body = document.getElementById('customerDetailBody');
+        const planLabel = { standard:'Standard', pro:'Pro', premium:'Premium', oem:'OEM', free:'未契約' };
+        let html = '<p class="text-sm text-gray-600 mb-3">紹介者コード <span class="font-mono font-bold">' + escapeHtml(code) + '</span> で契約した顧客：<b>' + list.length + '件</b></p>';
+        if (!list.length) {
+            html += '<p class="text-gray-400 text-sm py-4 text-center">このコードで契約した顧客はまだいません</p>';
+        } else {
+            html += '<table class="w-full text-sm"><thead class="text-xs text-gray-500 border-b"><tr><th class="text-left py-1.5">店舗名</th><th class="text-left">契約ID</th><th class="text-center">プラン</th><th class="text-center">状態</th><th class="text-center">契約日</th></tr></thead><tbody>';
+            html += list.map(c => '<tr class="border-b border-gray-50">'
+                + '<td class="py-2 font-bold">' + escapeHtml(c.shop_name || '(未設定)') + '</td>'
+                + '<td class="font-mono text-xs">' + escapeHtml(c.contract_id || '—') + '</td>'
+                + '<td class="text-center text-xs">' + (planLabel[c.plan] || c.plan || '—') + '</td>'
+                + '<td class="text-center">' + (c.license_status === 'suspended' ? '<span class="text-gray-400">停止</span>' : (c.is_paying ? '<span class="text-green-600 font-bold">課金中</span>' : '<span class="text-amber-600">未課金</span>')) + '</td>'
+                + '<td class="text-center text-xs text-gray-500">' + _custDate(c.created_at) + '</td>'
+                + '</tr>').join('');
+            html += '</tbody></table>';
+        }
+        document.getElementById('customerDetailModal').querySelector('h3').innerHTML = '<i class="fas fa-users text-indigo-600 mr-2"></i>紹介した顧客';
+        body.innerHTML = html;
+        document.getElementById('customerDetailModal').classList.remove('hidden');
     }
 
     function calcCommission(r) {
@@ -2943,7 +2983,7 @@
                     <div class="font-bold text-indigo-600 text-sm">${commissionLabel(r)}</div>
                     <div class="text-[10px] text-gray-400 mt-0.5">+OEM ¥3,200/件</div>
                 </td>
-                <td class="text-center text-sm font-medium text-gray-700">${r.tenant_count || 0}</td>
+                <td class="text-center text-sm font-medium">${(() => { const n = (_referrerClients[(r.code||'').toUpperCase()]||[]).length; return n > 0 ? `<button onclick="openReferrerClients('${escapeHtml(r.code)}')" class="text-indigo-600 font-bold hover:underline">${n}件 <i class="fa-solid fa-list text-[10px]"></i></button>` : '<span class="text-gray-400">0</span>'; })()}</td>
                 <td class="text-center">${payDetail}</td>
                 <td class="text-right font-mono text-sm text-gray-700">¥${totalRev.toLocaleString()}</td>
                 <td class="text-right font-mono font-bold text-purple-600">¥${commission.toLocaleString()}</td>
@@ -2973,6 +3013,7 @@
         document.getElementById('refCommissionAmount').value = '1000';
         document.querySelector('input[name="refCommissionType"][value="percent"]').checked = true;
         document.getElementById('refNote').value = '';
+        document.getElementById('refBankAccount').value = '';
         document.getElementById('refActiveWrap').style.display = 'none';
         document.getElementById('refCode').disabled = false;
         toggleCommissionInputs();
@@ -2994,6 +3035,7 @@
         const type = r.commission_type || 'percent';
         document.querySelector(`input[name="refCommissionType"][value="${type}"]`).checked = true;
         document.getElementById('refNote').value = r.note || '';
+        document.getElementById('refBankAccount').value = r.bank_account || '';
         document.getElementById('refActiveWrap').style.display = 'flex';
         document.getElementById('refActive').checked = !!r.active;
         toggleCommissionInputs();
@@ -3010,6 +3052,7 @@
         const rate = parseFloat(document.getElementById('refCommissionRate').value) || 0;
         const amount = parseFloat(document.getElementById('refCommissionAmount').value) || 0;
         const note = document.getElementById('refNote').value.trim();
+        const bankAccount = document.getElementById('refBankAccount').value.trim();
         const active = document.getElementById('refActive').checked;
 
         if (!name) { showToast('紹介者名を入力してください', 'error'); return; }
@@ -3025,7 +3068,7 @@
                 const result = await rpc('update_referrer', {
                     p_id: id, p_name: name, p_email: email, p_phone: phone,
                     p_commission_rate: rate, p_commission_amount: amount, p_commission_type: type,
-                    p_active: active, p_note: note
+                    p_active: active, p_note: note, p_bank_account: bankAccount
                 });
                 if (result.success) {
                     showToast('紹介者を更新しました', 'success');
@@ -3039,7 +3082,7 @@
                 const result = await rpc('create_referrer', {
                     p_name: name, p_code: code || null, p_email: email, p_phone: phone,
                     p_commission_rate: rate, p_commission_amount: amount, p_commission_type: type,
-                    p_note: note
+                    p_note: note, p_bank_account: bankAccount
                 });
                 if (result.success) {
                     showToast(`紹介者「${name}」を発行しました（コード: ${result.code}）`, 'success');

@@ -1034,6 +1034,7 @@ const app = {
         const address = document.getElementById('inquiryAddress')?.value.trim() || '';
         const phone = document.getElementById('inquiryPhone')?.value.trim() || '';
         const name = document.getElementById('inquiryName')?.value.trim() || '';
+        const inqReferrer = (document.getElementById('inquiryReferrer')?.value.trim() || '').toUpperCase();
         const lightCount = document.getElementById('inquiryLightCount')?.value || '0';
         const standardCount = document.getElementById('inquiryStandardCount')?.value || '0';
         const premiumCount = document.getElementById('inquiryPremiumCount')?.value || '0';
@@ -1088,6 +1089,7 @@ const app = {
                 company_address: this._sanitize(address),
                 phone: this._sanitize(phone),
                 contact_name: this._sanitize(name),
+                referrer_code: this._sanitize(inqReferrer),
                 plan_summary: planSummary,
                 light_plan_count: lightCount,
                 standard_plan_count: standardCount,
@@ -1126,7 +1128,7 @@ const app = {
             }
 
             // フォームリセット
-            ['inquiryCompany', 'inquiryBusiness', 'inquiryEmail', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryMessage', 'inquiryDate1', 'inquiryDate2', 'inquiryDate3'].forEach(id => {
+            ['inquiryCompany', 'inquiryBusiness', 'inquiryEmail', 'inquiryAddress', 'inquiryPhone', 'inquiryName', 'inquiryReferrer', 'inquiryMessage', 'inquiryDate1', 'inquiryDate2', 'inquiryDate3'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
