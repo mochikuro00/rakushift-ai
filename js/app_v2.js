@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260717-v3.7.276-revenue-sort-tabs',
+    APP_VERSION: '20260718-v3.7.277-sidebar-overlay-fix',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -417,11 +417,14 @@ const app = {
      * イベントリスナー登録
      */
     bindEvents() {
+        // v3.7.277: 暗幕は常に閉じられるようにする (幅ガートを撤廃)
         const closeSidebar = () => {
-            if (window.innerWidth < 768) {
-                document.querySelector('aside')?.classList.add('-translate-x-full');
-                document.getElementById('sidebarOverlay')?.classList.remove('active');
-            }
+            document.querySelector('aside')?.classList.add('-translate-x-full');
+            document.getElementById('sidebarOverlay')?.classList.remove('active');
+        };
+        const openSidebar = () => {
+            document.querySelector('aside')?.classList.remove('-translate-x-full');
+            document.getElementById('sidebarOverlay')?.classList.add('active');
         };
 
         // v3.7.139: 親 (sidebar) に 1個のリスナーで委譲 (累積リーク防止)
@@ -433,23 +436,34 @@ const app = {
                 e.preventDefault();
                 const view = link.dataset.view;
                 if (view) {
-                    this.changeView(view);
-                    closeSidebar();
+                    // 描画で例外が出ても暗幕を必ず閉じる (残留グレーアウト防止)
+                    try { this.changeView(view); }
+                    finally { closeSidebar(); }
                 }
             });
             sidebarEl.dataset.linkBound = '1';
         }
 
-        document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
-            const aside = document.querySelector('aside');
-            const overlay = document.getElementById('sidebarOverlay');
-            aside.classList.toggle('-translate-x-full');
-            if (aside.classList.contains('-translate-x-full')) {
-                overlay?.classList.remove('active');
-            } else {
-                overlay?.classList.add('active');
-            }
-        });
+        // v3.7.277: 多重バインド防止 (init 再実行でトグルが破綻し暗幕が残る問題)
+        const menuBtn = document.getElementById('mobileMenuBtn');
+        if (menuBtn && !menuBtn.dataset.bound) {
+            menuBtn.addEventListener('click', () => {
+                const hidden = document.querySelector('aside')?.classList.contains('-translate-x-full');
+                hidden ? openSidebar() : closeSidebar();
+            });
+            menuBtn.dataset.bound = '1';
+        }
+        // v3.7.277: iOS Safari で bare <div onclick> のタップが不発になり暗幕が閉じない
+        //           →JSで明示バインド。ESC でも閉じる。
+        const ov = document.getElementById('sidebarOverlay');
+        if (ov && !ov.dataset.bound) {
+            ov.addEventListener('click', closeSidebar);
+            ov.dataset.bound = '1';
+        }
+        if (!document.body.dataset.escBound) {
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
+            document.body.dataset.escBound = '1';
+        }
         
         // Dynamic buttons (autoFill, aiAdvice) are bound in updateAuthUI()
 
@@ -1675,7 +1689,7 @@ const app = {
             this.showLoading(false);
         }
 
-        const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', free: '未契約' };
+        const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'エンタープライズ', enterprise: 'エンタープライズ', free: '未契約' };
         const planColors = { standard: 'bg-blue-100 text-blue-800', pro: 'bg-green-100 text-green-800', premium: 'bg-purple-100 text-purple-800', oem: 'bg-amber-100 text-amber-800', free: 'bg-gray-100 text-gray-500' };
 
         // グローバル本部(運営 hq_master)は全店舗が返るため、localStorage で
@@ -5152,8 +5166,8 @@ const app = {
                             <div class="flex items-center justify-between">
                                 <div>
                                     <p class="text-white/70 text-xs font-medium">現在ご利用中のプラン</p>
-                                    <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium', oem:'OEM', enterprise:'Enterprise'}[config.stripe_plan] || 'Standard'}</p>
-                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380円/月 - スタッフ10名まで', pro:'4,880円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限', oem:'OEM（エンタープライズ相当）- スタッフ無制限', enterprise:'Enterprise - スタッフ無制限'}[config.stripe_plan] || '3,380円/月 - スタッフ10名まで'}</p>
+                                    <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium', oem:'エンタープライズ', enterprise:'エンタープライズ'}[config.stripe_plan] || 'Standard'}</p>
+                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380円/月 - スタッフ10名まで', pro:'4,880円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限', oem:'エンタープライズ - スタッフ無制限', enterprise:'エンタープライズ - スタッフ無制限'}[config.stripe_plan] || '3,380円/月 - スタッフ10名まで'}</p>
                                 </div>
                                 <div class="text-right flex flex-col items-end gap-2">
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-sm font-bold backdrop-blur-sm">
