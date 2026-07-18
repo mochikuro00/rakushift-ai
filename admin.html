@@ -977,6 +977,22 @@
                             <li>紹介者コードは、新規申込フォーム／お問い合わせフォーム／手動テナント発行のいずれからでも紐付きます。</li>
                             <li><b>運営作業</b>：月次で報酬額を確認し、登録された振込口座へ振込を行います。</li>
                         </ul>
+
+                        <!-- v3.7.282: 紹介フローの制定 -->
+                        <h4 class="font-bold text-gray-900 mt-4 mb-2">🤝 紹介フロー（制定）</h4>
+                        <table class="w-full text-sm border-collapse mb-2">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">段階</th><th class="p-2 border text-left">内容</th><th class="p-2 border text-left">担当</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">1. 紹介者登録</td><td class="p-2 border">紹介者管理タブで新規発行。<b>紹介者コード</b>（例：PARTNER01）と<b>報酬条件</b>・<b>振込口座</b>を登録。</td><td class="p-2 border">運営</td></tr>
+                                <tr><td class="p-2 border font-bold">2. コード共有</td><td class="p-2 border">発行した紹介者コードを紹介者へ通知。紹介者は見込み客に案内する。</td><td class="p-2 border">運営→紹介者</td></tr>
+                                <tr><td class="p-2 border font-bold">3. 顧客が申込</td><td class="p-2 border">顧客が新規申込フォーム／お問い合わせで<b>紹介者コードを入力</b>。手動発行時は運営がコードを設定。</td><td class="p-2 border">顧客 / 運営</td></tr>
+                                <tr><td class="p-2 border font-bold">4. 契約成立で紐付け</td><td class="p-2 border">契約が成立するとテナントに紹介者コードが記録され、<b>紹介数</b>にカウント。</td><td class="p-2 border">自動</td></tr>
+                                <tr><td class="p-2 border font-bold">5. 実績確認</td><td class="p-2 border">紹介者一覧の「紹介数」から<b>課金中の顧客</b>を確認（未課金は報酬対象外の判断材料）。</td><td class="p-2 border">運営</td></tr>
+                                <tr><td class="p-2 border font-bold">6. 報酬計算・振込</td><td class="p-2 border"><b>月次</b>で報酬額（％ or 固定 ¥3,200/件 等）を集計し、登録済み振込口座へ支払う。</td><td class="p-2 border">運営</td></tr>
+                                <tr><td class="p-2 border font-bold">7. 解約時</td><td class="p-2 border">紹介顧客が解約・停止した場合は、翌月以降の継続報酬（％型）を停止。単発報酬（固定型）は支払済み分そのまま。</td><td class="p-2 border">運営</td></tr>
+                            </tbody>
+                        </table>
+                        <p class="text-xs text-gray-500">※ 報酬条件（率・固定額・継続/単発）は紹介者ごとに登録した内容に従います。OEM（代理店）契約は紹介料 ¥3,200/件・Stripe非連動の手動管理が既定です。</p>
                     </div>
 
                     <div id="man-announce" class="bg-white rounded-xl border border-gray-200 p-5">
@@ -996,6 +1012,18 @@
 
                     <div id="man-cancel" class="bg-white rounded-xl border-2 border-red-200 p-5">
                         <h3 class="font-bold text-red-700 mb-2">⑨ 解約対応（運営者が行うこと）</h3>
+
+                        <!-- v3.7.282: 用語の定義 -->
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-800 leading-relaxed mb-3">
+                            <p class="font-bold mb-1">用語の定義</p>
+                            <ul class="list-disc list-inside ml-1 space-y-1">
+                                <li><b>解約</b>：顧客がサービスの利用をやめる<b>意思表示・手続き</b>。すぐには止まらず、<b>発効日</b>（Strip=契約期間末 / 手動=当月末）まで全機能を利用できる。発効日を迎えると自動的に「停止」になる。</li>
+                                <li><b>停止（ライセンス停止）</b>：ログイン・利用が<b>できなくなった状態</b>（license_status = suspended）。①解約の発効、②支払い失敗の継続（Stripeは約21日）、③運営による手動停止、のいずれかで発生する。<b>データは残ったまま</b>で、復活すれば元に戻る。</li>
+                                <li><b>削除</b>：停止から<b>6ヶ月経過</b>後にデータを物理的に消す最終段階。<b>復元不可</b>。</li>
+                            </ul>
+                            <p class="mt-2 text-xs text-gray-500">流れ：<b>契約中 →（解約手続き）→ 発効日まで利用可 →（発効）→ 停止（6ヶ月データ保持）→（6ヶ月経過）→ 削除</b></p>
+                        </div>
+
                         <table class="w-full text-sm border-collapse mb-3">
                             <thead><tr class="bg-gray-50"><th class="p-2 border text-left">段階</th><th class="p-2 border text-left">クレジット契約（Stripe）</th><th class="p-2 border text-left">手動発行契約</th></tr></thead>
                             <tbody>
@@ -1014,6 +1042,61 @@
                                 <li>手動契約の復活は運営が「復活」ボタンで行います。</li>
                                 <li>どちらも日割り返金はありません（発効日まで利用可）。</li>
                             </ul>
+                        </div>
+
+                        <!-- v3.7.282: 料金の発生 -->
+                        <h4 class="font-bold text-gray-900 mt-4 mb-2">💴 解約・停止と料金の発生</h4>
+                        <table class="w-full text-sm border-collapse mb-3">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">状態</th><th class="p-2 border text-left">クレジット契約（Stripe）</th><th class="p-2 border text-left">手動発行契約（請求書 / OEM）</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">解約発効日まで</td><td class="p-2 border">通常どおり課金（利用可）</td><td class="p-2 border">通常どおり請求（利用可）</td></tr>
+                                <tr><td class="p-2 border font-bold">発効日以降（＝停止）</td><td class="p-2 border text-green-700"><b>課金は自動停止</b>（期間末で次回請求なし）</td><td class="p-2 border text-green-700"><b>以降の請求を停止</b>（請求書を発行しない）</td></tr>
+                                <tr><td class="p-2 border font-bold">日割り返金</td><td class="p-2 border" colspan="2"><b>なし</b>（支払い済み期間は発効日まで全機能利用可）</td></tr>
+                                <tr><td class="p-2 border font-bold">復活後</td><td class="p-2 border">支払い再開で通常課金が再開</td><td class="p-2 border">運営の「復活」後、通常請求を再開</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 leading-relaxed mb-3">
+                            <p class="font-bold mb-1"><i class="fas fa-triangle-exclamation mr-1"></i>「今すぐ停止」で前倒し停止する場合の注意</p>
+                            <p>「今すぐ停止」は<b>アクセスを即遮断</b>しますが、Stripeのサブスクリプション自体を解約するものではありません。顧客がまだStripeで解約していない状態で運営が前倒し停止すると、<b>Stripe側の課金は継続</b>します。課金も止めたい場合は、Stripeダッシュボード（または顧客の請求ポータル）でサブスクリプションを解約してください。手動契約（Stripe非連動）は課金継続の心配はありません。</p>
+                        </div>
+
+                        <!-- v3.7.282: 停止6ヶ月後 -->
+                        <h4 class="font-bold text-gray-900 mt-4 mb-2">🗓 停止してから6ヶ月後どうなるか</h4>
+                        <table class="w-full text-sm border-collapse mb-2">
+                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">期間</th><th class="p-2 border text-left">状態と対応</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2 border font-bold">停止日〜6ヶ月</td><td class="p-2 border"><b>データは全て保持</b>。この間はログイン不可（利用停止）だが、<b>復活すれば契約ID・全データそのまま</b>で即再開できる（新たな課金・請求は復活まで発生しない）。</td></tr>
+                                <tr><td class="p-2 border font-bold">6ヶ月経過時点</td><td class="p-2 border">保持期間切れ。テナント管理タブの<b>「削除予定」統計</b>と<b>期限切れ一覧</b>に表示される（＝物理削除の対象）。</td></tr>
+                                <tr><td class="p-2 border font-bold">6ヶ月経過後</td><td class="p-2 border text-red-700">保持期間クリーンアップジョブで<b>データを物理削除</b>。<b>復元不可</b>。以降の利用再開は<b>新規契約（契約ID・データは新規）</b>となる。</td></tr>
+                            </tbody>
+                        </table>
+                        <p class="text-xs text-gray-500">※ 6ヶ月以内であれば、Stripe契約は支払い再開で自動復活、手動契約は「復活」ボタンで復活できます（いずれも契約ID・データ維持）。</p>
+
+                        <!-- v3.7.282: データ保持したまま復旧するフロー -->
+                        <h4 class="font-bold text-gray-900 mt-4 mb-2">♻️ データを保持したまま復旧させるフロー（停止から6ヶ月以内）</h4>
+                        <p class="text-sm text-gray-700 mb-2">停止中でも6ヶ月以内なら、<b>契約ID・スタッフ・シフト・設定をすべて保持したまま</b>元通りに再開できます。</p>
+                        <div class="grid md:grid-cols-2 gap-3">
+                            <div class="border border-green-200 rounded-lg p-3 bg-green-50/40">
+                                <p class="font-bold text-green-700 text-sm mb-1">クレジット契約（Stripe）</p>
+                                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1 leading-relaxed">
+                                    <li>顧客が請求ポータルで<b>支払い方法を更新／再契約</b>する（同一メール・同一契約）。</li>
+                                    <li>Stripe Webhook が入金を検知 → ライセンスが<b>自動で復活</b>（運営作業は原則なし）。</li>
+                                    <li>顧客は従来の契約ID・PINで<b>そのままログイン</b>、全データが復元済み。</li>
+                                    <li>前倒しで戻したい場合は、運営が顧客情報／テナント管理の<b>「復活」</b>でも即復旧可（課金はStripe側の状態に従う）。</li>
+                                </ol>
+                            </div>
+                            <div class="border border-blue-200 rounded-lg p-3 bg-blue-50/40">
+                                <p class="font-bold text-blue-700 text-sm mb-1">手動発行契約（請求書 / OEM）</p>
+                                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1 leading-relaxed">
+                                    <li>運営がテナント管理または顧客情報でそのテナントを開く。</li>
+                                    <li><b>「復活」ボタン</b>を押す → ライセンスが active に戻る。</li>
+                                    <li>顧客は従来の契約ID・PINで<b>そのままログイン</b>、全データが復元済み。</li>
+                                    <li>必要に応じて次月分の<b>請求を再開</b>する。</li>
+                                </ol>
+                            </div>
+                        </div>
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-900 leading-relaxed mt-3">
+                            <p><i class="fas fa-circle-exclamation mr-1"></i><b>6ヶ月を過ぎるとデータは物理削除され、この復旧フローは使えません。</b>その場合は新規契約（新しい契約ID・データはゼロから）になります。復旧の可否は、テナント管理の「削除予定」に入る前かどうかで判断してください。</p>
                         </div>
                     </div>
 
