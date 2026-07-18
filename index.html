@@ -1686,7 +1686,7 @@
             // この時刻は実質「リロードのたびに更新される」。
             // 15 分単位に丸めて同一セッション内の連続リロードでブラウザキャッシュも効くようにする。
             var v = Math.floor(Date.now() / (15 * 60 * 1000));
-            ['js/holidays.js', 'js/config.js', 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js']
+            ['js/holidays.js', 'js/config.js', 'js/api.js', 'js/app_v2.js', 'js/gantt_drag.js', 'js/password_toggle.js']
                 .forEach(function (src) {
                     document.write('<script src="' + src + '?v=' + v + '"><\/script>');
                 });
