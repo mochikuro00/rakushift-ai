@@ -528,6 +528,13 @@
                             <option value="all">すべての紹介者</option>
                             <option value="none">紹介者なし</option>
                         </select>
+                        <select id="sortTenants" class="select w-auto" onchange="filterTenants()" title="並び替え">
+                            <option value="created_desc">新規登録順（新しい順）</option>
+                            <option value="created_asc">登録が古い順</option>
+                            <option value="name_asc">組織名（あいうえお/A→Z）</option>
+                            <option value="staff_desc">スタッフ数（多い順）</option>
+                            <option value="plan_desc">プラン（上位順）</option>
+                        </select>
                         <button onclick="openCreateTenantModal()" class="btn-primary">
                             <i class="fas fa-plus"></i>新規テナント
                         </button>
@@ -1583,7 +1590,7 @@
             allTenants = data || [];
             updateStats();
             updateReferrerFilterOptions();
-            renderTenants(allTenants);
+            filterTenants(); // v3.7.279: 既定=新規登録順で描画
         } catch (e) {
             showToast('テナント一覧の取得に失敗しました: ' + e.message, 'error');
         }
@@ -1706,6 +1713,19 @@
         } else if (refFilter !== 'all') {
             filtered = filtered.filter(t => t.referrer_code === refFilter);
         }
+        // v3.7.279: 並び替え（既定=新規登録順）
+        const sort = document.getElementById('sortTenants')?.value || 'created_desc';
+        const planRank = { standard: 1, pro: 2, premium: 3, oem: 4, enterprise: 5, free: 0 };
+        filtered = filtered.slice().sort((a, b) => {
+            switch (sort) {
+                case 'created_asc':  return (a.created_at || '').localeCompare(b.created_at || '');
+                case 'name_asc':     return (a.name || '').localeCompare(b.name || '', 'ja');
+                case 'staff_desc':   return (b.staff_count || 0) - (a.staff_count || 0);
+                case 'plan_desc':    return (planRank[b.stripe_plan] || 0) - (planRank[a.stripe_plan] || 0);
+                case 'created_desc':
+                default:             return (b.created_at || '').localeCompare(a.created_at || '');
+            }
+        });
         renderTenants(filtered);
     }
 

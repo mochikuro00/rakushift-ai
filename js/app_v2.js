@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260718-v3.7.278-oem-label-restore',
+    APP_VERSION: '20260718-v3.7.279-billing-view-sort',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -1493,6 +1493,9 @@ const app = {
                 break;
             case 'announcements':
                 this.renderAnnouncementsAdmin(container);
+                break;
+            case 'billing':
+                this.renderBilling(container);
                 break;
             default:
                 this.renderDashboard(container);
@@ -5186,8 +5189,8 @@ const app = {
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                                 ${[
                                     { key: 'standard', name: 'Standard', price: '3,380', staffs: '10名', color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
-                                    { key: 'pro', name: 'Pro', price: '4,880', staffs: '50名', color: 'green', badge: '人気', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
-                                    { key: 'premium', name: 'Premium', price: '9,980', staffs: '無制限', color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応', '専属サポート'] },
+                                    { key: 'pro', name: 'Pro', price: '4,880', staffs: '50名', color: 'green', badge: '人気', features: ['スタッフ50名まで', '全AI機能', '分析レポート'] },
+                                    { key: 'premium', name: 'Premium', price: '9,980', staffs: '無制限', color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応'] },
                                 ].map(p => {
                                     const currentPlanKey = (config.stripe_plan && config.stripe_plan !== 'free') ? config.stripe_plan : 'standard';
                                     const isCurrent = currentPlanKey === p.key;
@@ -5263,6 +5266,71 @@ const app = {
         // v3.7.133: PIN 状態を非同期で読み込んで表示更新
         this._renderPinStatus();
         // v3.7.256: 解約発効日 (契約日起算の利用期間末日) を非同期表示
+        this._loadCancelInfo();
+    },
+
+    // v3.7.279: 契約・解約 独立ページ (契約情報＋解約申請を1画面に集約)
+    renderBilling(container) {
+        if (!this.state.isAdmin) {
+            container.innerHTML = '<div class="p-8 text-center text-gray-400">この画面は店舗管理者のみ閲覧できます。</div>';
+            return;
+        }
+        const config = this.state.config || {};
+        const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', enterprise: 'Enterprise', free: '未契約' };
+        const planKey = (config.stripe_plan && config.stripe_plan !== 'free') ? config.stripe_plan : 'free';
+        const planName = planLabels[planKey] || 'Standard';
+        // 請求方法
+        let billing = '請求書払い';
+        if (config.stripe_subscription_id) billing = 'クレジットカード（Stripe自動決済）';
+        else if (planKey === 'oem' || planKey === 'enterprise') billing = 'OEM（代理店・手動管理）';
+        const limit = this.getStaffLimit();
+        const staffCount = (this.state.staff || []).length;
+        const companyName = config.company_name || config.shop_name || '—';
+
+        const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const row = (label, val) => `<div class="flex justify-between py-2.5 border-b border-gray-100 last:border-0">
+            <span class="text-sm text-gray-500">${label}</span><span class="text-sm font-semibold text-gray-900 text-right">${esc(val)}</span></div>`;
+
+        container.innerHTML = `
+            <div class="max-w-3xl mx-auto space-y-5">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900">契約・解約</h2>
+                        <p class="text-xs text-gray-500">現在のご契約内容の確認と、解約のお手続きができます</p>
+                    </div>
+                </div>
+
+                <!-- 契約情報 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">ご契約情報</h3>
+                    ${row('会社名 / 店舗名', companyName)}
+                    ${row('契約ID', config.contract_id || '—')}
+                    ${row('現在のプラン', planName)}
+                    ${row('お支払い方法', billing)}
+                    ${row('スタッフ数', `${staffCount} / ${limit >= 9999 ? '無制限' : limit + '名'}`)}
+                </div>
+
+                <!-- 解約手続き -->
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">解約のお手続き</h3>
+                    <p class="text-sm text-gray-600 mb-3">解約は現在の利用期間の末日（手動契約は当月末）付けで発効します。発効日までは全機能をご利用いただけ、日割り返金はありません。</p>
+                    ${config.stripe_subscription_id ? `
+                    <div class="mb-3 flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                        <p class="text-xs text-gray-500">請求書・支払い方法の変更・解約は請求管理ポータルから</p>
+                        <button onclick="app.openStripePortal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200 transition whitespace-nowrap">
+                            <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>請求管理ポータル
+                        </button>
+                    </div>` : ''}
+                    <div id="cancelInfoBox"></div>
+                </div>
+
+                <div class="text-center">
+                    <a href="terms.html" target="_blank" rel="noopener" class="text-xs text-gray-400 hover:text-gray-600 hover:underline mr-4">利用規約</a>
+                    <a href="tokushoho.html" target="_blank" rel="noopener" class="text-xs text-gray-400 hover:text-gray-600 hover:underline">特定商取引法に基づく表記</a>
+                </div>
+            </div>`;
+        // 契約状況(解約予約/申請の有無)と解約ボタンを非同期で描画
         this._loadCancelInfo();
     },
 
@@ -10201,8 +10269,8 @@ const app = {
                     <thead><tr class="bg-green-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月額</th><th class="p-2 text-left border">スタッフ上限</th><th class="p-2 text-left border">主な内容</th></tr></thead>
                     <tbody>
                         <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">3,380円</td><td class="p-2 border">10名まで</td><td class="p-2 border">AI自動シフト生成・労基法チェック・シフト管理全機能</td></tr>
-                        <tr><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880円</td><td class="p-2 border">50名まで</td><td class="p-2 border">全AI機能・優先サポート・分析レポート</td></tr>
-                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">全AI機能・複数店舗対応・専属サポート</td></tr>
+                        <tr><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880円</td><td class="p-2 border">50名まで</td><td class="p-2 border">全AI機能・分析レポート</td></tr>
+                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">全AI機能・複数店舗対応</td></tr>
                     </tbody>
                 </table>
                 <ul class="text-base text-gray-700 list-disc list-inside ml-2 leading-relaxed">
@@ -10385,8 +10453,8 @@ const app = {
                     <thead><tr class="bg-gray-50"><th class="p-2 text-left border">プラン</th><th class="p-2 text-left border">月額</th><th class="p-2 text-left border">スタッフ上限</th><th class="p-2 text-left border">機能</th></tr></thead>
                     <tbody>
                         <tr><td class="p-2 border font-bold text-blue-600">Standard</td><td class="p-2 border">3,380円</td><td class="p-2 border">10名</td><td class="p-2 border">全AI機能・シフト管理全機能</td></tr>
-                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880円</td><td class="p-2 border">50名</td><td class="p-2 border">+ 優先サポート・分析レポート</td></tr>
-                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">+ 複数店舗対応・専属サポート</td></tr>
+                        <tr class="bg-green-50"><td class="p-2 border font-bold text-green-600">Pro</td><td class="p-2 border">4,880円</td><td class="p-2 border">50名</td><td class="p-2 border">+ 分析レポート</td></tr>
+                        <tr><td class="p-2 border font-bold text-purple-600">Premium</td><td class="p-2 border">9,980円</td><td class="p-2 border">無制限</td><td class="p-2 border">+ 複数店舗対応</td></tr>
                     </tbody>
                 </table>
                 <div class="mt-3 space-y-1 text-sm text-gray-500">
@@ -11049,8 +11117,8 @@ const app = {
 
         const plans = [
             { key: 'standard', name: 'Standard', price: '3,380', limit: 10, color: 'blue', features: ['スタッフ10名まで', 'AI自動シフト生成', 'AI労基法チェック', 'シフト管理全機能'] },
-            { key: 'pro', name: 'Pro', price: '4,880', limit: 50, badge: '人気', color: 'green', features: ['スタッフ50名まで', '全AI機能', '優先サポート', '分析レポート'] },
-            { key: 'premium', name: 'Premium', price: '9,980', limit: 9999, color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応', '専属サポート'] },
+            { key: 'pro', name: 'Pro', price: '4,880', limit: 50, badge: '人気', color: 'green', features: ['スタッフ50名まで', '全AI機能', '分析レポート'] },
+            { key: 'premium', name: 'Premium', price: '9,980', limit: 9999, color: 'purple', features: ['スタッフ無制限', '全AI機能', '複数店舗対応'] },
         ];
 
         // 現在より上のプランのみ表示
