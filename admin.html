@@ -1204,6 +1204,22 @@
                                 <li><b>記録保存</b>：申出日時・方法・返金額・対応者を記録し、証跡を残す。</li>
                                 <li><b>代理店経由</b>：OEM/紹介者が勧誘した契約でクーリングオフされた場合、その件の<b>紹介報酬は対象外</b>（未払いは支払わない／支払済みは調整）。</li>
                             </ol>
+                            <h4 class="man-sub"><i class="fab fa-cc-stripe"></i>Stripe（クレジット決済）での返金手順</h4>
+                            <p>返金はアプリ内ではなく<b>Stripeダッシュボードで実施</b>します（本システムに返金ボタンはありません）。</p>
+                            <div class="man-tablewrap">
+                                <table class="man-table">
+                                    <thead><tr><th>手順</th><th>操作</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>1. 全額返金</td><td>Stripe「支払い(Payments)」で該当決済を開く →<b>Refund →全額</b>。<b>決済手数料は戻らないが当社負担</b>（顧客に請求しない）。</td></tr>
+                                        <tr><td>2. サブスク即時解約</td><td>「Subscriptions」で該当契約 →<b>Cancel（即時。※期間末ではない）</b>。→ Webhook <code>customer.subscription.deleted</code> でライセンスが<b>自動停止</b>。</td></tr>
+                                        <tr><td>3. 前倒し停止</td><td>Webhook前に止めたい場合は 顧客情報／テナント管理で<b>「今すぐ停止」</b>。</td></tr>
+                                        <tr><td>4. データ</td><td>顧客希望に応じて削除（契約は「初めから無かった」扱い）。</td></tr>
+                                        <tr><td>5. 記録・報酬</td><td><b>返金ID・日時・対応者</b>を記録。紹介報酬は<b>対象外</b>。</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-sm text-gray-500">※ 手動発行（請求書 / OEM）の場合：入金済みなら振込で返金、未入金なら<b>請求を取消</b>。あわせてテナントを「停止」。</p>
+
                             <div class="cal cal-danger">
                                 <p class="cal-t"><i class="fas fa-ban"></i>禁止：クーリングオフ妨害</p>
                                 <p>「解約できない」等の<b>虚偽説明・威迫でクーリングオフを妨げる</b>ことは禁止です。妨害があった場合、<b>8日を過ぎても顧客はクーリングオフ可能</b>になります。期間の起算は「法定書面（契約内容・クーリングオフの説明を記載した書面）を交付した日」からです。</p>
