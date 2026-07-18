@@ -1149,7 +1149,7 @@
                                 <option value="standard">Standard</option>
                                 <option value="pro">Pro</option>
                                 <option value="premium">Premium</option>
-                                <option value="oem">エンタープライズ (代理店・月額¥4,000)</option>
+                                <option value="oem">OEM (代理店プラン・月額¥4,000)</option>
                                 <option value="free">Free (停止)</option>
                             </select>
                         </div>
@@ -1371,10 +1371,10 @@
                         <option value="standard">Standard - 3,380円/月 (10名まで)</option>
                         <option value="pro" selected>Pro - 4,880円/月 (50名まで)</option>
                         <option value="premium">Premium - 9,980円/月 (無制限)</option>
-                        <option value="oem">エンタープライズ (代理店) - 4,000円/月 (手動管理・Stripe非連動)</option>
+                        <option value="oem">OEM代理店 - 4,000円/月 (手動管理・Stripe非連動)</option>
                     </select>
                     <div id="oemPlanNote" class="hidden mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
-                        <i class="fas fa-circle-info mr-1"></i>エンタープライズ(代理店)プラン: 月額¥4,000・紹介料¥3,200/件・Stripe非連動の手動管理
+                        <i class="fas fa-circle-info mr-1"></i>OEMプラン: 月額¥4,000・紹介料¥3,200/件・Stripe非連動の手動管理
                     </div>
                 </div>
 
@@ -1655,7 +1655,7 @@
             // v3.7.170: stripe_customer_id 必須を撤廃。本部からの手動プラン変更でも
             // stripe_plan の値をそのまま badge に反映する (Stripe 未連携でも表示)
             const planBadgeClass = { standard: 'badge-info', pro: 'badge-success', premium: 'badge-purple', oem: 'badge-amber', free: 'badge-neutral' };
-            const planNameMap = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'エンタープライズ', enterprise: 'エンタープライズ', free: '未契約' };
+            const planNameMap = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', enterprise: 'Enterprise', free: '未契約' };
             const rawPlan = (t.stripe_plan || 'free').toLowerCase();
             const currentPlan = planNameMap[rawPlan] ? rawPlan : 'free';
             const planBadge = `<span class="badge ${planBadgeClass[currentPlan] || 'badge-neutral'}">${planNameMap[currentPlan]}</span>`;
@@ -2130,7 +2130,7 @@
         invoice: '<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">請求書払い</span>',
     };
     const BILLING_LABEL = { stripe:'Stripe決済', oem:'OEM代理店', invoice:'請求書払い' };
-    const PLAN_LABEL = { standard:'Standard', pro:'Pro', premium:'Premium', oem:'エンタープライズ', enterprise:'エンタープライズ', free:'未契約', '':'—' };
+    const PLAN_LABEL = { standard:'Standard', pro:'Pro', premium:'Premium', oem:'OEM', enterprise:'Enterprise', free:'未契約', '':'—' };
 
     function _custStatus(t) {
         if (t.license_status === 'suspended') return '<span class="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold">停止中</span>';
@@ -2727,7 +2727,7 @@
     //   既存 update_tenant_metadata RPC を使用 (stripe_plan 更新対応済み)
     //   顧客側 Stripe アップグレードフローはそのまま並行運用
     // ============================================================
-    const PLAN_NAME_MAP = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'エンタープライズ', enterprise: 'エンタープライズ', free: 'Free' };
+    const PLAN_NAME_MAP = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', enterprise: 'Enterprise', free: 'Free' };
 
     function openChangePlanModal(contractId, name, currentPlan) {
         if (!contractId) return;
@@ -2890,7 +2890,7 @@
 
     // --- 収益計算・表示 ---
     const PLAN_PRICES = { standard: 3380, pro: 4880, premium: 9980, oem: 4000 };
-    const PLAN_NAMES = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'エンタープライズ', enterprise: 'エンタープライズ' };
+    const PLAN_NAMES = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', enterprise: 'Enterprise' };
     const PLAN_COLORS = { standard: '#3b82f6', pro: '#22c55e', premium: '#a855f7', oem: '#f59e0b' };
 
     function renderRevenue() {
@@ -2979,7 +2979,7 @@
             chartEl._chart = new Chart(chartEl, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Standard', 'Pro', 'Premium', 'エンタープライズ'],
+                    labels: ['Standard', 'Pro', 'Premium', 'OEM'],
                     datasets: [{
                         data: [planRevenue.standard, planRevenue.pro, planRevenue.premium, planRevenue.oem],
                         backgroundColor: [PLAN_COLORS.standard, PLAN_COLORS.pro, PLAN_COLORS.premium, PLAN_COLORS.oem],
@@ -3128,7 +3128,7 @@
     function openReferrerClients(code) {
         const list = _referrerClients[(code || '').toUpperCase()] || [];
         const body = document.getElementById('customerDetailBody');
-        const planLabel = { standard:'Standard', pro:'Pro', premium:'Premium', oem:'エンタープライズ', enterprise:'エンタープライズ', free:'未契約' };
+        const planLabel = { standard:'Standard', pro:'Pro', premium:'Premium', oem:'OEM', enterprise:'Enterprise', free:'未契約' };
         let html = '<p class="text-sm text-gray-600 mb-3">紹介者コード <span class="font-mono font-bold">' + escapeHtml(code) + '</span> で契約した顧客：<b>' + list.length + '件</b></p>';
         if (!list.length) {
             html += '<p class="text-gray-400 text-sm py-4 text-center">このコードで契約した顧客はまだいません</p>';

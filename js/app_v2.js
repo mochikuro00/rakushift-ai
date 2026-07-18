@@ -252,7 +252,7 @@ const app = {
     // JS のビルドバージョン (デプロイの度に bump)。
     // 旧バージョンの JS でロードされた古いタブが残っている場合、
     // checkAppVersion() がそれを検知して自動リロードする。
-    APP_VERSION: '20260718-v3.7.277-sidebar-overlay-fix',
+    APP_VERSION: '20260718-v3.7.278-oem-label-restore',
 
     // 起動時に保存版と比較して、不一致なら強制リロード (キャッシュ強制破棄)
     checkAppVersion() {
@@ -1689,7 +1689,7 @@ const app = {
             this.showLoading(false);
         }
 
-        const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'エンタープライズ', enterprise: 'エンタープライズ', free: '未契約' };
+        const planLabels = { standard: 'Standard', pro: 'Pro', premium: 'Premium', oem: 'OEM', enterprise: 'Enterprise', free: '未契約' };
         const planColors = { standard: 'bg-blue-100 text-blue-800', pro: 'bg-green-100 text-green-800', premium: 'bg-purple-100 text-purple-800', oem: 'bg-amber-100 text-amber-800', free: 'bg-gray-100 text-gray-500' };
 
         // グローバル本部(運営 hq_master)は全店舗が返るため、localStorage で
@@ -5166,8 +5166,8 @@ const app = {
                             <div class="flex items-center justify-between">
                                 <div>
                                     <p class="text-white/70 text-xs font-medium">現在ご利用中のプラン</p>
-                                    <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium', oem:'エンタープライズ', enterprise:'エンタープライズ'}[config.stripe_plan] || 'Standard'}</p>
-                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380円/月 - スタッフ10名まで', pro:'4,880円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限', oem:'エンタープライズ - スタッフ無制限', enterprise:'エンタープライズ - スタッフ無制限'}[config.stripe_plan] || '3,380円/月 - スタッフ10名まで'}</p>
+                                    <p class="text-3xl font-extrabold mt-1">${{standard:'Standard', pro:'Pro', premium:'Premium', oem:'OEM', enterprise:'Enterprise'}[config.stripe_plan] || 'Standard'}</p>
+                                    <p class="text-white/80 text-sm mt-1">${{standard:'3,380円/月 - スタッフ10名まで', pro:'4,880円/月 - スタッフ50名まで', premium:'9,980円/月 - スタッフ無制限', oem:'OEM - スタッフ無制限・全機能', enterprise:'Enterprise - スタッフ無制限・全機能'}[config.stripe_plan] || '3,380円/月 - スタッフ10名まで'}</p>
                                 </div>
                                 <div class="text-right flex flex-col items-end gap-2">
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 rounded-full text-sm font-bold backdrop-blur-sm">
