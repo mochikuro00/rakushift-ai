@@ -26,7 +26,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
             integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4"
             crossorigin="anonymous"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&family=M+PLUS+Rounded+1c:wght@700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #4f46e5;
@@ -896,218 +896,336 @@
 
             <!-- ===== 運営マニュアルタブ (v3.7.272) ===== -->
             <div id="panelManual" class="hidden panel">
-                <div class="max-w-4xl mx-auto space-y-5">
-                    <div>
-                        <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-book text-indigo-500 mr-2"></i>運営管理マニュアル</h2>
-                        <p class="text-sm text-gray-500 mt-1">この運営コンソールの各タブの使い方と、運営者が行う作業をまとめています。</p>
+                <style>
+                  /* ===== v3.7.283 運営マニュアル 視認性リデザイン ===== */
+                  #panelManual{ font-size:16px; color:#334155; }
+                  #panelManual .man-wrap{ max-width:56rem; margin:0 auto; }
+                  #panelManual .man-title{ font-family:'M PLUS Rounded 1c','Noto Sans JP',sans-serif; font-weight:800; }
+                  #panelManual h3.man-h{ font-family:'M PLUS Rounded 1c','Noto Sans JP',sans-serif; font-weight:800; font-size:1.35rem; color:#0f172a; margin:0; }
+                  #panelManual h4.man-sub{ font-family:'M PLUS Rounded 1c','Noto Sans JP',sans-serif; font-weight:700; font-size:1.1rem; color:#1e293b; margin:1.25rem 0 .5rem; display:flex; align-items:center; gap:.5rem; }
+                  #panelManual .man-card{ background:#fff; border-radius:18px; border:1px solid #eef1f6; border-left:7px solid var(--c,#6366f1); box-shadow:0 2px 10px rgba(15,23,42,.05); overflow:hidden; }
+                  #panelManual .man-head{ display:flex; align-items:center; gap:.85rem; padding:1rem 1.35rem; background:var(--bg,#eef2ff); border-bottom:1px solid rgba(0,0,0,.04); }
+                  #panelManual .man-badge{ flex:0 0 auto; width:2.5rem; height:2.5rem; border-radius:12px; background:var(--c,#6366f1); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.15rem; box-shadow:0 3px 8px color-mix(in srgb, var(--c,#6366f1) 40%, transparent); }
+                  #panelManual .man-body{ padding:1.15rem 1.35rem 1.35rem; line-height:1.85; }
+                  #panelManual .man-body p{ line-height:1.85; }
+                  #panelManual .man-list{ list-style:none; margin:.5rem 0 0; padding:0; }
+                  #panelManual .man-list li{ position:relative; padding:.35rem 0 .35rem 1.6rem; border-bottom:1px dashed #eef1f6; }
+                  #panelManual .man-list li:last-child{ border-bottom:0; }
+                  #panelManual .man-list li::before{ content:'\f105'; font-family:'Font Awesome 6 Free'; font-weight:900; position:absolute; left:.4rem; top:.5rem; color:var(--c,#6366f1); font-size:.85rem; }
+                  #panelManual .man-list b, #panelManual .man-body b{ color:#0f172a; font-weight:700; }
+                  /* テーブル */
+                  #panelManual .man-tablewrap{ overflow-x:auto; border:1px solid #e5e9f0; border-radius:12px; margin:.35rem 0 .5rem; }
+                  #panelManual table.man-table{ width:100%; border-collapse:collapse; font-size:.95rem; }
+                  #panelManual table.man-table th{ background:var(--c,#6366f1); color:#fff; font-weight:700; text-align:left; padding:.7rem .85rem; white-space:nowrap; }
+                  #panelManual table.man-table td{ padding:.7rem .85rem; border-top:1px solid #eef1f6; vertical-align:top; }
+                  #panelManual table.man-table tbody tr:nth-child(even){ background:#fafbfe; }
+                  #panelManual table.man-table td:first-child{ font-weight:700; color:#0f172a; white-space:nowrap; }
+                  /* コールアウト */
+                  #panelManual .cal{ border-radius:12px; padding:.9rem 1.05rem; margin:.75rem 0; line-height:1.8; border:1px solid; }
+                  #panelManual .cal p{ margin:0; }
+                  #panelManual .cal .cal-t{ font-weight:800; display:flex; align-items:center; gap:.45rem; margin-bottom:.3rem; }
+                  #panelManual .cal-danger{ background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+                  #panelManual .cal-warn{ background:#fffbeb; border-color:#fde68a; color:#92400e; }
+                  #panelManual .cal-ok{ background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
+                  #panelManual .cal-info{ background:#eff6ff; border-color:#bfdbfe; color:#1e40af; }
+                  #panelManual .man-flow{ display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; font-weight:700; font-size:.92rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:.7rem .9rem; margin-top:.6rem; }
+                  #panelManual .man-flow .st{ background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:.2rem .55rem; }
+                  #panelManual .man-flow .st.stop{ background:#fef2f2; border-color:#fecaca; color:#b91c1c; }
+                  #panelManual .man-flow .st.del{ background:#334155; color:#fff; border-color:#334155; }
+                  #panelManual .man-flow .ar{ color:#94a3b8; }
+                  /* 目次 */
+                  #panelManual .toc{ display:grid; grid-template-columns:repeat(2,1fr); gap:.6rem; }
+                  @media(min-width:640px){ #panelManual .toc{ grid-template-columns:repeat(3,1fr); } }
+                  #panelManual .toc a{ display:flex; align-items:center; gap:.6rem; padding:.7rem .85rem; border-radius:12px; background:#fff; border:1px solid #eef1f6; border-left:5px solid var(--c,#6366f1); font-weight:700; color:#334155; text-decoration:none; transition:all .15s; font-size:.97rem; }
+                  #panelManual .toc a:hover{ background:var(--bg,#eef2ff); transform:translateY(-1px); box-shadow:0 3px 8px rgba(15,23,42,.06); }
+                  #panelManual .toc a i{ color:var(--c,#6366f1); width:1.2rem; text-align:center; }
+                </style>
+                <div class="man-wrap space-y-5">
+                    <!-- ヘッダー -->
+                    <div class="rounded-2xl p-6 text-white" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 55%,#9333ea 100%);box-shadow:0 8px 24px rgba(79,70,229,.25);">
+                        <h2 class="man-title text-2xl flex items-center gap-3"><i class="fas fa-book-open"></i>運営管理マニュアル</h2>
+                        <p class="text-white/85 mt-1.5 text-[15px]">この運営コンソールの各タブの使い方と、運営者が行う作業をまとめています。項目をタップして移動できます。</p>
                     </div>
 
                     <!-- 目次 -->
-                    <div class="bg-white rounded-xl border border-gray-200 p-4">
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-                            <a href="#man-customers" class="text-indigo-600 hover:underline">① 顧客情報</a>
-                            <a href="#man-tenants" class="text-indigo-600 hover:underline">② テナント管理</a>
-                            <a href="#man-hq" class="text-indigo-600 hover:underline">③ 本部管理</a>
-                            <a href="#man-revenue" class="text-indigo-600 hover:underline">④ 事業収益</a>
-                            <a href="#man-payments" class="text-indigo-600 hover:underline">⑤ 決済管理</a>
-                            <a href="#man-referrers" class="text-indigo-600 hover:underline">⑥ 紹介者管理</a>
-                            <a href="#man-announce" class="text-indigo-600 hover:underline">⑦ お知らせ管理</a>
-                            <a href="#man-inquiry" class="text-indigo-600 hover:underline">⑧ お問い合わせ</a>
-                            <a href="#man-cancel" class="text-red-600 hover:underline font-bold">⑨ 解約対応（重要）</a>
-                            <a href="#man-settings" class="text-indigo-600 hover:underline">⑩ プラットフォーム設定</a>
+                    <div class="man-card" style="--c:#64748b;--bg:#f1f5f9">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-list-ul"></i></span><h3 class="man-h">目次</h3></div>
+                        <div class="man-body">
+                            <div class="toc">
+                                <a href="#man-customers" style="--c:#6366f1;--bg:#eef2ff"><i class="fas fa-address-book"></i>① 顧客情報</a>
+                                <a href="#man-tenants"   style="--c:#3b82f6;--bg:#eff6ff"><i class="fas fa-building"></i>② テナント管理</a>
+                                <a href="#man-hq"        style="--c:#14b8a6;--bg:#f0fdfa"><i class="fas fa-sitemap"></i>③ 本部管理</a>
+                                <a href="#man-revenue"   style="--c:#10b981;--bg:#ecfdf5"><i class="fas fa-chart-line"></i>④ 事業収益</a>
+                                <a href="#man-payments"  style="--c:#22c55e;--bg:#f0fdf4"><i class="fas fa-credit-card"></i>⑤ 決済管理</a>
+                                <a href="#man-referrers" style="--c:#f59e0b;--bg:#fffbeb"><i class="fas fa-user-group"></i>⑥ 紹介者管理</a>
+                                <a href="#man-announce"  style="--c:#0ea5e9;--bg:#f0f9ff"><i class="fas fa-bullhorn"></i>⑦ お知らせ管理</a>
+                                <a href="#man-inquiry"   style="--c:#8b5cf6;--bg:#f5f3ff"><i class="fas fa-envelope-open-text"></i>⑧ お問い合わせ</a>
+                                <a href="#man-cancel"    style="--c:#ef4444;--bg:#fef2f2"><i class="fas fa-door-open"></i>⑨ 解約対応 <span class="ml-auto text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">重要</span></a>
+                                <a href="#man-cooling"   style="--c:#e11d48;--bg:#fff1f2"><i class="fas fa-scale-balanced"></i>⑩ クーリングオフ <span class="ml-auto text-[10px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full">法令</span></a>
+                                <a href="#man-settings"  style="--c:#475569;--bg:#f1f5f9"><i class="fas fa-key"></i>⑪ プラットフォーム設定</a>
+                            </div>
                         </div>
                     </div>
 
-                    <div id="man-customers" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">① 顧客情報</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">Stripe契約・手動発行テナント・お問い合わせ（見込み客）を1画面に集約したメイン画面です。</p>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
-                            <li>上部サマリーで Stripe契約数／手動発行数／見込み客数／解約数 を一目で確認。</li>
-                            <li><b>名称をクリック</b>すると顧客詳細（会社名・住所・代表/担当電話・メール・紹介者コード・プラン・スタッフ数・解約状況）が開きます。</li>
-                            <li><b>解約の管理</b>セクション：発効待ちは「今すぐ停止」、停止済みは「復活」。解約手続き中があるとタブに赤バッジが付きます。</li>
-                            <li>検索窓とソース別フィルタで絞り込めます。</li>
-                        </ul>
-                    </div>
+                    <!-- ① 顧客情報 -->
+                    <section id="man-customers" class="man-card" style="--c:#6366f1;--bg:#eef2ff">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-address-book"></i></span><h3 class="man-h">① 顧客情報</h3></div>
+                        <div class="man-body">
+                            <p>Stripe契約・手動発行テナント・お問い合わせ（見込み客）を1画面に集約したメイン画面です。</p>
+                            <ul class="man-list">
+                                <li>上部サマリーで <b>Stripe決済／OEM代理店／請求書払い／見込み客／解約</b> を一目で確認。</li>
+                                <li><b>名称をクリック</b>すると顧客詳細（会社名・住所・代表/担当電話・メール・紹介者コード・プラン・請求カテゴリー・スタッフ数・解約状況）が開きます。</li>
+                                <li><b>解約の管理</b>セクション：発効待ちは「今すぐ停止」、停止済みは「復活」。解約手続き中があるとタブに赤バッジが付きます。</li>
+                                <li>検索窓と<b>請求カテゴリー別フィルタ</b>で絞り込めます。</li>
+                            </ul>
+                        </div>
+                    </section>
 
-                    <div id="man-tenants" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">② テナント管理</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">全テナント（契約店舗）の一覧・作成・保守を行います。</p>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
-                            <li><b>＋新規テナント</b>：手動でテナントを発行（請求書払い・OEM等）。会社名・プラン・紹介者コードを設定できます。</li>
-                            <li><b>👁 観覧</b>：そのテナントのシフト・スタッフ・設定を閲覧。</li>
-                            <li><b>🔑 PINリセット</b>：管理者がPINを忘れた場合に初期化（次回ログイン時に再設定）。</li>
-                            <li><b>🏷 プラン変更</b>：テナントのプランを運営側から変更。</li>
-                            <li><b>⏸ 停止 / ▶ 復活 / 🗑 削除</b>：ライセンスの停止・復活・完全削除。停止後もデータは6ヶ月保持されます。</li>
-                            <li>上部「APIキー・プラットフォーム設定」で Stripe / Gemini 等のキーを管理します（⑩参照）。</li>
-                        </ul>
-                    </div>
+                    <!-- ② テナント管理 -->
+                    <section id="man-tenants" class="man-card" style="--c:#3b82f6;--bg:#eff6ff">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-building"></i></span><h3 class="man-h">② テナント管理</h3></div>
+                        <div class="man-body">
+                            <p>全テナント（契約店舗）の一覧・作成・保守を行います。<b>並び替え</b>（新規登録順ほか）で探せます。</p>
+                            <ul class="man-list">
+                                <li><b>＋新規テナント</b>：手動でテナントを発行（請求書払い・OEM等）。会社名・プラン・紹介者コードを設定できます。</li>
+                                <li><b><i class="fas fa-eye text-blue-500"></i> 観覧</b>：そのテナントのシフト・スタッフ・設定を閲覧。</li>
+                                <li><b><i class="fas fa-key text-amber-500"></i> PINリセット</b>：管理者がPINを忘れた場合に初期化（次回ログイン時に再設定）。</li>
+                                <li><b><i class="fas fa-tags text-purple-500"></i> プラン変更</b>：テナントのプランを運営側から変更。</li>
+                                <li><b><i class="fas fa-pause text-red-500"></i> 停止 / <i class="fas fa-play text-green-500"></i> 復活 / <i class="fas fa-trash text-gray-500"></i> 削除</b>：ライセンスの停止・復活・完全削除。停止後もデータは6ヶ月保持されます。</li>
+                                <li>上部「APIキー・プラットフォーム設定」で Stripe / Gemini 等のキーを管理します（⑩参照）。</li>
+                            </ul>
+                        </div>
+                    </section>
 
-                    <div id="man-hq" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">③ 本部管理</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">複数店舗をまとめて閲覧する「本部アカウント」を発行・管理します。</p>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
-                            <li><b>本部発行</b>：本部ID・パスワード・管轄する店舗を設定。管轄店舗は検索・並び替え・一括選択できます（100店舗超でも探せます）。</li>
-                            <li><b>管轄編集</b>：後から管轄店舗を追加・削除。</li>
-                            <li>本部は「契約ID＋管理者パスワード」で店舗を管轄に登録することもできます。</li>
-                            <li>本部は管轄店舗を店舗管理者と同等に操作できます（AI生成・編集含む）。</li>
-                        </ul>
-                    </div>
+                    <!-- ③ 本部管理 -->
+                    <section id="man-hq" class="man-card" style="--c:#14b8a6;--bg:#f0fdfa">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-sitemap"></i></span><h3 class="man-h">③ 本部管理</h3></div>
+                        <div class="man-body">
+                            <p>複数店舗をまとめて閲覧する「本部アカウント」を発行・管理します。</p>
+                            <ul class="man-list">
+                                <li><b>本部発行</b>：本部ID・パスワード・管轄する店舗を設定。管轄店舗は検索・並び替え・一括選択できます（100店舗超でも探せます）。</li>
+                                <li><b>管轄編集</b>：後から管轄店舗を追加・削除。</li>
+                                <li>本部は「契約ID＋管理者パスワード」で店舗を管轄に登録することもできます。</li>
+                                <li>本部は管轄店舗を店舗管理者と同等に操作できます（AI生成・編集含む）。</li>
+                            </ul>
+                        </div>
+                    </section>
 
-                    <div id="man-revenue" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">④ 事業収益</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">MRR（月間経常収益）やプラン別内訳を把握します。課金中テナントの合計月額が表示されます。</p>
-                    </div>
+                    <!-- ④ 事業収益 -->
+                    <section id="man-revenue" class="man-card" style="--c:#10b981;--bg:#ecfdf5">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-chart-line"></i></span><h3 class="man-h">④ 事業収益</h3></div>
+                        <div class="man-body">
+                            <p>MRR（月間経常収益）やプラン別内訳を把握します。課金中テナントの合計月額が表示されます。</p>
+                            <ul class="man-list">
+                                <li><b>顧客別収益一覧</b>：請求カテゴリー（Stripe/OEM/請求書）タブで切替、各列で昇順降順ソート。</li>
+                            </ul>
+                        </div>
+                    </section>
 
-                    <div id="man-payments" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">⑤ 決済管理</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">Stripe の実際の決済状況を「決済済み」「未決済（失敗・回収不能）」に分けて表示します。</p>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
-                            <li>未決済がある場合、ログイン時に<b>赤バッジ＋アラート音</b>で通知されます。</li>
-                            <li>各行の請求書リンクから Stripe の請求書を開けます。再試行回数・次回再試行日も表示。</li>
-                            <li><b>運営作業</b>：未決済が続く顧客には連絡し、支払い方法の更新を促してください（21日で自動停止）。</li>
-                        </ul>
-                    </div>
+                    <!-- ⑤ 決済管理 -->
+                    <section id="man-payments" class="man-card" style="--c:#22c55e;--bg:#f0fdf4">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-credit-card"></i></span><h3 class="man-h">⑤ 決済管理</h3></div>
+                        <div class="man-body">
+                            <p>Stripe の実際の決済状況を「決済済み」「未決済（失敗・回収不能）」に分けて表示します。</p>
+                            <ul class="man-list">
+                                <li>未決済がある場合、ログイン時に<b>赤バッジ＋アラート音</b>で通知されます。</li>
+                                <li>各行の請求書リンクから Stripe の請求書を開けます。再試行回数・次回再試行日も表示。</li>
+                                <li><b>運営作業</b>：未決済が続く顧客には連絡し、支払い方法の更新を促してください（21日で自動停止）。</li>
+                            </ul>
+                        </div>
+                    </section>
 
-                    <div id="man-referrers" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">⑥ 紹介者管理</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">紹介者（代理店・パートナー）の発行と報酬管理を行います。</p>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
-                            <li><b>新規発行</b>：紹介者名・紹介法人名・紹介者コード（空欄で自動生成）・報酬タイプ（％ or 固定額）・<b>振込口座</b>を登録。</li>
-                            <li><b>紹介数</b>の件数をクリックすると、その紹介者が契約させた顧客一覧（会社名・契約ID・プラン・課金/未課金・契約日）が開きます。</li>
-                            <li>紹介者コードは、新規申込フォーム／お問い合わせフォーム／手動テナント発行のいずれからでも紐付きます。</li>
-                            <li><b>運営作業</b>：月次で報酬額を確認し、登録された振込口座へ振込を行います。</li>
-                        </ul>
+                    <!-- ⑥ 紹介者管理 -->
+                    <section id="man-referrers" class="man-card" style="--c:#f59e0b;--bg:#fffbeb">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-user-group"></i></span><h3 class="man-h">⑥ 紹介者管理</h3></div>
+                        <div class="man-body">
+                            <p>紹介者（代理店・パートナー）の発行と報酬管理を行います。</p>
+                            <ul class="man-list">
+                                <li><b>新規発行</b>：紹介者名・紹介法人名・紹介者コード（空欄で自動生成）・報酬タイプ（％ or 固定額）・<b>振込口座</b>を登録。</li>
+                                <li><b>紹介数</b>の件数をクリックすると、その紹介者が契約させた顧客一覧（会社名・契約ID・プラン・課金/未課金・契約日）が開きます。</li>
+                                <li>紹介者コードは、新規申込フォーム／お問い合わせフォーム／手動テナント発行のいずれからでも紐付きます。</li>
+                                <li><b>運営作業</b>：月次で報酬額を確認し、登録された振込口座へ振込を行います。</li>
+                            </ul>
 
-                        <!-- v3.7.282: 紹介フローの制定 -->
-                        <h4 class="font-bold text-gray-900 mt-4 mb-2">🤝 紹介フロー（制定）</h4>
-                        <table class="w-full text-sm border-collapse mb-2">
-                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">段階</th><th class="p-2 border text-left">内容</th><th class="p-2 border text-left">担当</th></tr></thead>
-                            <tbody>
-                                <tr><td class="p-2 border font-bold">1. 紹介者登録</td><td class="p-2 border">紹介者管理タブで新規発行。<b>紹介者コード</b>（例：PARTNER01）と<b>報酬条件</b>・<b>振込口座</b>を登録。</td><td class="p-2 border">運営</td></tr>
-                                <tr><td class="p-2 border font-bold">2. コード共有</td><td class="p-2 border">発行した紹介者コードを紹介者へ通知。紹介者は見込み客に案内する。</td><td class="p-2 border">運営→紹介者</td></tr>
-                                <tr><td class="p-2 border font-bold">3. 顧客が申込</td><td class="p-2 border">顧客が新規申込フォーム／お問い合わせで<b>紹介者コードを入力</b>。手動発行時は運営がコードを設定。</td><td class="p-2 border">顧客 / 運営</td></tr>
-                                <tr><td class="p-2 border font-bold">4. 契約成立で紐付け</td><td class="p-2 border">契約が成立するとテナントに紹介者コードが記録され、<b>紹介数</b>にカウント。</td><td class="p-2 border">自動</td></tr>
-                                <tr><td class="p-2 border font-bold">5. 実績確認</td><td class="p-2 border">紹介者一覧の「紹介数」から<b>課金中の顧客</b>を確認（未課金は報酬対象外の判断材料）。</td><td class="p-2 border">運営</td></tr>
-                                <tr><td class="p-2 border font-bold">6. 報酬計算・振込</td><td class="p-2 border"><b>月次</b>で報酬額（％ or 固定 ¥3,200/件 等）を集計し、登録済み振込口座へ支払う。</td><td class="p-2 border">運営</td></tr>
-                                <tr><td class="p-2 border font-bold">7. 解約時</td><td class="p-2 border">紹介顧客が解約・停止した場合は、翌月以降の継続報酬（％型）を停止。単発報酬（固定型）は支払済み分そのまま。</td><td class="p-2 border">運営</td></tr>
-                            </tbody>
-                        </table>
-                        <p class="text-xs text-gray-500">※ 報酬条件（率・固定額・継続/単発）は紹介者ごとに登録した内容に従います。OEM（代理店）契約は紹介料 ¥3,200/件・Stripe非連動の手動管理が既定です。</p>
-                    </div>
+                            <h4 class="man-sub"><i class="fas fa-handshake"></i>紹介フロー（制定）</h4>
+                            <div class="man-tablewrap">
+                                <table class="man-table">
+                                    <thead><tr><th>段階</th><th>内容</th><th>担当</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>1. 紹介者登録</td><td>紹介者管理タブで新規発行。<b>紹介者コード</b>（例：PARTNER01）と<b>報酬条件</b>・<b>振込口座</b>を登録。</td><td>運営</td></tr>
+                                        <tr><td>2. コード共有</td><td>発行した紹介者コードを紹介者へ通知。紹介者は見込み客に案内する。</td><td>運営→紹介者</td></tr>
+                                        <tr><td>3. 顧客が申込</td><td>顧客が新規申込フォーム／お問い合わせで<b>紹介者コードを入力</b>。手動発行時は運営がコードを設定。</td><td>顧客 / 運営</td></tr>
+                                        <tr><td>4. 契約成立で紐付け</td><td>契約が成立するとテナントに紹介者コードが記録され、<b>紹介数</b>にカウント。</td><td>自動</td></tr>
+                                        <tr><td>5. 実績確認</td><td>紹介者一覧の「紹介数」から<b>課金中の顧客</b>を確認（未課金は報酬対象外の判断材料）。</td><td>運営</td></tr>
+                                        <tr><td>6. 報酬計算・振込</td><td><b>月次</b>で報酬額（％ or 固定 ¥3,200/件 等）を集計し、登録済み振込口座へ支払う。</td><td>運営</td></tr>
+                                        <tr><td>7. 解約時</td><td>紹介顧客が解約・停止した場合は、翌月以降の継続報酬（％型）を停止。単発報酬（固定型）は支払済み分そのまま。</td><td>運営</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-sm text-gray-500">※ 報酬条件（率・固定額・継続/単発）は紹介者ごとに登録した内容に従います。OEM（代理店）契約は紹介料 ¥3,200/件・Stripe非連動の手動管理が既定です。</p>
+                        </div>
+                    </section>
 
-                    <div id="man-announce" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">⑦ お知らせ管理</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">全テナントに表示するお知らせを作成・編集します。種別（お知らせ/注意/キャンペーン/アップデート）・優先度・有効期限・リンクボタンを設定できます。</p>
-                        <p class="text-xs text-amber-700 mt-2">※ リンクボタンのURLに自サイトのURLを入れると「詳しく見る」でログイン画面に戻るため、外部URLか空欄にしてください。</p>
-                    </div>
+                    <!-- ⑦ お知らせ管理 -->
+                    <section id="man-announce" class="man-card" style="--c:#0ea5e9;--bg:#f0f9ff">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-bullhorn"></i></span><h3 class="man-h">⑦ お知らせ管理</h3></div>
+                        <div class="man-body">
+                            <p>全テナントに表示するお知らせを作成・編集します。種別（お知らせ/注意/キャンペーン/アップデート）・優先度・有効期限・リンクボタンを設定できます。</p>
+                            <div class="cal cal-warn"><p><i class="fas fa-triangle-exclamation mr-1"></i>リンクボタンのURLに自サイトのURLを入れると「詳しく見る」でログイン画面に戻るため、外部URLか空欄にしてください。</p></div>
+                        </div>
+                    </section>
 
-                    <div id="man-inquiry" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">⑧ お問い合わせ</h3>
-                        <p class="text-sm text-gray-700 leading-relaxed">3店舗以上の申込フォームからの問い合わせが届きます。会社名・事業者名・メール・電話・希望プラン・希望日程・紹介者コードを確認できます。</p>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-2 space-y-1 leading-relaxed">
-                            <li>問い合わせが入ると <b>rakushift.ai@gmail.com へ自動メール通知</b>されます（本文に連絡先・希望内容を記載）。</li>
-                            <li>解約申請（手動契約）も同じ通知先にメールが届き、顧客情報タブの解約管理に表示されます。</li>
-                        </ul>
-                    </div>
+                    <!-- ⑧ お問い合わせ -->
+                    <section id="man-inquiry" class="man-card" style="--c:#8b5cf6;--bg:#f5f3ff">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-envelope-open-text"></i></span><h3 class="man-h">⑧ お問い合わせ</h3></div>
+                        <div class="man-body">
+                            <p>3店舗以上の申込フォームからの問い合わせが届きます。会社名・事業者名・メール・電話・希望プラン・希望日程・紹介者コードを確認できます。</p>
+                            <ul class="man-list">
+                                <li>問い合わせが入ると <b>rakushift.ai@gmail.com へ自動メール通知</b>されます（本文に連絡先・希望内容を記載）。</li>
+                                <li>解約申請（手動契約）も同じ通知先にメールが届き、顧客情報タブの解約管理に表示されます。</li>
+                            </ul>
+                        </div>
+                    </section>
 
-                    <div id="man-cancel" class="bg-white rounded-xl border-2 border-red-200 p-5">
-                        <h3 class="font-bold text-red-700 mb-2">⑨ 解約対応（運営者が行うこと）</h3>
-
-                        <!-- v3.7.282: 用語の定義 -->
-                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-800 leading-relaxed mb-3">
-                            <p class="font-bold mb-1">用語の定義</p>
-                            <ul class="list-disc list-inside ml-1 space-y-1">
-                                <li><b>解約</b>：顧客がサービスの利用をやめる<b>意思表示・手続き</b>。すぐには止まらず、<b>発効日</b>（Strip=契約期間末 / 手動=当月末）まで全機能を利用できる。発効日を迎えると自動的に「停止」になる。</li>
-                                <li><b>停止（ライセンス停止）</b>：ログイン・利用が<b>できなくなった状態</b>（license_status = suspended）。①解約の発効、②支払い失敗の継続（Stripeは約21日）、③運営による手動停止、のいずれかで発生する。<b>データは残ったまま</b>で、復活すれば元に戻る。</li>
+                    <!-- ⑨ 解約対応 -->
+                    <section id="man-cancel" class="man-card" style="--c:#ef4444;--bg:#fef2f2">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-door-open"></i></span><h3 class="man-h">⑨ 解約対応（運営者が行うこと）</h3></div>
+                        <div class="man-body">
+                            <h4 class="man-sub"><i class="fas fa-book-bookmark"></i>用語の定義（解約 ≠ 停止）</h4>
+                            <ul class="man-list">
+                                <li><b>解約</b>：顧客がサービスの利用をやめる<b>意思表示・手続き</b>。すぐには止まらず、<b>発効日</b>（Stripe＝契約期間末 / 手動＝当月末）まで全機能を利用できる。発効日を迎えると自動的に「停止」になる。</li>
+                                <li><b>停止（ライセンス停止）</b>：ログイン・利用が<b>できなくなった状態</b>（license_status = suspended）。①解約の発効、②支払い失敗の継続（Stripeは約21日）、③運営による手動停止、のいずれかで発生。<b>データは残ったまま</b>で、復活すれば元に戻る。</li>
                                 <li><b>削除</b>：停止から<b>6ヶ月経過</b>後にデータを物理的に消す最終段階。<b>復元不可</b>。</li>
                             </ul>
-                            <p class="mt-2 text-xs text-gray-500">流れ：<b>契約中 →（解約手続き）→ 発効日まで利用可 →（発効）→ 停止（6ヶ月データ保持）→（6ヶ月経過）→ 削除</b></p>
-                        </div>
+                            <div class="man-flow">
+                                <span class="st">契約中</span><span class="ar">→</span><span class="st">解約手続き</span><span class="ar">→</span><span class="st">発効日まで利用可</span><span class="ar">→</span><span class="st stop">停止（6ヶ月保持）</span><span class="ar">→</span><span class="st del">削除</span>
+                            </div>
 
-                        <table class="w-full text-sm border-collapse mb-3">
-                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">段階</th><th class="p-2 border text-left">クレジット契約（Stripe）</th><th class="p-2 border text-left">手動発行契約</th></tr></thead>
-                            <tbody>
-                                <tr><td class="p-2 border font-bold">解約手続き</td><td class="p-2 border">顧客が請求ポータルで解約（運営作業なし）</td><td class="p-2 border">顧客が「解約を申請する」→ 運営にメール通知</td></tr>
-                                <tr><td class="p-2 border font-bold">発効日</td><td class="p-2 border">契約日起算の期間末日</td><td class="p-2 border">申請月の末日（当月末）</td></tr>
-                                <tr><td class="p-2 border font-bold">サービス停止</td><td class="p-2 border text-green-700">Webhookで<b>自動</b>停止</td><td class="p-2 border text-green-700">毎日0:05のジョブで<b>自動</b>停止</td></tr>
-                                <tr><td class="p-2 border font-bold">運営がやること</td><td class="p-2 border">原則なし（前倒し停止したい時のみ顧客情報→今すぐ停止）</td><td class="p-2 border">原則なし。発効前に止めたい場合のみ「今すぐ停止」</td></tr>
-                                <tr><td class="p-2 border font-bold">復活</td><td class="p-2 border">支払い再開/再契約で<b>自動復活</b>（6ヶ月以内・契約IDそのまま）</td><td class="p-2 border">顧客情報 or テナント管理の「復活」ボタン（6ヶ月以内）</td></tr>
-                            </tbody>
-                        </table>
-                        <div class="bg-red-50 rounded-lg p-3 text-sm text-red-900 leading-relaxed">
-                            <p class="font-bold mb-1">重要ポイント</p>
-                            <ul class="list-disc list-inside ml-1 space-y-1">
-                                <li>解約後も<b>データは6ヶ月保持</b>。6ヶ月を過ぎると自動削除されます。</li>
-                                <li>Stripe契約は、支払い回復・再アクティブ化でライセンスが<b>自動で復活</b>します（テナント情報・契約IDは変わりません）。</li>
-                                <li>手動契約の復活は運営が「復活」ボタンで行います。</li>
-                                <li>どちらも日割り返金はありません（発効日まで利用可）。</li>
+                            <h4 class="man-sub"><i class="fas fa-list-check"></i>解約の段階と運営作業</h4>
+                            <div class="man-tablewrap">
+                                <table class="man-table">
+                                    <thead><tr><th>段階</th><th>クレジット契約（Stripe）</th><th>手動発行契約</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>解約手続き</td><td>顧客が請求ポータルで解約（運営作業なし）</td><td>顧客が「解約を申請する」→ 運営にメール通知</td></tr>
+                                        <tr><td>発効日</td><td>契約日起算の期間末日</td><td>申請月の末日（当月末）</td></tr>
+                                        <tr><td>サービス停止</td><td><b class="text-green-700">Webhookで自動停止</b></td><td><b class="text-green-700">毎日0:05のジョブで自動停止</b></td></tr>
+                                        <tr><td>運営がやること</td><td>原則なし（前倒し停止したい時のみ 顧客情報→今すぐ停止）</td><td>原則なし。発効前に止めたい場合のみ「今すぐ停止」</td></tr>
+                                        <tr><td>復活</td><td>支払い再開/再契約で<b>自動復活</b>（6ヶ月以内・契約IDそのまま）</td><td>顧客情報 or テナント管理の「復活」ボタン（6ヶ月以内）</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h4 class="man-sub"><i class="fas fa-yen-sign"></i>解約・停止と料金の発生</h4>
+                            <div class="man-tablewrap">
+                                <table class="man-table">
+                                    <thead><tr><th>状態</th><th>クレジット契約（Stripe）</th><th>手動発行契約（請求書 / OEM）</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>解約発効日まで</td><td>通常どおり課金（利用可）</td><td>通常どおり請求（利用可）</td></tr>
+                                        <tr><td>発効日以降（＝停止）</td><td><b class="text-green-700">課金は自動停止</b>（期間末で次回請求なし）</td><td><b class="text-green-700">以降の請求を停止</b>（請求書を発行しない）</td></tr>
+                                        <tr><td>日割り返金</td><td colspan="2"><b>なし</b>（支払い済み期間は発効日まで全機能利用可）</td></tr>
+                                        <tr><td>復活後</td><td>支払い再開で通常課金が再開</td><td>運営の「復活」後、通常請求を再開</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="cal cal-warn">
+                                <p class="cal-t"><i class="fas fa-triangle-exclamation"></i>「今すぐ停止」で前倒し停止する場合の注意</p>
+                                <p>「今すぐ停止」は<b>アクセスを即遮断</b>しますが、Stripeのサブスクリプション自体を解約するものではありません。顧客がまだStripeで解約していない状態で運営が前倒し停止すると、<b>Stripe側の課金は継続</b>します。課金も止めたい場合は、Stripeダッシュボード（または顧客の請求ポータル）でサブスクリプションを解約してください。手動契約（Stripe非連動）は課金継続の心配はありません。</p>
+                            </div>
+
+                            <h4 class="man-sub"><i class="fas fa-calendar-days"></i>停止してから6ヶ月後どうなるか</h4>
+                            <div class="man-tablewrap">
+                                <table class="man-table">
+                                    <thead><tr><th>期間</th><th>状態と対応</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>停止日〜6ヶ月</td><td><b>データは全て保持</b>。この間はログイン不可（利用停止）だが、<b>復活すれば契約ID・全データそのまま</b>で即再開できる（新たな課金・請求は復活まで発生しない）。</td></tr>
+                                        <tr><td>6ヶ月経過時点</td><td>保持期間切れ。テナント管理タブの<b>「削除予定」統計</b>と<b>期限切れ一覧</b>に表示される（＝物理削除の対象）。</td></tr>
+                                        <tr><td>6ヶ月経過後</td><td><b class="text-red-700">保持期間クリーンアップジョブでデータを物理削除。復元不可。</b>以降の利用再開は<b>新規契約（契約ID・データは新規）</b>となる。</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h4 class="man-sub"><i class="fas fa-recycle"></i>データを保持したまま復旧させるフロー（停止から6ヶ月以内）</h4>
+                            <p>停止中でも6ヶ月以内なら、<b>契約ID・スタッフ・シフト・設定をすべて保持したまま</b>元通りに再開できます。</p>
+                            <div class="grid md:grid-cols-2 gap-3 mt-2">
+                                <div class="cal cal-ok">
+                                    <p class="cal-t"><i class="fas fa-credit-card"></i>クレジット契約（Stripe）</p>
+                                    <ol class="list-decimal list-inside space-y-1">
+                                        <li>顧客が請求ポータルで<b>支払い方法を更新／再契約</b>（同一メール・同一契約）。</li>
+                                        <li>Stripe Webhook が入金を検知 → ライセンスが<b>自動で復活</b>。</li>
+                                        <li>顧客は従来の契約ID・PINで<b>そのままログイン</b>、全データ復元済み。</li>
+                                        <li>前倒しで戻す場合は運営が<b>「復活」</b>でも即復旧可。</li>
+                                    </ol>
+                                </div>
+                                <div class="cal cal-info">
+                                    <p class="cal-t"><i class="fas fa-file-invoice"></i>手動発行契約（請求書 / OEM）</p>
+                                    <ol class="list-decimal list-inside space-y-1">
+                                        <li>運営がテナント管理／顧客情報でそのテナントを開く。</li>
+                                        <li><b>「復活」ボタン</b>を押す → ライセンスが active に戻る。</li>
+                                        <li>顧客は従来の契約ID・PINで<b>そのままログイン</b>、全データ復元済み。</li>
+                                        <li>必要に応じて次月分の<b>請求を再開</b>する。</li>
+                                    </ol>
+                                </div>
+                            </div>
+                            <div class="cal cal-danger">
+                                <p><i class="fas fa-circle-exclamation mr-1"></i><b>6ヶ月を過ぎるとデータは物理削除され、この復旧フローは使えません。</b>その場合は新規契約（新しい契約ID・データはゼロから）になります。復旧の可否は、テナント管理の「削除予定」に入る前かどうかで判断してください。</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ⑩ クーリングオフ -->
+                    <section id="man-cooling" class="man-card" style="--c:#e11d48;--bg:#fff1f2">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-scale-balanced"></i></span><h3 class="man-h">⑩ クーリングオフの取扱い</h3></div>
+                        <div class="man-body">
+                            <div class="cal cal-info">
+                                <p class="cal-t"><i class="fas fa-circle-info"></i>原則：通常のオンライン申込にクーリングオフは無い</p>
+                                <p>本サービスの<b>Webサイトからの申込は「通信販売」</b>に当たり、特定商取引法上の<b>法定クーリングオフ制度の対象外</b>です。返金の可否は特商法表記に記載した<b>返品特約（日割り返金なし・所定の解約ルール）</b>に従います。</p>
+                            </div>
+
+                            <h4 class="man-sub"><i class="fas fa-triangle-exclamation"></i>クーリングオフをしなければならないケース（例外）</h4>
+                            <p>次の<b>販売方法で契約させた場合は「通信販売」ではなく、クーリングオフ義務が発生</b>します（書面交付日から原則<b>8日以内</b>）。特に<b>代理店（OEM）や営業担当が対面・電話で勧誘して契約に至ったケース</b>は該当しやすいので注意してください。</p>
+                            <div class="man-tablewrap">
+                                <table class="man-table">
+                                    <thead><tr><th>販売方法</th><th>具体例</th><th>期間</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>訪問販売</td><td>営業担当・代理店が顧客の店舗/事務所を訪問して勧誘・契約／喫茶店など営業所以外で契約</td><td>8日</td></tr>
+                                        <tr><td>電話勧誘販売</td><td>こちらから電話をかけて勧誘し、その流れで申込ませた</td><td>8日</td></tr>
+                                        <tr><td>アポイントメント/キャッチセールス</td><td>「特別に案内」等と呼び出す・路上で声かけして契約（訪問販売扱い）</td><td>8日</td></tr>
+                                        <tr><td>特定継続的役務 等</td><td>該当する役務・条件に当たる場合（個別判断が必要）</td><td>要確認</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-sm text-gray-500">※ 逆に、顧客が自らWebフォームから申し込んだ場合（通信販売）はこれらに当たらず、クーリングオフ義務はありません。</p>
+
+                            <h4 class="man-sub"><i class="fas fa-list-check"></i>該当した場合の対応方法</h4>
+                            <ol class="list-decimal list-inside space-y-1" style="line-height:1.9">
+                                <li><b>期間内の申出は無条件で受理</b>：理由を問わず、書面・メール・フォーム等の申出で契約解除に応じる（口頭でも受理し記録する）。</li>
+                                <li><b>全額返金</b>：既に受領した料金は<b>全額返金</b>。違約金・使用済み期間分の請求・返金手数料の顧客負担は<b>不可</b>（返金にかかる費用は当社負担）。</li>
+                                <li><b>アカウント処理</b>：ライセンスを停止し、顧客の希望に沿ってデータを扱う（契約は初めから無かったものとして扱う）。</li>
+                                <li><b>記録保存</b>：申出日時・方法・返金額・対応者を記録し、証跡を残す。</li>
+                                <li><b>代理店経由</b>：OEM/紹介者が勧誘した契約でクーリングオフされた場合、その件の<b>紹介報酬は対象外</b>（未払いは支払わない／支払済みは調整）。</li>
+                            </ol>
+                            <div class="cal cal-danger">
+                                <p class="cal-t"><i class="fas fa-ban"></i>禁止：クーリングオフ妨害</p>
+                                <p>「解約できない」等の<b>虚偽説明・威迫でクーリングオフを妨げる</b>ことは禁止です。妨害があった場合、<b>8日を過ぎても顧客はクーリングオフ可能</b>になります。期間の起算は「法定書面（契約内容・クーリングオフの説明を記載した書面）を交付した日」からです。</p>
+                            </div>
+                            <div class="cal cal-warn">
+                                <p><i class="fas fa-circle-exclamation mr-1"></i><b>この記載は一般的な運用指針です。</b>実際に該当するか・期間・書面要件は個別事情で変わります。判断に迷う場合は<b>弁護士・消費生活センター等に確認</b>してください。対面・電話での勧誘販売を行う場合は、事前に法定書面（クーリングオフ告知）の様式を準備しておくことを推奨します。</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ⑪ プラットフォーム設定 -->
+                    <section id="man-settings" class="man-card" style="--c:#475569;--bg:#f1f5f9">
+                        <div class="man-head"><span class="man-badge"><i class="fas fa-key"></i></span><h3 class="man-h">⑪ プラットフォーム設定</h3></div>
+                        <div class="man-body">
+                            <p>テナント管理タブ上部の「APIキー・プラットフォーム設定」で管理します。</p>
+                            <ul class="man-list">
+                                <li><b>Stripe</b>：シークレットキー・価格ID（Standard/Pro/Premium）・Webhook署名シークレット。決済とテナント自動作成に必須。</li>
+                                <li><b>AI（Gemini）</b>：APIキー・モデル。AIシフト生成の労基法チェックに使用。</li>
+                                <li><b>メール（環境変数）</b>：SMTP_USER / SMTP_PASS で送信、INQUIRY_EMAIL_TO で通知先（既定 rakushift.ai@gmail.com）。Railwayの環境変数で設定します。</li>
                             </ul>
                         </div>
-
-                        <!-- v3.7.282: 料金の発生 -->
-                        <h4 class="font-bold text-gray-900 mt-4 mb-2">💴 解約・停止と料金の発生</h4>
-                        <table class="w-full text-sm border-collapse mb-3">
-                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">状態</th><th class="p-2 border text-left">クレジット契約（Stripe）</th><th class="p-2 border text-left">手動発行契約（請求書 / OEM）</th></tr></thead>
-                            <tbody>
-                                <tr><td class="p-2 border font-bold">解約発効日まで</td><td class="p-2 border">通常どおり課金（利用可）</td><td class="p-2 border">通常どおり請求（利用可）</td></tr>
-                                <tr><td class="p-2 border font-bold">発効日以降（＝停止）</td><td class="p-2 border text-green-700"><b>課金は自動停止</b>（期間末で次回請求なし）</td><td class="p-2 border text-green-700"><b>以降の請求を停止</b>（請求書を発行しない）</td></tr>
-                                <tr><td class="p-2 border font-bold">日割り返金</td><td class="p-2 border" colspan="2"><b>なし</b>（支払い済み期間は発効日まで全機能利用可）</td></tr>
-                                <tr><td class="p-2 border font-bold">復活後</td><td class="p-2 border">支払い再開で通常課金が再開</td><td class="p-2 border">運営の「復活」後、通常請求を再開</td></tr>
-                            </tbody>
-                        </table>
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 leading-relaxed mb-3">
-                            <p class="font-bold mb-1"><i class="fas fa-triangle-exclamation mr-1"></i>「今すぐ停止」で前倒し停止する場合の注意</p>
-                            <p>「今すぐ停止」は<b>アクセスを即遮断</b>しますが、Stripeのサブスクリプション自体を解約するものではありません。顧客がまだStripeで解約していない状態で運営が前倒し停止すると、<b>Stripe側の課金は継続</b>します。課金も止めたい場合は、Stripeダッシュボード（または顧客の請求ポータル）でサブスクリプションを解約してください。手動契約（Stripe非連動）は課金継続の心配はありません。</p>
-                        </div>
-
-                        <!-- v3.7.282: 停止6ヶ月後 -->
-                        <h4 class="font-bold text-gray-900 mt-4 mb-2">🗓 停止してから6ヶ月後どうなるか</h4>
-                        <table class="w-full text-sm border-collapse mb-2">
-                            <thead><tr class="bg-gray-50"><th class="p-2 border text-left">期間</th><th class="p-2 border text-left">状態と対応</th></tr></thead>
-                            <tbody>
-                                <tr><td class="p-2 border font-bold">停止日〜6ヶ月</td><td class="p-2 border"><b>データは全て保持</b>。この間はログイン不可（利用停止）だが、<b>復活すれば契約ID・全データそのまま</b>で即再開できる（新たな課金・請求は復活まで発生しない）。</td></tr>
-                                <tr><td class="p-2 border font-bold">6ヶ月経過時点</td><td class="p-2 border">保持期間切れ。テナント管理タブの<b>「削除予定」統計</b>と<b>期限切れ一覧</b>に表示される（＝物理削除の対象）。</td></tr>
-                                <tr><td class="p-2 border font-bold">6ヶ月経過後</td><td class="p-2 border text-red-700">保持期間クリーンアップジョブで<b>データを物理削除</b>。<b>復元不可</b>。以降の利用再開は<b>新規契約（契約ID・データは新規）</b>となる。</td></tr>
-                            </tbody>
-                        </table>
-                        <p class="text-xs text-gray-500">※ 6ヶ月以内であれば、Stripe契約は支払い再開で自動復活、手動契約は「復活」ボタンで復活できます（いずれも契約ID・データ維持）。</p>
-
-                        <!-- v3.7.282: データ保持したまま復旧するフロー -->
-                        <h4 class="font-bold text-gray-900 mt-4 mb-2">♻️ データを保持したまま復旧させるフロー（停止から6ヶ月以内）</h4>
-                        <p class="text-sm text-gray-700 mb-2">停止中でも6ヶ月以内なら、<b>契約ID・スタッフ・シフト・設定をすべて保持したまま</b>元通りに再開できます。</p>
-                        <div class="grid md:grid-cols-2 gap-3">
-                            <div class="border border-green-200 rounded-lg p-3 bg-green-50/40">
-                                <p class="font-bold text-green-700 text-sm mb-1">クレジット契約（Stripe）</p>
-                                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1 leading-relaxed">
-                                    <li>顧客が請求ポータルで<b>支払い方法を更新／再契約</b>する（同一メール・同一契約）。</li>
-                                    <li>Stripe Webhook が入金を検知 → ライセンスが<b>自動で復活</b>（運営作業は原則なし）。</li>
-                                    <li>顧客は従来の契約ID・PINで<b>そのままログイン</b>、全データが復元済み。</li>
-                                    <li>前倒しで戻したい場合は、運営が顧客情報／テナント管理の<b>「復活」</b>でも即復旧可（課金はStripe側の状態に従う）。</li>
-                                </ol>
-                            </div>
-                            <div class="border border-blue-200 rounded-lg p-3 bg-blue-50/40">
-                                <p class="font-bold text-blue-700 text-sm mb-1">手動発行契約（請求書 / OEM）</p>
-                                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1 leading-relaxed">
-                                    <li>運営がテナント管理または顧客情報でそのテナントを開く。</li>
-                                    <li><b>「復活」ボタン</b>を押す → ライセンスが active に戻る。</li>
-                                    <li>顧客は従来の契約ID・PINで<b>そのままログイン</b>、全データが復元済み。</li>
-                                    <li>必要に応じて次月分の<b>請求を再開</b>する。</li>
-                                </ol>
-                            </div>
-                        </div>
-                        <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-900 leading-relaxed mt-3">
-                            <p><i class="fas fa-circle-exclamation mr-1"></i><b>6ヶ月を過ぎるとデータは物理削除され、この復旧フローは使えません。</b>その場合は新規契約（新しい契約ID・データはゼロから）になります。復旧の可否は、テナント管理の「削除予定」に入る前かどうかで判断してください。</p>
-                        </div>
-                    </div>
-
-                    <div id="man-settings" class="bg-white rounded-xl border border-gray-200 p-5">
-                        <h3 class="font-bold text-gray-900 mb-2">⑩ プラットフォーム設定（テナント管理タブ上部）</h3>
-                        <ul class="list-disc list-inside text-sm text-gray-700 mt-1 space-y-1 leading-relaxed">
-                            <li><b>Stripe</b>：シークレットキー・価格ID（Standard/Pro/Premium）・Webhook署名シークレット。決済とテナント自動作成に必須。</li>
-                            <li><b>AI（Gemini）</b>：APIキー・モデル。AIシフト生成の労基法チェックに使用。</li>
-                            <li><b>メール（環境変数）</b>：SMTP_USER / SMTP_PASS で送信、INQUIRY_EMAIL_TO で通知先（既定 rakushift.ai@gmail.com）。Railwayの環境変数で設定します。</li>
-                        </ul>
-                    </div>
+                    </section>
                 </div>
             </div><!-- /panelManual -->
 
