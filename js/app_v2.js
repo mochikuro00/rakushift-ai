@@ -2391,8 +2391,11 @@ const app = {
         }
 
         await this.switchToHQShop(orgId, contractId);
-        // ヘッダーに本部観覧モードのバナー表示
-        setTimeout(() => this.showToast('🔍 本部観覧モード — 編集操作はサーバ側でも遮断されます', 'info'), 800);
+        // v3.7.285: 旧メッセージは「編集操作はサーバ側でも遮断されます」と表示していたが
+        //   事実に反していた (switchToHQShop が isAdmin=true を立て、シフト/スタッフ/設定の
+        //   書き込みRPCにも本部を弾く仕組みは無い)。直後に出る「編集可能」トーストとも
+        //   矛盾していたため、実際の挙動に合わせる。
+        setTimeout(() => this.showToast('🏢 本部モード — 管轄店舗として編集できます', 'info'), 800);
     },
 
     // 本部ログアウト（confirmなしで即時実行）
@@ -3355,7 +3358,10 @@ const app = {
                                 <!-- v3.7.156: 時刻表示を HH:MM に短縮、改行で開始/終了の両方を確実に出す -->
                                 <div class="absolute top-1/2 -translate-y-1/2 h-9 ${period==='week'?'':'h-7'} rounded ${barColor} border shadow-sm flex items-center justify-center overflow-hidden z-10 hover:brightness-95 transition-all px-1"
                                      ${adminDrag}
-                                     ${this.state.isHQ ? '' : `ondblclick="app.openEditShift('${shift.id}')"`}>
+                                     ${/* v3.7.285: 本部だけダブルクリック編集を塞いでいたが、
+                                           ドラッグ移動・リサイズ・削除・シフト生成は本部でも通るため
+                                           一貫していなかった。本部は管轄店舗を編集できる仕様に揃える。 */''}
+                                     ondblclick="app.openEditShift('${shift.id}')">
                                      ${resizeHandles}
                                      <span class="text-[8px] sm:text-[9px] md:text-[10px] font-bold whitespace-nowrap pointer-events-none select-none leading-tight text-center">
                                         ${(shift.start_time || '').slice(0,5)}<br>${(shift.end_time || '').slice(0,5)}

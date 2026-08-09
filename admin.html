@@ -502,6 +502,30 @@
                             <i class="fas fa-save"></i>設定を保存
                         </button>
                     </div>
+
+                    <!-- ===== GAS(スプレッドシート)連携キー (v3.7.285) ===== -->
+                    <div class="mt-6 pt-5 border-t border-gray-200">
+                        <h4 class="font-semibold text-gray-900 flex items-center gap-2 mb-2">
+                            <i class="fas fa-table text-emerald-600"></i>GAS（運営管理スプレッドシート）連携キー
+                        </h4>
+                        <p class="text-sm text-gray-500 mb-3">
+                            スプレッドシートの Apps Script からこのシステムへ接続するためのキーです。
+                            発行したキーは<b>この画面で1度だけ表示</b>されます。Apps Script のメニュー「⚙️ 初期設定（APIキー登録）」に貼り付けてください。
+                        </p>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span id="gasKeyStatus" class="text-sm font-bold text-gray-500">確認中...</span>
+                            <button onclick="issueGasKey()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition">
+                                <i class="fas fa-key mr-1"></i>キーを発行 / 再発行
+                            </button>
+                        </div>
+                        <div id="gasKeyResult" class="hidden mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <p class="text-xs font-bold text-emerald-800 mb-1">発行されたキー（この画面を閉じると二度と表示されません）</p>
+                            <code id="gasKeyValue" class="block font-mono text-sm break-all bg-white border border-emerald-200 rounded p-2"></code>
+                            <button onclick="copyGasKey()" class="mt-2 px-3 py-1.5 bg-white border border-emerald-300 text-emerald-700 text-xs font-bold rounded hover:bg-emerald-100 transition">
+                                <i class="fas fa-copy mr-1"></i>コピー
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -759,6 +783,55 @@
                     </div>
                 </div>
                 <p class="text-xs text-gray-400 mt-3">※ Stripe の直近100件の請求書を表示。決済失敗時はこのタブに赤バッジとアラート音でお知らせします（ログイン時に自動チェック）。</p>
+
+                <!-- ===== 請求書払い・OEM の請求／入金台帳 (v3.7.285) =====
+                     従来ここは Stripe しか表示しておらず、請求書払い・OEM の顧客は
+                     入金履歴がどこにも紐づかなかった。invoices 台帳で顧客に紐付ける。 -->
+                <div class="mt-8 pt-6 border-t-2 border-dashed border-gray-300">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <h2 class="text-lg font-bold text-gray-800"><i class="fas fa-file-invoice-dollar mr-2 text-blue-500"></i>請求書払い・OEM の請求／入金履歴</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <input type="month" id="invMonth" class="select w-auto text-sm">
+                            <button onclick="loadInvoices()" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition">
+                                <i class="fas fa-rotate mr-1"></i>表示
+                            </button>
+                            <button onclick="generateInvoices()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition">
+                                <i class="fas fa-plus mr-1"></i>対象月の請求書を一括生成
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="invSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4"></div>
+
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                            <h3 class="font-bold text-gray-700"><i class="fas fa-list mr-2"></i>請求一覧（顧客ごとの入金履歴）</h3>
+                            <span id="invCount" class="text-sm font-bold text-gray-500">0件</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">請求番号</th>
+                                        <th class="px-3 py-2 text-left">対象月</th>
+                                        <th class="px-3 py-2 text-left">顧客</th>
+                                        <th class="px-3 py-2 text-left">契約ID</th>
+                                        <th class="px-3 py-2 text-center">区分</th>
+                                        <th class="px-3 py-2 text-right">請求額</th>
+                                        <th class="px-3 py-2 text-right">入金額</th>
+                                        <th class="px-3 py-2 text-center">状態</th>
+                                        <th class="px-3 py-2 text-left">入金日</th>
+                                        <th class="px-3 py-2 text-center">代理店</th>
+                                        <th class="px-3 py-2 text-right">代理店フィー</th>
+                                        <th class="px-3 py-2 text-center">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invoiceTableBody"><tr><td colspan="12" class="px-4 py-6 text-center text-gray-400">「表示」を押してください</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3">※ 請求書は「対象月の請求書を一括生成」で、請求書払い・OEM の稼働中テナント分がまとめて作られます（同一月の重複生成はされません）。入金を記録するとライセンス管理と代理店フィーの支払対象に自動で反映されます。</p>
+                </div>
             </div><!-- /panelPayments -->
 
             <!-- ===== 紹介者管理タブ ===== -->
@@ -1477,6 +1550,49 @@
                 </div>
             </div>
 
+    </div>
+
+    <!-- ========== 入金記録モーダル (v3.7.285) ========== -->
+    <div id="invoicePayModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
+                <h3 class="text-lg font-bold"><i class="fas fa-yen-sign mr-2"></i>入金を記録</h3>
+                <button onclick="closeModal('invoicePayModal')" class="text-white/80 hover:text-white"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-3">
+                <div class="bg-gray-50 rounded-lg p-3 text-sm">
+                    <p class="font-mono text-xs text-gray-500" id="payInvoiceNo">—</p>
+                    <p class="font-bold" id="payInvoiceShop">—</p>
+                    <p class="text-gray-600">請求額 <span class="font-bold text-lg" id="payInvoiceTotal">—</span></p>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">入金日 <span class="text-red-500">*</span></label>
+                    <input type="date" id="payPaidAt" class="select w-full">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">入金額（円） <span class="text-red-500">*</span></label>
+                    <input type="number" id="payPaidAmount" min="0" step="1" class="select w-full">
+                    <p class="text-xs text-gray-400 mt-1">請求額より少ない場合は「一部入金」として記録されます。</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">入金方法</label>
+                    <select id="payMethod" class="select w-full">
+                        <option value="bank">銀行振込</option>
+                        <option value="cash">現金</option>
+                        <option value="stripe">クレジット(Stripe)</option>
+                        <option value="offset">相殺</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">振込名義</label>
+                    <input type="text" id="payPayerName" maxlength="128" class="select w-full" placeholder="例: カ)ラクシフト">
+                </div>
+            </div>
+            <div class="px-5 py-4 bg-gray-50 flex gap-2">
+                <button onclick="closeModal('invoicePayModal')" class="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">キャンセル</button>
+                <button onclick="submitInvoicePayment()" class="flex-1 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition">記録する</button>
+            </div>
+        </div>
     </div>
 
     <!-- ========== 紹介者新規/編集モーダル ========== -->
@@ -2323,6 +2439,160 @@
     }
 
 
+    // ===== 請求書払い・OEM の請求／入金台帳 (v3.7.285) =====
+    // Stripe は Stripe API が正だが、請求書払い/OEM は invoices 台帳が正。
+    // 両方を同じ決済管理タブで確認できるようにする。
+    let _invoicesData = [];
+
+    function _invSess() {
+        const s = adminSession || JSON.parse(sessionStorage.getItem('platform_admin') || 'null');
+        return (s && s.session_id) || '';
+    }
+    function _invYen(n) { return '¥' + Number(n || 0).toLocaleString(); }
+    function _invMonthValue() {
+        const el = document.getElementById('invMonth');
+        if (el && el.value) return el.value;
+        const d = new Date();
+        const m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        if (el) el.value = m;   // 未選択なら今月を初期表示
+        return m;
+    }
+    const INV_STATUS_LABELS = {
+        draft:   '<span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-bold">下書き</span>',
+        issued:  '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">未入金</span>',
+        sent:    '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">送付済/未入金</span>',
+        partial: '<span class="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">一部入金</span>',
+        paid:    '<span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">入金済</span>',
+        void:    '<span class="px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 text-xs font-bold">無効</span>',
+    };
+    const INV_CATEGORY_LABELS = { invoice: '請求書払い', oem: 'OEM代理店', stripe: 'Stripe' };
+
+    async function loadInvoices() {
+        const body = document.getElementById('invoiceTableBody');
+        if (!body) return;
+        body.innerHTML = '<tr><td colspan="12" class="px-4 py-6 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...</td></tr>';
+        try {
+            const month = _invMonthValue();
+            const res = await fetch(RAILWAY_API + '/admin/invoices?month=' + encodeURIComponent(month), {
+                headers: { 'x-session-id': _invSess() }
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            _invoicesData = data.invoices || [];
+            _renderInvoiceSummary(data);
+
+            document.getElementById('invCount').textContent = _invoicesData.length + '件';
+            body.innerHTML = _invoicesData.length === 0
+                ? '<tr><td colspan="12" class="px-4 py-6 text-center text-gray-400">' + _payEsc(month) + ' の請求はありません。「対象月の請求書を一括生成」で作成できます。</td></tr>'
+                : _invoicesData.map(function (v) {
+                    const balance = Number(v.total || 0) - Number(v.paid_amount || 0);
+                    const overdue = v.status !== 'paid' && v.status !== 'void'
+                        && v.due_date && v.due_date < new Date().toISOString().slice(0, 10);
+                    return '<tr class="border-t border-gray-100 ' + (overdue ? 'bg-red-50/50' : '') + '">'
+                        + '<td class="px-3 py-2.5 font-mono text-xs">' + _payEsc(v.invoice_no) + '</td>'
+                        + '<td class="px-3 py-2.5 text-xs">' + _payEsc(String(v.billing_month || '').slice(0, 7)) + '</td>'
+                        + '<td class="px-3 py-2.5 font-bold">' + _payEsc(v.shop_name || v.company_name || '—') + '</td>'
+                        + '<td class="px-3 py-2.5 font-mono text-xs">' + _payEsc(v.contract_id || '—') + '</td>'
+                        + '<td class="px-3 py-2.5 text-center text-xs">' + _payEsc(INV_CATEGORY_LABELS[v.billing_category] || v.billing_category || '—') + '</td>'
+                        + '<td class="px-3 py-2.5 text-right font-bold">' + _invYen(v.total) + '</td>'
+                        + '<td class="px-3 py-2.5 text-right ' + (balance > 0 ? 'text-red-700 font-bold' : 'text-green-700') + '">' + _invYen(v.paid_amount) + '</td>'
+                        + '<td class="px-3 py-2.5 text-center">' + (INV_STATUS_LABELS[v.status] || _payEsc(v.status))
+                          + (overdue ? '<br><span class="text-[10px] text-red-600 font-bold">期日超過</span>' : '') + '</td>'
+                        + '<td class="px-3 py-2.5 text-xs">' + _payEsc(v.paid_at || '—') + '</td>'
+                        + '<td class="px-3 py-2.5 text-center">' + (v.referrer_code ? '<span class="badge badge-amber font-mono">' + _payEsc(v.referrer_code) + '</span>' : '<span class="text-gray-300">—</span>') + '</td>'
+                        + '<td class="px-3 py-2.5 text-right text-xs">' + _invYen(v.agency_fee) + '</td>'
+                        + '<td class="px-3 py-2.5 text-center">'
+                          + (v.status === 'void' ? '—'
+                             : '<button onclick="openInvoicePayModal(\'' + _payEsc(v.invoice_no) + '\')" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded transition">入金記録</button>')
+                        + '</td></tr>';
+                }).join('');
+        } catch (e) {
+            body.innerHTML = '<tr><td colspan="12" class="px-4 py-6 text-center text-red-500">取得に失敗しました: ' + _payEsc(e.message) + '</td></tr>';
+        }
+    }
+
+    function _renderInvoiceSummary(data) {
+        const box = document.getElementById('invSummary');
+        if (!box) return;
+        const m = ((data.summary || {}).months || [])[0] || {};
+        const card = function (label, value, color) {
+            return '<div class="bg-white rounded-xl border border-gray-200 p-3 text-center">'
+                + '<p class="text-xs text-gray-500">' + label + '</p>'
+                + '<p class="text-xl font-bold ' + color + '">' + value + '</p></div>';
+        };
+        box.innerHTML =
+            card('請求額', _invYen(m.billed), 'text-gray-800')
+            + card('入金済', _invYen(m.paid), 'text-green-600')
+            + card('未入金', _invYen(m.unpaid), 'text-red-600')
+            + card('代理店フィー（支払対象）', _invYen(m.agency_fee_payable), 'text-amber-600');
+    }
+
+    function openInvoicePayModal(invoiceNo) {
+        const inv = _invoicesData.find(function (v) { return v.invoice_no === invoiceNo; });
+        if (!inv) return;
+        document.getElementById('payInvoiceNo').textContent = inv.invoice_no;
+        document.getElementById('payInvoiceShop').textContent = inv.shop_name || inv.company_name || '';
+        document.getElementById('payInvoiceTotal').textContent = _invYen(inv.total);
+        document.getElementById('payPaidAt').value = inv.paid_at || new Date().toISOString().slice(0, 10);
+        document.getElementById('payPaidAmount').value = Number(inv.paid_amount) > 0 ? inv.paid_amount : inv.total;
+        document.getElementById('payMethod').value = inv.payment_method || 'bank';
+        document.getElementById('payPayerName').value = inv.payer_name || '';
+        openModal('invoicePayModal');
+    }
+
+    async function submitInvoicePayment() {
+        const invoiceNo = document.getElementById('payInvoiceNo').textContent.trim();
+        const paidAt = document.getElementById('payPaidAt').value;
+        const amount = Number(document.getElementById('payPaidAmount').value);
+        if (!paidAt || !(amount >= 0)) { alert('入金日と入金額を入力してください'); return; }
+        try {
+            const res = await fetch(RAILWAY_API + '/admin/invoices/pay', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-session-id': _invSess() },
+                body: JSON.stringify({
+                    invoice_no: invoiceNo,
+                    paid_at: paidAt,
+                    paid_amount: amount,
+                    payment_method: document.getElementById('payMethod').value,
+                    payer_name: document.getElementById('payPayerName').value.trim(),
+                })
+            });
+            const data = await res.json();
+            if (!res.ok || data.success === false) throw new Error(data.message || data.error || 'HTTP ' + res.status);
+            closeModal('invoicePayModal');
+            await loadInvoices();
+            showToast('入金を記録しました（残額 ' + _invYen(data.balance) + '）', 'success');
+        } catch (e) {
+            alert('入金の記録に失敗しました: ' + e.message);
+        }
+    }
+
+    async function generateInvoices() {
+        const month = _invMonthValue();
+        if (!confirm(month + ' の請求書を一括生成します。\n請求書払い・OEM の稼働中テナントが対象です（同じ月の請求が既にある顧客はスキップ）。\nよろしいですか？')) return;
+        try {
+            const res = await fetch(RAILWAY_API + '/admin/invoices/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-session-id': _invSess() },
+                body: JSON.stringify({ month: month })
+            });
+            const data = await res.json();
+            if (!res.ok || data.success === false) throw new Error(data.error || data.message || 'HTTP ' + res.status);
+            await loadInvoices();
+            let msg = '請求書を生成しました\n新規作成: ' + (data.created || 0) + '件 / 既存のためスキップ: ' + (data.skipped || 0) + '件';
+            if (data.no_price_count > 0) {
+                msg += '\n\n⚠ プラン未設定のため作成できなかった顧客: ' + data.no_price_count + '件\n'
+                     + (data.no_price_contracts || []).join(', ')
+                     + '\n顧客管理タブでプランを設定してから再実行してください。';
+            }
+            alert(msg);
+        } catch (e) {
+            alert('請求書の生成に失敗しました: ' + e.message);
+        }
+    }
+
+
     // --- 顧客情報 (v3.7.262: 全ソース統合 + 解約管理) ---
     let _customersData = { tenants: [], leads: [], cancelling: [] };
 
@@ -2531,7 +2801,7 @@
 
         if (tab === 'customers') loadCustomers();
         else if (tab === 'revenue') renderRevenue();
-        else if (tab === 'payments') loadPayments();
+        else if (tab === 'payments') { loadPayments(); loadInvoices(); }
         else if (tab === 'referrers') loadReferrers();
         else if (tab === 'announcements') loadAnnouncements();
         else if (tab === 'inquiries') loadInquiries();
@@ -3671,6 +3941,7 @@
             panel.classList.remove('hidden');
             icon.style.transform = 'rotate(180deg)';
             loadPlatformSettings();
+            loadGasKeyStatus();
         } else {
             panel.classList.add('hidden');
             icon.style.transform = '';
@@ -3708,6 +3979,54 @@
             document.getElementById('settingsGrid').innerHTML =
                 `<p class="text-red-500 text-sm col-span-2">エラー: ${escapeHtml(e.message)}</p>`;
         }
+    }
+
+    // --- GAS連携キー (v3.7.285) ---
+    // update_platform_settings_batch は anon から実行できないため、
+    // 運営セッションで Railway 経由 (service_role) で設定する。
+    async function loadGasKeyStatus() {
+        const el = document.getElementById('gasKeyStatus');
+        if (!el) return;
+        try {
+            const res = await fetch(RAILWAY_API + '/admin/gas-key', {
+                headers: { 'x-session-id': _invSess() }
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+            el.innerHTML = data.configured
+                ? '<span class="text-green-700"><i class="fas fa-circle-check mr-1"></i>設定済み ('
+                  + escapeHtml(data.masked) + ')</span>'
+                : '<span class="text-amber-700"><i class="fas fa-triangle-exclamation mr-1"></i>未設定</span>';
+        } catch (e) {
+            el.innerHTML = '<span class="text-red-600">状態を取得できません: ' + escapeHtml(e.message) + '</span>';
+        }
+    }
+
+    async function issueGasKey() {
+        if (!confirm('GAS連携キーを発行します。\n\n既にスプレッドシートを運用している場合、'
+                   + '再発行すると古いキーは使えなくなり、Apps Script 側の再登録が必要になります。\n\nよろしいですか？')) return;
+        try {
+            const res = await fetch(RAILWAY_API + '/admin/gas-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-session-id': _invSess() },
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'HTTP ' + res.status);
+            document.getElementById('gasKeyValue').textContent = data.api_key;
+            document.getElementById('gasKeyResult').classList.remove('hidden');
+            await loadGasKeyStatus();
+            showToast('GAS連携キーを発行しました', 'success');
+        } catch (e) {
+            showToast('発行に失敗しました: ' + e.message, 'error');
+        }
+    }
+
+    function copyGasKey() {
+        const text = document.getElementById('gasKeyValue').textContent;
+        navigator.clipboard.writeText(text)
+            .then(function () { showToast('キーをコピーしました', 'success'); })
+            .catch(function () { showToast('コピーできませんでした。手動で選択してください', 'error'); });
     }
 
     async function savePlatformSettings() {
