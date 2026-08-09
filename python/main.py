@@ -422,7 +422,7 @@ async def health_check():
         )
         if resp.status_code != 200:
             return JSONResponse(status_code=503, content={"status": "error", "db": "http_{}".format(resp.status_code)})
-        return {"status": "ok", "db": "alive", "version": "3.7.281"}
+        return {"status": "ok", "db": "alive", "version": "3.7.285"}
     except Exception as e:
         logger.warning("health check failed: %s", e)
         return JSONResponse(status_code=503, content={"status": "error", "db": "unreachable"})
@@ -651,15 +651,19 @@ async def hq_get_shops(request: Request):
         # organizationsテーブルから全店舗取得
         orgs = await supabase_query(
             "organizations",
-            "select=id,name,created_at&order=created_at.desc"
+            "select=id,name,created_at,license_status&order=created_at.desc"
         )
         if not orgs:
             orgs = []
 
         # configテーブルから契約情報取得
+        # v3.7.285: staff_count / license_status を要求していたが、いずれも config には
+        #   存在しない列 (license_status は organizations 側、staff_count は未定義)。
+        #   PostgREST が 400 を返すため configs が空になり、本部の店舗一覧で
+        #   契約ID・プラン・担当者・メールがすべて空欄になっていた。
         configs = await supabase_query(
             "config",
-            "select=organization_id,contract_id,stripe_plan,staff_count,customer_email,contact_name,license_status"
+            "select=organization_id,contract_id,stripe_plan,customer_email,contact_name"
         )
         config_map = {}
         if configs:
@@ -668,25 +672,14 @@ async def hq_get_shops(request: Request):
 
         # v3.7.218: スタッフ人数は staff テーブルから実数を集計する。
         #   config.staff_count 列は更新されず NULL のことが多く、本部一覧で 0 表示になっていた。
-        staff_counts = {}
-        try:
-            staff_rows = await supabase_query("staff", "select=organization_id&limit=100000")
-            if staff_rows:
-                for s in staff_rows:
-                    oid = s.get("organization_id")
-                    if oid:
-                        staff_counts[oid] = staff_counts.get(oid, 0) + 1
-        except Exception as _e:
-            logger.info("[HQ] staff count aggregate failed: {}".format(_e))
+        staff_counts = await _fetch_staff_counts()
 
         # 結合
         shops = []
         for o in orgs:
             cfg = config_map.get(o["id"], {})
             # 実スタッフ数を優先。取得できなければ config.staff_count → 0
-            real_count = staff_counts.get(o["id"])
-            if real_count is None:
-                real_count = cfg.get("staff_count") or 0
+            real_count = staff_counts.get(o["id"]) or 0
             shops.append({
                 "organization_id": o["id"],
                 "name": o.get("name", "未設定"),
@@ -696,7 +689,7 @@ async def hq_get_shops(request: Request):
                 "staff_count": real_count,
                 "contact_name": cfg.get("contact_name", ""),
                 "customer_email": cfg.get("customer_email", ""),
-                "license_status": cfg.get("license_status") or "active",
+                "license_status": o.get("license_status") or "active",
                 "created_at": o.get("created_at", ""),
             })
 
@@ -1751,15 +1744,11 @@ async def admin_customers(request: Request,
     org_map = {o.get("id"): o for o in orgs}
 
     # スタッフ数集計
-    staff_counts = {}
-    try:
-        staff_rows = await supabase_query("staff", "select=organization_id&limit=100000")
-        for s in (staff_rows or []):
-            oid = s.get("organization_id")
-            if oid:
-                staff_counts[oid] = staff_counts.get(oid, 0) + 1
-    except Exception:
-        pass
+    # v3.7.285: staff を REST で直接読むと PostgREST の max-rows=1000 で切り捨てられ、
+    # 全テナント合計が1000名を超えた時点で後半テナントのスタッフ数が 0 になっていた
+    # (limit=100000 を付けても max-rows の方が優先されるため効かない)。
+    # DB側で集計した JSONB を受け取る形に変更。
+    staff_counts = await _fetch_staff_counts()
 
     # Stripe 最新決済状況 + 申込会社名を customer_id ごとにマップ。
     # v3.7.266: Stripe 呼び出しが遅いと顧客タブ全体が待たされ「たまに出てこない」原因に
@@ -1884,6 +1873,113 @@ async def admin_customers(request: Request,
     }
 
 
+def _rpc_error(result: Any) -> Optional[str]:
+    """supabase_rpc の戻りが失敗を表しているなら理由を返す (成功なら None)。
+
+    supabase_rpc は例外ではなく {"status": "error", ...} を返すため、
+    そのまま `isinstance(x, list) else []` で潰すと「取得できなかった」のか
+    「本当に0件」なのか運営が区別できない。エクスポート側で明示する。
+    """
+    if isinstance(result, dict) and result.get("status") == "error":
+        msg = str(result.get("message", ""))[:120]
+        return msg or "unknown error"
+    return None
+
+
+async def _fetch_staff_counts() -> Dict[str, int]:
+    """テナントごとのスタッフ数。
+
+    v3.7.285: staff を REST で直接読むと PostgREST の max-rows=1000 で切り捨てられ、
+    全テナント合計が1000名を超えると後半テナントが 0 名になる。DB側集計 RPC を使う。
+    ただし migration 87 の適用前でも動くよう、RPC が無い場合は従来の集計に落とす
+    (デプロイとマイグレーションの順序に依存させないため)。
+    """
+    try:
+        counts = await supabase_rpc("list_staff_counts", {})
+        if isinstance(counts, dict) and "status" not in counts:
+            return {k: int(v) for k, v in counts.items()}
+    except Exception as e:
+        logger.info("list_staff_counts unavailable: %s", type(e).__name__)
+
+    fallback: Dict[str, int] = {}
+    try:
+        rows = await supabase_query("staff", "select=organization_id&limit=100000")
+        for s in (rows or []):
+            oid = s.get("organization_id")
+            if oid:
+                fallback[oid] = fallback.get(oid, 0) + 1
+    except Exception:
+        pass
+    return fallback
+
+
+async def _collect_stripe_payments() -> Dict[str, Any]:
+    """Stripe の直近請求書を「支払済み / 未払い」に仕分けして返す。
+
+    v3.7.285: 運営コンソールと GAS 売上シートの両方から使うため関数に切り出し。
+    Stripe 未設定時は例外ではなく空の結果を返す (請求書払いだけの運用でも
+    売上シート同期が止まらないようにするため)。
+    """
+    _load_platform_settings()
+    sk = _get_setting("stripe_secret_key")
+    if not sk:
+        return {"paid": [], "unpaid": [], "counts": {"paid": 0, "unpaid": 0},
+                "configured": False}
+    stripe.api_key = sk
+
+    # customer_id → テナント情報の対応表
+    tenant_map = {}
+    rows = await supabase_query(
+        "config",
+        "select=contract_id,organization_id,stripe_customer_id,stripe_plan,referrer_code"
+        "&stripe_customer_id=not.is.null")
+    orgs = await supabase_query("organizations", "select=id,name")
+    org_names = {o.get("id"): o.get("name") for o in (orgs or [])}
+    for c in (rows or []):
+        cid = c.get("stripe_customer_id")
+        if cid:
+            tenant_map[cid] = {
+                "contract_id": c.get("contract_id"),
+                "shop_name": org_names.get(c.get("organization_id"), ""),
+                "plan": c.get("stripe_plan"),
+                "referrer_code": (c.get("referrer_code") or "").strip().upper(),
+            }
+
+    # 直近の請求書 (最大100件 = 約1年分/100テナント月)
+    invoices = await asyncio.to_thread(lambda: stripe.Invoice.list(limit=100))
+    paid, unpaid = [], []
+    for inv in invoices.get("data", []):
+        status = inv.get("status")
+        if status in ("draft", "void"):
+            continue  # 下書き・無効化済みは対象外
+        cust = inv.get("customer")
+        tenant = tenant_map.get(cust, {})
+        item = {
+            "invoice_id": inv.get("id"),
+            "date": inv.get("created"),
+            "amount": inv.get("amount_due") if status != "paid" else inv.get("amount_paid"),
+            "currency": inv.get("currency"),
+            "status": status,
+            "attempt_count": inv.get("attempt_count", 0),
+            "next_attempt": inv.get("next_payment_attempt"),
+            "customer_email": inv.get("customer_email") or "",
+            "invoice_url": inv.get("hosted_invoice_url") or "",
+            "contract_id": tenant.get("contract_id") or "",
+            "shop_name": tenant.get("shop_name") or "",
+            "plan": tenant.get("plan") or "",
+            "referrer_code": tenant.get("referrer_code") or "",
+        }
+        if status == "paid":
+            paid.append(item)
+        else:
+            # open (支払い待ち/失敗リトライ中) / uncollectible (回収不能)
+            unpaid.append(item)
+
+    return {"paid": paid, "unpaid": unpaid,
+            "counts": {"paid": len(paid), "unpaid": len(unpaid)},
+            "configured": True}
+
+
 @app.get("/admin/stripe/payments")
 @limiter.limit("10/minute")
 async def admin_stripe_payments(request: Request,
@@ -1892,60 +1988,11 @@ async def admin_stripe_payments(request: Request,
     if not session_info or session_info.get("role") != "platform_admin":
         return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
 
-    _load_platform_settings()
-    sk = _get_setting("stripe_secret_key")
-    if not sk:
-        return JSONResponse(status_code=500, content={"error": "Stripe is not configured"})
-    stripe.api_key = sk
-
     try:
-        # customer_id → テナント情報の対応表
-        tenant_map = {}
-        rows = await supabase_query(
-            "config",
-            "select=contract_id,organization_id,stripe_customer_id,stripe_plan&stripe_customer_id=not.is.null")
-        orgs = await supabase_query("organizations", "select=id,name")
-        org_names = {o.get("id"): o.get("name") for o in (orgs or [])}
-        for c in (rows or []):
-            cid = c.get("stripe_customer_id")
-            if cid:
-                tenant_map[cid] = {
-                    "contract_id": c.get("contract_id"),
-                    "shop_name": org_names.get(c.get("organization_id"), ""),
-                    "plan": c.get("stripe_plan"),
-                }
-
-        # 直近の請求書 (最大100件 = 約1年分/100テナント月)
-        invoices = stripe.Invoice.list(limit=100)
-        paid, unpaid = [], []
-        for inv in invoices.get("data", []):
-            status = inv.get("status")
-            if status in ("draft", "void"):
-                continue  # 下書き・無効化済みは対象外
-            cust = inv.get("customer")
-            tenant = tenant_map.get(cust, {})
-            item = {
-                "invoice_id": inv.get("id"),
-                "date": inv.get("created"),
-                "amount": inv.get("amount_due") if status != "paid" else inv.get("amount_paid"),
-                "currency": inv.get("currency"),
-                "status": status,
-                "attempt_count": inv.get("attempt_count", 0),
-                "next_attempt": inv.get("next_payment_attempt"),
-                "customer_email": inv.get("customer_email") or "",
-                "invoice_url": inv.get("hosted_invoice_url") or "",
-                "contract_id": tenant.get("contract_id") or "",
-                "shop_name": tenant.get("shop_name") or "",
-                "plan": tenant.get("plan") or "",
-            }
-            if status == "paid":
-                paid.append(item)
-            else:
-                # open (支払い待ち/失敗リトライ中) / uncollectible (回収不能)
-                unpaid.append(item)
-
-        return {"paid": paid, "unpaid": unpaid,
-                "counts": {"paid": len(paid), "unpaid": len(unpaid)}}
+        result = await _collect_stripe_payments()
+        if not result.get("configured"):
+            return JSONResponse(status_code=500, content={"error": "Stripe is not configured"})
+        return result
     except Exception as e:
         logger.info("admin stripe payments error: {}".format(e))
         err = "決済情報の取得に失敗しました" if IS_PRODUCTION else str(e)
@@ -2510,6 +2557,470 @@ async def submit_inquiry(req: InquiryRequest, request: Request):
                 "success": False,
                 "message": "お問い合わせの受付に失敗しました。時間をおいて再度お試しください。"
             })
+
+
+# =====================================================================
+# v3.7.285: 請求書台帳 / 代理店フィー / GASスプレッドシート連携
+#
+# 背景:
+#   決済管理タブは Stripe API を直読みしているだけで、請求書払い・OEM の
+#   顧客には請求も入金も保存先が無く「入金履歴が顧客に紐づかない」状態だった。
+#   invoices テーブル (migration 87) を台帳として、Stripe / 請求書 / OEM の
+#   すべての売上をここに集約する。
+# =====================================================================
+
+def _month_start(value: Optional[str]) -> str:
+    """'2026-08' / '2026-08-15' / None → 'YYYY-MM-01' に正規化"""
+    today = _datetime_module.date.today()
+    if not value:
+        return today.replace(day=1).isoformat()
+    s = str(value).strip()
+    try:
+        if len(s) == 7:  # YYYY-MM
+            return _datetime_module.date.fromisoformat(s + "-01").replace(day=1).isoformat()
+        return _datetime_module.date.fromisoformat(s[:10]).replace(day=1).isoformat()
+    except ValueError:
+        return today.replace(day=1).isoformat()
+
+
+async def _fetch_invoices(month: Optional[str] = None,
+                          months_back: int = 12) -> List[Dict[str, Any]]:
+    """請求書台帳を取得。month 指定時はその月のみ、未指定なら直近 months_back ヶ月。
+
+    テーブルを REST で直接読むと PostgREST の max-rows=1000 で静かに切り捨てられる
+    (migration 74/75 と同じ罠) ため、JSONB を返す RPC 経由で取得する。
+    """
+    if month:
+        p_from = p_to = _month_start(month)
+    else:
+        base = _datetime_module.date.fromisoformat(_month_start(None))
+        y, m = base.year, base.month - (months_back - 1)
+        while m <= 0:
+            m += 12
+            y -= 1
+        p_from = _datetime_module.date(y, m, 1).isoformat()
+        p_to = None
+    rows = await supabase_rpc("list_invoices", {"p_from": p_from, "p_to": p_to})
+    err = _rpc_error(rows)
+    if err:
+        logger.info("list_invoices failed: %s", err)
+    return rows if isinstance(rows, list) else []
+
+
+def _summarize_invoices(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """請求書台帳から月次サマリー (請求額/入金額/未入金/代理店フィー) を作る"""
+    by_month: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        if r.get("status") == "void":
+            continue
+        m = str(r.get("billing_month") or "")[:7]
+        cat = r.get("billing_category") or "invoice"
+        b = by_month.setdefault(m, {
+            "month": m, "billed": 0.0, "paid": 0.0, "unpaid": 0.0,
+            "agency_fee": 0.0, "agency_fee_payable": 0.0,
+            "count": 0, "paid_count": 0, "unpaid_count": 0,
+            "by_category": {},
+        })
+        total = float(r.get("total") or 0)
+        paid = float(r.get("paid_amount") or 0)
+        fee = float(r.get("agency_fee") or 0)
+        b["billed"] += total
+        b["paid"] += paid
+        b["unpaid"] += max(total - paid, 0)
+        b["agency_fee"] += fee
+        b["count"] += 1
+        if r.get("status") == "paid":
+            b["paid_count"] += 1
+            b["agency_fee_payable"] += fee
+        else:
+            b["unpaid_count"] += 1
+        c = b["by_category"].setdefault(cat, {"billed": 0.0, "paid": 0.0, "count": 0})
+        c["billed"] += total
+        c["paid"] += paid
+        c["count"] += 1
+    return {"months": [by_month[k] for k in sorted(by_month, reverse=True)]}
+
+
+# ---------------------------------------------------------------------
+# 運営コンソール (admin.html) 用: 請求書払い/OEM の請求・入金履歴
+# ---------------------------------------------------------------------
+
+class InvoicePaymentBody(BaseModel):
+    invoice_no: str
+    paid_at: Optional[str] = None
+    paid_amount: float = 0
+    payment_method: str = "bank"
+    payer_name: str = ""
+    note: Optional[str] = None
+
+
+class GenerateInvoicesBody(BaseModel):
+    month: Optional[str] = None
+
+
+@app.get("/admin/invoices")
+@limiter.limit("20/minute")
+async def admin_list_invoices(request: Request,
+                              month: Optional[str] = None,
+                              x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    """請求書払い・OEM を含む全請求の台帳 (顧客に紐づく入金履歴)"""
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+    try:
+        rows = await _fetch_invoices(month)
+        unpaid = [r for r in rows if r.get("status") in ("issued", "sent", "partial")]
+        paid = [r for r in rows if r.get("status") == "paid"]
+        overdue_ref = _datetime_module.date.today().isoformat()
+        return {
+            "invoices": rows,
+            "unpaid": unpaid,
+            "paid": paid,
+            "overdue": [r for r in unpaid if (r.get("due_date") or "9999-12-31") < overdue_ref],
+            "summary": _summarize_invoices(rows),
+            "counts": {"all": len(rows), "paid": len(paid), "unpaid": len(unpaid)},
+        }
+    except Exception as e:
+        logger.info("admin invoices error: {}".format(e))
+        err = "請求台帳の取得に失敗しました" if IS_PRODUCTION else str(e)
+        return JSONResponse(status_code=500, content={"error": err})
+
+
+@app.post("/admin/invoices/generate")
+@limiter.limit("6/minute")
+async def admin_generate_invoices(request: Request, req: GenerateInvoicesBody,
+                                  x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    """対象月の請求書を一括生成 (請求書払い・OEM の稼働中テナント)"""
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+    result = await supabase_rpc("generate_monthly_invoices",
+                                {"p_month": _month_start(req.month)})
+    if isinstance(result, dict) and result.get("status") == "error":
+        return JSONResponse(status_code=500, content={"error": "請求書の生成に失敗しました"})
+    return result
+
+
+@app.post("/admin/invoices/pay")
+@limiter.limit("30/minute")
+async def admin_record_payment(request: Request, req: InvoicePaymentBody,
+                               x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    """入金を記録 (請求書に紐づけて消し込む)"""
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+    return await supabase_rpc("record_invoice_payment", {
+        "p_invoice_no": req.invoice_no,
+        "p_paid_at": req.paid_at or _datetime_module.date.today().isoformat(),
+        "p_paid_amount": req.paid_amount,
+        "p_payment_method": req.payment_method,
+        "p_payer_name": req.payer_name,
+        "p_note": req.note,
+    })
+
+
+# ---------------------------------------------------------------------
+# GAS (スプレッドシート) 連携
+#   認証は x-gas-key ヘッダー。platform_settings.gas_api_key と定数時間比較する。
+#   Supabase の service_role キーをスプレッドシート側に置かずに済ませるため、
+#   読み書きはすべてこの API を通す。
+# ---------------------------------------------------------------------
+
+class GasKeyBody(BaseModel):
+    api_key: Optional[str] = None   # 未指定なら安全な乱数を生成する
+
+
+@app.get("/admin/gas-key")
+@limiter.limit("20/minute")
+async def admin_get_gas_key(request: Request,
+                            x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    """GAS連携キーの設定状況 (キー本体は返さない)"""
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+    _load_platform_settings()
+    key = _get_setting("gas_api_key")
+    return {
+        "configured": bool(key) and len(key) >= 16,
+        "masked": ("{}****{}".format(key[:4], key[-4:]) if key and len(key) >= 16 else ""),
+    }
+
+
+@app.post("/admin/gas-key")
+@limiter.limit("6/minute")
+async def admin_set_gas_key(request: Request, req: GasKeyBody,
+                            x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    """GAS連携キーを発行/更新して、生成したキーを1度だけ返す"""
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+
+    key = (req.api_key or "").strip()
+    if not key:
+        import secrets
+        key = secrets.token_urlsafe(36)
+    if len(key) < 16:
+        return JSONResponse(status_code=400,
+                            content={"error": "APIキーは16文字以上にしてください"})
+
+    result = await supabase_rpc("update_platform_setting",
+                                {"p_key": "gas_api_key", "p_value": key})
+    if not (isinstance(result, dict) and result.get("success")):
+        return JSONResponse(status_code=500, content={"error": "APIキーの保存に失敗しました"})
+
+    # 直後の接続確認で古い値が使われないよう、設定キャッシュを捨てる
+    global _platform_settings, _settings_loaded_at
+    _platform_settings["gas_api_key"] = key
+    _settings_loaded_at = 0
+    return {"success": True, "api_key": key}
+
+
+def _verify_gas_key(provided: Optional[str]) -> bool:
+    _load_platform_settings()
+    expected = _get_setting("gas_api_key")
+    if not expected or len(expected) < 16:
+        return False
+    # hmac.compare_digest は str 同士だと非ASCIIで TypeError を投げるため、
+    # ヘッダーに日本語等が入ってきても 500 にならないようバイト列で比較する。
+    try:
+        return hmac.compare_digest(str(provided or "").encode("utf-8"),
+                                   expected.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def _gas_denied() -> JSONResponse:
+    return JSONResponse(status_code=403, content={"error": "GAS APIキーが不正です"})
+
+
+@app.get("/gas/export")
+@limiter.limit("30/minute")
+async def gas_export(request: Request,
+                     sheet: str = "all",
+                     month: Optional[str] = None,
+                     x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """スプレッドシート同期用の一括エクスポート。
+
+    運営に関わるデータをすべて返す:
+      customers  … 顧客台帳 (プラン/代理店/代理店フィー/入金状況)
+      inquiries  … お問い合わせフォームの全項目 (Stripe決済前の見込みも含む全件)
+      invoices   … 請求書・入金台帳 (売上管理の元データ)
+      stripe     … Stripe の決済履歴
+      referrers  … 紹介者(代理店)マスタ
+      agency     … 代理店フィーの月次確定集計
+      reconcile  … お問い合わせ × 顧客 の突合 (抜け検出)
+      summary    … 月次売上サマリー
+    """
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+
+    want = {s.strip() for s in sheet.split(",")} if sheet != "all" else {"all"}
+
+    def need(name: str) -> bool:
+        return "all" in want or name in want
+
+    out: Dict[str, Any] = {
+        "generated_at": _datetime_module.datetime.now(_datetime_module.timezone.utc).isoformat(),
+        "month": _month_start(month),
+    }
+    errors = []
+
+    # customers / inquiries も JSONB を返す RPC 経由。
+    # ビュー/テーブルの REST 直読みは 1000件で静かに欠落する。
+    if need("customers"):
+        try:
+            rows = await supabase_rpc("list_customer_ledger", {})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("customers: {}".format(err))
+            out["customers"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("customers: {}".format(type(e).__name__))
+
+    if need("inquiries"):
+        try:
+            # to_jsonb(i) で全カラム返るため、フォーム項目が増えてもシートに自動で載る
+            rows = await supabase_rpc("list_inquiries_all", {})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("inquiries: {}".format(err))
+            out["inquiries"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("inquiries: {}".format(type(e).__name__))
+
+    if need("invoices"):
+        try:
+            # 対象月では絞らない。売上サマリーを複数月で出すため、また過去月の
+            # 未入金を追えるようにするため、常に直近24ヶ月を返して GAS 側で絞る。
+            out["invoices"] = await _fetch_invoices(None, months_back=24)
+        except Exception as e:
+            errors.append("invoices: {}".format(type(e).__name__))
+
+    if need("referrers"):
+        try:
+            rows = await supabase_rpc("list_referrers", {})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("referrers: {}".format(err))
+            out["referrers"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("referrers: {}".format(type(e).__name__))
+
+    if need("agency"):
+        try:
+            rows = await supabase_rpc("list_agency_fees", {"p_month": _month_start(month)})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("agency: {}".format(err))
+            out["agency"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("agency: {}".format(type(e).__name__))
+
+    if need("reconcile"):
+        try:
+            rows = await supabase_rpc("reconcile_inquiries", {})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("reconcile: {}".format(err))
+            out["reconcile"] = rows if isinstance(rows, dict) and not err else {}
+        except Exception as e:
+            errors.append("reconcile: {}".format(type(e).__name__))
+
+    if need("stripe"):
+        try:
+            out["stripe"] = await _collect_stripe_payments()
+        except Exception as e:
+            out["stripe"] = {"paid": [], "unpaid": [], "configured": False}
+            errors.append("stripe: {}".format(type(e).__name__))
+
+    if need("summary"):
+        try:
+            rows = out.get("invoices")
+            if rows is None:
+                rows = await _fetch_invoices(None, months_back=24)
+            out["summary"] = _summarize_invoices(rows)
+        except Exception as e:
+            errors.append("summary: {}".format(type(e).__name__))
+
+    if errors:
+        # 一部が落ちても取れた分は返す (シート同期を全滅させない)
+        out["errors"] = errors
+        logger.info("gas export partial failure: %s", errors)
+    return out
+
+
+class GasPaymentRow(BaseModel):
+    invoice_no: str
+    paid_at: Optional[str] = None
+    paid_amount: float = 0
+    payment_method: str = "bank"
+    payer_name: str = ""
+    note: Optional[str] = None
+
+
+class GasPaymentsBody(BaseModel):
+    rows: List[GasPaymentRow] = Field(default_factory=list)
+
+
+@app.post("/gas/invoices/payments")
+@limiter.limit("20/minute")
+async def gas_record_payments(request: Request, req: GasPaymentsBody,
+                              x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """スプレッドシートで入力した入金をまとめて書き戻す (消込)"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    if len(req.rows) > 500:
+        return JSONResponse(status_code=400, content={"error": "一度に処理できるのは500件までです"})
+
+    results, ok = [], 0
+    for row in req.rows:
+        r = await supabase_rpc("record_invoice_payment", {
+            "p_invoice_no": row.invoice_no,
+            "p_paid_at": row.paid_at or _datetime_module.date.today().isoformat(),
+            "p_paid_amount": row.paid_amount,
+            "p_payment_method": row.payment_method,
+            "p_payer_name": row.payer_name,
+            "p_note": row.note,
+        })
+        if isinstance(r, dict) and r.get("success"):
+            ok += 1
+        results.append(r if isinstance(r, dict)
+                       else {"success": False, "invoice_no": row.invoice_no})
+    return {"success": True, "updated": ok, "failed": len(req.rows) - ok, "results": results}
+
+
+class GasAgencyRow(BaseModel):
+    contract_id: str
+    referrer_code: Optional[str] = None
+    agency_fee_type: Optional[str] = None
+    agency_fee_amount: Optional[float] = None
+    billing_email: Optional[str] = None
+    payment_terms_days: Optional[int] = None
+
+
+class GasAgencyBody(BaseModel):
+    rows: List[GasAgencyRow] = Field(default_factory=list)
+
+
+@app.post("/gas/customers/agency")
+@limiter.limit("20/minute")
+async def gas_update_agency(request: Request, req: GasAgencyBody,
+                            x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """顧客の代理店(紹介者)・代理店フィー設定をスプレッドシートから書き戻す"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    if len(req.rows) > 500:
+        return JSONResponse(status_code=400, content={"error": "一度に処理できるのは500件までです"})
+
+    results, ok = [], 0
+    for row in req.rows:
+        r = await supabase_rpc("update_customer_agency", {
+            "p_contract_id": row.contract_id,
+            "p_referrer_code": row.referrer_code,
+            "p_fee_type": row.agency_fee_type,
+            "p_fee_amount": row.agency_fee_amount,
+            "p_billing_email": row.billing_email,
+            "p_payment_terms_days": row.payment_terms_days,
+        })
+        if isinstance(r, dict) and r.get("success"):
+            ok += 1
+        results.append(r if isinstance(r, dict)
+                       else {"success": False, "contract_id": row.contract_id})
+    return {"success": True, "updated": ok, "failed": len(req.rows) - ok, "results": results}
+
+
+@app.post("/gas/invoices/generate")
+@limiter.limit("6/minute")
+async def gas_generate_invoices(request: Request, req: GenerateInvoicesBody,
+                                x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """対象月の請求書を一括生成"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    return await supabase_rpc("generate_monthly_invoices",
+                              {"p_month": _month_start(req.month)})
+
+
+class GasMarkDraftedBody(BaseModel):
+    invoice_nos: List[str] = Field(default_factory=list)
+
+
+@app.post("/gas/invoices/mark-drafted")
+@limiter.limit("20/minute")
+async def gas_mark_drafted(request: Request, req: GasMarkDraftedBody,
+                           x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """Gmail下書きを作成した請求書に印を付ける (二重下書きの防止)"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    nos = [n for n in req.invoice_nos if n][:500]
+    if not nos:
+        return {"success": True, "updated": 0}
+
+    now = _datetime_module.datetime.now(_datetime_module.timezone.utc).isoformat()
+    quoted = ",".join('"{}"'.format(n.replace('"', '')) for n in nos)
+    rows = await supabase_query(
+        "invoices", "invoice_no=in.({})".format(quoted), method="PATCH",
+        body={"email_draft_at": now})
+    return {"success": rows is not None, "updated": len(rows or [])}
 
 
 # deploy: 20260516-0508
