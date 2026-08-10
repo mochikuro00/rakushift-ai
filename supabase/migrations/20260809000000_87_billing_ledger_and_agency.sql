@@ -238,7 +238,10 @@ SET search_path = pg_catalog, public, pg_temp;
 -- 6. 顧客台帳ビュー (顧客管理シートの元データ)
 --    請求カテゴリー・プラン・代理店・代理店フィー・入金状況を1行に集約。
 -- =========================================================
-CREATE OR REPLACE VIEW v_customer_ledger AS
+-- 後続マイグレーションで列構成が変わるため、置換ではなく作り直す
+-- (CREATE OR REPLACE VIEW は列の削除ができず、再適用時に失敗する)
+DROP VIEW IF EXISTS v_customer_ledger CASCADE;
+CREATE VIEW v_customer_ledger AS
 SELECT
     o.id                                    AS organization_id,
     c.contract_id,
