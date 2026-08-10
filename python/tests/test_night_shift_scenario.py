@@ -13,7 +13,7 @@
   - 日勤者 (正社員/月給) ×6  → 日勤4名 + 夜勤1名 + 予備1名 必要
   - パート (時給) ×3        → 1名は月-金のみ
 """
-import sys, os, json
+import sys, collections
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -88,36 +88,6 @@ STAFF = [
           eligible=["パート朝", "パート通し"]),
 ]
 
-print("=" * 70)
-print("夜勤シフト ① シナリオテスト")
-print("=" * 70)
-print(f"対象期間: {DATES[0]} 〜 {DATES[-1]} ({len(DATES)}日間)")
-print(f"スタッフ: 日勤者 6名 + パート 3名")
-print("シフトパターン: 日勤(4)/夜勤(1)/パート朝(2)/パート通し(2)")
-print()
-
-scheduler_obj = ShiftScheduler(STAFF, CONFIG, DATES)
-result = scheduler_obj.solve(force=False)
-
-shifts = result.get("shifts", []) if isinstance(result, dict) else result
-print(f"生成シフト件数: {len(shifts)}")
-
-# 時刻ペアの分布を可視化
-import collections
-time_dist = collections.Counter()
-for s in shifts:
-    time_dist[(s.get("start_time","")[:5], s.get("end_time","")[:5])] += 1
-print("時刻ペア分布:")
-for (st, et), n in time_dist.most_common():
-    print(f"   {st}-{et}: {n}件")
-print()
-
-# 検証
-import collections
-by_date_pattern = collections.defaultdict(lambda: collections.defaultdict(list))
-night_shift_by_staff = collections.defaultdict(int)
-sat_violations = []
-
 # 夜勤は max_hours_day=17 でも端数調整で 16:00-09:00 のまま保存される想定だが、
 # 圧縮されている可能性もあるので幅を持たせる
 def classify(st, et):
@@ -130,81 +100,93 @@ def classify(st, et):
 PART_IDS = {"p1", "p2", "p3"}
 P3_UNAVAIL = set(saturdays)
 
-for s in shifts:
-    st = s.get("start_time", "")[:5]
-    et = s.get("end_time", "")[:5]
-    pat = classify(st, et)
-    d = s.get("date")
-    sid = s.get("staff_id")
-    by_date_pattern[d][pat].append(sid)
-    if pat == "夜勤":
-        night_shift_by_staff[sid] += 1
-    if sid == "p3" and d in P3_UNAVAIL:
-        sat_violations.append((sid, d))
 
-# 集計
-days_with_4_day = 0
-days_with_1_night = 0
-night_assigned_to_part = []
-all_ok_days = 0
+def test_night_shift_scenario():
+    """夜勤を含む混在シフトで、日勤4名/夜勤1名/パートの非夜勤を同時に満たせること。"""
+    print("=" * 70)
+    print("夜勤シフト ① シナリオテスト")
+    print("=" * 70)
+    print(f"対象期間: {DATES[0]} 〜 {DATES[-1]} ({len(DATES)}日間)")
+    print("スタッフ: 日勤者 6名 + パート 3名")
+    print("シフトパターン: 日勤(4)/夜勤(1)/パート朝(2)/パート通し(2)")
+    print()
 
-for d in DATES:
-    day_cnt = len(by_date_pattern[d].get("日勤", []))
-    night_cnt = len(by_date_pattern[d].get("夜勤", []))
-    night_ids = by_date_pattern[d].get("夜勤", [])
-    if day_cnt >= 4:
-        days_with_4_day += 1
-    if night_cnt >= 1:
-        days_with_1_night += 1
-    for nid in night_ids:
-        if nid in PART_IDS:
-            night_assigned_to_part.append((nid, d))
-    if day_cnt >= 4 and night_cnt >= 1:
-        all_ok_days += 1
+    result = ShiftScheduler(STAFF, CONFIG, DATES).solve(force=False)
+    shifts = result.get("shifts", []) if isinstance(result, dict) else result
+    print(f"生成シフト件数: {len(shifts)}")
 
-print("=" * 70)
-print("検証結果")
-print("=" * 70)
-print(f"[1] 日勤 4名以上 達成: {days_with_4_day}/{len(DATES)} 日 "
-      f"({'OK' if days_with_4_day == len(DATES) else 'NG'})")
-print(f"[2] 夜勤 1名 達成:    {days_with_1_night}/{len(DATES)} 日 "
-      f"({'OK' if days_with_1_night == len(DATES) else 'NG'})")
-print(f"[3] パートに夜勤 割当: {len(night_assigned_to_part)} 件 "
-      f"({'OK (0件想定)' if not night_assigned_to_part else 'NG'})")
-if night_assigned_to_part:
-    print(f"    例: {night_assigned_to_part[:3]}")
-print(f"[4] パート3 土曜日 違反: {len(sat_violations)} 件 "
-      f"({'OK' if not sat_violations else 'NG'})")
-if sat_violations:
-    print(f"    例: {sat_violations[:3]}")
-print(f"[5] 全要件 同時達成日:  {all_ok_days}/{len(DATES)} 日")
+    time_dist = collections.Counter()
+    for s in shifts:
+        time_dist[(s.get("start_time", "")[:5], s.get("end_time", "")[:5])] += 1
+    print("時刻ペア分布:")
+    for (st, et), n in time_dist.most_common():
+        print(f"   {st}-{et}: {n}件")
+    print()
 
-# 各スタッフの稼働
-print()
-print("=" * 70)
-print("スタッフ別 稼働状況")
-print("=" * 70)
-staff_count = collections.defaultdict(lambda: collections.defaultdict(int))
-for s in shifts:
-    sid = s.get("staff_id")
-    st = s.get("start_time", "")[:5]
-    et = s.get("end_time", "")[:5]
-    pat = classify(st, et)
-    staff_count[sid][pat] += 1
+    by_date_pattern = collections.defaultdict(lambda: collections.defaultdict(list))
+    sat_violations = []
 
-for s in STAFF:
-    sid = s["id"]
-    totals = dict(staff_count.get(sid, {}))
-    total = sum(totals.values())
-    print(f"  {s['name']:30s} 合計{total:3d}日 {totals}")
+    for s in shifts:
+        st = s.get("start_time", "")[:5]
+        et = s.get("end_time", "")[:5]
+        pat = classify(st, et)
+        d = s.get("date")
+        sid = s.get("staff_id")
+        by_date_pattern[d][pat].append(sid)
+        if sid == "p3" and d in P3_UNAVAIL:
+            sat_violations.append((sid, d))
 
-# サマリ
-ok_count = sum([
-    days_with_4_day == len(DATES),
-    days_with_1_night == len(DATES),
-    len(night_assigned_to_part) == 0,
-    len(sat_violations) == 0,
-])
-print()
-print(f"=== {ok_count}/4 制約 PASS ===")
-sys.exit(0 if ok_count == 4 else 1)
+    # 集計
+    days_with_4_day = 0
+    days_with_1_night = 0
+    night_assigned_to_part = []
+    all_ok_days = 0
+
+    for d in DATES:
+        night_ids = by_date_pattern[d].get("夜勤", [])
+        day_cnt = len(by_date_pattern[d].get("日勤", []))
+        night_cnt = len(night_ids)
+        if day_cnt >= 4:
+            days_with_4_day += 1
+        if night_cnt >= 1:
+            days_with_1_night += 1
+        night_assigned_to_part += [(nid, d) for nid in night_ids if nid in PART_IDS]
+        if day_cnt >= 4 and night_cnt >= 1:
+            all_ok_days += 1
+
+    print("=" * 70)
+    print("検証結果")
+    print("=" * 70)
+    print(f"[1] 日勤 4名以上 達成: {days_with_4_day}/{len(DATES)} 日")
+    print(f"[2] 夜勤 1名 達成:    {days_with_1_night}/{len(DATES)} 日")
+    print(f"[3] パートに夜勤 割当: {len(night_assigned_to_part)} 件 {night_assigned_to_part[:3]}")
+    print(f"[4] パート3 土曜日 違反: {len(sat_violations)} 件 {sat_violations[:3]}")
+    print(f"[5] 全要件 同時達成日:  {all_ok_days}/{len(DATES)} 日")
+
+    # 各スタッフの稼働
+    print()
+    print("=" * 70)
+    print("スタッフ別 稼働状況")
+    print("=" * 70)
+    staff_count = collections.defaultdict(lambda: collections.defaultdict(int))
+    for s in shifts:
+        pat = classify(s.get("start_time", "")[:5], s.get("end_time", "")[:5])
+        staff_count[s.get("staff_id")][pat] += 1
+
+    for s in STAFF:
+        totals = dict(staff_count.get(s["id"], {}))
+        print(f"  {s['name']:30s} 合計{sum(totals.values()):3d}日 {totals}")
+
+    assert days_with_4_day == len(DATES), f"日勤4名を満たせない日がある ({days_with_4_day}/{len(DATES)})"
+    assert days_with_1_night == len(DATES), f"夜勤1名を満たせない日がある ({days_with_1_night}/{len(DATES)})"
+    assert not night_assigned_to_part, f"パートに夜勤が割り当たった: {night_assigned_to_part[:3]}"
+    assert not sat_violations, f"月-金のみのパートに土曜が割り当たった: {sat_violations[:3]}"
+
+
+if __name__ == "__main__":
+    try:
+        test_night_shift_scenario()
+    except AssertionError as e:
+        print(f"\n=== NG: {e} ===")
+        sys.exit(1)
+    print("\n=== 4/4 制約 PASS ===")
