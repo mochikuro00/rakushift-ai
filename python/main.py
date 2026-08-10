@@ -2237,6 +2237,95 @@ async def stripe_webhook(request: Request):
                 )
                 logger.info("[Webhook] Subscription {} -> {} for: {}".format(
                     event_type, status, contract_id))
+                # v3.7.286: 解約が確定した時点で解約者台帳にスナップショットを残す。
+                #   テナントは解約6ヶ月後に削除されるため、ここで残さないと
+                #   「どの顧客がどれだけ契約していたか」が追えなくなる。
+                if status in ("canceled", "unpaid") or event_type == "customer.subscription.deleted":
+                    try:
+                        await supabase_rpc("record_cancellation",
+                                           {"p_contract_id": contract_id,
+                                            "p_cancelled_on": None,
+                                            "p_reason": "Stripe: " + str(event_type)})
+                    except Exception as _e:
+                        logger.info("record_cancellation failed: %s", type(_e).__name__)
+
+        elif event_type in ("charge.refunded", "refund.created", "refund.updated"):
+            # v3.7.286: 返金の台帳反映。
+            #   charge.refunded は charge オブジェクト、refund.* は refund オブジェクトが届く。
+            #   どちらでも拾えるように正規化する。テストモードの返金も記録し、
+            #   台帳側で「テスト」として区別できるようにする (集計から外す判断ができる)。
+            is_test = (event.get("livemode") is False)
+            if event_type == "charge.refunded":
+                charge_id = data.get("id")
+                customer_id = data.get("customer")
+                stripe_invoice_id = data.get("invoice")
+                refunds_list = ((data.get("refunds") or {}).get("data") or [])
+                if not refunds_list:
+                    # refunds が展開されていない場合は総額で1件として記録
+                    refunds_list = [{
+                        "id": None,
+                        "amount": data.get("amount_refunded") or 0,
+                        "currency": data.get("currency") or "jpy",
+                        "reason": data.get("reason") or "",
+                        "created": data.get("created"),
+                    }]
+            else:
+                charge_id = data.get("charge")
+                customer_id = None
+                stripe_invoice_id = None
+                refunds_list = [data]
+
+            # customer_id が取れないときは charge から引く
+            if not customer_id and charge_id:
+                try:
+                    _ch = await asyncio.to_thread(lambda: stripe.Charge.retrieve(charge_id))
+                    customer_id = _ch.get("customer")
+                    stripe_invoice_id = stripe_invoice_id or _ch.get("invoice")
+                except Exception as e:
+                    logger.info("[Webhook] charge retrieve failed: %s", type(e).__name__)
+
+            contract_id = ""
+            if customer_id:
+                configs = await supabase_query(
+                    "config",
+                    "stripe_customer_id=eq.{}&select=contract_id".format(customer_id))
+                if configs:
+                    contract_id = configs[0].get("contract_id") or ""
+
+            recorded = 0
+            for rf in refunds_list:
+                amount = rf.get("amount") or 0
+                if amount <= 0:
+                    continue
+                # 返金は pending / failed / canceled になりうる。
+                # 成功した分だけを計上しないと返金額を過大に記録してしまう。
+                # (charge.refunded 由来で status が無い場合は成功扱い)
+                rf_status = rf.get("status")
+                if rf_status is not None and rf_status != "succeeded":
+                    logger.info("[Webhook] refund skipped (status=%s)", rf_status)
+                    continue
+                ts = rf.get("created")
+                refunded_on = None
+                if ts:
+                    refunded_on = _datetime_module.datetime.fromtimestamp(
+                        ts, _datetime_module.timezone.utc).date().isoformat()
+                res = await supabase_rpc("record_refund", {
+                    "p_source": "stripe",
+                    "p_contract_id": contract_id,
+                    "p_amount": amount,          # JPY は最小単位=円なのでそのまま
+                    "p_refunded_at": refunded_on,
+                    "p_reason": rf.get("reason") or "",
+                    "p_invoice_no": None,
+                    "p_stripe_refund_id": rf.get("id"),
+                    "p_stripe_charge_id": charge_id,
+                    "p_stripe_invoice_id": stripe_invoice_id,
+                    "p_is_test": is_test,
+                    "p_currency": rf.get("currency") or "jpy",
+                })
+                if isinstance(res, dict) and res.get("success"):
+                    recorded += 1
+            logger.info("[Webhook] refund recorded: %d (contract=%s test=%s)",
+                        recorded, contract_id or "-", is_test)
 
         elif event_type == "invoice.payment_failed":
             # 支払い失敗
@@ -2656,6 +2745,7 @@ class InvoicePaymentBody(BaseModel):
 
 class GenerateInvoicesBody(BaseModel):
     month: Optional[str] = None
+    contract_id: Optional[str] = None   # 指定するとその顧客だけを生成する
 
 
 @app.get("/admin/invoices")
@@ -2694,8 +2784,15 @@ async def admin_generate_invoices(request: Request, req: GenerateInvoicesBody,
     session_info = await verify_session_org_id(x_session_id)
     if not session_info or session_info.get("role") != "platform_admin":
         return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
-    result = await supabase_rpc("generate_monthly_invoices",
-                                {"p_month": _month_start(req.month)})
+    # 生成は常に「今日」を基準にする。
+    #   過去の月を指定して遡って請求書を作れてしまうと、既に請求済みの期間や
+    #   本来請求しない過去期間の請求書ができてしまう。画面の対象月は
+    #   「一覧の絞り込み」だけに使い、生成の基準日には使わない。
+    # contract_id 指定時はその顧客だけを対象にする (手動発行の直後など)。
+    result = await supabase_rpc("generate_due_invoices", {
+        "p_asof": None,
+        "p_contract_id": req.contract_id,
+    })
     if isinstance(result, dict) and result.get("status") == "error":
         return JSONResponse(status_code=500, content={"error": "請求書の生成に失敗しました"})
     return result
@@ -2775,6 +2872,38 @@ async def admin_set_gas_key(request: Request, req: GasKeyBody,
     return {"success": True, "api_key": key}
 
 
+class RefundBody(BaseModel):
+    contract_id: str
+    amount: float
+    refunded_at: Optional[str] = None
+    reason: str = ""
+    invoice_no: Optional[str] = None
+    source: str = "manual"
+
+
+@app.post("/admin/refunds")
+@limiter.limit("20/minute")
+async def admin_record_refund(request: Request, req: RefundBody,
+                              x_session_id: Optional[str] = Header(None, alias="x-session-id")):
+    """返金を台帳に記録 (請求書払い・手動返金用)"""
+    session_info = await verify_session_org_id(x_session_id)
+    if not session_info or session_info.get("role") != "platform_admin":
+        return JSONResponse(status_code=403, content={"error": "運営管理者の認証が必要です"})
+    return await supabase_rpc("record_refund", {
+        "p_source": req.source or "manual",
+        "p_contract_id": req.contract_id,
+        "p_amount": req.amount,
+        "p_refunded_at": req.refunded_at,
+        "p_reason": req.reason,
+        "p_invoice_no": req.invoice_no,
+        "p_stripe_refund_id": None,
+        "p_stripe_charge_id": None,
+        "p_stripe_invoice_id": None,
+        "p_is_test": False,
+        "p_currency": "jpy",
+    })
+
+
 def _verify_gas_key(provided: Optional[str]) -> bool:
     _load_platform_settings()
     expected = _get_setting("gas_api_key")
@@ -2803,6 +2932,9 @@ async def gas_export(request: Request,
 
     運営に関わるデータをすべて返す:
       customers  … 顧客台帳 (プラン/代理店/代理店フィー/入金状況)
+      bank       … 入金明細と自動消込の結果
+      refunds    … 返金台帳 (Stripe / 請求書払い)
+      cancellations … 解約者台帳 (契約期間つき。テナント削除後も残る)
       inquiries  … お問い合わせフォームの全項目 (Stripe決済前の見込みも含む全件)
       invoices   … 請求書・入金台帳 (売上管理の元データ)
       stripe     … Stripe の決済履歴
@@ -2886,6 +3018,38 @@ async def gas_export(request: Request,
         except Exception as e:
             errors.append("reconcile: {}".format(type(e).__name__))
 
+    if need("bank"):
+        try:
+            rows = await supabase_rpc("list_bank_transactions", {"p_days": 180})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("bank: {}".format(err))
+            out["bank"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("bank: {}".format(type(e).__name__))
+
+    if need("refunds"):
+        try:
+            rows = await supabase_rpc("list_refunds", {"p_from": None})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("refunds: {}".format(err))
+            out["refunds"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("refunds: {}".format(type(e).__name__))
+
+    if need("cancellations"):
+        try:
+            # 解約済みテナントの差分を台帳へ取り込んでから返す
+            await supabase_rpc("sync_cancellations", {})
+            rows = await supabase_rpc("list_cancellations", {})
+            err = _rpc_error(rows)
+            if err:
+                errors.append("cancellations: {}".format(err))
+            out["cancellations"] = rows if isinstance(rows, list) else []
+        except Exception as e:
+            errors.append("cancellations: {}".format(type(e).__name__))
+
     if need("stripe"):
         try:
             out["stripe"] = await _collect_stripe_payments()
@@ -2956,6 +3120,8 @@ class GasAgencyRow(BaseModel):
     agency_fee_amount: Optional[float] = None
     billing_email: Optional[str] = None
     payment_terms_days: Optional[int] = None
+    billing_start_date: Optional[str] = None
+    payer_names: Optional[str] = None
 
 
 class GasAgencyBody(BaseModel):
@@ -2981,6 +3147,8 @@ async def gas_update_agency(request: Request, req: GasAgencyBody,
             "p_fee_amount": row.agency_fee_amount,
             "p_billing_email": row.billing_email,
             "p_payment_terms_days": row.payment_terms_days,
+            "p_billing_start_date": row.billing_start_date,
+            "p_payer_names": row.payer_names,
         })
         if isinstance(r, dict) and r.get("success"):
             ok += 1
@@ -3002,6 +3170,96 @@ async def gas_generate_invoices(request: Request, req: GenerateInvoicesBody,
 
 class GasMarkDraftedBody(BaseModel):
     invoice_nos: List[str] = Field(default_factory=list)
+
+
+class BankTxRow(BaseModel):
+    paid_on: str
+    amount: float
+    payer_name: str = ""
+    memo: str = ""
+    source: str = "csv"
+
+
+class BankTxBody(BaseModel):
+    rows: List[BankTxRow] = Field(default_factory=list)
+
+
+@app.post("/gas/payments/import")
+@limiter.limit("20/minute")
+async def gas_import_payments(request: Request, req: BankTxBody,
+                              x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """銀行の入金明細を取り込む (同じ明細は二重に登録しない)"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    if len(req.rows) > 1000:
+        return JSONResponse(status_code=400, content={"error": "一度に処理できるのは1000件までです"})
+
+    imported = dup = failed = 0
+    for row in req.rows:
+        r = await supabase_rpc("import_bank_transaction", {
+            "p_paid_on": row.paid_on,
+            "p_amount": row.amount,
+            "p_payer_name": row.payer_name,
+            "p_memo": row.memo,
+            "p_source": row.source,
+        })
+        if isinstance(r, dict) and r.get("success"):
+            if r.get("duplicated"):
+                dup += 1
+            else:
+                imported += 1
+        else:
+            failed += 1
+    return {"success": True, "imported": imported, "duplicated": dup, "failed": failed}
+
+
+@app.post("/gas/payments/match")
+@limiter.limit("10/minute")
+async def gas_match_payments(request: Request,
+                             x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """取り込んだ入金明細を未入金の請求書へ自動照合する"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    return await supabase_rpc("auto_match_payments", {"p_days": 90})
+
+
+@app.get("/gas/invoices/overdue")
+@limiter.limit("20/minute")
+async def gas_overdue(request: Request,
+                      x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """督促対象 (期日超過・未督促または前回から間隔が空いたもの)"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    _load_platform_settings()
+    rows = await supabase_rpc("list_overdue_for_reminder", {
+        "p_grace_days": 1, "p_interval_days": 7, "p_max_count": 3})
+    return {"invoices": rows if isinstance(rows, list) else []}
+
+
+@app.post("/gas/invoices/mark-reminded")
+@limiter.limit("20/minute")
+async def gas_mark_reminded(request: Request, req: GasMarkDraftedBody,
+                            x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """督促を送った記録 (同じ請求に何度も送らないため)"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    nos = [n for n in req.invoice_nos if n][:500]
+    if not nos:
+        return {"success": True, "updated": 0}
+    return await supabase_rpc("mark_reminder_sent", {"p_invoice_nos": nos})
+
+
+@app.post("/gas/invoices/mark-sent")
+@limiter.limit("20/minute")
+async def gas_mark_sent(request: Request, req: GasMarkDraftedBody,
+                        x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """請求書メールを実際に送信した記録 (自動送信を有効にしたとき用)"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    nos = [n for n in req.invoice_nos if n][:500]
+    if not nos:
+        return {"success": True, "updated": 0}
+    return await supabase_rpc("mark_invoices_sent", {"p_invoice_nos": nos})
 
 
 @app.post("/gas/invoices/mark-drafted")
