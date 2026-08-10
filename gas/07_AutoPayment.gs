@@ -73,7 +73,8 @@ function setupPasteSheet_() {
   sh.getRange(1, 1, 1, 5).setValues([['入金日', '入金額', '振込名義', '摘要', '残高']])
     .setFontWeight('bold').setBackground('#0369a1').setFontColor('#ffffff');
   sh.getRange(3, 1).setValue(
-    '↑ 銀行からダウンロードしたCSVを、この見出しごと貼り付けてください（列名が違っても自動で判別します）。'
+    '↑ 銀行からダウンロードしたCSVを2行目以降に貼り付けてください。'
+    + '銀行側の見出しごと貼っても、上の見出しに合わせてデータだけ貼っても取り込めます（列名は自動で判別します）。'
     + '取り込むと自動で空になります。結果は「入金明細」シートに出ます。')
     .setFontColor('#6b7280');
   sh.setFrozenRows(1);
@@ -244,22 +245,34 @@ function parseBankCsv_(text) {
 function parseBankTable_(table) {
   if (!table || table.length < 2) return [];
 
-  // 見出し行を探す (先頭5行のうち、日付らしき列名を含む行)
-  var head = -1;
-  for (var i = 0; i < Math.min(table.length, 5); i++) {
-    var joined = table[i].join(',');
-    if (/日付|取引日|入出金日|勘定日|年月日/.test(joined)) { head = i; break; }
+  // 見出し行を探す。
+  //
+  // 「入金貼付」シートには案内用のテンプレ見出し (入金日/入金額/…) が1行目に固定で入っており、
+  // 運営はその下に銀行CSVを見出しごと貼る。先頭から探すとテンプレ側を掴んでしまい、
+  // 列順の違う銀行CSVを取り違えて読む。後ろの行から探して、銀行の見出しを優先する。
+  // 日付列と金額列の両方が取れた行だけを見出しとして採用する。
+  var DATE_NAMES = ['入金日', '取引日', '入出金日', '勘定日', '取引年月日', '年月日', '日付'];
+  // 「入金」は '入金日' にも部分一致してしまうため、より具体的な名前の後ろに置く
+  var IN_NAMES   = ['入金金額', 'お預入金額', '預入金額', '入金額', '入金'];
+
+  var head = -1, h = null, iDate = -1, iAmt = -1;
+  for (var i = Math.min(table.length, 6) - 1; i >= 0; i--) {
+    var cand = table[i].map(function (x) { return String(x).trim(); });
+    var d = pickCol_(cand, DATE_NAMES);
+    if (d < 0) continue;
+    var a = pickCol_(cand, IN_NAMES);
+    if (a < 0) a = pickCol_(cand, ['金額', '取引金額']);
+    if (a < 0 || a === d) continue;      // 金額列が日付列と同じなら部分一致の誤判定
+    head = i; h = cand; iDate = d; iAmt = a;
+    break;
   }
   if (head < 0) return [];
 
-  var h = table[head].map(function (x) { return String(x).trim(); });
-  var iDate = pickCol_(h, ['入金日', '取引日', '入出金日', '勘定日', '日付', '取引年月日']);
-  var iIn   = pickCol_(h, ['入金金額', 'お預入金額', '入金', '預入金額', '入金額']);
-  var iAmt  = iIn >= 0 ? iIn : pickCol_(h, ['金額', '取引金額']);
-  var iName = pickCol_(h, ['振込依頼人', 'お取引内容', '摘要', '内容', '振込人名', '取引内容']);
+  // 名義そのものを指す列を先に見る。'摘要' を先頭側に置くと、
+  // 振込名義の列がある明細でも摘要を名義として拾ってしまう。
+  var iName = pickCol_(h, ['振込名義', '振込依頼人', '振込人名', 'お取引内容', '取引内容', '内容', '摘要']);
   var iMemo = pickCol_(h, ['備考', 'メモ']);
   var iRef  = pickCol_(h, ['残高', '取引番号', '取引No', '照会番号']);
-  if (iDate < 0 || iAmt < 0) return [];
 
   var out = [];
   for (var r = head + 1; r < table.length; r++) {
@@ -357,23 +370,31 @@ function sendReminders_core_() {
   var list = api_('/gas/invoices/overdue', 'get').invoices || [];
   // 請求書の下書きと同じくGmailの1日あたり上限に当たらないよう分割する
   var limit = Math.max(1, num_(getSetting_('1回に作る下書きの上限')) || DRAFT_LIMIT_DEFAULT);
-  var remaining = Math.max(list.length - limit, 0);
+  var deferred = Math.max(list.length - limit, 0);
   if (list.length > limit) list = list.slice(0, limit);
 
   var issuer = issuerInfo_();
   var autoSend = autoSendEnabled_();
   var created = [], sent = [], skipped = [];
+  var start = Date.now();
+  var i = 0;
 
-  list.forEach(function (x) {
+  for (; i < list.length; i++) {
+    // 実行時間の上限で強制終了されると督促の記録が残らず、
+    // 回数上限(3回)の判定を素通りして毎朝同じ顧客に届いてしまう。
+    if (Date.now() - start > MAIL_LOOP_BUDGET_MS) break;
+
+    var x = list[i];
+    var no = str_(x.invoice_no);
     var to = str_(x.billing_email).trim();
-    if (!to) { skipped.push(str_(x.invoice_no) + ': 請求先メール未登録'); return; }
+    if (!to) { skipped.push(no + ': 請求先メール未登録'); continue; }
     try {
-      var subject = '【ラクシフトAI】お支払いのご確認のお願い（' + str_(x.invoice_no) + '）';
+      var subject = '【ラクシフトAI】お支払いのご確認のお願い（' + no + '）';
       var body = str_(x.company_name || x.shop_name) + ' 御中\n\n'
         + 'いつもラクシフトAIをご利用いただきありがとうございます。\n'
         + '下記のご請求につきまして、本日時点でご入金の確認がとれておりません。\n\n'
         + '─────────────────────\n'
-        + '請求番号 : ' + str_(x.invoice_no) + '\n'
+        + '請求番号 : ' + no + '\n'
         + 'ご請求額 : ¥' + Number(num_(x.balance)).toLocaleString() + '（未入金分）\n'
         + 'お支払期限: ' + jpDate_(x.due_date) + '（' + num_(x.days_overdue) + '日経過）\n'
         + '─────────────────────\n\n'
@@ -385,20 +406,26 @@ function sendReminders_core_() {
 
       if (autoSend) {
         GmailApp.sendEmail(to, subject, body, { name: issuer.name });
-        sent.push(str_(x.invoice_no));
+        sent.push(no);
       } else {
         GmailApp.createDraft(to, subject, body, { name: issuer.name });
       }
-      created.push(str_(x.invoice_no));
+      created.push(no);
     } catch (e) {
-      skipped.push(str_(x.invoice_no) + ': ' + e.message);
+      skipped.push(no + ': ' + e.message);
+      continue;
     }
-  });
 
-  if (created.length > 0) {
-    api_('/gas/invoices/mark-reminded', 'post', { invoice_nos: created });
+    // 送信の直後に1件ずつ記録する (まとめて記録すると途中終了で全件が再送になる)
+    try {
+      api_('/gas/invoices/mark-reminded', 'post', { invoice_nos: [no] });
+    } catch (e) {
+      skipped.push(no + ': 督促は出しましたが記録に失敗しました (' + e.message + ')');
+    }
   }
-  return { created: created, sent: sent, skipped: skipped, remaining: remaining };
+
+  return { created: created, sent: sent, skipped: skipped,
+           remaining: deferred + (list.length - i) };
 }
 
 /** メニュー: 期日超過に督促 */

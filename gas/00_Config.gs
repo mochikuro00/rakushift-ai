@@ -42,6 +42,12 @@ var INVOICE_EDITABLE = ['入金日', '入金額', '入金方法', '振込名義'
 /** 1回の実行で作るGmail下書きの上限 (Gmailの1日あたり上限に当たらないため) */
 var DRAFT_LIMIT_DEFAULT = 50;
 
+/**
+ * メール作成ループを打ち切る時間。GASの実行上限(6分)に届く前に自分から止める。
+ * 上限で強制終了されると「送ったが記録できていない」請求書が残り、翌朝再送される。
+ */
+var MAIL_LOOP_BUDGET_MS = 4 * 60 * 1000;
+
 var FEE_TYPE_LABEL = { inherit: '紹介者マスタ準拠', fixed: '固定額', percent: '料率(%)', none: '対象外' };
 var FEE_TYPE_VALUE = { '紹介者マスタ準拠': 'inherit', '固定額': 'fixed', '料率(%)': 'percent', '対象外': 'none' };
 var CATEGORY_LABEL = { stripe: 'Stripe', oem: 'OEM代理店', invoice: '請求書払い' };

@@ -82,13 +82,12 @@ function pushAgencySettings() {
       return;
     }
 
-    var snapshot = loadSnapshot_();
+    var snapshot = loadSnapshot_()[SHEETS.CUSTOMERS] || {};
     var targets = [];
     sheet.rows.forEach(function (r) {
       var contractId = str_(r['契約ID']).trim();
       if (!contractId) return;
-      var current = customerFingerprint_(r);
-      if (snapshot[contractId] === current) return;   // 変更のない行は送らない
+      if (!isEdited_(r, snapshot[contractId], CUSTOMER_EDITABLE)) return;   // 変更のない行は送らない
       targets.push({
         contract_id: contractId,
         // 空欄のまま送ることで「代理店の紐付けを解除」を表現する。
@@ -131,32 +130,136 @@ function pushAgencySettings() {
 
 // ---------------------------------------------------------------------
 // 変更検出用スナップショット
+//
+// 控えるのは「同期がシートに書いたシステム側の値」であって、シートの現在値ではない。
+// この区別が要で、これにより次の2つが同時に成り立つ:
+//   - 書き戻し: シート ≠ 控え の行だけをシステムへ送る
+//   - 自動同期: シートを作り直す前に未反映の編集を拾い、書き戻せる
+// 控えをシートから取ると、同期で復元した編集が「編集なし」に見えて送られなくなる。
 // ---------------------------------------------------------------------
 
-function customerFingerprint_(r) {
-  return [
-    str_(r['紹介者コード']).trim(),
-    str_(r['代理店フィー種別']).trim(),
-    num_(r['代理店フィー額']),
-    str_(r['請求先メール']).trim(),
-    num_(r['支払サイト(日)']),
-    ymd_(r['請求開始日']),
-    str_(r['振込名義']).trim()
-  ].join('|');
+var _snapshotStage = {};   // { シート名: { キー: { 列名: 値 } } }
+var _restoredEdits = 0;    // 直近の同期で復元した未反映編集の件数
+
+/** セル値を比較用の文字列に寄せる (日付列は Date で返るため揃える) */
+function normCell_(v) {
+  if (v instanceof Date) return ymd_(v);
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') return String(v);
+  return String(v).trim();
 }
 
-/** 同期直後の値を控えておき、次回の書き戻しで「変わった行」だけを送る */
+/** 控えと突き合わせて、編集された行かを判定する。控えが無い行は送る。 */
+function isEdited_(r, prev, editable) {
+  if (!prev) return true;
+  for (var i = 0; i < editable.length; i++) {
+    var c = editable[i];
+    if (!(c in prev)) continue;
+    if (normCell_(r[c]) !== prev[c]) return true;
+  }
+  return false;
+}
+
+/**
+ * 前回の同期以降に運営が編集し、まだシステムへ反映していないセルを拾う。
+ * 自動同期はシートを作り直すため、これを拾わないと編集が痕跡なく消える。
+ * writeSheet_ を呼ぶ「前」に実行すること。
+ */
+function pendingEdits_(sheetName, keyCol, editable) {
+  var prev = loadSnapshot_()[sheetName];
+  if (!prev) return {};            // 控えが無い = 比較できないので触らない
+  var out = {};
+  readSheet_(sheetName).rows.forEach(function (r) {
+    var key = normCell_(r[keyCol]);
+    if (!key || !prev[key]) return;
+    var diff = null;
+    editable.forEach(function (c) {
+      if (!(c in prev[key])) return;
+      if (normCell_(r[c]) === prev[key][c]) return;
+      if (!diff) diff = {};
+      diff[c] = r[c];
+    });
+    if (diff) out[key] = diff;
+  });
+  return out;
+}
+
+/** 同期がこれから書く値を控える。writeSheet_ の「前」に実行すること。 */
+function stageSnapshot_(sheetName, headers, rows, keyCol, editable) {
+  var iKey = headers.indexOf(keyCol);
+  var cols = editable.filter(function (c) { return headers.indexOf(c) >= 0; });
+  var map = {};
+  rows.forEach(function (row) {
+    var key = normCell_(row[iKey]);
+    if (!key) return;
+    var o = {};
+    cols.forEach(function (c) { o[c] = normCell_(row[headers.indexOf(c)]); });
+    map[key] = o;
+  });
+  _snapshotStage[sheetName] = map;
+}
+
+/** 拾っておいた未反映の編集をシートへ書き戻し、未反映と分かるよう色と注記を付ける */
+function restorePendingEdits_(sh, headers, rows, keyCol, pending) {
+  var keys = Object.keys(pending || {});
+  if (keys.length === 0) return 0;
+
+  var iKey = headers.indexOf(keyCol);
+  var rowOf = {};
+  for (var i = 0; i < rows.length; i++) rowOf[normCell_(rows[i][iKey])] = i + 2;
+
+  var n = 0;
+  keys.forEach(function (key) {
+    var rowNo = rowOf[key];
+    if (!rowNo) return;            // 同期後に消えた行は復元しない
+    var restored = false;
+    Object.keys(pending[key]).forEach(function (col) {
+      var c = headers.indexOf(col);
+      if (c < 0) return;
+      sh.getRange(rowNo, c + 1)
+        .setValue(pending[key][col])
+        .setBackground('#fde68a')
+        .setNote('システムへ未反映の編集です。\n書き戻しのメニューを実行するまでシステムには入りません。');
+      restored = true;
+    });
+    if (restored) n++;
+  });
+  return n;
+}
+
+/** 同期の開始時に呼ぶ。控えと復元件数をリセットする。 */
+function beginSnapshot_() {
+  _snapshotStage = {};
+  _restoredEdits = 0;
+}
+
+function countRestoredEdits_(n) { _restoredEdits += (n || 0); }
+function restoredEdits_() { return _restoredEdits; }
+
+/**
+ * 控えを保存する。beginSnapshot_ → stageSnapshot_ → ここ、の順で呼ぶ。
+ * 今回書き換えたシートの分だけを差し替える。突合チェックのように
+ * 一部のシートしか作り直さない入口があるため、丸ごと置き換えてはいけない。
+ */
 function saveSnapshot_() {
-  var sheet = readSheet_(SHEETS.CUSTOMERS);
-  var rows = sheet.rows.map(function (r) {
-    return [str_(r['契約ID']).trim(), customerFingerprint_(r)];
-  }).filter(function (r) { return r[0]; });
+  var merged = loadSnapshot_();
+  Object.keys(_snapshotStage).forEach(function (sheetName) {
+    merged[sheetName] = _snapshotStage[sheetName];
+  });
+
+  var rows = [];
+  Object.keys(merged).forEach(function (sheetName) {
+    var map = merged[sheetName];
+    Object.keys(map).forEach(function (key) {
+      rows.push([sheetName, key, JSON.stringify(map[key])]);
+    });
+  });
 
   var sh = getOrCreateSheet_(SNAPSHOT_SHEET);
   sh.clear();
-  ensureGrid_(sh, 2, rows.length + 2);
-  sh.getRange(1, 1, 1, 2).setValues([['契約ID', 'fingerprint']]);
-  if (rows.length) sh.getRange(2, 1, rows.length, 2).setValues(rows);
+  ensureGrid_(sh, 3, rows.length + 2);
+  sh.getRange(1, 1, 1, 3).setValues([['シート', 'キー', '値']]);
+  if (rows.length) sh.getRange(2, 1, rows.length, 3).setValues(rows);
   sh.hideSheet();
 }
 
@@ -166,7 +269,15 @@ function loadSnapshot_() {
   if (!sh) return map;
   var values = sh.getDataRange().getValues();
   for (var i = 1; i < values.length; i++) {
-    if (values[i][0]) map[String(values[i][0]).trim()] = String(values[i][1]);
+    var name = String(values[i][0] || '').trim();
+    var key  = String(values[i][1] || '').trim();
+    if (!name || !key) continue;
+    // 旧形式 (契約ID, fingerprint の2列) は3列目が無く JSON にならない。
+    // 読み飛ばせば「控え無し」として扱われ、初回だけ全件が編集扱いになるだけで済む。
+    var parsed;
+    try { parsed = JSON.parse(values[i][2]); } catch (e) { continue; }
+    if (!map[name]) map[name] = {};
+    map[name][key] = parsed;
   }
   return map;
 }
@@ -181,8 +292,12 @@ function chunk_(arr, size) {
   return out;
 }
 
-/** ダイアログを出さずに再同期する (書き戻し直後の反映用) */
+/**
+ * ダイアログを出さずに再同期する (書き戻し直後・自動実行から呼ぶ)。
+ * @return {number} 未反映のまま退避・復元した編集の行数
+ */
 function syncAll_quiet_() {
+  beginSnapshot_();
   var month = targetMonth_();
   var data = api_('/gas/export?sheet=all&month=' + encodeURIComponent(month), 'get');
   var reconcile = data.reconcile || {};
@@ -198,4 +313,5 @@ function syncAll_quiet_() {
   syncReconcile_(reconcile);
   syncSummary_(data.summary || {}, data.stripe || {});
   saveSnapshot_();
+  return restoredEdits_();
 }

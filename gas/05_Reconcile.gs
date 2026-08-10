@@ -17,10 +17,11 @@ function runReconcile() {
                     + encodeURIComponent(targetMonth_()), 'get');
     var reconcile = data.reconcile || {};
 
+    beginSnapshot_();
     syncReconcile_(reconcile);
     syncCustomers_(data.customers || [], reconcile);
     syncInquiries_(data.inquiries || [], reconcile);
-    saveSnapshot_();
+    saveSnapshot_();   // 顧客管理シートの分だけが差し替わる
 
     var orphans = (reconcile.inquiries || []).filter(function (q) { return q.is_orphan; }).length;
     var noInquiry = (reconcile.customers_without_inquiry || []).length;

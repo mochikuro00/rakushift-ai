@@ -121,16 +121,26 @@ function createDrafts_core_() {
   // 一度に大量の下書きを作ると Gmail の1日あたり上限に当たる。
   // 溜まっている場合は分割し、残りは翌日の自動実行で処理する。
   var limit = Math.max(1, num_(getSetting_('1回に作る下書きの上限')) || DRAFT_LIMIT_DEFAULT);
-  var remaining = Math.max(targets.length - limit, 0);
+  var deferred = Math.max(targets.length - limit, 0);
   if (targets.length > limit) targets = targets.slice(0, limit);
 
   var issuer = issuerInfo_();
   var autoSend = autoSendEnabled_();
   var created = [], skipped = [], sent = [];
+  var start = Date.now();
+  var i = 0;
 
-  targets.forEach(function (r) {
+  for (; i < targets.length; i++) {
+    // 実行時間の上限で強制終了されると、送信済みでも記録が残らず翌朝再送になる。
+    // 自動送信ONなら顧客に二重で届くため、余裕を持って自分から打ち切る。
+    if (Date.now() - start > MAIL_LOOP_BUDGET_MS) break;
+
+    var r = targets[i];
+    var no = str_(r['請求番号']);
     var to = str_(r['請求先メール']).trim();
-    if (!to) { skipped.push(str_(r['請求番号']) + ': 請求先メール未登録'); return; }
+    if (!to) { skipped.push(no + ': 請求先メール未登録'); continue; }
+
+    var didSend = false;
     try {
       var pdf = buildInvoicePdf_(r, issuer);
       var subject = fillTemplate_(
@@ -142,23 +152,31 @@ function createDrafts_core_() {
 
       if (autoSend) {
         GmailApp.sendEmail(to, subject, fillTemplate_(body, r), options);
-        sent.push(str_(r['請求番号']));
+        didSend = true;
+        sent.push(no);
       } else {
         GmailApp.createDraft(to, subject, fillTemplate_(body, r), options);
       }
-      created.push(str_(r['請求番号']));
+      created.push(no);
     } catch (e) {
-      skipped.push(str_(r['請求番号']) + ': ' + e.message);
+      skipped.push(no + ': ' + e.message);
+      continue;
     }
-  });
 
-  if (created.length > 0) {
-    api_('/gas/invoices/mark-drafted', 'post', { invoice_nos: created });
-    if (sent.length > 0) api_('/gas/invoices/mark-sent', 'post', { invoice_nos: sent });
-    syncAll_quiet_();
+    // 送信・下書きの直後に1件ずつ記録する。まとめて最後に記録すると、
+    // 途中で止まったとき1件も記録されず、処理済みの全件が翌朝再送される。
+    try {
+      api_('/gas/invoices/mark-drafted', 'post', { invoice_nos: [no] });
+      if (didSend) api_('/gas/invoices/mark-sent', 'post', { invoice_nos: [no] });
+    } catch (e) {
+      skipped.push(no + ': ' + (didSend ? '送信済みだが' : '下書き作成済みだが')
+                   + '記録に失敗しました。再実行前に確認してください (' + e.message + ')');
+    }
   }
+
+  if (created.length > 0) syncAll_quiet_();
   return { created: created, skipped: skipped, sent: sent,
-           targets: targets.length, remaining: remaining };
+           targets: targets.length, remaining: deferred + (targets.length - i) };
 }
 
 // ---------------------------------------------------------------------

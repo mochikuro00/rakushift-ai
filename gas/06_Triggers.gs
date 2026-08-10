@@ -109,7 +109,15 @@ function dailyJob() {
   var headline = [];
 
   try {
-    syncAll_quiet_();
+    // 同期はシートを作り直すため、書き戻していない編集は退避・復元される。
+    // 運営が編集したまま帰った翌朝に黙って消えることがないよう、件数を通知に載せる。
+    var kept = syncAll_quiet_();
+    if (kept > 0) {
+      sections.push('■ 未反映の編集 (' + kept + '行)\n'
+        + '　シート上の黄色いセルがシステムへ反映されていません。\n'
+        + '　「代理店設定をシステムに反映」または「入金を手動で反映」を実行してください。');
+      headline.push('未反映の編集' + kept + '行');
+    }
   } catch (e) {
     notifyError_('毎朝の同期', e);
     return;   // 同期できていない状態で後続を動かさない

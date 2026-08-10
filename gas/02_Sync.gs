@@ -11,6 +11,7 @@ function syncAll() {
     var data = api_('/gas/export?sheet=all&month=' + encodeURIComponent(month), 'get');
 
     setupSettingsSheet_();
+    beginSnapshot_();
     var reconcile = data.reconcile || {};
 
     syncCustomers_(data.customers || [], reconcile);
@@ -33,6 +34,11 @@ function syncAll() {
       + '入金明細: ' + (data.bank || []).length + '件\n'
       + '返金: ' + (data.refunds || []).length + '件 / 解約者: ' + (data.cancellations || []).length + '件\n'
       + '紹介者(代理店): ' + (data.referrers || []).length + '件';
+    if (restoredEdits_() > 0) {
+      msg += '\n\n⚠ システムへ未反映の編集が ' + restoredEdits_() + ' 行あり、'
+           + '同期で消えないよう黄色で残しました。\n'
+           + '「代理店設定をシステムに反映」または「入金を手動で反映」を実行してください。';
+    }
     if (data.errors && data.errors.length) {
       msg += '\n\n⚠ 一部取得できませんでした: ' + data.errors.join(' / ');
     }
@@ -103,6 +109,11 @@ function syncCustomers_(customers, reconcile) {
     return String(a[1]) < String(b[1]) ? -1 : 1;
   });
 
+  // シートを作り直す前に、まだシステムへ送っていない編集を拾っておく。
+  // 拾わないと、朝の自動同期が運営の編集を痕跡なく消してしまう。
+  var pending = pendingEdits_(SHEETS.CUSTOMERS, '契約ID', CUSTOMER_EDITABLE);
+  stageSnapshot_(SHEETS.CUSTOMERS, CUSTOMER_HEADERS, rows, '契約ID', CUSTOMER_EDITABLE);
+
   var sh = writeSheet_(SHEETS.CUSTOMERS, CUSTOMER_HEADERS, rows, {
     editable: CUSTOMER_EDITABLE,
     headerColor: '#1d4ed8',
@@ -134,6 +145,10 @@ function syncCustomers_(customers, reconcile) {
         'プランが未設定のため請求書が作成されません。\n運営コンソールでプランを設定してください。');
     }
   }
+
+  // 未反映の編集を書き戻す。警告色より後に当てて、こちらを優先して見せる。
+  countRestoredEdits_(
+    restorePendingEdits_(sh, CUSTOMER_HEADERS, rows, '契約ID', pending));
 
   // 代理店フィーの月額合計を見出しに出す (最終計算の確認用)
   if (rows.length > 0) {
@@ -282,6 +297,10 @@ function syncInvoices_(invoices) {
     ];
   });
 
+  // 入金の手入力も、書き戻す前に同期が走ると消える。顧客管理と同じく退避しておく。
+  var pending = pendingEdits_(SHEETS.INVOICES, '請求番号', INVOICE_EDITABLE);
+  stageSnapshot_(SHEETS.INVOICES, INVOICE_HEADERS, rows, '請求番号', INVOICE_EDITABLE);
+
   var sh = writeSheet_(SHEETS.INVOICES, INVOICE_HEADERS, rows, {
     editable: INVOICE_EDITABLE,
     headerColor: '#047857',
@@ -323,6 +342,9 @@ function syncInvoices_(invoices) {
       sh.getRange(i + 2, iDraft + 1).setBackground('#e0f2fe');
     }
   }
+
+  countRestoredEdits_(
+    restorePendingEdits_(sh, INVOICE_HEADERS, rows, '請求番号', pending));
 }
 
 // ---------------------------------------------------------------------
