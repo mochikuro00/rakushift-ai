@@ -170,8 +170,15 @@ function dailyJob() {
         });
         if (rec.ambiguous + rec.unmatched > 0) {
           m.push('　⚠ 要確認: ' + rec.ambiguous + '件 / 該当なし: ' + rec.unmatched + '件');
-          m.push('　　「入金明細」シートで請求書を指定してください');
+          m.push('　　「入金明細」シートの「照合先請求番号」に請求番号を入れ、'
+                 + '「入金を手動で反映」を実行してください');
           headline.push('入金' + (rec.ambiguous + rec.unmatched) + '件の確認');
+        }
+        if (rec.overPaid > 0) {
+          // 請求額を超えた分はどの請求にも充てていない。放置すると前受けのまま残る。
+          m.push('　⚠ 請求額を超える入金: ' + rec.overPaid + '件（超過分は前受けとして未充当）');
+          m.push('　　「入金明細」シートのメモに超過額が出ています');
+          headline.push('前受け' + rec.overPaid + '件の確認');
         }
         if (rec.importError) m.push('　⚠ ' + rec.importError);
         sections.push(m.join('\n'));

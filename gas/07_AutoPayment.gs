@@ -366,6 +366,7 @@ function autoReconcile_core_() {
     matched: res.matched || 0,
     ambiguous: res.ambiguous || 0,
     unmatched: res.unmatched || 0,
+    overPaid: res.over_paid || 0,
     matched_list: res.matched_list || [],
     ambiguous_list: res.ambiguous_list || [],
     importError: a.error || d.error || null
@@ -383,7 +384,8 @@ function autoReconcilePayments() {
       + '取込: ' + r.imported + '件' + (r.duplicated ? '（取込済みを除く ' + r.duplicated + '件）' : '') + '\n'
       + '消込: ' + r.matched + '件\n'
       + '⚠ 要確認: ' + r.ambiguous + '件\n'
-      + '⚠ 該当なし: ' + r.unmatched + '件';
+      + '⚠ 該当なし: ' + r.unmatched + '件'
+      + (r.overPaid ? '\n⚠ 請求額を超える入金: ' + r.overPaid + '件（超過分は未充当）' : '');
     if (r.matched_list.length) {
       msg += '\n\n【消し込んだ入金】\n'
         + r.matched_list.slice(0, 15).map(function (x) {
