@@ -1,6 +1,3 @@
-# ステージング設定 (実 key を含むためコミットしない)
-js/config.staging.js
-
 # Python
 __pycache__/
 *.pyc
@@ -30,6 +27,11 @@ check-rls.mjs
 
 # テスト・スクラッチ (本番リポジトリには不要)
 scratch/
+debug_*.py
+python/tests/mobile_screenshots/
+
+# デプロイ用アーカイブ (生成物)
+rakushift-ai-deploy-*.zip
 
 # Node.js
 node_modules/

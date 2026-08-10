@@ -1,0 +1,15 @@
+# railway up のアップロード対象から除外 (Python エンジンのビルドに不要なもの)
+.git/
+node_modules/
+scratch/
+images/
+frontend/
+docs/
+*.zip
+*.html
+js/
+supabase/
+.github/
+python/tests/
+python/tests/mobile_screenshots/
+c:Users*

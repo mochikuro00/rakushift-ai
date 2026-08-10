@@ -1,0 +1,65 @@
+# =============================================================
+# Repository root .dockerignore
+# Railway build context = repository root (railway.toml: dockerfilePath = "python/Dockerfile")
+# 本番イメージに含めない物を全て列挙する
+# =============================================================
+
+# --- Python キャッシュ ---
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- 開発・実験用スクリプト (本番イメージに含めない) ---
+python/scheduler_backup.py
+python/ai_scheduler.py
+scratch/
+fix_scheduler_midnight.py
+deep_debug_full.py
+apply_deep_debug_fixes.py
+apply_safe_fixes.py
+apply-migration.mjs
+check-rls.mjs
+*-temp.mjs
+*-debug.mjs
+*-debug.py
+
+# --- 機密情報 ---
+.env
+.env.*
+*.pem
+*.key
+*.p12
+secrets/
+credentials/
+
+# --- フロント・ドキュメント (Python API には不要) ---
+README.md
+docs/
+images/
+js/
+frontend/
+supabase/
+*.html
+*.ps1
+
+# --- Git / VCS / IDE ---
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- node_modules / build artefact ---
+node_modules/
+**/node_modules/
+dist/
+build/
