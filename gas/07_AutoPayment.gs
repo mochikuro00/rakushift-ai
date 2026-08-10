@@ -132,6 +132,9 @@ function importMailTransactions_() {
         amount: amount,
         payer_name: nm ? str_(nm[1]).trim() : '',
         memo: m.getSubject(),
+        // 検索条件は newer_than:7d のように期間で書くため、同じ通知メールが
+        // 毎朝ヒットする。メッセージIDを識別子にして二重取込を止める。
+        ref: m.getId(),
         source: 'mail'
       });
     });
@@ -181,7 +184,11 @@ function importAttachmentTransactions_() {
         var text;
         try { text = att.getDataAsString(enc); }
         catch (e) { try { text = att.getDataAsString('UTF-8'); } catch (e2) { return; } }
-        rows = rows.concat(parseBankCsv_(text));
+        // 添付CSVも同じメールが毎朝ヒットする。明細に取引番号が無い銀行のために
+        // 「メッセージID#行番号」を識別子として補う。
+        var parsed = parseBankCsv_(text);
+        parsed.forEach(function (b, i) { b.ref = b.ref || (m.getId() + '#' + i); });
+        rows = rows.concat(parsed);
       });
     });
   });

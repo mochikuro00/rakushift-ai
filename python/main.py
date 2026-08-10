@@ -3178,6 +3178,10 @@ class BankTxRow(BaseModel):
     payer_name: str = ""
     memo: str = ""
     source: str = "csv"
+    # 銀行明細の取引識別子 (残高・取引番号・メールのメッセージID)。
+    # これを落とすと二重取込の判定が「同内容なら連番」に退化し、
+    # 毎朝のメール取込が同じ入金を日々加算してしまう。
+    ref: str = ""
 
 
 class BankTxBody(BaseModel):
@@ -3202,6 +3206,7 @@ async def gas_import_payments(request: Request, req: BankTxBody,
             "p_payer_name": row.payer_name,
             "p_memo": row.memo,
             "p_source": row.source,
+            "p_ref": row.ref,
         })
         if isinstance(r, dict) and r.get("success"):
             if r.get("duplicated"):
