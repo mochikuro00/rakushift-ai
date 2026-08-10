@@ -22,7 +22,9 @@ DECLARE
 BEGIN
     SELECT role INTO v_role FROM auth_sessions
     WHERE id = get_session_id() AND expires_at > now() LIMIT 1;
-    IF v_role NOT IN ('hq_admin', 'platform_admin') THEN
+    -- セッションが無いと v_role は NULL。NULL NOT IN (...) は NULL になり
+    -- 分岐に入らないため、COALESCE を外すとチェックごと素通りする。
+    IF COALESCE(v_role, '') NOT IN ('hq_admin', 'platform_admin') THEN
         RAISE EXCEPTION 'Access denied.';
     END IF;
 
