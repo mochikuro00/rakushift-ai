@@ -23,6 +23,11 @@ function pushPayments() {
       return;
     }
 
+    // 「入金明細」シートで要確認行に入れた請求番号も同じ操作で反映する。
+    // シートの案内がこのメニューを指しているため、ここで拾わないと
+    // 要確認の行を運営が解消する手段が無くなる。
+    var assigned = pushBankAssignments_();
+
     var targets = [];
     sheet.rows.forEach(function (r) {
       var invoiceNo = str_(r['請求番号']).trim();
@@ -41,7 +46,15 @@ function pushPayments() {
     });
 
     if (targets.length === 0) {
-      SpreadsheetApp.getUi().alert('反映する入金がありません。\n\n「入金日」と「入金額」を入力してから実行してください。');
+      syncAll_quiet_();
+      SpreadsheetApp.getUi().alert(
+        assigned.updated > 0
+          ? ('入金明細の手動紐付けを ' + assigned.updated + ' 件反映しました。'
+             + (assigned.failures.length ? '\n\n【失敗】\n' + assigned.failures.slice(0, 15).join('\n') : ''))
+          : ('反映する入金がありません。\n\n'
+             + '請求・入金シートの「入金日」と「入金額」、または入金明細シートの'
+             + '「照合先請求番号」を入力してから実行してください。'
+             + (assigned.failures.length ? '\n\n【失敗】\n' + assigned.failures.slice(0, 15).join('\n') : '')));
       return;
     }
 
@@ -65,7 +78,10 @@ function pushPayments() {
     });
 
     syncAll_quiet_();
-    ui.alert('入金を反映しました。\n\n成功: ' + updated + '件 / 失敗: ' + failures.length + '件'
+    failures = assigned.failures.concat(failures);
+    ui.alert('入金を反映しました。\n\n成功: ' + (updated + assigned.updated) + '件 / 失敗: '
+             + failures.length + '件'
+             + (assigned.updated ? '\n（うち入金明細からの手動紐付け ' + assigned.updated + '件）' : '')
              + (failures.length ? '\n\n【失敗】\n' + failures.slice(0, 15).join('\n') : ''));
   });
 }

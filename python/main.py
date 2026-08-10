@@ -3223,6 +3223,40 @@ async def gas_import_payments(request: Request, req: BankTxBody,
     return {"success": True, "imported": imported, "duplicated": dup, "failed": failed}
 
 
+class BankAssignRow(BaseModel):
+    tx_id: str
+    invoice_no: str
+
+
+class BankAssignBody(BaseModel):
+    rows: List[BankAssignRow] = Field(default_factory=list)
+
+
+@app.post("/gas/payments/assign")
+@limiter.limit("20/minute")
+async def gas_assign_payments(request: Request, req: BankAssignBody,
+                              x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
+    """自動照合できなかった入金明細を、運営が指定した請求書へ手で紐付ける"""
+    if not _verify_gas_key(x_gas_key):
+        return _gas_denied()
+    if len(req.rows) > 200:
+        return JSONResponse(status_code=400, content={"error": "一度に処理できるのは200件までです"})
+
+    updated = 0
+    results: List[Dict[str, Any]] = []
+    for row in req.rows:
+        r = await supabase_rpc("assign_bank_transaction", {
+            "p_tx_id": row.tx_id,
+            "p_invoice_no": row.invoice_no,
+        })
+        ok = isinstance(r, dict) and r.get("success")
+        if ok:
+            updated += 1
+        results.append({"invoice_no": row.invoice_no, "success": bool(ok),
+                        "message": (r or {}).get("message", "") if isinstance(r, dict) else "RPC失敗"})
+    return {"success": True, "updated": updated, "results": results}
+
+
 @app.post("/gas/payments/match")
 @limiter.limit("10/minute")
 async def gas_match_payments(request: Request,

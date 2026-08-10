@@ -243,7 +243,9 @@ function buildInvoicePdf_(r, issuer) {
   var total    = num_(r['請求額(税込)']);
   var tax      = num_(r['消費税']);
   var subtotal = num_(r['小計(税抜)']);
-  var taxRate  = 10;
+  // 税率は請求書の金額から出す。10%固定にすると、軽減税率や税率改定の際に
+  // 内訳の見出しだけが実際の税額と食い違い、適格請求書として成立しなくなる。
+  var taxRate  = subtotal > 0 ? Math.round(tax / subtotal * 100) : 10;
   var qty      = num_(r['数量']) || 1;
   var unit     = Math.round(total / qty);        // 単価は税込 (運用ルール)
   var itemName = str_(getSetting_('品目名')) || 'システム利用料';

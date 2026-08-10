@@ -23,9 +23,13 @@
 //   入金貼付 … 運営が銀行CSVを貼る場所 (取り込んだら自動で空になる)
 var PAYMENT_PASTE_SHEET = '入金貼付';
 
+// 照合先請求番号は運営が要確認行を手で紐付けるための入力欄。
+// 明細IDは書き戻し先を特定するために持つ (運営は触らない)。
 var BANKTX_HEADERS = [
-  '入金日', '金額', '振込名義', '摘要', '識別', '取込元', '照合状態', '照合先請求番号', 'メモ', '照合日時'
+  '入金日', '金額', '振込名義', '摘要', '識別', '取込元', '照合状態', '照合先請求番号',
+  'メモ', '照合日時', '明細ID'
 ];
+var BANKTX_EDITABLE = ['照合先請求番号'];
 
 var MATCH_STATUS_LABEL = {
   pending: '未処理', matched: '消込済', ambiguous: '⚠ 要確認',
@@ -316,9 +320,26 @@ function parseBankTable_(table) {
   return out;
 }
 
-/** 明細をまとめてAPIへ送る */
+/**
+ * 明細をまとめてAPIへ送る。
+ *
+ * 取引番号を持たない銀行のために、識別子が空の行には
+ * 「この取込の中で同じ内容が何本目か」を振る。
+ * 同日・同額・同名義の2本を別の入金として扱いつつ、
+ * 同じCSVを貼り直しても同じ識別子になるので二重取込にならない。
+ * (件数を毎回DBから数えると、貼り直すたびに番号がずれて指紋が別物になる)
+ */
 function sendBankRows_(rows, source) {
   if (!rows || rows.length === 0) return { sent: 0, skipped: 0 };
+
+  var seq = {};
+  rows.forEach(function (b) {
+    if (str_(b.ref).trim()) return;
+    var key = [b.paid_on, b.amount, str_(b.payer_name).trim(), str_(b.memo).trim()].join('|');
+    seq[key] = (seq[key] || 0) + 1;
+    b.ref = '#' + seq[key];
+  });
+
   var sent = 0, dup = 0;
   chunk_(rows, 200).forEach(function (batch) {
     batch.forEach(function (b) { if (source) b.source = b.source || source; });
@@ -495,10 +516,17 @@ function syncBankTransactions_(list) {
       MATCH_STATUS_LABEL[x.match_status] || str_(x.match_status),
       str_(x.matched_invoice_no),
       str_(x.match_note),
-      ymdhm_(x.matched_at)
+      ymdhm_(x.matched_at),
+      str_(x.id)
     ];
   });
+
+  // 要確認行に入れた請求番号も、同期で消えないよう退避・復元する
+  var pending = pendingEdits_(SHEETS.BANK, '明細ID', BANKTX_EDITABLE);
+  stageSnapshot_(SHEETS.BANK, BANKTX_HEADERS, rows, '明細ID', BANKTX_EDITABLE);
+
   var sh = writeSheet_(SHEETS.BANK, BANKTX_HEADERS, rows, {
+    editable: BANKTX_EDITABLE,
     headerColor: '#0369a1',
     numberFormats: { '金額': '#,##0', '入金日': 'yyyy-mm-dd' }
   });
@@ -514,8 +542,39 @@ function syncBankTransactions_(list) {
   if (rows.length > 0) {
     var ng = rows.filter(function (r) { return String(r[iSt]).indexOf('⚠') === 0; }).length;
     sh.getRange(rows.length + 2, 1)
-      .setValue(ng > 0 ? ('要確認 ' + ng + '件 — 請求番号を「照合先請求番号」に入れて「入金を反映」してください')
+      .setValue(ng > 0 ? ('要確認 ' + ng + '件 — 請求番号を「照合先請求番号」に入れて'
+                          + 'メニューの「💰 入金を手動で反映（消込）」を実行してください')
                        : 'すべて消込済み')
       .setFontWeight('bold');
   }
+
+  countRestoredEdits_(
+    restorePendingEdits_(sh, BANKTX_HEADERS, rows, '明細ID', pending));
+}
+
+/**
+ * 「入金明細」シートで運営が手で紐付けた要確認行をシステムへ反映する。
+ * @return {{updated:number, failures:string[]}}
+ */
+function pushBankAssignments_() {
+  var sheet = readSheet_(SHEETS.BANK);
+  var targets = [];
+  sheet.rows.forEach(function (r) {
+    var id = str_(r['明細ID']).trim();
+    var no = str_(r['照合先請求番号']).trim();
+    // 消込済みの行は触らない。再送すると入金が二重に加算される。
+    if (!id || !no || str_(r['照合状態']).indexOf('⚠') !== 0) return;
+    targets.push({ tx_id: id, invoice_no: no });
+  });
+  if (targets.length === 0) return { updated: 0, failures: [] };
+
+  var updated = 0, failures = [];
+  chunk_(targets, 100).forEach(function (batch) {
+    var res = api_('/gas/payments/assign', 'post', { rows: batch });
+    updated += res.updated || 0;
+    (res.results || []).forEach(function (x) {
+      if (!x.success) failures.push(str_(x.invoice_no) + ': ' + str_(x.message));
+    });
+  });
+  return { updated: updated, failures: failures };
 }
