@@ -44,6 +44,9 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- config_safeビューにadmin_passwordを追加（設定画面で表示するため）
+-- 列が増えるため CREATE OR REPLACE では置き換えられない
+-- (ERROR: cannot change name of view column ...)。作り直す。
+DROP VIEW IF EXISTS config_safe;
 CREATE OR REPLACE VIEW config_safe AS
 SELECT
     c.id,

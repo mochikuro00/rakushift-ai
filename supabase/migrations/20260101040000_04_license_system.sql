@@ -385,6 +385,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =========================================================
 -- 13. config_safe ビューにライセンス情報を追加
 -- =========================================================
+-- 列構成が変わるため CREATE OR REPLACE では置き換えられない
+-- (ERROR: cannot drop columns from view)。作り直す。
+DROP VIEW IF EXISTS config_safe;
 CREATE OR REPLACE VIEW config_safe AS
 SELECT
     c.id,

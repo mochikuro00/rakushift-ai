@@ -202,6 +202,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =========================================================
 -- 5. config_safe ビューにプラン情報追加
 -- =========================================================
+-- 列が増えるため CREATE OR REPLACE では置き換えられない
+-- (ERROR: cannot change name of view column ...)。作り直す。
+DROP VIEW IF EXISTS config_safe;
 CREATE OR REPLACE VIEW config_safe AS
 SELECT
     c.id,

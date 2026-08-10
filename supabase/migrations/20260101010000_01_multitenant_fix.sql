@@ -10,6 +10,17 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- ライセンス関連の列は 04 で追加されるが、この 01 と 02 が既に参照している
+-- (04 の追加後にこれらを書き足したため)。ファイル順に流すと
+--   ERROR: column "license_status" of relation "organizations" does not exist
+-- でここが落ち、以降 create_tenant() に依存する 09 なども芋づるで落ちる。
+-- 定義は 04 と同一。先に作られていれば 04 側が no-op になる。
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS license_status TEXT DEFAULT 'active'
+        CHECK (license_status IN ('active', 'suspended'));
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS license_suspended_at TIMESTAMPTZ;
+
 -- =========================================================
 -- 1. RLSポリシー再構築
 -- =========================================================
