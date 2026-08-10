@@ -5,6 +5,8 @@
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('ラクシフト運営')
+    .addItem('📖 使い方を開く', 'showGuide')
+    .addSeparator()
     .addItem('🔄 全データを同期', 'syncAll')
     .addSeparator()
     .addItem('🧾 対象月の請求書を一括生成', 'generateInvoicesForMonth')
@@ -55,7 +57,13 @@ function initSheets() {
   setupSettingsSheet_();
   Object.keys(SHEETS).forEach(function (k) { getOrCreateSheet_(SHEETS[k]); });
   setupPasteSheet_();
-  SpreadsheetApp.getUi().alert('シートを初期化しました。続けて「🔄 全データを同期」を実行してください。');
+  var guide = setupGuideSheet_();   // 空シートを作った後に中身を入れる
+  ss_().setActiveSheet(guide);
+  SpreadsheetApp.getUi().alert(
+    'シートを初期化しました。\n\n'
+    + '「📖 使い方」シートに、初期設定から日々の運用までをまとめてあります。\n'
+    + 'まずはそちらをご覧ください。\n\n'
+    + '続けて「🔄 全データを同期」を実行してください。');
 }
 
 /** メニュー実行時の共通エラーハンドラ */

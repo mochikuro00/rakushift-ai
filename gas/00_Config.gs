@@ -17,6 +17,7 @@ var PROP_API_KEY = 'GAS_API_KEY';
 
 /** シート名 */
 var SHEETS = {
+  GUIDE:     '📖 使い方',
   SETTINGS:  '⚙️設定',
   CUSTOMERS: '顧客管理',
   INQUIRIES: 'お問い合わせ',
