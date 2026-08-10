@@ -97,7 +97,11 @@ function pushAgencySettings() {
         agency_fee_type: FEE_TYPE_VALUE[str_(r['代理店フィー種別']).trim()] || null,
         agency_fee_amount: r['代理店フィー額'] === '' ? null : num_(r['代理店フィー額']),
         billing_email: str_(r['請求先メール']).trim() || null,
-        payment_terms_days: r['支払サイト(日)'] === '' ? null : num_(r['支払サイト(日)'])
+        payment_terms_days: r['支払サイト(日)'] === '' ? null : num_(r['支払サイト(日)']),
+        // 請求サイクルの起算日。空欄なら変更しない
+        billing_start_date: ymd_(r['請求開始日']) || null,
+        // 振込名義 (' / ' 区切り)。入金の自動消込で使う
+        payer_names: str_(r['振込名義'])
       });
     });
 
@@ -135,7 +139,9 @@ function customerFingerprint_(r) {
     str_(r['代理店フィー種別']).trim(),
     num_(r['代理店フィー額']),
     str_(r['請求先メール']).trim(),
-    num_(r['支払サイト(日)'])
+    num_(r['支払サイト(日)']),
+    ymd_(r['請求開始日']),
+    str_(r['振込名義']).trim()
   ].join('|');
 }
 
@@ -186,6 +192,9 @@ function syncAll_quiet_() {
   syncStripe_(data.stripe || {});
   syncReferrers_(data.referrers || []);
   syncAgency_(data.agency || []);
+  syncBankTransactions_(data.bank || []);
+  syncRefunds_(data.refunds || []);
+  syncCancellations_(data.cancellations || []);
   syncReconcile_(reconcile);
   syncSummary_(data.summary || {}, data.stripe || {});
   saveSnapshot_();

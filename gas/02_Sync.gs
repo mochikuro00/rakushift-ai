@@ -19,6 +19,9 @@ function syncAll() {
     syncStripe_(data.stripe || {});
     syncReferrers_(data.referrers || []);
     syncAgency_(data.agency || []);
+    syncBankTransactions_(data.bank || []);
+    syncRefunds_(data.refunds || []);
+    syncCancellations_(data.cancellations || []);
     syncReconcile_(reconcile);
     syncSummary_(data.summary || {}, data.stripe || {});
     saveSnapshot_();   // 次回の書き戻しで「編集された行」だけを送るための控え
@@ -27,6 +30,8 @@ function syncAll() {
       + '顧客: ' + (data.customers || []).length + '件\n'
       + 'お問い合わせ: ' + (data.inquiries || []).length + '件\n'
       + '請求・入金: ' + (data.invoices || []).length + '件\n'
+      + '入金明細: ' + (data.bank || []).length + '件\n'
+      + '返金: ' + (data.refunds || []).length + '件 / 解約者: ' + (data.cancellations || []).length + '件\n'
       + '紹介者(代理店): ' + (data.referrers || []).length + '件';
     if (data.errors && data.errors.length) {
       msg += '\n\n⚠ 一部取得できませんでした: ' + data.errors.join(' / ');
@@ -43,7 +48,7 @@ var CUSTOMER_HEADERS = [
   '契約ID', '店舗名', '会社名', '担当者名', '請求先メール', '電話', '担当電話', '住所',
   '請求区分', 'プラン', '月額(円)',
   '紹介者コード', '代理店名', '代理店フィー種別', '代理店フィー額', '代理店フィー(月額)',
-  '契約状態', 'ライセンス', '解約申請日', '解約発効日', '支払サイト(日)',
+  '契約状態', 'ライセンス', '解約申請日', '解約発効日', '支払サイト(日)', '請求開始日', '振込名義',
   '直近請求月', '未入金件数', '未入金額', '入金累計', '最終入金日',
   '問い合わせ有無', '契約日', 'organization_id'
 ];
@@ -78,6 +83,8 @@ function syncCustomers_(customers, reconcile) {
       ymd_(c.cancel_requested_at),
       ymd_(c.cancel_effective_date),
       num_(c.payment_terms_days),
+      ymd_(c.billing_start_date),
+      str_(c.payer_names),
       str_(c.last_invoice_month).slice(0, 7),
       num_(c.unpaid_count),
       num_(c.unpaid_amount),
@@ -102,13 +109,31 @@ function syncCustomers_(customers, reconcile) {
     numberFormats: {
       '月額(円)': '#,##0', '代理店フィー額': '#,##0', '代理店フィー(月額)': '#,##0',
       '未入金額': '#,##0', '入金累計': '#,##0',
-      '支払サイト(日)': '0', '未入金件数': '0'
+      '支払サイト(日)': '0', '未入金件数': '0', '請求開始日': 'yyyy-mm-dd'
     }
   });
 
   applyFilter_(sh, CUSTOMER_HEADERS.length, rows.length);
   applyDropdown_(sh, CUSTOMER_HEADERS.indexOf('代理店フィー種別') + 1, rows.length,
                  Object.keys(FEE_TYPE_VALUE));
+
+  // 請求書の送付に必要な情報が欠けている行を赤くする。
+  // 請求先メールが無いと下書きが作られずスキップされるため、事前に気づけるようにする。
+  var iMail = CUSTOMER_HEADERS.indexOf('請求先メール');
+  var iCat  = CUSTOMER_HEADERS.indexOf('請求区分');
+  var iPlan = CUSTOMER_HEADERS.indexOf('プラン');
+  for (var k = 0; k < rows.length; k++) {
+    var needsInvoice = (rows[k][iCat] === CATEGORY_LABEL.invoice || rows[k][iCat] === CATEGORY_LABEL.oem);
+    if (!needsInvoice) continue;
+    if (!String(rows[k][iMail] || '').trim()) {
+      sh.getRange(k + 2, iMail + 1).setBackground('#fecaca').setNote(
+        '請求先メールが未登録です。\nこのままでは請求書の下書きが作られません。');
+    }
+    if (!String(rows[k][iPlan] || '').trim()) {
+      sh.getRange(k + 2, iPlan + 1).setBackground('#fecaca').setNote(
+        'プランが未設定のため請求書が作成されません。\n運営コンソールでプランを設定してください。');
+    }
+  }
 
   // 代理店フィーの月額合計を見出しに出す (最終計算の確認用)
   if (rows.length > 0) {
@@ -215,9 +240,9 @@ function syncInquiries_(inquiries, reconcile) {
 // ---------------------------------------------------------------------
 
 var INVOICE_HEADERS = [
-  '請求番号', '対象月', '契約ID', '顧客名', '会社名', '請求先メール', '請求区分', 'プラン',
-  '発行日', '支払期限', '数量', '単価', '小計(税抜)', '消費税', '請求額(税込)',
-  '状態', '入金日', '入金額', '残額', '入金方法', '振込名義',
+  '請求番号', '対象月', '利用開始', '利用終了', '契約ID', '顧客名', '会社名', '請求先メール',
+  '請求区分', 'プラン', '発行日', '支払期限', '数量', '単価', '小計(税抜)', '消費税', '請求額(税込)',
+  '状態', '入金日', '入金額', '残額', '返金額', '入金方法', '振込名義',
   '紹介者コード', '代理店フィー', '下書き作成', '送付日時', '備考'
 ];
 
@@ -227,6 +252,8 @@ function syncInvoices_(invoices) {
     return [
       str_(v.invoice_no),
       str_(v.billing_month).slice(0, 7),
+      ymd_(v.period_start),
+      ymd_(v.period_end),
       str_(v.contract_id),
       str_(v.shop_name),
       str_(v.company_name),
@@ -244,6 +271,7 @@ function syncInvoices_(invoices) {
       ymd_(v.paid_at),
       paid,
       total - paid,
+      num_(v.refunded_amount),
       str_(v.payment_method),
       str_(v.payer_name),
       str_(v.referrer_code),
@@ -260,7 +288,8 @@ function syncInvoices_(invoices) {
     numberFormats: {
       '発行日': 'yyyy-mm-dd', '支払期限': 'yyyy-mm-dd', '入金日': 'yyyy-mm-dd',
       '数量': '0', '単価': '#,##0', '小計(税抜)': '#,##0', '消費税': '#,##0',
-      '請求額(税込)': '#,##0', '入金額': '#,##0', '残額': '#,##0', '代理店フィー': '#,##0'
+      '請求額(税込)': '#,##0', '入金額': '#,##0', '残額': '#,##0',
+      '返金額': '#,##0', '代理店フィー': '#,##0'
     }
   });
   applyFilter_(sh, INVOICE_HEADERS.length, rows.length);
@@ -269,10 +298,29 @@ function syncInvoices_(invoices) {
 
   // 期日超過の未入金を赤く
   var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  var iStatus = INVOICE_HEADERS.indexOf('状態'), iDue = INVOICE_HEADERS.indexOf('支払期限');
+  var iMailI  = INVOICE_HEADERS.indexOf('請求先メール');
+  var iPaid   = INVOICE_HEADERS.indexOf('入金額');
+  var iTotal  = INVOICE_HEADERS.indexOf('請求額(税込)');
+  var iDraft  = INVOICE_HEADERS.indexOf('下書き作成');
   for (var i = 0; i < rows.length; i++) {
-    var status = rows[i][15], due = rows[i][9];
+    var status = rows[i][iStatus], due = rows[i][iDue];
     if (status !== '入金済' && status !== '無効' && due && due < today) {
       sh.getRange(i + 2, 1, 1, INVOICE_HEADERS.length).setBackground('#fef2f2');
+    }
+    // 送付先が無い請求は下書きが作られない
+    if (!String(rows[i][iMailI] || '').trim() && status !== '無効') {
+      sh.getRange(i + 2, iMailI + 1).setBackground('#fecaca').setNote(
+        '請求先メールが未登録のため、下書きは作られません。\n顧客管理シートで登録してください。');
+    }
+    // 入金額が請求額を超えている (入力ミスの可能性)
+    if (num_(rows[i][iPaid]) > num_(rows[i][iTotal])) {
+      sh.getRange(i + 2, iPaid + 1).setBackground('#fde68a').setNote(
+        '入金額が請求額を超えています。入力を確認してください。');
+    }
+    // 未下書きの行を薄く示す (これから下書きを作る対象)
+    if (!String(rows[i][iDraft] || '').trim() && status !== '入金済' && status !== '無効') {
+      sh.getRange(i + 2, iDraft + 1).setBackground('#e0f2fe');
     }
   }
 }
@@ -496,4 +544,120 @@ function colLetter_(col) {
     col = Math.floor((col - m) / 26);
   }
   return s;
+}
+
+// ---------------------------------------------------------------------
+// 返金 (Stripe / 請求書払い)
+//   売上サマリーには含めない。返金は独立した台帳として管理する。
+// ---------------------------------------------------------------------
+
+var REFUND_HEADERS = [
+  '返金日', '区分', '契約ID', '顧客名', '会社名', '返金額', '通貨', '対象請求番号',
+  '理由', 'テスト', 'Stripe返金ID', 'Stripe請求ID', '備考', '記録日時'
+];
+
+var REFUND_SOURCE_LABEL = { stripe: 'Stripe', invoice: '請求書払い', manual: '手動' };
+
+function syncRefunds_(refunds) {
+  var rows = (refunds || []).map(function (x) {
+    return [
+      ymd_(x.refunded_at),
+      REFUND_SOURCE_LABEL[x.source] || str_(x.source),
+      str_(x.contract_id),
+      str_(x.shop_name),
+      str_(x.company_name),
+      num_(x.amount),
+      String(x.currency || 'jpy').toUpperCase(),
+      str_(x.invoice_no),
+      str_(x.reason),
+      x.is_test ? 'テスト' : '本番',
+      str_(x.stripe_refund_id),
+      str_(x.stripe_invoice_id),
+      str_(x.note),
+      ymdhm_(x.created_at)
+    ];
+  });
+  var sh = writeSheet_(SHEETS.REFUNDS, REFUND_HEADERS, rows, {
+    headerColor: '#b91c1c',
+    numberFormats: { '返金額': '#,##0', '返金日': 'yyyy-mm-dd' }
+  });
+  applyFilter_(sh, REFUND_HEADERS.length, rows.length);
+
+  if (rows.length > 0) {
+    var col = REFUND_HEADERS.indexOf('返金額') + 1;
+    sh.getRange(rows.length + 2, col - 1).setValue('返金合計').setFontWeight('bold');
+    sh.getRange(rows.length + 2, col)
+      .setFormula('=SUM(' + colLetter_(col) + '2:' + colLetter_(col) + (rows.length + 1) + ')')
+      .setFontWeight('bold').setNumberFormat('#,##0');
+    // テスト返金は色を落として本番と区別する
+    var iTest = REFUND_HEADERS.indexOf('テスト');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i][iTest] === 'テスト') {
+        sh.getRange(i + 2, 1, 1, REFUND_HEADERS.length).setFontColor('#9ca3af');
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// 解約者 (顧客情報は解約時点のスナップショットとして残す)
+// ---------------------------------------------------------------------
+
+var CANCEL_HEADERS = [
+  '解約日', '早期解約', '契約期間(月)', '契約期間(日)', '契約開始日',
+  '契約ID', '店舗名', '会社名', '担当者', 'メール', '電話', '住所',
+  'プラン', '請求区分', '月額', '紹介者コード',
+  '請求累計', '入金累計', '返金累計', '解約申請日', '理由', '備考'
+];
+
+function syncCancellations_(list) {
+  var rows = (list || []).map(function (x) {
+    return [
+      ymd_(x.cancelled_on),
+      x.is_early_churn ? '⚠ 早期' : '',
+      num_(x.contract_months),
+      num_(x.contract_days),
+      ymd_(x.started_on),
+      str_(x.contract_id),
+      str_(x.shop_name),
+      str_(x.company_name),
+      str_(x.contact_name),
+      str_(x.email),
+      str_(x.phone),
+      str_(x.address),
+      PLAN_LABEL[x.plan] || str_(x.plan),
+      CATEGORY_LABEL[x.billing_category] || str_(x.billing_category),
+      num_(x.monthly_amount),
+      str_(x.referrer_code),
+      num_(x.total_billed),
+      num_(x.total_paid),
+      num_(x.total_refunded),
+      ymdhm_(x.cancel_requested_at),
+      str_(x.reason),
+      str_(x.note)
+    ];
+  });
+  var sh = writeSheet_(SHEETS.CANCELLED, CANCEL_HEADERS, rows, {
+    headerColor: '#6b7280',
+    numberFormats: {
+      '解約日': 'yyyy-mm-dd', '契約開始日': 'yyyy-mm-dd',
+      '契約期間(月)': '0.0', '契約期間(日)': '0',
+      '月額': '#,##0', '請求累計': '#,##0', '入金累計': '#,##0', '返金累計': '#,##0'
+    }
+  });
+  applyFilter_(sh, CANCEL_HEADERS.length, rows.length);
+
+  // 早期解約を目立たせる (定着施策の検討材料)
+  var iEarly = CANCEL_HEADERS.indexOf('早期解約');
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i][iEarly]) {
+      sh.getRange(i + 2, 1, 1, CANCEL_HEADERS.length).setBackground('#fff7ed');
+    }
+  }
+  if (rows.length > 0) {
+    var early = rows.filter(function (x) { return x[iEarly]; }).length;
+    sh.getRange(rows.length + 2, 1)
+      .setValue('解約 ' + rows.length + '件 / うち早期解約 ' + early + '件')
+      .setFontWeight('bold');
+  }
 }

@@ -9,11 +9,18 @@ function onOpen() {
     .addSeparator()
     .addItem('🧾 対象月の請求書を一括生成', 'generateInvoicesForMonth')
     .addItem('📧 未送付の請求書をGmail下書きに作成', 'createInvoiceDrafts')
+    .addItem('🧪 テスト請求書を下書きに作成（自分宛）', 'createTestDraft')
     .addSeparator()
-    .addItem('💰 入金をシステムに反映（消込）', 'pushPayments')
+    .addItem('🤖 入金を自動で消し込む', 'autoReconcilePayments')
+    .addItem('💰 入金を手動で反映（消込）', 'pushPayments')
+    .addItem('📮 期日超過に督促する', 'sendOverdueReminders')
     .addItem('🏢 代理店設定をシステムに反映', 'pushAgencySettings')
     .addSeparator()
     .addItem('✅ 突合チェック（お問い合わせ×顧客）', 'runReconcile')
+    .addSeparator()
+    .addItem('⏰ 自動実行をONにする', 'setupTriggers')
+    .addItem('⏸️ 自動実行を解除する', 'disableTriggers')
+    .addItem('📅 自動実行の状態を確認', 'showTriggerStatus')
     .addSeparator()
     .addItem('⚙️ 初期設定（APIキー登録）', 'setupApiKey')
     .addItem('🧱 シートを初期化', 'initSheets')
@@ -47,6 +54,7 @@ function setupApiKey() {
 function initSheets() {
   setupSettingsSheet_();
   Object.keys(SHEETS).forEach(function (k) { getOrCreateSheet_(SHEETS[k]); });
+  setupPasteSheet_();
   SpreadsheetApp.getUi().alert('シートを初期化しました。続けて「🔄 全データを同期」を実行してください。');
 }
 
