@@ -125,6 +125,9 @@ function writeSheet_(name, headers, rows, opts) {
   opts = opts || {};
   var sh = getOrCreateSheet_(name);
   sh.clear();
+  // clear() は書式と値だけで注記は残る。
+  // 「請求先メール未登録」等の警告メモが、登録後もセルに貼り付いたままになる。
+  sh.clearNotes();
   ensureGrid_(sh, headers.length + 2, rows.length + 10);  // 合計行・注記の書き込み分に余裕を持たせる
   if (sh.getFrozenRows() !== 1) sh.setFrozenRows(1);
 

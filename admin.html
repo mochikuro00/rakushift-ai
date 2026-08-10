@@ -2278,7 +2278,7 @@
         populateReferrerDropdown();
         onTenantPlanChange();
         const bs = document.getElementById('newBillingStart');
-        if (bs && !bs.value) bs.value = new Date().toISOString().slice(0, 10);
+        if (bs && !bs.value) bs.value = todayJst();
         openModal('createTenantModal');
     }
 
@@ -2336,7 +2336,7 @@
                 //   会社名は請求書の宛名になるため、未入力なら店舗名を使う。
                 company_name: companyName || orgName,
                 billing_email: billingEmail || orgEmail,
-                billing_start_date: billingStart || new Date().toISOString().slice(0, 10),
+                billing_start_date: billingStart || todayJst(),
                 payment_terms_days: paymentTerms || '10',
             };
             // 選択したプランを反映。旧版は OEM のときだけ設定しており、Pro/Premium を
@@ -2562,7 +2562,7 @@
                 : _invoicesData.map(function (v) {
                     const balance = Number(v.total || 0) - Number(v.paid_amount || 0);
                     const overdue = v.status !== 'paid' && v.status !== 'void'
-                        && v.due_date && v.due_date < new Date().toISOString().slice(0, 10);
+                        && v.due_date && v.due_date < todayJst();
                     return '<tr class="border-t border-gray-100 ' + (overdue ? 'bg-red-50/50' : '') + '">'
                         + '<td class="px-3 py-2.5 font-mono text-xs">' + _payEsc(v.invoice_no) + '</td>'
                         + '<td class="px-3 py-2.5 text-xs">' + _payEsc(String(v.billing_month || '').slice(0, 7)) + '</td>'
@@ -2608,7 +2608,7 @@
         document.getElementById('payInvoiceNo').textContent = inv.invoice_no;
         document.getElementById('payInvoiceShop').textContent = inv.shop_name || inv.company_name || '';
         document.getElementById('payInvoiceTotal').textContent = _invYen(inv.total);
-        document.getElementById('payPaidAt').value = inv.paid_at || new Date().toISOString().slice(0, 10);
+        document.getElementById('payPaidAt').value = inv.paid_at || todayJst();
         document.getElementById('payPaidAmount').value = Number(inv.paid_amount) > 0 ? inv.paid_amount : inv.total;
         document.getElementById('payMethod').value = inv.payment_method || 'bank';
         document.getElementById('payPayerName').value = inv.payer_name || '';
@@ -3943,6 +3943,12 @@
         if (diff < 0) return `${Math.abs(diff)}日超過`;
         if (diff === 0) return '本日期限';
         return `残り${diff}日`;
+    }
+
+    // v3.7.287: 日本時間の「今日」。toISOString() はUTCなので、JSTの 0:00〜9:00 に使うと
+    // 前日の日付になる。請求開始日の既定値や期日超過の判定が1日ずれるため必ずこちらを使う。
+    function todayJst() {
+        return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
     }
 
     function escapeHtml(str) {
