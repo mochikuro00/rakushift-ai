@@ -200,9 +200,16 @@ function importAttachmentTransactions_() {
 // 取込 D: Drive フォルダに置かれたCSVを自動で読む
 // =====================================================================
 
+var PROP_DRIVE_DONE = 'IMPORTED_DRIVE_FILES';
+var DRIVE_DONE_KEEP = 500;
+
 /**
- * 指定フォルダのCSVを取り込む。取り込んだファイルは名前の先頭に「取込済_」を付け、
- * 次回以降は読み飛ばす (同じ明細は指紋で二重取込されないが、無駄な読み込みを避ける)。
+ * 指定フォルダのCSVを取り込む。
+ *
+ * 取り込み済みの目印はファイル名ではなくスクリプトプロパティに持つ。
+ * このスクリプトのDrive権限は読み取り (drive.readonly) だけなので、
+ * ファイル名の変更は必ず失敗し、目印として使えない。
+ * 更新日時も鍵に含め、同じファイルが差し替えられたら読み直す。
  */
 function importDriveTransactions_() {
   var folderId = str_(getSetting_('明細CSVのDriveフォルダID')).trim();
@@ -213,20 +220,34 @@ function importDriveTransactions_() {
   try { folder = DriveApp.getFolderById(folderId); }
   catch (e) { return { sent: 0, skipped: 0, error: 'Driveフォルダを開けません: ' + e.message }; }
 
-  var rows = [], done = [];
+  var props = PropertiesService.getScriptProperties();
+  var done = [];
+  try { done = JSON.parse(props.getProperty(PROP_DRIVE_DONE) || '[]'); } catch (e) { done = []; }
+  var seen = {};
+  done.forEach(function (k) { seen[k] = true; });
+
+  var rows = [], added = [];
   var it = folder.getFiles();
   while (it.hasNext()) {
     var f = it.next();
-    var name = f.getName();
-    if (/^取込済_/.test(name) || !/\.(csv|txt)$/i.test(name)) continue;
+    if (!/\.(csv|txt)$/i.test(f.getName())) continue;
+    var key = f.getId() + '|' + f.getLastUpdated().getTime();
+    if (seen[key]) continue;
     var text;
     try { text = f.getBlob().getDataAsString(enc); }
     catch (e) { try { text = f.getBlob().getDataAsString('UTF-8'); } catch (e2) { continue; } }
-    rows = rows.concat(parseBankCsv_(text));
-    done.push(f);
+    // 取引番号を持たない明細のために、ファイル単位で一意な識別子を補う
+    var parsed = parseBankCsv_(text);
+    parsed.forEach(function (b, i) { b.ref = b.ref || (f.getId() + '#' + i); });
+    rows = rows.concat(parsed);
+    added.push(key);
   }
   var res = sendBankRows_(rows, 'csv');
-  done.forEach(function (f) { try { f.setName('取込済_' + f.getName()); } catch (e) {} });
+  if (added.length) {
+    // 送信できた分だけを済みにする。落ちた場合は次回また読む。
+    props.setProperty(PROP_DRIVE_DONE,
+                      JSON.stringify(done.concat(added).slice(-DRIVE_DONE_KEEP)));
+  }
   return res;
 }
 

@@ -85,9 +85,17 @@ function api_(path, method, payload) {
     options.contentType = 'application/json';
     options.payload = JSON.stringify(payload);
   }
-  var res = UrlFetchApp.fetch(API_BASE + path, options);
-  var code = res.getResponseCode();
-  var text = res.getContentText();
+  // 429 は「処理される前に弾かれた」ことが確定しているので、待って出し直す。
+  // 5xx やタイムアウトは処理済みかどうか分からないため再送しない
+  // (督促回数の加算など、二重に効くと困る呼び出しがある)。
+  var res, code, text;
+  for (var attempt = 0; ; attempt++) {
+    res = UrlFetchApp.fetch(API_BASE + path, options);
+    code = res.getResponseCode();
+    text = res.getContentText();
+    if (code !== 429 || attempt >= 3) break;
+    Utilities.sleep(1000 * Math.pow(2, attempt));
+  }
   if (code === 403) {
     throw new Error('APIキーが拒否されました。運営管理画面の設定と一致しているか確認してください。');
   }

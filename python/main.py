@@ -2240,7 +2240,10 @@ async def stripe_webhook(request: Request):
                 # v3.7.286: 解約が確定した時点で解約者台帳にスナップショットを残す。
                 #   テナントは解約6ヶ月後に削除されるため、ここで残さないと
                 #   「どの顧客がどれだけ契約していたか」が追えなくなる。
-                if status in ("canceled", "unpaid") or event_type == "customer.subscription.deleted":
+                # unpaid は督促中でまだ復帰しうる状態なので解約として記録しない。
+                # 記録すると、支払い直して継続した顧客が解約者台帳に残り続ける
+                # (復帰時に台帳から消す仕組みは無い)。
+                if status == "canceled" or event_type == "customer.subscription.deleted":
                     try:
                         await supabase_rpc("record_cancellation",
                                            {"p_contract_id": contract_id,
@@ -2260,15 +2263,17 @@ async def stripe_webhook(request: Request):
                 customer_id = data.get("customer")
                 stripe_invoice_id = data.get("invoice")
                 refunds_list = ((data.get("refunds") or {}).get("data") or [])
-                if not refunds_list:
-                    # refunds が展開されていない場合は総額で1件として記録
-                    refunds_list = [{
-                        "id": None,
-                        "amount": data.get("amount_refunded") or 0,
-                        "currency": data.get("currency") or "jpy",
-                        "reason": data.get("reason") or "",
-                        "created": data.get("created"),
-                    }]
+                if not refunds_list and charge_id:
+                    # refunds が展開されていない場合は API から引き直す。
+                    # amount_refunded (累計) で代替すると refund ID が無く重複判定できず、
+                    # 2回目の一部返金や refund.created との重複で二重計上になる。
+                    try:
+                        _rl = await asyncio.to_thread(
+                            lambda: stripe.Refund.list(charge=charge_id, limit=100))
+                        refunds_list = _rl.get("data") or []
+                    except Exception as e:
+                        logger.warning("[Webhook] refund list failed (%s): %s",
+                                       charge_id, type(e).__name__)
             else:
                 charge_id = data.get("charge")
                 customer_id = None
@@ -3242,7 +3247,9 @@ async def gas_overdue(request: Request,
 
 
 @app.post("/gas/invoices/mark-reminded")
-@limiter.limit("20/minute")
+# GAS は送信・下書きの直後に1件ずつ記録する (まとめて記録すると途中終了で全件再送になる)。
+# 1回の実行で最大100件が連続するため、20/分では自分の記録が弾かれる。
+@limiter.limit("200/minute")
 async def gas_mark_reminded(request: Request, req: GasMarkDraftedBody,
                             x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
     """督促を送った記録 (同じ請求に何度も送らないため)"""
@@ -3255,7 +3262,9 @@ async def gas_mark_reminded(request: Request, req: GasMarkDraftedBody,
 
 
 @app.post("/gas/invoices/mark-sent")
-@limiter.limit("20/minute")
+# GAS は送信・下書きの直後に1件ずつ記録する (まとめて記録すると途中終了で全件再送になる)。
+# 1回の実行で最大100件が連続するため、20/分では自分の記録が弾かれる。
+@limiter.limit("200/minute")
 async def gas_mark_sent(request: Request, req: GasMarkDraftedBody,
                         x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
     """請求書メールを実際に送信した記録 (自動送信を有効にしたとき用)"""
@@ -3268,7 +3277,9 @@ async def gas_mark_sent(request: Request, req: GasMarkDraftedBody,
 
 
 @app.post("/gas/invoices/mark-drafted")
-@limiter.limit("20/minute")
+# GAS は送信・下書きの直後に1件ずつ記録する (まとめて記録すると途中終了で全件再送になる)。
+# 1回の実行で最大100件が連続するため、20/分では自分の記録が弾かれる。
+@limiter.limit("200/minute")
 async def gas_mark_drafted(request: Request, req: GasMarkDraftedBody,
                            x_gas_key: Optional[str] = Header(None, alias="x-gas-key")):
     """Gmail下書きを作成した請求書に印を付ける (二重下書きの防止)"""

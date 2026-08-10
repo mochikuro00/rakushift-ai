@@ -199,24 +199,31 @@ function stageSnapshot_(sheetName, headers, rows, keyCol, editable) {
   _snapshotStage[sheetName] = map;
 }
 
-/** 拾っておいた未反映の編集をシートへ書き戻し、未反映と分かるよう色と注記を付ける */
+/**
+ * 拾っておいた未反映の編集をシートへ書き戻し、未反映と分かるよう色と注記を付ける。
+ *
+ * システム側が既に同じ値を持っている編集は書き戻さない。
+ * 書き戻し (pushAgencySettings 等) の直後は必ず再同期が走るため、
+ * これが無いと「今しがた反映した編集」が毎回「未反映」と警告されてしまう。
+ */
 function restorePendingEdits_(sh, headers, rows, keyCol, pending) {
   var keys = Object.keys(pending || {});
   if (keys.length === 0) return 0;
 
   var iKey = headers.indexOf(keyCol);
   var rowOf = {};
-  for (var i = 0; i < rows.length; i++) rowOf[normCell_(rows[i][iKey])] = i + 2;
+  for (var i = 0; i < rows.length; i++) rowOf[normCell_(rows[i][iKey])] = i;
 
   var n = 0;
   keys.forEach(function (key) {
-    var rowNo = rowOf[key];
-    if (!rowNo) return;            // 同期後に消えた行は復元しない
+    var idx = rowOf[key];
+    if (idx === undefined) return;   // 同期後に消えた行は復元しない
     var restored = false;
     Object.keys(pending[key]).forEach(function (col) {
       var c = headers.indexOf(col);
       if (c < 0) return;
-      sh.getRange(rowNo, c + 1)
+      if (normCell_(rows[idx][c]) === normCell_(pending[key][col])) return;   // 反映済み
+      sh.getRange(idx + 2, c + 1)
         .setValue(pending[key][col])
         .setBackground('#fde68a')
         .setNote('システムへ未反映の編集です。\n書き戻しのメニューを実行するまでシステムには入りません。');
